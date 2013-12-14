@@ -1,0 +1,29 @@
+				
+parameter				DataWidth =				64,
+						BlockCount =			20,
+						ORAMB =					512,
+						ORAMU =					32,
+						ORAML =					32,
+						ORAMZ =					4;
+
+`ifdef MACROSAFE				
+	localparam			NumChunks =				ORAMB / DataWidth;
+	localparam			ChunkAWidth =			(`popcount(NumChunks) == 1) ? `log2(NumChunks+1) : `log2(NumChunks+1); // TODO switch to logf
+	localparam			StashEAWidth =			(`popcount(BlockCount) == 1) ? `log2(BlockCount+1) : `log2(BlockCount); // TODO switch to logf
+	localparam			StashAWidth =			`log2(StashEAWidth) + NumChunks; // addr width into data-based memories
+	localparam			StashHDWidth =			ORAMU + ORAML; // stash entry header
+	localparam			SNULL =					BlockCount;
+
+	localparam			ORAMLP1 =				ORAML + 1; // the actual number of levels
+	localparam			ScanTableAWidth =		`log2(ORAMLP1 * ORAMZ);
+	localparam			BucketAWidth =			`log2(ORAMLP1);
+	
+	localparam			BCWidth =				`log2(ORAMZ) + 1;
+	localparam			BCLWidth =	 			ORAMLP1 * BCWidth;
+`endif
+
+localparam				CMDWidth =				2,
+						CMD_Push =				2'd0,
+						CMD_Peak = 				2'd1,
+						CMD_Dump =				2'd2,
+						CMD_Sync =				2'd3;
