@@ -15,6 +15,7 @@ module StashScanTable(
 			CurrentLeaf,
 
 			InLeaf,
+			InPAddr, // debugging
 			InSAddr,
 			InValid,
 			
@@ -42,6 +43,7 @@ module StashScanTable(
 	input	[ORAML-1:0]			CurrentLeaf;
 
 	input	[ORAML-1:0]			InLeaf;
+	input	[ORAMU-1:0]			InPAddr; // debugging
 	input	[StashEAWidth-1:0]	InSAddr;
 	input						InValid;
 
@@ -76,7 +78,7 @@ module StashScanTable(
 	`ifdef MODELSIM
 		always @(posedge Clock) begin
 			if (InValid) begin
-				$display("[%m @ %t] Scan table start [%x <-> %x]", $time, CurrentLeaf, InLeaf);
+				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InSAddr, InPAddr, CurrentLeaf, InLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
 				$display("\tCommonSubpath:       %x", CommonSubpath);
@@ -86,6 +88,8 @@ module StashScanTable(
 				
 				if (OutAccepted & OutValid)
 					$display("\tScan accept: entry %d will be written back", OutSAddr);
+				if (~OutAccepted & OutValid)
+					$display("\tScan reject: entry %d will NOT be written back", OutSAddr);
 			end
 		end
 	`endif

@@ -41,6 +41,7 @@ module	StashCoreTestbench;
 
 	reg		[ORAML-1:0]			CurrentLeaf;
 
+	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
 	wire	[StashEAWidth-1:0]	ScanSAddr;
 	wire						ScanLeafValid;
@@ -64,7 +65,7 @@ module	StashCoreTestbench;
 		input	[StashEAWidth-1:0] SAddr;
 		input	[CMDWidth-1:0] Command;
 		begin
-			if (Command == CMD_Push)
+			if (Command == CMD_Push | Command == CMD_Overwrite)
 				InValid = 1'b1;
 			else
 				InValid = 1'b0;
@@ -115,18 +116,29 @@ module	StashCoreTestbench;
 		TASK_QueueCommand(32'hf0000001, 32'h0000ffff, 1'bx, CMD_Push);
 		TASK_QueueCommand(32'hf0000002, 32'h0000ffff, 1'bx, CMD_Push);
 		TASK_QueueCommand(32'hf0000003, 32'h0000ffff, 1'bx, CMD_Push);
-		TASK_QueueCommand(32'hf0000004, 32'h0000ffff, 1'bx, CMD_Push);
 
 		// fill some other bucket
+		TASK_QueueCommand(32'hf0000004, 32'h0001ffff, 1'bx, CMD_Push);
 		TASK_QueueCommand(32'hf0000005, 32'h0001ffff, 1'bx, CMD_Push);
 		TASK_QueueCommand(32'hf0000006, 32'h0001ffff, 1'bx, CMD_Push);
 		TASK_QueueCommand(32'hf0000007, 32'h0001ffff, 1'bx, CMD_Push);
-		TASK_QueueCommand(32'hf0000008, 32'h0001ffff, 1'bx, CMD_Push);
 
-		// TODO add correctness tests
+		// Read out two non-contig elements
 		
+		TASK_QueueCommand(1'hx, 1'hx, 0, CMD_Peak);
 		TASK_QueueCommand(1'hx, 1'hx, 1, CMD_Peak);
+		TASK_QueueCommand(1'hx, 1'hx, 2, CMD_Peak);
 		TASK_QueueCommand(1'hx, 1'hx, 3, CMD_Peak);
+		
+		// Overwrite and try to read again
+		
+		TASK_QueueCommand(32'hba5eba11, 32'h0000ff0f, 1, CMD_Overwrite);
+		TASK_QueueCommand(1'hx, 1'hx, 0, CMD_Peak);
+		TASK_QueueCommand(1'hx, 1'hx, 1, CMD_Peak);
+		TASK_QueueCommand(1'hx, 1'hx, 2, CMD_Peak);
+		TASK_QueueCommand(1'hx, 1'hx, 3, CMD_Peak);
+		
+		// Other operations
 
 		TASK_QueueCommand(1'hx, 1'hx, 1'hx, CMD_Dump);
 		TASK_QueueCommand(1'hx, 1'hx, 1'hx, CMD_Sync);
@@ -171,7 +183,7 @@ module	StashCoreTestbench;
 						.OutData(			),
 						.OutValid(			OutValid),
 
-						.OutScanPAddr(		/*use this to identify block of interest*/),
+						.OutScanPAddr(		ScanPAddr),
 						.OutScanLeaf(		ScanLeaf),
 						.OutScanSAddr(		ScanSAddr),
 						.OutScanValid(		ScanLeafValid),
@@ -186,6 +198,7 @@ module	StashCoreTestbench;
 						.CurrentLeaf(		CurrentLeaf),
 
 						.InLeaf(			ScanLeaf),
+						.InPAddr(			ScanPAddr),
 						.InSAddr(			ScanSAddr),
 						.InValid(			ScanLeafValid),
 			

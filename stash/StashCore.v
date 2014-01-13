@@ -7,7 +7,16 @@
 
 //------------------------------------------------------------------------------
 //	Module:		StashCore
-//	Desc:		
+//	Desc:		Implements core stash operations		
+//
+//	Commands:
+//		Push - 	add element to stash
+//		Peak - 	read (do not remove) element from stash
+//		Dump - 	scan all elements in stash and fill table that indicates the 
+//				highest position in the ORAM tree, where each block can be 
+//				written back to.  This operation destroys the stash pointer 
+//				memory and must be followed by a Sync command.
+//		Sync - 	Reconstruct the stash pointer memory
 //------------------------------------------------------------------------------
 module StashCore(
 			Clock, 
@@ -46,10 +55,11 @@ module StashCore(
 	localparam				STWidth =				3,
 							ST_Reset =				3'd0,
 							ST_Idle = 				3'd1,
-							ST_Peaking = 			3'd2,
-							ST_Pushing =			3'd3,
-							ST_Dumping =			3'd4,
-							ST_Syncing =			3'd5;
+							ST_Pushing = 			3'd2, // write, add
+							ST_Overwriting = 		3'd3, // overwrite current entry
+							ST_Peaking =			3'd4, // read, do not remove
+							ST_Dumping =			3'd5,
+							ST_Syncing =			3'd6;
 
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
@@ -101,14 +111,14 @@ module StashCore(
 	//--------------------------------------------------------------------------
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSPeaking, CSPushing, CSDumping, CSSyncing;
-	wire 						CSReset, CNSPeaking, CNSPushing;
+	wire						CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
+	wire 						CSReset, CNSPeaking, CNSPushing, CNSOverwriting;
 
 	wire	[StashEAWidth-1:0]	ResetCount;
 	wire						ResetDone;
 
 	wire	[DataWidth-1:0]		StashD_DataOut;
-	wire						WriteTransfer, DataTransfer, Transfer_Terminator;
+	wire						WriteTransfer, DataTransfer, Add_Terminator, Transfer_Terminator;
 
 	wire	[StashAWidth-1:0]	StashD_Address;
 	wire	[StashEAWidth-1:0]	StashE_Address;
@@ -188,9 +198,12 @@ module StashCore(
 		always @(posedge Clock) begin
 			if (MS_StartingWrite) begin
 				$display("[%m @ %t] Writing [a=%x, l=%x]", $time, InPAddr, InLeaf);
+				if (CSOverwriting) begin
+					$display("\t(Overwrite)");
+				end
 			end
 
-			MS_FinishedWrite <=	CSPushing & Transfer_Terminator;
+			MS_FinishedWrite <=	(CSPushing | CSOverwriting) & Transfer_Terminator;
 			MS_StartingWrite <= WriteTransfer & FirstChunk;
 			MS_FinishedSync <= CSSyncing & Sync_Terminator;
 			CS_Delayed <= CS;
@@ -258,31 +271,34 @@ module StashCore(
 		reads have fdlat = 1.  This allows read->write turnovers to happen 
 		without a cycle gap. 
 	*/
-	assign	InCommandReady =						(CSPeaking | CSPushing) ? Transfer_Terminator :
+	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
 													(CSDumping) ? StashWalk_Terminator : 
 													(CSSyncing) ? Sync_Terminator : 1'b0;
 
 	assign	OutData =								StashD_DataOut;	
 	
-	assign	InReady =								CNSPushing;
-	assign 	OutValid = 								CS == ST_Peaking | CSPeaking_Delayed;
+	assign	InReady =								CNSPushing | CNSOverwriting;
+	assign 	OutValid = 								CSPeaking | CSPeaking_Delayed;
 
 	assign 	WriteTransfer = 						InReady & InValid;
-	assign 	ReadTransfer = 							OutValid;
+	assign 	ReadTransfer = 							CSPeaking; // will we have valid data out in the next cycle?
 	assign 	DataTransfer = 							WriteTransfer | ReadTransfer;
 
+	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
 
 	assign	CSReset =								CS == ST_Reset;
 
 	assign	CSPeaking = 							CS == ST_Peaking; 
-	assign	CSPushing = 							CS == ST_Pushing; 
+	assign	CSPushing = 							CS == ST_Pushing;
+	assign	CSOverwriting =							CS == ST_Overwriting;
 	assign	CSDumping = 							CS == ST_Dumping;
 	assign	CSSyncing =								CS == ST_Syncing;
 
 	/* Mealy machine to decrease rd->wr/etc op turnover time */
 	assign	CNSPeaking = 							CSPeaking | (NS == ST_Peaking); 
 	assign	CNSPushing = 							CSPushing | (NS == ST_Pushing); 
+	assign 	CNSOverwriting =						CSOverwriting | (NS == ST_Overwriting);
 	
 	assign	CSDumping_FirstCycle = 					CSDumping & ~CSDumping_Delayed;
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
@@ -309,6 +325,8 @@ module StashCore(
 				if (InCommandValid) begin
 					if (InCommand == CMD_Push & InValid)
 						NS =						ST_Pushing;
+					if (InCommand == CMD_Overwrite & InValid)
+						NS =						ST_Overwriting;
 					if (InCommand == CMD_Peak)
 						NS =						ST_Peaking;
 					if (InCommand == CMD_Dump)
@@ -316,10 +334,13 @@ module StashCore(
 					if (InCommand == CMD_Sync)
 						NS =						ST_Syncing;
 				end
-			ST_Peaking :
+			ST_Pushing :
 				if (Transfer_Terminator)
 					NS =							ST_Idle;
-			ST_Pushing :
+			ST_Overwriting :
+				if (Transfer_Terminator)
+					NS =							ST_Idle;
+			ST_Peaking :
 				if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Dumping : 
@@ -349,7 +370,7 @@ module StashCore(
 	//	Core memories
 	//--------------------------------------------------------------------------
 
-	assign	StashE_Address = 						(CNSPeaking) ? InSAddr : 
+	assign	StashE_Address = 						(CNSPeaking | CNSOverwriting) ? InSAddr : 
 													(CSDumping) ? StashWalk : 
 													FreeListHead;
 	assign	StashD_Address =						{StashE_Address, {ChunkAWidth{1'b0}}} + CurrentChunk;
@@ -393,7 +414,7 @@ module StashCore(
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
-							.Write(					WriteTransfer & FirstChunk),
+							.Write(					WriteTransfer & FirstChunk), // TODO latch this in on last chunk?
 							.Address(				StashE_Address),
 							.DIn(					{InPAddr, 		InLeaf}),
 							.DOut(					{OutScanPAddr, 	OutScanLeaf}));
@@ -411,7 +432,7 @@ module StashCore(
 													(CNSPushing) ? 	UsedListHead : 
 													(CSSyncing) ? 	SyncCount : 
 																	{StashEAWidth{1'bx}};
-	assign	StashP_WE =								CSReset | LastChunk | (CSSyncing & ~Sync_SettingULH & ~Sync_SettingFLH);
+	assign	StashP_WE =								CSReset | Add_Terminator | (CSSyncing & ~Sync_SettingULH & ~Sync_SettingFLH);
 																	
 	assign	StashC_Address = 						(CSReset) ? 	ResetCount : 
 													(CNSPushing) ? 	FreeListHead : 
@@ -422,7 +443,7 @@ module StashCore(
 													(CNSPushing) ? 	EN_Used : 
 													(CSDumping) ? 	EN_Free : 
 																	{ENWidth{1'bx}};
-	assign	StashC_WE =								CSReset | LastChunk | StashWalk_Writeback;
+	assign	StashC_WE =								CSReset | Add_Terminator | StashWalk_Writeback;
 	
 	assign FreeListHead_New =						(CNSPushing) ? 	StashP_DataOut : 
 													(CSSyncing) ? 	SyncCount : 
@@ -440,14 +461,14 @@ module StashCore(
 				UsedListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				LastChunk & WriteTransfer | Sync_SettingULH | CSSyncing_FirstCycle),
+							.Enable(				Add_Terminator | Sync_SettingULH | CSSyncing_FirstCycle),
 							.In(					UsedListHead_New),
 							.Out(					UsedListHead));
 	Register	#(			.Width(					StashEAWidth))
 				FreeListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				LastChunk & WriteTransfer | Sync_SettingFLH | CSSyncing_FirstCycle),
+							.Enable(				Add_Terminator | Sync_SettingFLH | CSSyncing_FirstCycle),
 							.In(					FreeListHead_New),
 							.Out(					FreeListHead));
 							
@@ -500,7 +521,7 @@ module StashCore(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Up(					LastChunk & WriteTransfer),
+							.Up(					Add_Terminator),
 							.Down(					StashWalk_Writeback),
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					StashOccupancy));

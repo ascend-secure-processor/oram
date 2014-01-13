@@ -22,8 +22,9 @@ parameter				DataWidth =				64,
 	localparam			BCLWidth =	 			ORAMLP1 * BCWidth;
 `endif
 
-localparam				CMDWidth =				2,
-						CMD_Push =				2'd0,
-						CMD_Peak = 				2'd1,
-						CMD_Dump =				2'd2,
-						CMD_Sync =				2'd3;
+localparam				CMDWidth =				3,
+						CMD_Push =				3'd0,
+						CMD_Overwrite =			3'd1,
+						CMD_Peak = 				3'd2,
+						CMD_Dump =				3'd3,
+						CMD_Sync =				3'd4;
