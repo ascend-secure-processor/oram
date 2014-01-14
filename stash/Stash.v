@@ -28,6 +28,8 @@ module Stash(
 			Clock, 
 			Reset,
 
+			// todo MAKE STASH INTERFACE 128
+
 			// Commands for current access
 			
 			AccessLeaf,
@@ -43,23 +45,26 @@ module Stash(
 			ReturnDataOutReady,
 			BlockReturnComplete,
 			
+			StartReadOperation, // start dumping data to AES encrypt
+
 			// Write block to stash (LLC eviction or path "read")
 			
 			WriteData,
+			WriteInValid,
+			WriteInReady, /// TODO will this ever go low? GET RID OF THIS
+
 			WritePAddr,
 			WriteLeaf,
-			WriteOutValid,
-			WriteOutReady,
-			BlockWriteComplete,			
+			BlockWriteComplete, // output, will be read by albert to tick the next PAddr/Leaf
 			
 			// Read blocks from stash (stash scan)
 			
 			ReadData,
-			ReadPAddr,
+			ReadPAddr, // set to 0 for dummy block [ask dave if programs will ever read paddr = 0]
 			ReadLeaf,
-			ReadInValid,
-			ReadInReady,
-			BlockReadComplete,
+			ReadOutValid, // redundant given StartReadOperation
+			ReadOutReady, // necessary because of DRAM 
+			BlockReadComplete, // TODO GET RID OF THIS SIGNAL
 			
 			// Status outputs
 			
