@@ -1,0 +1,2 @@
+
+- with 64B blocks, DRAM bandwidth on FPGA [ ~ 1KB / FPGA cycle ] makes stash design complicated; this isn't a problem with 4KB blocks
