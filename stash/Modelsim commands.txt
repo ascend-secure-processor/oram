@@ -1,7 +1,9 @@
 Modelsim:
 
-+incdir+C:/wc/chip/oram
++incdir+C:/wc/chip-build/oram/stash
 +define+MACROSAFE=1
 +define+MODELSIM=1
+
+1.) copy paste const.v
 
 vsim -gui work.StashCoreTestbench; add wave -position insertpoint sim:/StashCoreTestbench/CUT/*; restart -f; run 2us
