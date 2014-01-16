@@ -21,20 +21,23 @@
 module StashCore(
 			Clock, 
 			Reset,
+			ResetDone,
+			
+			InCommand,
+			InSAddr,
+			InCommandValid,
+			InCommandReady,
 
 			InData,
+			InPAddr,
+			InLeaf,
 			InValid,
 			InReady,
 
 			OutData,
+			OutPAddr,
+			OutLeaf,
 			OutValid,
-
-			InCommand,
-			InPAddr,
-			InLeaf,
-			InSAddr,
-			InCommandValid,
-			InCommandReady,
 
 			OutScanPAddr,
 			OutScanLeaf,
@@ -44,7 +47,7 @@ module StashCore(
 			InScanSAddr,
 			InScanAccepted,
 			InScanValid
-		);
+	);
 
 	//--------------------------------------------------------------------------
 	//	Parameters & constants
@@ -58,7 +61,7 @@ module StashCore(
 							ST_Pushing = 			3'd2, // write, add
 							ST_Overwriting = 		3'd3, // overwrite current entry
 							ST_Peaking =			3'd4, // read, do not remove
-							ST_Dumping =			3'd5,
+							ST_Dumping =			3'd5, // stash scan [rename?]
 							ST_Syncing =			3'd6;
 
 	localparam				ENWidth =				1,
@@ -69,28 +72,34 @@ module StashCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset; 
+  	input 						Clock, Reset, ResetDone;
+
+	//--------------------------------------------------------------------------
+	//	Command interface
+	//--------------------------------------------------------------------------
 		
+	input	[CMDWidth-1:0] 		InCommand;
+	input	[StashEAWidth-1:0]	InSAddr;
+	input						InCommandValid;
+	output 						InCommandReady;
+
 	//--------------------------------------------------------------------------
 	//	Input interface
 	//--------------------------------------------------------------------------
 	
 	input	[DataWidth-1:0]		InData;
-	input						InValid;
-	output 						InReady;
-
-	input	[CMDWidth-1:0] 		InCommand;
 	input	[ORAMU-1:0]			InPAddr;
 	input	[ORAML-1:0]			InLeaf;
-	input	[StashEAWidth-1:0]	InSAddr;
-	input						InCommandValid;
-	output 						InCommandReady;
+	input						InValid;
+	output 						InReady;
 
 	//--------------------------------------------------------------------------
 	//	Output interface
 	//--------------------------------------------------------------------------
 	
 	output	[DataWidth-1:0]		OutData;
+	output	[ORAMU-1:0]			OutPAddr;
+	output	[ORAML-1:0]			OutLeaf;
 	output 						OutValid;
 
 	//--------------------------------------------------------------------------
@@ -115,7 +124,6 @@ module StashCore(
 	wire 						CSReset, CNSPeaking, CNSPushing, CNSOverwriting;
 
 	wire	[StashEAWidth-1:0]	ResetCount;
-	wire						ResetDone;
 
 	wire	[DataWidth-1:0]		StashD_DataOut;
 	wire						WriteTransfer, DataTransfer, Add_Terminator, Transfer_Terminator;
@@ -142,6 +150,9 @@ module StashCore(
 	wire						StashWalk_Terminator, StashWalk_Writeback;
 	wire 						OutScanValidCutoff;
 	
+	wire						DumpPushTransition, DumpHasTransitioned;
+	wire	[StashEAWidth-1:0]	LastDumpAddress;
+
 	wire	[StashEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
 	wire						ULHSet, FLHSet;
 	wire						Sync_SettingULH, Sync_SettingFLH;
@@ -159,7 +170,7 @@ module StashCore(
 	initial begin
 		CS = ST_Reset;
 		CSPeaking_Delayed = 1'b0;
-		CSDumping_Delayed = 1'b0;	
+		CSDumping_Delayed = 1'b0;
 	end
 
 	//--------------------------------------------------------------------------
@@ -242,7 +253,7 @@ module StashCore(
 					end
 				end
 				//
-				MS_pt = FreeListHead;
+				/*MS_pt = FreeListHead;
 				i = 0;
 				$display("\tFreeListHead = %d", MS_pt);
 				while (MS_pt != SNULL) begin
@@ -253,7 +264,7 @@ module StashCore(
 						$display("[ERROR] no terminator (FreeList)");
 						$stop;
 					end
-				end
+				end*/
 			end
 
 			if (OutValid)
@@ -272,11 +283,14 @@ module StashCore(
 		without a cycle gap. 
 	*/
 	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
-													(CSDumping) ? StashWalk_Terminator : 
+													(CSDumping) ? CSDumping_FirstCycle : 
 													(CSSyncing) ? Sync_Terminator : 1'b0;
 
-	assign	OutData =								StashD_DataOut;	
+	assign	OutData =								StashD_DataOut;
 	
+	assign	OutScanPAddr =							OutPAddr;
+	assign	OutScanLeaf =							OutLeaf;
+			
 	assign	InReady =								CNSPushing | CNSOverwriting;
 	assign 	OutValid = 								CSPeaking | CSPeaking_Delayed;
 
@@ -314,7 +328,9 @@ module StashCore(
 		InScanValid_Delayed <=						InScanValid;
 		OutScanValid_Delayed <=						OutScanValid;
 	end
-
+	
+	assign	DumpPushTransition =					InCommand == CMD_Push & InValid;
+	
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
@@ -344,7 +360,10 @@ module StashCore(
 				if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Dumping : 
-				if (StashWalk_Terminator)
+				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
+				if (DumpPushTransition)
+					NS = 							ST_Pushing;
+				else if (StashWalk_Terminator)
 					NS =							ST_Idle;
 			ST_Syncing :
 				if (Sync_Terminator)
@@ -416,35 +435,13 @@ module StashCore(
 							.Enable(				1'b1),
 							.Write(					WriteTransfer & FirstChunk), // TODO latch this in on last chunk?
 							.Address(				StashE_Address),
-							.DIn(					{InPAddr, 		InLeaf}),
-							.DOut(					{OutScanPAddr, 	OutScanLeaf}));
+							.DIn(					{InPAddr, 	InLeaf}),
+							.DOut(					{OutPAddr, 	OutLeaf}));
 
 	//--------------------------------------------------------------------------
 	//	Management
 	//--------------------------------------------------------------------------
 
-	assign	StashP_Address = 						(CSReset) ? 	ResetCount : 
-													(CNSPushing) ? 	FreeListHead : 
-													(CSDumping) ? 	StashWalk : 
-													(CSSyncing) ? 	Sync_StashPUpdateSrc : 
-																	{StashEAWidth{1'bx}};
-	assign	StashP_DataIn = 						(CSReset) ? 	ResetCount + 1 :
-													(CNSPushing) ? 	UsedListHead : 
-													(CSSyncing) ? 	SyncCount : 
-																	{StashEAWidth{1'bx}};
-	assign	StashP_WE =								CSReset | Add_Terminator | (CSSyncing & ~Sync_SettingULH & ~Sync_SettingFLH);
-																	
-	assign	StashC_Address = 						(CSReset) ? 	ResetCount : 
-													(CNSPushing) ? 	FreeListHead : 
-													(CSDumping) ? 	InScanSAddr : 
-													(CSSyncing) ?	SyncCount : 
-																	{StashEAWidth{1'bx}};
-	assign	StashC_DataIn = 						(CSReset) ? 	EN_Free :
-													(CNSPushing) ? 	EN_Used : 
-													(CSDumping) ? 	EN_Free : 
-																	{ENWidth{1'bx}};
-	assign	StashC_WE =								CSReset | Add_Terminator | StashWalk_Writeback;
-	
 	assign FreeListHead_New =						(CNSPushing) ? 	StashP_DataOut : 
 													(CSSyncing) ? 	SyncCount : 
 													(CSSyncing_FirstCycle & Sync_SettingULH) ? SNULL :	
@@ -475,6 +472,18 @@ module StashCore(
 	/* 
 		StashP: pointers that make up both the used list/free list. 
 	*/
+	
+	assign	StashP_Address = 						(CSReset) ? 	ResetCount : 
+													(CNSPushing) ? 	FreeListHead : // read at end of second to last write cycle
+													(CSDumping) ? 	StashWalk : 
+													(CSSyncing) ? 	Sync_StashPUpdateSrc : 
+																	{StashEAWidth{1'bx}};
+	assign	StashP_DataIn = 						(CSReset) ? 	ResetCount + 1 :
+													(CNSPushing) ? 	UsedListHead : 
+													(CSSyncing) ? 	SyncCount : 
+																	{StashEAWidth{1'bx}};
+	assign	StashP_WE =								CSReset | Add_Terminator | (CSSyncing & ~Sync_SettingULH & ~Sync_SettingFLH);
+		
 	RAM			#(			.DWidth(				StashEAWidth),
 							.AWidth(				StashEAWidth))
 				StashP(		.Clock(					Clock),
@@ -505,7 +514,19 @@ module StashCore(
 		used/free list while ScanTable is being scanned (hides latency and is 
 		simple to code).
 	*/
-	RAM			#(			.DWidth(				ENWidth),
+
+	assign	StashC_Address = 						(CSReset) ? 	ResetCount : 
+													(CNSPushing) ? 	FreeListHead : 
+													(CSDumping) ? 	InScanSAddr : 
+													(CSSyncing) ?	SyncCount : 
+																	{StashEAWidth{1'bx}};
+	assign	StashC_DataIn = 						(CSReset) ? 	EN_Free :
+													(CNSPushing) ? 	EN_Used : 
+													(CSDumping) ? 	EN_Free : 
+																	{ENWidth{1'bx}};
+	assign	StashC_WE =								CSReset | Add_Terminator | StashWalk_Writeback;
+		
+	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				StashEAWidth),
 							.RLatency(				0))
 				StashC(		.Clock(					Clock),
@@ -536,13 +557,16 @@ module StashCore(
 		ScanOutValid) so that we can add pipelining to StashScanTable as needed.
 	*/
 
-	assign	StashWalk = 							(CSDumping_FirstCycle) ? UsedListHead : StashP_DataOut;
+	assign	StashWalk = 							(CSDumping_FirstCycle & DumpHasTransitioned) ? LastDumpAddress : 
+													(CSDumping_FirstCycle & ~DumpHasTransitioned) ? UsedListHead : 
+													StashP_DataOut;
 	assign 	StashWalk_Terminator =					~InScanValid & InScanValid_Delayed;
 
 	assign	StashWalk_Writeback =					InScanValid & InScanAccepted;
 
 	assign	OutScanSAddr =							StashWalk_Delayed;
-	assign	OutScanValid =							CSDumping_Delayed & OutScanSAddr != SNULL & ~OutScanValidCutoff;
+	assign	OutScanValid =							CSDumping_Delayed & OutScanSAddr != SNULL & ~OutScanValidCutoff & ~DumpPushTransition;
+	
 	Register	#(			.Width(					1)) // brings valid low a cycle earlier
 				SawLast(	.Clock(					Clock),
 							.Reset(					Reset | ~CSDumping),
@@ -551,6 +575,27 @@ module StashCore(
 							.In(					1'bx),
 							.Out(					OutScanValidCutoff));
 
+	/*
+		We need to be able to stall the dump in the middle when data comes back 
+		from DRAM.  The dump can be restarted in the middle using another Dump 
+		command.
+	*/
+							
+	Register	#(			.Width(					1))
+				DumpSaved(	.Clock(					Clock),
+							.Reset(					Reset | StashWalk_Terminator),
+							.Set(					DumpPushTransition),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					DumpHasTransitioned));
+	Register	#(			.Width(					StashEAWidth))
+				SavedDump(	.Clock(					Clock),
+							.Reset(					Reset | StashWalk_Terminator),
+							.Set(					1'b0),
+							.Enable(				DumpPushTransition),
+							.In(					{StashEAWidth{1'bx}}),
+							.Out(					LastDumpAddress));
+							
 	//--------------------------------------------------------------------------
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------

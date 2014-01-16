@@ -9,34 +9,40 @@
 //	Module:		Stash
 //	Desc:		The Path ORAM stash.
 //
-//	Interface specification:
-//	
-//	- 	Command interface: Before sending read requests to external memory, 
-//		place current leaf and current request program address on command 
-//		interface.  The Stash WILL NOT be ready to receive decrypted data until 
-//		the command interface asserts CommandInReady
-//
 //	- Leaf orientation: least significant bit is root bucket
 //
 //	TODO:
-//		- inclusive stash
 //		- override all parameters
-//
-//
+//		- eviction interface
+//		- return interface
+//		- dummy accesses
 //------------------------------------------------------------------------------
 module Stash(
 			Clock, 
 			Reset,
-
-			// todo MAKE STASH INTERFACE 128
-
-			// Commands for current access
+			ResetDone,
+			
+			//
+			// Level signals for current ORAM access
+			//
 			
 			AccessLeaf,
 			AccessPAddr,
 			AccessIsDummy,
 			
-			// Data returned to LLC
+			//
+			// External pulse commands 
+			//
+			
+			StartScanOperation, // Start scanning the contents of the stash
+								// This should be pulsed as soon as the PosMap is read
+								// The level command signals must be valid at this time 
+			StartReadOperation, // Start dumping data to AES encrypt in the NEXT cycle
+								// This should be pulsed as soon as the last dummy block is decrypted
+								
+			//
+			// [FRONTEND] Stash -> LLC interface
+			//
 			
 			ReturnData,
 			ReturnPAddr,
@@ -45,99 +51,132 @@ module Stash(
 			ReturnDataOutReady,
 			BlockReturnComplete,
 			
-			StartReadOperation, // start dumping data to AES encrypt
+			//
+			// [FRONTEND] LLC -> Stash interface
+			//
 
-			// Write block to stash (LLC eviction or path "read")
+			EvictData,
+			EvictPAddr,
+			EvictLeaf,
+			EvictDataInValid,
+			EvictDataInReady,
+			BlockEvictComplete,
+			
+			//
+			// [BACKEND] (LLC eviction, AES decrypt) -> Stash interface
+			//
 			
 			WriteData,
 			WriteInValid,
-			WriteInReady, /// TODO will this ever go low? GET RID OF THIS
-
+			WriteInReady,
 			WritePAddr,
 			WriteLeaf,
-			BlockWriteComplete, // output, will be read by albert to tick the next PAddr/Leaf
+			BlockWriteComplete, // Pulsed during the last cycle that a block is being written [this will be read by albert to tick the next PAddr/Leaf]
 			
-			// Read blocks from stash (stash scan)
+			//
+			// [BACKEND] Stash -> AES encrypt interface (Stash scan and writeback)
+			//
 			
 			ReadData,
 			ReadPAddr, // set to 0 for dummy block [ask dave if programs will ever read paddr = 0]
 			ReadLeaf,
 			ReadOutValid, // redundant given StartReadOperation
-			ReadOutReady, // necessary because of DRAM 
-			BlockReadComplete, // TODO GET RID OF THIS SIGNAL
+			ReadOutReady, // necessary because of unpredictable/public DRAM backpressure 
+			BlockReadComplete, // Pulsed during last cycle that a block is being read [TODO not needed by albert?]
 			
-			// Status outputs
+			//
+			// Status interface
+			//
 			
 			StashAlmostFull,
 			StashOverflow
-		);
+	);
 		
 	//--------------------------------------------------------------------------
 	//	Parameters & constants
 	//--------------------------------------------------------------------------
-					
+
 	`include "StashCore.constants"
 
+	localparam					STWidth =				3,
+								ST_Reset =				3'd0,
+								ST_Idle = 				3'd1,
+								ST_Scan1 =				3'd2,
+								ST_PathRead =			3'd3,
+								ST_Scan2 =				3'd4,
+								ST_PathWriteback = 		3'd4;	
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					Clock, Reset; 
+  	input 						Clock, Reset, ResetDone; 
 
 	//--------------------------------------------------------------------------
-	//	Per access commands
+	//	Commands
 	//--------------------------------------------------------------------------
 			
-	input	[ORAML-1:0]		AccessLeaf;
-	input	[ORAMU-1:0]		AccessPAddr;
-	input					AccessIsDummy;
+	input	[ORAML-1:0]			AccessLeaf;
+	input	[ORAMU-1:0]			AccessPAddr;
+	input						AccessIsDummy;
+
+	input						StartScanOperation;
+	input						StartReadOperation;		
 		
 	//--------------------------------------------------------------------------
 	//	Data return interface (ORAM controller -> LLC)
 	//--------------------------------------------------------------------------
 	
-	output	[DataWidth-1:0]	ReturnData;
-	output	[ORAMU-1:0]		ReturnPAddr;
-	output	[ORAML-1:0]		ReturnLeaf;
-	output					ReturnDataOutValid;
-	input					ReturnDataOutReady;	
-	output					BlockReturnComplete;
+	output	[DataWidth-1:0]		ReturnData;
+	output	[ORAMU-1:0]			ReturnPAddr;
+	output	[ORAML-1:0]			ReturnLeaf;
+	output						ReturnDataOutValid;
+	input						ReturnDataOutReady;	
+	output						BlockReturnComplete;
+	
+	//--------------------------------------------------------------------------
+	//	Data return interface (LLC -> Stash)
+	//--------------------------------------------------------------------------	
+	
+	input	[DataWidth-1:0]		EvictData;
+	input	[ORAMU-1:0]			EvictPAddr;
+	input	[ORAML-1:0]			EvictLeaf;
+	input						EvictDataInValid;
+	output						EvictDataInReady;
+	output						BlockEvictComplete;	
 	
 	//--------------------------------------------------------------------------
 	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	input	[DataWidth-1:0]	WriteData;
-	input	[ORAMU-1:0]		WritePAddr;
-	input	[LeafWidth-1:0]	WriteLeaf;
-	input					WriteInValid;
-	output					WriteInReady;	
-	output					BlockWriteComplete;
+	input	[DataWidth-1:0]		WriteData;
+	input	[ORAMU-1:0]			WritePAddr;
+	input	[ORAML-1:0]			WriteLeaf;
+	input						WriteInValid;
+	output						WriteInReady;	
+	output						BlockWriteComplete;
 	
 	//--------------------------------------------------------------------------
 	//	ORAM read interface (stash -> encryption -> external memory)
 	//--------------------------------------------------------------------------
 
-	output	[DataWidth-1:0]	ReadData;
-	output	[ORAMU-1:0]		ReadPAddr;
-	output	[LeafWidth-1:0]	ReadLeaf;
-	output					ReadOutValid;
-	input					ReadOutReady;	
-	output					BlockReadComplete;
+	output	[DataWidth-1:0]		ReadData;
+	output	[ORAMU-1:0]			ReadPAddr;
+	output	[ORAML-1:0]			ReadLeaf;
+	output						ReadOutValid;
+	input						ReadOutReady;	
+	output						BlockReadComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Status interface
 	//--------------------------------------------------------------------------
 
-	output 					StashAlmostFull;
-	output					StashOverflow;
+	output 						StashAlmostFull;
+	output						StashOverflow;
 
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
-	//--------------------------------------------------------------------------
-
-	wire 						Clock;
-	reg							Reset; 
+	//-------------------------------------------------------------------------- 
 	
 	wire	[DataWidth-1:0]		InData;
 	reg							InValid;
@@ -151,82 +190,164 @@ module Stash(
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
 	wire						ScannedLeafAccepted, ScannedLeafValid;
 	
+	reg		[STWidth-1:0]		CS, NS;
+	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
+	
+	wire						ScanCount, ScanComplete;
+		
+	wire						WritebackDone;
+	
+	wire						CoreResetDone;
+	wire	[CMDWidth-1:0]		CoreCommand;
+	wire						CoreCommandValid, CoreCommandReady, CoreOutValid;
+
+	wire	[ScanTableAWidth-1:0]InSTAddr;
+	wire	[StashEAWidth-1:0]	OutSTAddr;	
+	wire						InSTValid, OutSTValid;
+
+	//--------------------------------------------------------------------------
+	//	Debugging interface
+	//--------------------------------------------------------------------------
+	
+	`ifdef MODELSIM
+		// check a bunch of conditions and halt the simulation if something fails
+	`endif
+	
+	//--------------------------------------------------------------------------
+	//	State transitions & control logic
+	//--------------------------------------------------------------------------
+
+	assign	ResetDone =								CoreResetDone;
+
+	
+	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
+	assign	BlockReadComplete =						CSPathWriteback & CoreCommandReady;
+	
+	assign	ReadOutValid =							CSPathWriteback & CoreOutValid;
+	
+	assign	CSPathRead = 							CS == ST_PathRead; 
+	assign	CSPathWriteback = 						CS == ST_PathWriteback; 
+	assign	CSScan1 = 								CS == ST_Scan1; 
+	assign	CSScan2 = 								CS == ST_Scan2;
+	
+	always @(posedge Clock) begin
+		if (Reset) CS <= 							ST_Reset;
+		else CS <= 									NS;
+	end
+	
+	always @( * ) begin
+		NS = 										CS;
+		case (CS)
+			ST_Reset : 
+				if (CoreResetDone) NS =				ST_Idle;
+			ST_Idle :
+				if (StartScanOperation) NS =		ST_Scan1;
+			ST_Scan1 :
+				if (WriteInValid) NS = 				ST_PathRead;
+			ST_PathRead :
+				if (ST_PathWriteback) NS =			ST_Scan2;
+			ST_Scan2 : 
+				if (ScanComplete) NS =				ST_PathWriteback;
+			ST_PathWriteback :
+				if (WritebackDone) NS =				ST_Idle;
+		endcase
+	end
+	
 	//--------------------------------------------------------------------------
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
-	input	[DataWidth-1:0]	WriteData;
-	input	[ORAMU-1:0]		WritePAddr;
-	input	[LeafWidth-1:0]	WriteLeaf;
-	input					WriteInValid;
-	output					WriteInReady;	
-	output					BlockWriteComplete;	
+	assign	CoreCommand =							(CSScan1 | CSScan2) ? CMD_Dump :
+													(CSPathRead) ? CMD_Push :
+													(CSPathWriteback) ? CMD_Peak : {CMDWidth{1'bx}};
 	
-	.InCommand(			Command),
-						.InCommandValid(	CommandValid),
-						.InCommandReady(	CommandReady),
-
-	
+	assign 	CoreCommandValid =						CSPathRead | CSScan1 | CSScan2 | CSPathWriteback;
 	
 	StashCore	
-			Core(		.Clock(				Clock), 
-						.Reset(				Reset),
+			Core(			.Clock(					Clock), 
+							.Reset(					Reset),
+							.ResetDone(				CoreResetDone),
+						
+							.InData(				WriteData),
+							.InPAddr(				WritePAddr),
+							.InLeaf(				WriteLeaf),
+							.InValid(				WriteInValid),
+							.InReady(				WriteInReady),
 
-						.InData(			WriteData),
-						.InValid(			WriteInValid),
-						.InReady(			WriteInReady),
+							.OutData(				ReadData),
+							.OutPAddr(				ReadPAddr),
+							.OutLeaf(				ReadLeaf),
+							.OutValid(				CoreOutValid),
 
-						.InPAddr(			WritePAddr),
-						.InLeaf(			WriteLeaf),
-						.InSAddr(			),
-						.InCommand(			Command),
-						.InCommandValid(	CommandValid),
-						.InCommandReady(	CommandReady),
+							.InSAddr(				OutSTAddr),
+							.InCommand(				CoreCommand),
+							.InCommandValid(		CoreCommandValid),
+							.InCommandReady(		CoreCommandReady),
+												
+							// to scan table
+							.OutScanPAddr(			ScanPAddr),
+							.OutScanLeaf(			ScanLeaf),
+							.OutScanSAddr(			ScanSAddr),
+							.OutScanValid(			ScanLeafValid),
 
-						.OutData(			),
-						.OutValid(			OutValid),
-
-						.OutScanPAddr(		ScanPAddr),
-						.OutScanLeaf(		ScanLeaf),
-						.OutScanSAddr(		ScanSAddr),
-						.OutScanValid(		ScanLeafValid),
-
-						.InScanSAddr(		ScannedSAddr),
-						.InScanAccepted(	ScannedLeafAccepted),
-						.InScanValid(		ScannedLeafValid));
+							// from scan table
+							.InScanSAddr(			ScannedSAddr),
+							.InScanAccepted(		ScannedLeafAccepted),
+							.InScanValid(			ScannedLeafValid));
 
 	StashScanTable 
-			ScanTable(	.Clock(				Clock),
-						.Reset(				Reset),
+			ScanTable(		.Clock(					Clock),
+							.Reset(					Reset),
 
-						.CurrentLeaf(		AccessLeaf),
+							.CurrentLeaf(			AccessLeaf),
 
-						.InLeaf(			ScanLeaf),
-						.InPAddr(			ScanPAddr),
-						.InSAddr(			ScanSAddr),
-						.InValid(			ScanLeafValid),
+							// from core
+							.InLeaf(				ScanLeaf),
+							.InPAddr(				ScanPAddr),
+							.InSAddr(				ScanSAddr),
+							.InValid(				ScanLeafValid),
 			
-						.OutSAddr(			ScannedSAddr),
-						.OutAccepted(		ScannedLeafAccepted),
-						.OutValid(			ScannedLeafValid));	
-	
-	//--------------------------------------------------------------------------
-	//	Debug interface
-	//--------------------------------------------------------------------------
-	
-	//--------------------------------------------------------------------------
-	//	Input gates
-	//--------------------------------------------------------------------------
+							// to core
+							.OutSAddr(				ScannedSAddr),
+							.OutAccepted(			ScannedLeafAccepted),
+							.OutValid(				ScannedLeafValid),
+						
+							// writeback control logic
+							.InSTAddr(				InSTAddr),
+							.InSTValid(				InSTValid),
+							.OutSTAddr(				OutSTAddr),
+							.OutSTValid(			OutSTValid));	
 
 	//--------------------------------------------------------------------------
-	//	Output gates
+	//	Scan control
 	//--------------------------------------------------------------------------
 
-	//--------------------------------------------------------------------------
-	//	State transitions
-	//--------------------------------------------------------------------------
+	Counter		#(			.Width(					SCWidth))
+				ScanCounter(.Clock(					Clock),
+							.Reset(					Reset | ScanComplete),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CSScan1 | CSScan2),
+							.In(					{SCWidth{1'bx}}),
+							.Count(					ScanCount));	
 	
+	assign	ScanComplete =							CSScan2 & ScanCount == ScanDelay;
+	
+	//--------------------------------------------------------------------------
+	//	Writeback control
+	//--------------------------------------------------------------------------
 
+	Counter		#(			.Width(					ScanTableAWidth))
+			RdCounter(		.Clock(					Clock),
+							.Reset(					Reset | ~CSPathWriteback),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CoreCommandReady),
+							.In(					{ScanTableAWidth{1'bx}}),
+							.Count(					InSTAddr));
+
+	assign	WritebackDone =							InSTAddr == BlocksOnPath;
+						
 	//--------------------------------------------------------------------------	
 endmodule
 //--------------------------------------------------------------------------

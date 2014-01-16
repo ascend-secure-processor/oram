@@ -14,6 +14,10 @@ module StashScanTable(
 
 			CurrentLeaf,
 
+			//
+			// Stash is being scanned
+			//
+			
 			InLeaf,
 			InPAddr, // debugging
 			InSAddr,
@@ -21,7 +25,15 @@ module StashScanTable(
 			
 			OutSAddr,
 			OutAccepted,
-			OutValid
+			OutValid,
+			
+			// Scanned stash is being read
+			
+			InSTAddr,
+			InSTValid,
+			
+			OutSTAddr,
+			OutSTValid
 		);
 
 	//--------------------------------------------------------------------------
@@ -55,6 +67,16 @@ module StashScanTable(
 	output						OutAccepted;
 	output						OutValid;
 
+	//--------------------------------------------------------------------------
+	//	Scan interface
+	//--------------------------------------------------------------------------
+		
+	input	[ScanTableAWidth-1:0] InSTAddr;
+	input						InSTValid;
+	
+	output	[StashEAWidth-1:0]	OutSTAddr;
+	output reg					OutSTValid;	
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -166,7 +188,17 @@ module StashScanTable(
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
 
-	assign ScanTableAddress = 						{HighestLevel_Bin, {BCWidth{1'b0}}} + BucketOccupancy;
+	`ifdef MODELSIM
+		always @(posedge Clock) begin
+			if ( (OutAccepted | InValid) & InSTValid ) begin
+				$display("ERROR: ScanTable is multitasking");
+				$stop;
+			end
+		end
+	`endif
+							
+	assign ScanTableAddress = 						(InSTValid) ? InSTAddr : 
+													{HighestLevel_Bin, {BCWidth{1'b0}}} + BucketOccupancy;
 
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
@@ -183,8 +215,13 @@ module StashScanTable(
 							.Write(					OutAccepted),
 							.Address(				ScanTableAddress),
 							.DIn(					InSAddr),
-							.DOut(					/* TODO */));
+							.DOut(					OutSTAddr));
 
+	// Synchronize with ScanTable
+	always @(posedge Clock) begin
+		OutSTValid <=								InSTValid;
+	end
+							
 	//--------------------------------------------------------------------------	
 endmodule
 //--------------------------------------------------------------------------

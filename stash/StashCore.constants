@@ -1,25 +1,36 @@
 				
-parameter				DataWidth =				64,
+/* Pros and cons of this style:
+
+*/
+				
+parameter				DataWidth =				64, // TODO change to 128
 						BlockCount =			20,
 						ORAMB =					512,
 						ORAMU =					32,
 						ORAML =					32,
 						ORAMZ =					4;
 
-`ifdef MACROSAFE				
+`ifdef MACROSAFE
+	localparam			DummyBlockAddress =		0;
+
 	localparam			NumChunks =				ORAMB / DataWidth;
 	localparam			ChunkAWidth =			(`popcount(NumChunks) == 1) ? `log2(NumChunks+1) : `log2(NumChunks+1); // TODO switch to logf
 	localparam			StashEAWidth =			(`popcount(BlockCount) == 1) ? `log2(BlockCount+1) : `log2(BlockCount); // TODO switch to logf
 	localparam			StashAWidth =			`log2(StashEAWidth) + NumChunks; // addr width into data-based memories
 	localparam			StashHDWidth =			ORAMU + ORAML; // stash entry header
-	localparam			SNULL =					BlockCount;
+	localparam			SNULL =					BlockCount; // an invalid stash location
 
 	localparam			ORAMLP1 =				ORAML + 1; // the actual number of levels
-	localparam			ScanTableAWidth =		`log2(ORAMLP1 * ORAMZ);
+	localparam			BlocksOnPath =			ORAMLP1 * ORAMZ;
+	localparam			ScanTableAWidth =		`log2(BlocksOnPath);
 	localparam			BucketAWidth =			`log2(ORAMLP1);
 	
 	localparam			BCWidth =				`log2(ORAMZ) + 1;
 	localparam			BCLWidth =	 			ORAMLP1 * BCWidth;
+	
+	localparam			ScanTableLatency =		0; // UPDATE if this changes
+	localparam			ScanDelay =				BlockCount + ScanTableLatency;
+	localparam			SCWidth =				`log2(ScanDelay);
 `endif
 
 localparam				CMDWidth =				3,
