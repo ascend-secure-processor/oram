@@ -10,8 +10,10 @@
 //	Desc:		Implements core stash operations		
 //
 //	Commands:
-//		Push - 	add element to stash
+//		Push - 	add element to stash.  This is only used on a path read --- NOT 
+//				when a dirty LLC block gets evicted.
 //		Peak - 	read (do not remove) element from stash
+//		Overwrite - update the data for a block currently in the stash
 //		Dump - 	scan all elements in stash and fill table that indicates the 
 //				highest position in the ORAM tree, where each block can be 
 //				written back to.  This operation destroys the stash pointer 
@@ -72,7 +74,8 @@ module StashCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, ResetDone;
+  	input 						Clock, Reset;
+	output						ResetDone;
 
 	//--------------------------------------------------------------------------
 	//	Command interface
@@ -120,8 +123,8 @@ module StashCore(
 	//--------------------------------------------------------------------------
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
-	wire 						CSReset, CNSPeaking, CNSPushing, CNSOverwriting;
+	wire						CSReset, CSIdle, CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
+	wire 						CNSPeaking, CNSPushing, CNSOverwriting;
 
 	wire	[StashEAWidth-1:0]	ResetCount;
 
@@ -147,8 +150,9 @@ module StashCore(
 	wire						StashC_WE;
 	
 	wire	[StashEAWidth-1:0]	StashWalk;
-	wire						StashWalk_Terminator, StashWalk_Writeback;
+	wire						StashWalk_Terminator;
 	wire 						OutScanValidCutoff;
+	wire						OutScanValidPush, OutScanValidDump;
 	
 	wire						DumpPushTransition, DumpHasTransitioned;
 	wire	[StashEAWidth-1:0]	LastDumpAddress;
@@ -192,7 +196,8 @@ module StashCore(
 	/* 
 		Other things to check:
 		1 - elements in used list are not in free list (and vice versa)
-		3 - no element with same program address appears twice
+		2 - no element with same program address appears twice
+		3 - after sync, each list is of expected length
 	*/
 
 	`ifdef MODELSIM
@@ -220,9 +225,9 @@ module StashCore(
 			CS_Delayed <= CS;
 			
 			if (CS_Delayed != CS & CS == ST_Idle)
-				LS <= 			CS_Delayed;
+				LS <= CS_Delayed;
 			
-			if (LS == ST_Dumping & CS != ST_Syncing & CS != ST_Idle) begin
+			if (LS == ST_Dumping & ~CSSyncing & ~CSIdle & ~CSPushing) begin
 				// This is so the block count gets updated ...
 				$display("ERROR: must perform sync after dump");
 				$stop;
@@ -233,10 +238,9 @@ module StashCore(
 				$stop;
 			end
 			
-			if (MS_FinishedWrite | MS_FinishedSync) begin
+			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
-				$display("Write; new element count = %d", StashOccupancy);
 				$display("\tUsedListHead = %d", MS_pt);
 				while (MS_pt != SNULL) begin
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt]);
@@ -253,7 +257,7 @@ module StashCore(
 					end
 				end
 				//
-				/*MS_pt = FreeListHead;
+				MS_pt = FreeListHead;
 				i = 0;
 				$display("\tFreeListHead = %d", MS_pt);
 				while (MS_pt != SNULL) begin
@@ -264,7 +268,7 @@ module StashCore(
 						$display("[ERROR] no terminator (FreeList)");
 						$stop;
 					end
-				end*/
+				end
 			end
 
 			if (OutValid)
@@ -287,9 +291,6 @@ module StashCore(
 													(CSSyncing) ? Sync_Terminator : 1'b0;
 
 	assign	OutData =								StashD_DataOut;
-	
-	assign	OutScanPAddr =							OutPAddr;
-	assign	OutScanLeaf =							OutLeaf;
 			
 	assign	InReady =								CNSPushing | CNSOverwriting;
 	assign 	OutValid = 								CSPeaking | CSPeaking_Delayed;
@@ -303,6 +304,7 @@ module StashCore(
 
 	assign	CSReset =								CS == ST_Reset;
 
+	assign	CSIdle =								CS == ST_Idle;
 	assign	CSPeaking = 							CS == ST_Peaking; 
 	assign	CSPushing = 							CS == ST_Pushing;
 	assign	CSOverwriting =							CS == ST_Overwriting;
@@ -515,16 +517,15 @@ module StashCore(
 		simple to code).
 	*/
 
-	assign	StashC_Address = 						(CSReset) ? 	ResetCount : 
-													(CNSPushing) ? 	FreeListHead : 
-													(CSDumping) ? 	InScanSAddr : 
+	assign	StashC_Address = 						(CSPushing | CSDumping) ? InScanSAddr : 
+													(CSReset) ? 	ResetCount : 
 													(CSSyncing) ?	SyncCount : 
 																	{StashEAWidth{1'bx}};
-	assign	StashC_DataIn = 						(CSReset) ? 	EN_Free :
-													(CNSPushing) ? 	EN_Used : 
-													(CSDumping) ? 	EN_Free : 
+																	
+	assign	StashC_DataIn = 						(CSPushing | CSDumping) ? ((InScanAccepted) ? EN_Free : EN_Used) :
+													(CSReset) ? 	EN_Free :  
 																	{ENWidth{1'bx}};
-	assign	StashC_WE =								CSReset | Add_Terminator | StashWalk_Writeback;
+	assign	StashC_WE =								CSReset | InScanValid;
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				StashEAWidth),
@@ -537,13 +538,14 @@ module StashCore(
 							.DIn(					StashC_DataIn),
 							.DOut(					StashC_DataOut));
 
+	// We could also just update this at the end of the access ...
 	UDCounter	#(			.Width(					StashEAWidth))
 				ElementCount(.Clock(				Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Up(					Add_Terminator),
-							.Down(					StashWalk_Writeback),
+							.Up(					InScanValid & ~InScanAccepted),
+							.Down(					InScanValid & InScanAccepted),
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					StashOccupancy));
 
@@ -560,12 +562,18 @@ module StashCore(
 	assign	StashWalk = 							(CSDumping_FirstCycle & DumpHasTransitioned) ? LastDumpAddress : 
 													(CSDumping_FirstCycle & ~DumpHasTransitioned) ? UsedListHead : 
 													StashP_DataOut;
-	assign 	StashWalk_Terminator =					~InScanValid & InScanValid_Delayed;
+	assign 	StashWalk_Terminator =					CSDumping & ((~InScanValid & InScanValid_Delayed) | // we've stopped getting scan data
+																(CSDumping_FirstCycle & StashWalk == SNULL)); // the stash was empty to begin with
 
-	assign	StashWalk_Writeback =					InScanValid & InScanAccepted;
-
-	assign	OutScanSAddr =							StashWalk_Delayed;
-	assign	OutScanValid =							CSDumping_Delayed & OutScanSAddr != SNULL & ~OutScanValidCutoff & ~DumpPushTransition;
+	assign	OutScanSAddr =							(CSPushing) ? FreeListHead : StashWalk_Delayed;
+	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
+	assign	OutScanLeaf =							(CSPushing) ? InLeaf : OutLeaf;
+	
+	// TODO clean this up
+	assign	OutScanValidPush =						CSPushing & Add_Terminator;
+	assign	OutScanValidDump =						CSDumping_Delayed & OutScanSAddr != SNULL & 
+													~OutScanValidCutoff & ~DumpPushTransition;
+	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
 	
 	Register	#(			.Width(					1)) // brings valid low a cycle earlier
 				SawLast(	.Clock(					Clock),

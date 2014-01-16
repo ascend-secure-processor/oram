@@ -104,13 +104,14 @@ module Stash(
 								ST_Scan1 =				3'd2,
 								ST_PathRead =			3'd3,
 								ST_Scan2 =				3'd4,
-								ST_PathWriteback = 		3'd4;	
+								ST_PathWriteback = 		3'd5;	
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, ResetDone; 
+  	input 						Clock, Reset;
+	output						ResetDone; 
 
 	//--------------------------------------------------------------------------
 	//	Commands
@@ -193,7 +194,8 @@ module Stash(
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
 	
-	wire						ScanCount, ScanComplete;
+	wire	[SCWidth-1:0]		ScanCount;
+	wire						ScanComplete;
 		
 	wire						WritebackDone;
 	
@@ -210,7 +212,20 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	`ifdef MODELSIM
-		// check a bunch of conditions and halt the simulation if something fails
+		reg [STWidth-1:0] CS_Delayed;
+		always @(posedge Clock) begin
+			CS_Delayed <= CS;
+			if (CS_Delayed != CS) begin
+				if (CSScan1)
+					$display("[%m @ %t] Stash: Scan1", $time);
+				if (CSPathRead)
+					$display("[%m @ %t] Stash: PathRead", $time);
+				if (CSScan2)
+					$display("[%m @ %t] Stash: Scan2", $time);
+				if (CSPathWriteback)
+					$display("[%m @ %t] Stash: PathWriteback", $time);
+			end
+		end
 	`endif
 	
 	//--------------------------------------------------------------------------
@@ -219,7 +234,6 @@ module Stash(
 
 	assign	ResetDone =								CoreResetDone;
 
-	
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete =						CSPathWriteback & CoreCommandReady;
 	
@@ -242,10 +256,12 @@ module Stash(
 				if (CoreResetDone) NS =				ST_Idle;
 			ST_Idle :
 				if (StartScanOperation) NS =		ST_Scan1;
+				else if (WriteInValid) NS = 		ST_PathRead;
 			ST_Scan1 :
 				if (WriteInValid) NS = 				ST_PathRead;
+				else if (CoreCommandReady) NS =		ST_Idle; // if the scan finished first
 			ST_PathRead :
-				if (ST_PathWriteback) NS =			ST_Scan2;
+				if (StartReadOperation) NS =		ST_Scan2;
 			ST_Scan2 : 
 				if (ScanComplete) NS =				ST_PathWriteback;
 			ST_PathWriteback :
@@ -261,8 +277,11 @@ module Stash(
 													(CSPathRead) ? CMD_Push :
 													(CSPathWriteback) ? CMD_Peak : {CMDWidth{1'bx}};
 	
-	assign 	CoreCommandValid =						CSPathRead | CSScan1 | CSScan2 | CSPathWriteback;
-	
+	assign 	CoreCommandValid =						CSPathRead | 
+													CSScan1 | 
+													CSScan2 | 
+													(CSPathWriteback & OutSTValid);
+													
 	StashCore	
 			Core(			.Clock(					Clock), 
 							.Reset(					Reset),
@@ -334,7 +353,7 @@ module Stash(
 	assign	ScanComplete =							CSScan2 & ScanCount == ScanDelay;
 	
 	//--------------------------------------------------------------------------
-	//	Writeback control
+	//	Read interface
 	//--------------------------------------------------------------------------
 
 	Counter		#(			.Width(					ScanTableAWidth))
@@ -342,10 +361,11 @@ module Stash(
 							.Reset(					Reset | ~CSPathWriteback),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CoreCommandReady),
+							.Enable(				CSPathWriteback & CoreCommandReady),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					InSTAddr));
 
+	assign	InSTValid =								CSPathWriteback;
 	assign	WritebackDone =							InSTAddr == BlocksOnPath;
 						
 	//--------------------------------------------------------------------------	

@@ -77,25 +77,67 @@ module	StashTestbench;
 	//	Tasks	
 	//--------------------------------------------------------------------------
 
+	task TASK_StartScan;
+		begin
+			StartScanOperation = 1'b1;
+			#(Cycle);
+			StartScanOperation = 1'b0;
+		end
+	endtask
 
+	task TASK_StartRead;
+		begin
+			StartReadOperation = 1'b1;
+			#(Cycle);
+			StartReadOperation = 1'b0;
+		end
+	endtask
 	
-	//--------------------------------------------------------------------------
-	//	Test Stimulus	
-	//--------------------------------------------------------------------------
-
 	Counter		#(			.Width(					DataWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				InValid & InReady),
+							.Enable(				WriteInValid & WriteInReady),
 							.In(					{DataWidth{1'bx}}),
 							.Count(					WriteData));
+		
+	task TASK_QueueWrite;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		begin
+			WriteInValid = 1'b1;
+			WritePAddr = PAddr;
+			WriteLeaf = Leaf;
+		
+			while (~BlockWriteComplete) #(Cycle);
+			#(Cycle);
+
+			WriteInValid = 1'b0;
+		end
+	endtask
+		
+	//--------------------------------------------------------------------------
+	//	Test Stimulus	
+	//--------------------------------------------------------------------------
+
+	/*
+		Cases to test:
+	
+		1.) Scan finishes before, after, during write data arrives
+		2.) Stash is initially empty/not empty
+		3.) Dummy blocks in path, only real blocks in path
+	*/						
 
 	initial begin
 		Reset = 1'b1;
+		
 		StartScanOperation = 1'b0;
 		StartReadOperation = 1'b0;
+		WriteInValid = 1'b0;
+		ReturnDataOutReady = 1'b1;
+		EvictDataInValid = 1'b1;
+		ReadOutReady = 1'b1;
 		
 		#(Cycle);
 	
@@ -103,12 +145,23 @@ module	StashTestbench;
 
 		AccessLeaf = 32'h0000ffff;
 		AccessPAddr = 32'hdeadbeef;
+		AccessIsDummy = 1'b0;
+		
+		while (~ResetDone) #(Cycle);
+		#(Cycle);
 		
 		$display("\n[%m @ %t] Test 1\n", $time);
 		
-		StartScanOperation = 1'b1;
-		#(Cycle);
-		StartScanOperation = 1'b0;
+		TASK_StartScan();
+		
+		#(Cycle*10); // will be > 10, (probably) < 100 in practice
+
+		TASK_QueueWrite(32'hf0000000, 32'h0000ffff);
+		TASK_QueueWrite(32'hf0000001, 32'h0000ffff);
+		TASK_QueueWrite(32'hf0000002, 32'h0000ffff);
+		TASK_QueueWrite(32'hf0000003, 32'h0000ffff);
+		
+		TASK_StartRead();
 		
 		#(Cycle*1000);
 	
