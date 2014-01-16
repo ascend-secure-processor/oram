@@ -21,11 +21,13 @@ module ORAM#
      AppAddr, // addr from core
      AppData, // data from core
 
+     // write to memory
      WrEn, // write enable
      WrData, // write data
      WrDataEnd, // indicate end of write
      WrFull, // write fifo full
 
+     // read from memory
      RdEn, // read enable
      RdData, // read data
      RdEmpty, // read fifo empty
@@ -38,7 +40,7 @@ module ORAM#
      STSize_bot
      );
 
-    local parameter AES_WIDTH = 128;
+    localparam AES_WIDTH = 128;
 
     input                           Clock, Reset;
 
@@ -86,9 +88,13 @@ module ORAM#
     wire [APP_DATA_WIDTH-1:0]           PlainOut; // data from AES
     wire [APP_DATA_WIDTH/AES_WIDTH-1:0] AESInDone;  // done decrypt
 
+    wire [DRAM_ADDR_WIDTH-1:0]        PAddr;
+
     wire                            AddrGenEn;
 
     assign AddrGenEn = MIGRdy & LeafValid;
+
+    assign MIGAddr = PAddr;
 
 
     PosMap#(.MAX_ORAM_L (MAX_ORAM_L),
@@ -102,7 +108,50 @@ module ORAM#
             );
 
 
-    AddrGen#(.DRAM_ADDR_WIDTH (DRAM_ADDR_WIDTH)
+    Stash (.Clock(Clock),
+           .Reset(Reset),
+           .ResetDone(),
+
+           .AccessLeaf(Leaf),
+           .AccessPAddr(PAddr),
+           .AccessIsDummy(), //need to figure out what's dummy
+
+           .StartScanOperation(LeafValid),
+           .StartReadOperation(),
+
+           .ReturnData(),
+           .ReturnPAddr(),
+           .ReturnLeaf(),
+           .ReturnDataOutValid(),
+           .ReturnDataOutReady(),
+           .BlockReturnComplete(),
+
+           .EvictData(),
+           .EvictPAddr(),
+           .EvictLeaf(),
+           .EvictDataInValid(),
+           .EvictDataInReady(),
+           .BlockEvictComplete(),
+
+           .WriteData(),
+           .WriteInValid(),
+           .WriteInReady(),
+           .WritePAddr(),
+           .WriteLeaf(),
+           .BlockWriteComplete(),
+
+           .ReadData(),
+           .ReadPAddr(),
+           .ReadLeaf(),
+           .ReadOutValid(),
+           .ReadOutReady(),
+           .BlockReadComplete(),
+
+           .StashAlmostFull(),
+           .StashOverflow()
+        );
+
+    AddrGen#(.DRAM_ADDR_WIDTH (DRAM_ADDR_WIDTH),
              .MAX_ORAM_L (MAX_ORAM_L),
              .MAX_LOG_L (MAX_LOG_L))
     addrGen (.Clock(Clock),
@@ -116,7 +165,7 @@ module ORAM#
              .NumCompST(NumCompST),
              .STSize_bot(STSize_bot),
              .CurrentLevel(),
-             .PhyAddr(MIGAddr),
+             .PhyAddr(PAddr),
              .STIdx(),
              .BktIdx()
              );
@@ -141,6 +190,7 @@ module ORAM#
                                 .text_in(CipherIn[i * AES_WIDTH - 1:0]),
                                 .text_out(PlainOut[i * AES_WIDTH -1:0]),
                                 .done(AESInDone[i])
+                                );
 
         end
     endgenerate
