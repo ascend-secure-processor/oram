@@ -52,7 +52,7 @@ module StashCore(
 			InScanValid,
 			
 			PrepNextPeak,
-			UpdatesComplete
+			SyncComplete
 	);
 
 	//--------------------------------------------------------------------------
@@ -126,7 +126,7 @@ module StashCore(
 	//--------------------------------------------------------------------------
 	
 	output						PrepNextPeak;
-	output						UpdatesComplete;
+	output						SyncComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -178,7 +178,6 @@ module StashCore(
 	wire						Sync_SettingULH, Sync_SettingFLH;
 	wire						Sync_FoundUsedElement, Sync_FoundFreeElement;
 	wire						Sync_Terminator;
-	wire						CSSyncing_Pre, Sync_Complete;
 	
 	// Derived signals
 
@@ -290,8 +289,10 @@ module StashCore(
 				end
 			end
 
-			if (OutValid)
+			if (OutValid & OutPAddr != DummyBlockAddress)
 				$display("[%m @ %t] Reading %d", $time, OutData);
+			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
+				$display("[%m @ %t] Read dummy block", $time);
 		end	
 	`endif
 	
@@ -325,7 +326,6 @@ module StashCore(
 	
 	// We need this cycle early because the stash scan table is a synchronous memory
 	assign	PrepNextPeak =							Transfer_Terminator_Pre;
-	assign	UpdatesComplete =						Sync_Terminator;
 	
 	assign	CSReset =								CS == ST_Reset;
 
@@ -384,7 +384,7 @@ module StashCore(
 				if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if (InCommand != CMD_Peak)
+				if (~InCommandValid & Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Dumping : 
 				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
@@ -394,22 +394,6 @@ module StashCore(
 					NS =							ST_Idle;
 		endcase
 	end
-
-	Register	#(			.Width(					1))
-				SyncOn(		.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
-							.Set(					CSPeaking),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					CSSyncing_Pre));
-	Register	#(			.Width(					1))
-				SyncDone(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					Sync_Terminator),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					Sync_Complete));
-	assign	CSSyncing = 							CSSyncing_Pre & ~Sync_Complete;
 	
 	//--------------------------------------------------------------------------
 	//	Reset logic
@@ -561,7 +545,7 @@ module StashCore(
 													(CSReset) ? 	ResetCount : 
 													(CSSyncing) ?	SyncCount : 
 																	{StashEAWidth{1'bx}};
-																	
+
 	assign	StashC_DataIn = 						(CSPushing | CSDumping) ? 
 																	((InScanAccepted) ? EN_Free : EN_Used) :
 													(CSReset) ? 	EN_Free :  
@@ -594,6 +578,12 @@ module StashCore(
 	//	Dumping the UsedList
 	//--------------------------------------------------------------------------
 
+	/*
+	
+		TODO this logic is kind of hacky because of the concurrent write logic ...
+	
+	*/
+	
 	/*
 		Connect the UsedList scanning logic to the ScanTable logic.  The 
 		termination condition is based on the ScanInValid logic (NOT 
@@ -650,6 +640,22 @@ module StashCore(
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------
 
+	// State.  This is decoupled from the main FSM to allow concurrent read/sync
+	Register	#(			.Width(					1))
+				Syncing(	.Clock(					Clock),
+							.Reset(					Reset | Sync_Terminator),
+							.Set(					CSPeaking & ~SyncComplete),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					CSSyncing));
+	Register	#(			.Width(					1))
+				SyncDone(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					Sync_Terminator),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					SyncComplete));	
+	
 	/*
 		After determining which ORAM blocks to writeback to the tree, re-create 
 		the used/free lists based on the contents in StashC.  This circuit 

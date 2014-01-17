@@ -8,7 +8,7 @@ parameter				DataWidth =				64, // TODO change to 128
 						ORAMB =					512,
 						ORAMU =					32,
 						ORAML =					32,
-						ORAMZ =					4;
+						ORAMZ =					2;
 
 `ifdef MACROSAFE
 	localparam			DummyBlockAddress =		32'hdeadbeef;
@@ -21,12 +21,12 @@ parameter				DataWidth =				64, // TODO change to 128
 	localparam			SNULL =					BlockCount; // an invalid stash location
 
 	localparam			ORAMLP1 =				ORAML + 1; // the actual number of levels
+	localparam			BucketAWidth =			`log2(ORAMLP1); // bucket lookup
 	localparam			BlocksOnPath =			ORAMLP1 * ORAMZ;
 	localparam			ScanTableAWidth =		`log2(BlocksOnPath);
-	localparam			BucketAWidth =			`log2(ORAMLP1);
-	
-	localparam			BCWidth =				`log2(ORAMZ) + 1;
-	localparam			BCLWidth =	 			ORAMLP1 * BCWidth;
+
+	localparam			BCWidth =				`log2(ORAMZ) + 1; // need +1 to account for full buckets
+	localparam			BCLWidth =	 			ORAMLP1 * BCWidth; // bitvector of bucket counts
 	
 	localparam			ScanTableLatency =		0; // UPDATE if this changes
 	localparam			ScanDelay =				BlockCount + ScanTableLatency;

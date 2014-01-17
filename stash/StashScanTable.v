@@ -136,7 +136,7 @@ module StashScanTable(
 							.Enable(				~ResetDone),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					ResetCount));
-	assign	ResetDone =								ResetCount == (BlocksOnPath - 1);	
+	assign	ResetDone =								ResetCount == BlocksOnPath;	
 
 	//--------------------------------------------------------------------------
 	//	Stash matching logic
@@ -219,9 +219,9 @@ module StashScanTable(
 		end
 	`endif
 							
-	assign 	ScanTable_Address = 					(~ResetDone) ? ResetCount : 
-													(InSTValid) ? InSTAddr : 
-													{HighestLevel_Bin, {BCWidth{1'b0}}} + BucketOccupancy;
+	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
+													(InValid) ? 	{HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
+																	InSTAddr;
 	assign	ScanTable_WE =							OutAccepted | InSTReset | ~ResetDone;
 
 	assign	ScanTable_DataIn =						(~ResetDone | InSTReset) ? SNULL : InSAddr;
@@ -243,7 +243,7 @@ module StashScanTable(
 							.DIn(					ScanTable_DataIn),
 							.DOut(					OutSTAddr));
 
-	// Synchronize with ScanTable
+	// Synchronize with ScanTable latency
 	always @(posedge Clock) begin
 		OutSTValid <=								InSTValid;
 	end

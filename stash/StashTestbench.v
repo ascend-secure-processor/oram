@@ -134,9 +134,11 @@ module	StashTestbench;
 		
 		StartScanOperation = 1'b0;
 		StartReadOperation = 1'b0;
+
 		WriteInValid = 1'b0;
+		EvictDataInValid = 1'b0;
+		
 		ReturnDataOutReady = 1'b1;
-		EvictDataInValid = 1'b1;
 		ReadOutReady = 1'b1;
 		
 		#(Cycle);

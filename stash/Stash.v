@@ -71,18 +71,24 @@ module Stash(
 			WriteInReady,
 			WritePAddr,
 			WriteLeaf,
-			BlockWriteComplete, // Pulsed during the last cycle that a block is being written [this will be read by albert to tick the next PAddr/Leaf]
+			BlockWriteComplete, // Pulsed during the last cycle that a block is 
+								// being written [this will be read by albert to 
+								// tick the next PAddr/Leaf]
 			
 			//
 			// [BACKEND] Stash -> AES encrypt interface (Stash scan and writeback)
 			//
 			
 			ReadData,
-			ReadPAddr, // set to 0 for dummy block [ask dave if programs will ever read paddr = 0]
+			ReadPAddr, 			// set to DummyBlockAddress (see StashCore.constants) 
+								// for dummy block
 			ReadLeaf,
-			ReadOutValid, // redundant given StartReadOperation
-			ReadOutReady, // necessary because of unpredictable/public DRAM backpressure 
-			BlockReadComplete, // Pulsed during last cycle that a block is being read [TODO not needed by albert?]
+			ReadOutValid, 		
+			ReadOutReady, 		// If de-asserted, the Stash will finish writing 
+								// back the current block and then wait to 
+								// writeback the next block   
+			BlockReadComplete, 	// Pulsed during last cycle that a block is 
+								// being read
 			
 			//
 			// Status interface
@@ -180,10 +186,6 @@ module Stash(
 	//-------------------------------------------------------------------------- 
 	
 	wire						PerAccessReset;
-	
-	wire	[DataWidth-1:0]		InData;
-	reg							InValid;
-	wire						InReady;
 
 	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
@@ -198,20 +200,24 @@ module Stash(
 	
 	wire						BlockReadComplete_Pre;
 	
+	wire						PathWriteback_Waiting;
+	wire	[ScanTableAWidth-1:0] BlocksRead;
+	
+	
 	wire	[SCWidth-1:0]		ScanCount;
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
 	
-	wire						PrepNextPeak, CoreUpdatesComplete, WritebackDone;
+	wire						PrepNextPeak, Core_AccessComplete, Top_AccessComplete;
 	
 	wire						CoreResetDone;
 	wire	[CMDWidth-1:0]		CoreCommand;
 	wire						CoreCommandValid, CoreCommandReady, CoreOutValid;
 
-	wire	[ScanTableAWidth-1:0]InSTAddr;
+	wire	[ScanTableAWidth-1:0]BlocksReading;
 	wire	[StashEAWidth-1:0]	OutSTAddr;	
 	wire						InSTValid, OutSTValid;
-	wire						PathWriteback_STReset;
+	wire						PathWriteback_Tick;
 
 	//--------------------------------------------------------------------------
 	//	Debugging interface
@@ -231,6 +237,14 @@ module Stash(
 				if (CSPathWriteback)
 					$display("[%m @ %t] Stash: PathWriteback", $time);
 			end
+			
+			if (PerAccessReset)
+				$display("[%m @ %t] *** Per-module reset *** (ORAM access should be complete)", $time);
+				
+			if (~Scan2Complete_Actual & Scan2Complete_Conservative) begin
+				$display("[%m @ %t] ERROR: scan took longer than worst-case time...", $time);
+				$stop;
+			end
 		end
 	`endif
 	
@@ -239,7 +253,7 @@ module Stash(
 	//--------------------------------------------------------------------------
 
 	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
-	assign	PerAccessReset =						WritebackDone & CoreUpdatesComplete;
+	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete_Pre =					CSPathWriteback & CoreCommandReady;
@@ -272,9 +286,10 @@ module Stash(
 			ST_PathRead :
 				if (StartReadOperation) NS =		ST_Scan2;
 			ST_Scan2 : 
-				if (Scan2Complete_Conservative) NS =ST_PathWriteback;
+				if (Scan2Complete_Conservative & ReadOutReady) 
+					NS = 							ST_PathWriteback;
 			ST_PathWriteback :
-				if (WritebackDone) NS =				ST_Idle;
+				if (Top_AccessComplete) NS =		ST_Idle;
 		endcase
 	end
 	
@@ -326,7 +341,7 @@ module Stash(
 							.InScanValid(			ScannedLeafValid),
 							
 							.PrepNextPeak(			PrepNextPeak),
-							.UpdatesComplete(		CoreUpdatesComplete));
+							.SyncComplete(			Core_AccessComplete));
 
 	StashScanTable 
 			ScanTable(		.Clock(					Clock),
@@ -348,9 +363,9 @@ module Stash(
 							.OutValid(				ScannedLeafValid),
 						
 							// writeback control logic
-							.InSTAddr(				InSTAddr),
+							.InSTAddr(				BlocksReading),
 							.InSTValid(				InSTValid),
-							.InSTReset(				PathWriteback_STReset),
+							.InSTReset(				PathWriteback_Tick),
 							.OutSTAddr(				OutSTAddr),
 							.OutSTValid(			OutSTValid));	
 
@@ -358,18 +373,20 @@ module Stash(
 	//	Scan control
 	//--------------------------------------------------------------------------
 
+	// count the worst-case scan latency (for security)
 	Counter		#(			.Width(					SCWidth))
 				ScanCounter(.Clock(					Clock),
-							.Reset(					Reset | Scan2Complete_Conservative),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSScan1 | CSScan2),
 							.In(					{SCWidth{1'bx}}),
 							.Count(					ScanCount));
 	
+	// marks when we _actually_ finish the scan (must be < worse-case time)
 	Register	#(			.Width(					1))
 				DumpStage(	.Clock(					Clock),
-							.Reset(					Reset | Scan2Complete_Conservative),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					CSScan2 & CoreCommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -380,20 +397,43 @@ module Stash(
 	//--------------------------------------------------------------------------
 	//	Read interface
 	//--------------------------------------------------------------------------
-
-	assign	PathWriteback_STReset =					CSPathWriteback & PrepNextPeak;
 	
+	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
+	wire StillReading;
+	
+	assign	StillReading = BlocksReading != (BlocksOnPath - 1);
+	
+	// ticks at start of block read
 	Counter		#(			.Width(					ScanTableAWidth))
-			RdCounter(		.Clock(					Clock),
+				RdStartCnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathWriteback_STReset),
+							.Enable(				PathWriteback_Tick & StillReading),
 							.In(					{ScanTableAWidth{1'bx}}),
-							.Count(					InSTAddr));
+							.Count(					BlocksReading));
+
+	// ticks at end of block read
+	Counter		#(			.Width(					ScanTableAWidth))
+				RdReturnCnt(.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CSPathWriteback & BlockReadComplete),
+							.In(					{ScanTableAWidth{1'bx}}),
+							.Count(					BlocksRead));
 							
-	assign	InSTValid =								CSPathWriteback;
-	assign	WritebackDone =							InSTAddr == BlocksOnPath;
+	// Block-level backpressure for reads (due to random DRAM delays)
+	Register	#(			.Width(					1))
+				ReadWait(	.Clock(					Clock),
+							.Reset(					Reset | ReadOutReady),
+							.Set(					PathWriteback_Tick & ~ReadOutReady),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					PathWriteback_Waiting));
+							
+	assign	InSTValid =								CSPathWriteback & StillReading & ~PathWriteback_Waiting;
+	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------	
 endmodule
