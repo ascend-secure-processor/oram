@@ -11,7 +11,8 @@
 module StashScanTable(
 			Clock, 
 			Reset,
-
+			ResetDone,
+			
 			CurrentLeaf,
 
 			//
@@ -31,6 +32,7 @@ module StashScanTable(
 			
 			InSTAddr,
 			InSTValid,
+			InSTReset, // perform scan table resets in the background
 			
 			OutSTAddr,
 			OutSTValid
@@ -46,8 +48,9 @@ module StashScanTable(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset; 
-		
+  	input 						Clock, Reset; 	
+	output						ResetDone;
+	
 	//--------------------------------------------------------------------------
 	//	Input interface
 	//--------------------------------------------------------------------------
@@ -72,7 +75,7 @@ module StashScanTable(
 	//--------------------------------------------------------------------------
 		
 	input	[ScanTableAWidth-1:0] InSTAddr;
-	input						InSTValid;
+	input						InSTValid, InSTReset;
 	
 	output	[StashEAWidth-1:0]	OutSTAddr;
 	output reg					OutSTValid;	
@@ -89,10 +92,14 @@ module StashScanTable(
 	wire	[BucketAWidth-1:0]	HighestLevel_Bin;
 
 	wire	[BCWidth-1:0]		BucketOccupancy;
-	wire	[ScanTableAWidth-1:0]ScanTableAddress;
+	wire	[ScanTableAWidth-1:0]ScanTable_Address;
+	wire	[StashEAWidth-1:0]	ScanTable_DataIn;
+	wire						ScanTable_WE;
 
 	wire	[BCLWidth-1:0]		BCounts, BCounts_New;
 
+	wire	[ScanTableAWidth-1:0]ResetCount;
+	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
 	//--------------------------------------------------------------------------
@@ -115,6 +122,20 @@ module StashScanTable(
 			end
 		end
 	`endif
+	
+	//--------------------------------------------------------------------------
+	//	Reset
+	//--------------------------------------------------------------------------
+	
+	Counter		#(			.Width(					ScanTableAWidth))
+				InitCounter(.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				~ResetDone),
+							.In(					{ScanTableAWidth{1'bx}}),
+							.Count(					ResetCount));
+	assign	ResetDone =								ResetCount == (BlocksOnPath - 1);	
 
 	//--------------------------------------------------------------------------
 	//	Stash matching logic
@@ -197,9 +218,13 @@ module StashScanTable(
 		end
 	`endif
 							
-	assign ScanTableAddress = 						(InSTValid) ? InSTAddr : 
+	assign 	ScanTable_Address = 					(~ResetDone) ? ResetCount : 
+													(InSTValid) ? InSTAddr : 
 													{HighestLevel_Bin, {BCWidth{1'b0}}} + BucketOccupancy;
+	assign	ScanTable_WE =							OutAccepted | InSTReset | ~ResetDone;
 
+	assign	ScanTable_DataIn =						(~ResetDone | InSTReset) ? SNULL : InSAddr;
+	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
 		written back during this ORAM access.
@@ -212,9 +237,9 @@ module StashScanTable(
 				ScanTable(	.Clock(					Clock),
 							.Reset(					/* not connected */),
 							.Enable(				1'b1),
-							.Write(					OutAccepted),
-							.Address(				ScanTableAddress),
-							.DIn(					InSAddr),
+							.Write(					ScanTable_WE),
+							.Address(				ScanTable_Address),
+							.DIn(					ScanTable_DataIn),
 							.DOut(					OutSTAddr));
 
 	// Synchronize with ScanTable
@@ -222,7 +247,7 @@ module StashScanTable(
 		OutSTValid <=								InSTValid;
 	end
 							
-	//--------------------------------------------------------------------------	
+	//--------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------
 

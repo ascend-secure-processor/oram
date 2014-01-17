@@ -11,7 +11,7 @@ parameter				DataWidth =				64, // TODO change to 128
 						ORAMZ =					4;
 
 `ifdef MACROSAFE
-	localparam			DummyBlockAddress =		0;
+	localparam			DummyBlockAddress =		32'hdeadbeef;
 
 	localparam			NumChunks =				ORAMB / DataWidth;
 	localparam			ChunkAWidth =			(`popcount(NumChunks) == 1) ? `log2(NumChunks+1) : `log2(NumChunks+1); // TODO switch to logf

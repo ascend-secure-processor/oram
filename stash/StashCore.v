@@ -130,11 +130,14 @@ module StashCore(
 	
 	wire	[StashEAWidth-1:0]	ResetCount;
 
+	wire	[ORAMU-1:0]			OutPAddr_Pre;
+	
 	wire	[DataWidth-1:0]		StashD_DataOut;
 	wire						WriteTransfer, DataTransfer, Add_Terminator, Transfer_Terminator;
 
 	wire	[StashAWidth-1:0]	StashD_Address;
 	wire	[StashEAWidth-1:0]	StashE_Address;
+	reg		[StashEAWidth-1:0]	StashE_Address_Delayed;
 	wire						FirstChunk, LastChunk_Pre, LastChunk;
 
 	wire 	[ChunkAWidth-1:0]	CurrentChunk;
@@ -339,6 +342,7 @@ module StashCore(
 		StashWalk_Delayed <=						StashWalk;
 		InScanValid_Delayed <=						InScanValid;
 		OutScanValid_Delayed <=						OutScanValid;
+		StashE_Address_Delayed <=					StashE_Address;
 	end
 	
 	always @( * ) begin
@@ -390,7 +394,7 @@ module StashCore(
 								.Reset(				Reset),
 								.Set(				1'b0),
 								.Load(				1'b0),
-								.Enable(			CSReset),
+								.Enable(			~ResetDone),
 								.In(				{StashEAWidth{1'bx}}),
 								.Count(				ResetCount));
 	assign	ResetDone =								ResetCount == (BlockCount - 1);
@@ -445,8 +449,9 @@ module StashCore(
 							.Enable(				1'b1),
 							.Write(					WriteTransfer & FirstChunk), // TODO latch this in on last chunk?
 							.Address(				StashE_Address),
-							.DIn(					{InPAddr, 	InLeaf}),
-							.DOut(					{OutPAddr, 	OutLeaf}));
+							.DIn(					{InPAddr, 		InLeaf}),
+							.DOut(					{OutPAddr_Pre, 	OutLeaf}));
+	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress : OutPAddr_Pre;
 
 	//--------------------------------------------------------------------------
 	//	Management
@@ -577,7 +582,6 @@ module StashCore(
 	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
 	assign	OutScanLeaf =							(CSPushing) ? InLeaf : OutLeaf;
 	
-	// TODO clean this up
 	assign	OutScanValidPush =						CSPushing & Add_Terminator;
 	assign	OutScanValidDump =						CSDumping_Delayed & OutScanSAddr != SNULL & 
 													~OutScanValidCutoff & ~Dump_Preempt;

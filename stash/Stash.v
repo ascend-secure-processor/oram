@@ -196,7 +196,8 @@ module Stash(
 	
 	wire	[SCWidth-1:0]		ScanCount;
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
-		
+	wire 						ScanTableResetDone;
+	
 	wire						WritebackDone;
 	
 	wire						CoreResetDone;
@@ -206,6 +207,7 @@ module Stash(
 	wire	[ScanTableAWidth-1:0]InSTAddr;
 	wire	[StashEAWidth-1:0]	OutSTAddr;	
 	wire						InSTValid, OutSTValid;
+	wire						PathWriteback_STReset;
 
 	//--------------------------------------------------------------------------
 	//	Debugging interface
@@ -232,7 +234,7 @@ module Stash(
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
-	assign	ResetDone =								CoreResetDone;
+	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
 
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete =						CSPathWriteback & CoreCommandReady;
@@ -279,6 +281,7 @@ module Stash(
 	
 	assign 	CoreCommandValid =						CSPathRead | 
 													CSScan1 | 
+													// we could also just let the stash loop between idle->dump ...
 													(CSScan2 & ~Scan2Complete_Actual) | 
 													(CSPathWriteback & OutSTValid);
 													
@@ -317,7 +320,8 @@ module Stash(
 	StashScanTable 
 			ScanTable(		.Clock(					Clock),
 							.Reset(					Reset),
-
+							.ResetDone(				ScanTableResetDone),
+							
 							.CurrentLeaf(			AccessLeaf),
 
 							// from core
@@ -334,6 +338,7 @@ module Stash(
 							// writeback control logic
 							.InSTAddr(				InSTAddr),
 							.InSTValid(				InSTValid),
+							.InSTReset(				PathWriteback_STReset),
 							.OutSTAddr(				OutSTAddr),
 							.OutSTValid(			OutSTValid));	
 
@@ -364,15 +369,17 @@ module Stash(
 	//	Read interface
 	//--------------------------------------------------------------------------
 
+	assign	PathWriteback_STReset =					CSPathWriteback & CoreCommandReady;
+	
 	Counter		#(			.Width(					ScanTableAWidth))
 			RdCounter(		.Clock(					Clock),
 							.Reset(					Reset | ~CSPathWriteback),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CSPathWriteback & CoreCommandReady),
+							.Enable(				PathWriteback_STReset),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					InSTAddr));
-
+							
 	assign	InSTValid =								CSPathWriteback;
 	assign	WritebackDone =							InSTAddr == BlocksOnPath;
 						
