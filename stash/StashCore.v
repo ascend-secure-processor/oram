@@ -126,6 +126,8 @@ module StashCore(
 	wire						CSReset, CSIdle, CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
 	wire 						CNSPeaking, CNSPushing, CNSOverwriting;
 
+	wire						PerAccessReset;
+	
 	wire	[StashEAWidth-1:0]	ResetCount;
 
 	wire	[DataWidth-1:0]		StashD_DataOut;
@@ -154,7 +156,7 @@ module StashCore(
 	wire 						OutScanValidCutoff;
 	wire						OutScanValidPush, OutScanValidDump;
 	
-	wire						DumpPushTransition, DumpHasTransitioned;
+	wire						Dump_Preempt, Dump_Phase2;
 	wire	[StashEAWidth-1:0]	LastDumpAddress;
 
 	wire	[StashEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
@@ -227,11 +229,13 @@ module StashCore(
 			if (CS_Delayed != CS & CS == ST_Idle)
 				LS <= CS_Delayed;
 			
+			/* obsolete check with all of the operation interleaving ...
 			if (LS == ST_Dumping & ~CSSyncing & ~CSIdle & ~CSPushing) begin
 				// This is so the block count gets updated ...
 				$display("ERROR: must perform sync after dump");
 				$stop;
 			end
+			*/
 			
 			if (CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH) begin
 				$display("ERROR: both free/used list given same pointer during sync");
@@ -287,7 +291,7 @@ module StashCore(
 		without a cycle gap. 
 	*/
 	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
-													(CSDumping) ? CSDumping_FirstCycle : 
+													(CSDumping) ? CSDumping_FirstCycle : // this is so we will see push commands in the queue
 													(CSSyncing) ? Sync_Terminator : 1'b0;
 
 	assign	OutData =								StashD_DataOut;
@@ -301,7 +305,8 @@ module StashCore(
 
 	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
-
+	assign	Dump_Preempt =							InCommand == CMD_Push & InValid & InCommandValid;
+	
 	assign	CSReset =								CS == ST_Reset;
 
 	assign	CSIdle =								CS == ST_Idle;
@@ -311,7 +316,12 @@ module StashCore(
 	assign	CSDumping = 							CS == ST_Dumping;
 	assign	CSSyncing =								CS == ST_Syncing;
 
-	/* Mealy machine to decrease rd->wr/etc op turnover time */
+	/* 	
+		Mealy machine to decrease rd->wr/etc op turnover time.  This design 
+		allows us to move to read/write/etc immediately, which is arguably 
+		better than waiting 1 cycle initially (Moore machine) and then 
+		avoiding turnover to the Idle stage for a cycle after each read/write. 
+	*/
 	assign	CNSPeaking = 							CSPeaking | (NS == ST_Peaking); 
 	assign	CNSPushing = 							CSPushing | (NS == ST_Pushing); 
 	assign 	CNSOverwriting =						CSOverwriting | (NS == ST_Overwriting);
@@ -330,8 +340,6 @@ module StashCore(
 		InScanValid_Delayed <=						InScanValid;
 		OutScanValid_Delayed <=						OutScanValid;
 	end
-	
-	assign	DumpPushTransition =					InCommand == CMD_Push & InValid;
 	
 	always @( * ) begin
 		NS = 										CS;
@@ -363,7 +371,7 @@ module StashCore(
 					NS =							ST_Idle;
 			ST_Dumping : 
 				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
-				if (DumpPushTransition)
+				if (Dump_Preempt)
 					NS = 							ST_Pushing;
 				else if (StashWalk_Terminator)
 					NS =							ST_Idle;
@@ -559,8 +567,8 @@ module StashCore(
 		ScanOutValid) so that we can add pipelining to StashScanTable as needed.
 	*/
 
-	assign	StashWalk = 							(CSDumping_FirstCycle & DumpHasTransitioned) ? LastDumpAddress : 
-													(CSDumping_FirstCycle & ~DumpHasTransitioned) ? UsedListHead : 
+	assign	StashWalk = 							(CSDumping_FirstCycle & Dump_Phase2) ? LastDumpAddress : 
+													(CSDumping_FirstCycle & ~Dump_Phase2) ? UsedListHead : 
 													StashP_DataOut;
 	assign 	StashWalk_Terminator =					CSDumping & ((~InScanValid & InScanValid_Delayed) | // we've stopped getting scan data
 																(CSDumping_FirstCycle & StashWalk == SNULL)); // the stash was empty to begin with
@@ -572,12 +580,12 @@ module StashCore(
 	// TODO clean this up
 	assign	OutScanValidPush =						CSPushing & Add_Terminator;
 	assign	OutScanValidDump =						CSDumping_Delayed & OutScanSAddr != SNULL & 
-													~OutScanValidCutoff & ~DumpPushTransition;
+													~OutScanValidCutoff & ~Dump_Preempt;
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
 	
 	Register	#(			.Width(					1)) // brings valid low a cycle earlier
 				SawLast(	.Clock(					Clock),
-							.Reset(					Reset | ~CSDumping),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					~OutScanValid & OutScanValid_Delayed),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -588,20 +596,22 @@ module StashCore(
 		from DRAM.  The dump can be restarted in the middle using another Dump 
 		command.
 	*/
-							
+
 	Register	#(			.Width(					1))
-				DumpSaved(	.Clock(					Clock),
-							.Reset(					Reset | StashWalk_Terminator),
-							.Set(					DumpPushTransition),
+				DumpStage(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					Dump_Preempt | StashWalk_Terminator),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					DumpHasTransitioned));
+							.Out(					Dump_Phase2));
+							
+	// if we get interrupted, save where we were in the used list
 	Register	#(			.Width(					StashEAWidth))
-				SavedDump(	.Clock(					Clock),
-							.Reset(					Reset | StashWalk_Terminator),
+				LastAddrReg(.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
-							.Enable(				DumpPushTransition),
-							.In(					{StashEAWidth{1'bx}}),
+							.Enable(				CSDumping & (Dump_Preempt | StashWalk_Terminator)),
+							.In(					StashWalk),
 							.Out(					LastDumpAddress));
 							
 	//--------------------------------------------------------------------------
@@ -626,7 +636,7 @@ module StashCore(
 	
 	Counter		#(			.Width(					StashEAWidth))
 				SyncCounter(.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSSyncing),
@@ -634,7 +644,8 @@ module StashCore(
 							.Count(					SyncCount));
 
 	assign	Sync_Terminator = 						SyncCount == (BlockCount - 1);
-
+	assign	PerAccessReset =						Sync_Terminator;
+	
 	assign	Sync_StashPUpdateSrc =					(StashC_DataOut == EN_Used) ? LastULE : LastFLE;
 
 	assign	Sync_FoundUsedElement =					CSSyncing & StashC_DataOut == EN_Used;
@@ -645,14 +656,14 @@ module StashCore(
 	
 	Register	#(			.Width(					1))
 				ULHSetReg(	.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					Sync_FoundUsedElement),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ULHSet));
 	Register	#(			.Width(					StashEAWidth))
 				LastULEReg(	.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Enable(				Sync_FoundUsedElement),
 							.In(					SyncCount),
@@ -660,14 +671,14 @@ module StashCore(
 
 	Register	#(			.Width(					1))
 				FLHSetReg(	.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					Sync_FoundFreeElement),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					FLHSet));
 	Register	#(			.Width(					StashEAWidth))
 				LastFLEReg(	.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Enable(				Sync_FoundFreeElement),
 							.In(					SyncCount),

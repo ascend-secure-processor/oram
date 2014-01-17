@@ -195,7 +195,7 @@ module Stash(
 	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
 	
 	wire	[SCWidth-1:0]		ScanCount;
-	wire						ScanComplete;
+	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
 		
 	wire						WritebackDone;
 	
@@ -263,7 +263,7 @@ module Stash(
 			ST_PathRead :
 				if (StartReadOperation) NS =		ST_Scan2;
 			ST_Scan2 : 
-				if (ScanComplete) NS =				ST_PathWriteback;
+				if (Scan2Complete_Conservative) NS =ST_PathWriteback;
 			ST_PathWriteback :
 				if (WritebackDone) NS =				ST_Idle;
 		endcase
@@ -279,7 +279,7 @@ module Stash(
 	
 	assign 	CoreCommandValid =						CSPathRead | 
 													CSScan1 | 
-													CSScan2 | 
+													(CSScan2 & ~Scan2Complete_Actual) | 
 													(CSPathWriteback & OutSTValid);
 													
 	StashCore	
@@ -343,14 +343,22 @@ module Stash(
 
 	Counter		#(			.Width(					SCWidth))
 				ScanCounter(.Clock(					Clock),
-							.Reset(					Reset | ScanComplete),
+							.Reset(					Reset | Scan2Complete_Conservative),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSScan1 | CSScan2),
 							.In(					{SCWidth{1'bx}}),
-							.Count(					ScanCount));	
+							.Count(					ScanCount));
 	
-	assign	ScanComplete =							CSScan2 & ScanCount == ScanDelay;
+	Register	#(			.Width(					1))
+				DumpStage(	.Clock(					Clock),
+							.Reset(					Reset | Scan2Complete_Conservative),
+							.Set(					CSScan2 & CoreCommandReady),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					Scan2Complete_Actual));
+	
+	assign	Scan2Complete_Conservative =			CSScan2 & ScanCount == ScanDelay;
 	
 	//--------------------------------------------------------------------------
 	//	Read interface
