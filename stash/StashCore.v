@@ -48,7 +48,9 @@ module StashCore(
 
 			InScanSAddr,
 			InScanAccepted,
-			InScanValid
+			InScanValid,
+			
+			PrepNextPeak,
 	);
 
 	//--------------------------------------------------------------------------
@@ -118,13 +120,15 @@ module StashCore(
 	input						InScanAccepted;
 	input						InScanValid;
 
+	output						PrepNextPeak;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSReset, CSIdle, CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
-	wire 						CNSPeaking, CNSPushing, CNSOverwriting;
+	wire 						CNSPushing, CNSOverwriting;
 
 	wire						PerAccessReset;
 	
@@ -133,7 +137,8 @@ module StashCore(
 	wire	[ORAMU-1:0]			OutPAddr_Pre;
 	
 	wire	[DataWidth-1:0]		StashD_DataOut;
-	wire						WriteTransfer, DataTransfer, Add_Terminator, Transfer_Terminator;
+	wire						WriteTransfer, DataTransfer, Add_Terminator;
+	wire						Transfer_Terminator, Transfer_Terminator_Pre;
 
 	wire	[StashAWidth-1:0]	StashD_Address;
 	wire	[StashEAWidth-1:0]	StashE_Address;
@@ -300,7 +305,7 @@ module StashCore(
 	assign	OutData =								StashD_DataOut;
 			
 	assign	InReady =								CNSPushing | CNSOverwriting;
-	assign 	OutValid = 								CSPeaking | CSPeaking_Delayed;
+	assign 	OutValid = 								CSPeaking_Delayed;
 
 	assign 	WriteTransfer = 						InReady & InValid;
 	assign 	ReadTransfer = 							CSPeaking; // will we have valid data out in the next cycle?
@@ -308,7 +313,11 @@ module StashCore(
 
 	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
+	assign	Transfer_Terminator_Pre =				LastChunk_Pre & DataTransfer;
 	assign	Dump_Preempt =							InCommand == CMD_Push & InValid & InCommandValid;
+	
+	// We need this cycle early because the stash scan table is a synchronous memory
+	assign	PrepNextPeak =							Transfer_Terminator_Pre;
 	
 	assign	CSReset =								CS == ST_Reset;
 
@@ -325,7 +334,6 @@ module StashCore(
 		better than waiting 1 cycle initially (Moore machine) and then 
 		avoiding turnover to the Idle stage for a cycle after each read/write. 
 	*/
-	assign	CNSPeaking = 							CSPeaking | (NS == ST_Peaking); 
 	assign	CNSPushing = 							CSPushing | (NS == ST_Pushing); 
 	assign 	CNSOverwriting =						CSOverwriting | (NS == ST_Overwriting);
 	
@@ -371,7 +379,7 @@ module StashCore(
 				if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if (Transfer_Terminator)
+				if (InCommand != CMD_Peak)
 					NS =							ST_Idle;
 			ST_Dumping : 
 				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
@@ -403,7 +411,7 @@ module StashCore(
 	//	Core memories
 	//--------------------------------------------------------------------------
 
-	assign	StashE_Address = 						(CNSPeaking | CNSOverwriting) ? InSAddr : 
+	assign	StashE_Address = 						(CSPeaking | CNSOverwriting) ? InSAddr : 
 													(CSDumping) ? StashWalk : 
 													FreeListHead;
 	assign	StashD_Address =						{StashE_Address, {ChunkAWidth{1'b0}}} + CurrentChunk;
@@ -431,7 +439,7 @@ module StashCore(
 							.Reset(					Reset | Transfer_Terminator),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~LastChunk & (DataTransfer | CNSPeaking)),
+							.Enable(				~LastChunk & (DataTransfer | CSPeaking)),
 							.In(					{ChunkAWidth{1'bx}}),
 							.Count(					CurrentChunk));
 

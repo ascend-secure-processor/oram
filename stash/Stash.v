@@ -198,6 +198,7 @@ module Stash(
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
 	
+	wire						PrepNextPeak;
 	wire						WritebackDone;
 	
 	wire						CoreResetDone;
@@ -315,7 +316,9 @@ module Stash(
 							// from scan table
 							.InScanSAddr(			ScannedSAddr),
 							.InScanAccepted(		ScannedLeafAccepted),
-							.InScanValid(			ScannedLeafValid));
+							.InScanValid(			ScannedLeafValid),
+							
+							.PrepNextPeak(			PrepNextPeak));
 
 	StashScanTable 
 			ScanTable(		.Clock(					Clock),
@@ -369,7 +372,7 @@ module Stash(
 	//	Read interface
 	//--------------------------------------------------------------------------
 
-	assign	PathWriteback_STReset =					CSPathWriteback & CoreCommandReady;
+	assign	PathWriteback_STReset =					CSPathWriteback & PrepNextPeak;
 	
 	Counter		#(			.Width(					ScanTableAWidth))
 			RdCounter(		.Clock(					Clock),
