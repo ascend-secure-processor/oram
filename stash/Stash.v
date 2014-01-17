@@ -166,7 +166,7 @@ module Stash(
 	output	[ORAML-1:0]			ReadLeaf;
 	output						ReadOutValid;
 	input						ReadOutReady;	
-	output						BlockReadComplete;
+	output reg 					BlockReadComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Status interface
@@ -195,6 +195,8 @@ module Stash(
 	
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
+	
+	wire						BlockReadComplete_Pre;
 	
 	wire	[SCWidth-1:0]		ScanCount;
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
@@ -240,7 +242,7 @@ module Stash(
 	assign	PerAccessReset =						WritebackDone & CoreUpdatesComplete;
 	
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
-	assign	BlockReadComplete =						CSPathWriteback & CoreCommandReady;
+	assign	BlockReadComplete_Pre =					CSPathWriteback & CoreCommandReady;
 	
 	assign	ReadOutValid =							CSPathWriteback & CoreOutValid;
 	
@@ -252,6 +254,8 @@ module Stash(
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
+		
+		BlockReadComplete <=						BlockReadComplete_Pre;
 	end
 	
 	always @( * ) begin

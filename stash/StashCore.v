@@ -556,12 +556,14 @@ module StashCore(
 		simple to code).
 	*/
 
-	assign	StashC_Address = 						(CSPushing | CSDumping) ? InScanSAddr : 
+	assign	StashC_Address = 						(CSPushing | CSDumping) ? 
+																	InScanSAddr : 
 													(CSReset) ? 	ResetCount : 
 													(CSSyncing) ?	SyncCount : 
 																	{StashEAWidth{1'bx}};
 																	
-	assign	StashC_DataIn = 						(CSPushing | CSDumping) ? ((InScanAccepted) ? EN_Free : EN_Used) :
+	assign	StashC_DataIn = 						(CSPushing | CSDumping) ? 
+																	((InScanAccepted) ? EN_Free : EN_Used) :
 													(CSReset) ? 	EN_Free :  
 																	{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid;
