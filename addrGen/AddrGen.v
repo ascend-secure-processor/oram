@@ -1,65 +1,54 @@
-module AddrGen#
-  (
-   parameter MAX_ORAM_L = 32,
-   parameter MAX_LOG_L = 5,
-   parameter ADDR_WIDTH = 30,
-   parameter DATA_WIDTH = 512
-   )
-  (
-   Clock,
-   Reset,
-   Enable,
-   leaf,
-   ORAMLevels,
-   L_st,
-   BktSize,
-   STSize,
-   NumCompST,
-   STSize_bot,
-   CurrentLevel,
-   PhyAddr,
-   STIdx,
-   BktIdx, // tmp output for debugging
-   );
+module AddrGen
+#(
+  parameter MAX_ORAM_L = 32,
+  parameter MAX_LOG_L = 5,
+  parameter ADDR_WIDTH = 30
+)
+(
+  input Clock, Reset, Enable, 
+  input [MAX_ORAM_L-1:0] leaf,                     // the input leaf label
+  input [MAX_LOG_L-1:0] ORAMLevels, L_st, numST,   // ORAM depth related
+  input [MAX_ORAM_L-1:0] BktSize, STSize, numCompST, STSize_bot,  // Bytes related parameters
+  output reg [MAX_LOG_L-1:0]  currentLevel, 
+  output [ADDR_WIDTH-1:0] PhyAddr,
+  output [MAX_ORAM_L-1:0] STIdx, BktIdx   // tmp output for debugging
+);
 
-  input Clock, Reset, Enable;
-  input [MAX_ORAM_L-1:0] leaf;
-  input [MAX_LOG_L-1:0]  ORAMLevels, L_st;
-  input [MAX_ORAM_L-1:0] BktSize, STSize, NumCompST, STSize_bot;  // Bytes related parameters
-  output reg [MAX_LOG_L-1:0]  CurrentLevel;
-  output [ADDR_WIDTH-1:0] PhyAddr;
 
-  // ORAM structure information and state counters
-  wire [MAX_LOG_L-1:0] numST;
-  wire [MAX_ORAM_L-1:0] leaf_padded, leaf_in;
-  reg [MAX_LOG_L-1:0] currentST;
-
-  assign numST = (ORAMLevels + L_st - 1) / L_st;
-  assign leaf_padded = leaf << (numST * L_st - ORAMLevels + 1);
-  assign leaf_in = (leaf >> (ORAMLevels - 1 - currentST * L_st)) % (1 << L_st);
-  initial begin
-    currentST = 1;
-    CurrentLevel = 0;
-  end
-
-  // use two PathGen modules to get subtree indices and bucket indices
-  output wire [MAX_ORAM_L-1:0] STIdx, BktIdx;
+  // reverse leaf and leaf shifter
+  wire [MAX_ORAM_L-1:0] leaf_reverse;
+  Reverse #(MAX_ORAM_L, 1, MAX_ORAM_L) rev(leaf, leaf_reverse);
+  reg [MAX_ORAM_L-1:0] leaf_reverse_shift;
+  
+  // One PathGen module walks the subtrees and the other inside a subtree
+  // wire [MAX_ORAM_L-1:0] STIdx, BktIdx;
   wire switchST;
-  PathGen STGen(Clock, Reset, switchST, leaf_padded, L_st, numST, STIdx);
-  PathGen BktGen(Clock, switchST, Enable, leaf_in, L_st-L_st+1, L_st, BktIdx);
-
-  // control logic for PathGen
-  assign switchST = (CurrentLevel % L_st) == L_st - 1;
+  PathGen #(MAX_ORAM_L, MAX_LOG_L, ADDR_WIDTH) 
+    STGen(Clock, Reset, Enable, switchST, leaf_reverse_shift[0], STIdx); 
+  PathGen #(MAX_ORAM_L, MAX_LOG_L, ADDR_WIDTH) 
+    BktGen(Clock, Reset || switchST, Enable, Enable, leaf_reverse_shift[0], BktIdx);
+    // or equivalently
+    // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
+  
+  // control logic for STGen and BktGen
+  reg [MAX_LOG_L-1:0] currentLvlinST;
+  assign switchST = currentLvlinST >= L_st - 1;
   always@(posedge Clock) begin
-    if (switchST)
-      currentST = currentST + 1;
-    if (Enable)
-      CurrentLevel = CurrentLevel + 1;
+    if (Reset) begin
+      currentLevel <= 0;
+      currentLvlinST <= 0;
+      leaf_reverse_shift <= leaf_reverse >> (MAX_ORAM_L - ORAMLevels + 1);
+    end 
+    else if (Enable) begin
+      currentLevel <= currentLevel + 1;
+      currentLvlinST <= switchST ? 0 : currentLvlinST + 1;
+      leaf_reverse_shift <= leaf_reverse_shift >> 1;    
+    end
   end
-
-  // adjust for the (possibly) incomplete subtrees at the bottom
-  wire inCompleteTree;
-  assign inCompleteTree = (numST * L_st != ORAMLevels) && CurrentLevel >= (numST-1) * L_st;
-  assign PhyAddr = STIdx * STSize + BktIdx * BktSize - inCompleteTree * (STSize - STSize_bot) * (STIdx - NumCompST);
-
+  
+  // adjust for the (possibly) shorter subtrees at the bottom 
+  wire shortTreeAtBottom;
+  assign shortTreeAtBottom = (numST * L_st != ORAMLevels) && currentLevel >= (numST-1) * L_st;
+  assign PhyAddr = STIdx * STSize + BktIdx * BktSize - shortTreeAtBottom * (STSize - STSize_bot) * (STIdx - numCompST); 
+  
 endmodule
