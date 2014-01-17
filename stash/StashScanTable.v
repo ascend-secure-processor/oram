@@ -11,6 +11,7 @@
 module StashScanTable(
 			Clock, 
 			Reset,
+			PerAccessReset,
 			ResetDone,
 			
 			CurrentLeaf,
@@ -48,7 +49,7 @@ module StashScanTable(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset; 	
+  	input 						Clock, Reset, PerAccessReset; 	
 	output						ResetDone;
 	
 	//--------------------------------------------------------------------------
@@ -192,7 +193,7 @@ module StashScanTable(
 	*/
 	Register	#(			.Width(					BCLWidth))
 				BucketCnts(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Enable(				OutAccepted),
 							.In(					BCounts_New),

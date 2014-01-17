@@ -23,6 +23,7 @@
 module StashCore(
 			Clock, 
 			Reset,
+			PerAccessReset,
 			ResetDone,
 			
 			InCommand,
@@ -51,6 +52,7 @@ module StashCore(
 			InScanValid,
 			
 			PrepNextPeak,
+			UpdatesComplete
 	);
 
 	//--------------------------------------------------------------------------
@@ -65,8 +67,7 @@ module StashCore(
 							ST_Pushing = 			3'd2, // write, add
 							ST_Overwriting = 		3'd3, // overwrite current entry
 							ST_Peaking =			3'd4, // read, do not remove
-							ST_Dumping =			3'd5, // stash scan [rename?]
-							ST_Syncing =			3'd6;
+							ST_Dumping =			3'd5; // stash scan [rename?]
 
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
@@ -76,7 +77,7 @@ module StashCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset;
+  	input 						Clock, Reset, PerAccessReset;
 	output						ResetDone;
 
 	//--------------------------------------------------------------------------
@@ -120,7 +121,12 @@ module StashCore(
 	input						InScanAccepted;
 	input						InScanValid;
 
+	//--------------------------------------------------------------------------
+	//	Hacks that help get the job done ...
+	//--------------------------------------------------------------------------
+	
 	output						PrepNextPeak;
+	output						UpdatesComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -172,7 +178,8 @@ module StashCore(
 	wire						Sync_SettingULH, Sync_SettingFLH;
 	wire						Sync_FoundUsedElement, Sync_FoundFreeElement;
 	wire						Sync_Terminator;
-
+	wire						CSSyncing_Pre, Sync_Complete;
+	
 	// Derived signals
 
 	reg		[StashEAWidth-1:0] 	StashWalk_Delayed;
@@ -300,7 +307,7 @@ module StashCore(
 	*/
 	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
 													(CSDumping) ? CSDumping_FirstCycle : // this is so we will see push commands in the queue
-													(CSSyncing) ? Sync_Terminator : 1'b0;
+													1'b0;
 
 	assign	OutData =								StashD_DataOut;
 			
@@ -318,6 +325,7 @@ module StashCore(
 	
 	// We need this cycle early because the stash scan table is a synchronous memory
 	assign	PrepNextPeak =							Transfer_Terminator_Pre;
+	assign	UpdatesComplete =						Sync_Terminator;
 	
 	assign	CSReset =								CS == ST_Reset;
 
@@ -326,7 +334,6 @@ module StashCore(
 	assign	CSPushing = 							CS == ST_Pushing;
 	assign	CSOverwriting =							CS == ST_Overwriting;
 	assign	CSDumping = 							CS == ST_Dumping;
-	assign	CSSyncing =								CS == ST_Syncing;
 
 	/* 	
 		Mealy machine to decrease rd->wr/etc op turnover time.  This design 
@@ -369,8 +376,6 @@ module StashCore(
 						NS =						ST_Peaking;
 					if (InCommand == CMD_Dump)
 						NS =						ST_Dumping;
-					if (InCommand == CMD_Sync)
-						NS =						ST_Syncing;
 				end
 			ST_Pushing :
 				if (Transfer_Terminator)
@@ -387,12 +392,25 @@ module StashCore(
 					NS = 							ST_Pushing;
 				else if (StashWalk_Terminator)
 					NS =							ST_Idle;
-			ST_Syncing :
-				if (Sync_Terminator)
-					NS =							ST_Idle;
 		endcase
 	end
 
+	Register	#(			.Width(					1))
+				SyncOn(		.Clock(					Clock),
+							.Reset(					Reset | Sync_Terminator),
+							.Set(					CSPeaking),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					CSSyncing_Pre));
+	Register	#(			.Width(					1))
+				SyncDone(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					Sync_Terminator),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					Sync_Complete));
+	assign	CSSyncing = 							CSSyncing_Pre & ~Sync_Complete;
+	
 	//--------------------------------------------------------------------------
 	//	Reset logic
 	//--------------------------------------------------------------------------
@@ -656,7 +674,6 @@ module StashCore(
 							.Count(					SyncCount));
 
 	assign	Sync_Terminator = 						SyncCount == (BlockCount - 1);
-	assign	PerAccessReset =						Sync_Terminator;
 	
 	assign	Sync_StashPUpdateSrc =					(StashC_DataOut == EN_Used) ? LastULE : LastFLE;
 

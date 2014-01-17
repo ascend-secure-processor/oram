@@ -179,6 +179,8 @@ module Stash(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 	
+	wire						PerAccessReset;
+	
 	wire	[DataWidth-1:0]		InData;
 	reg							InValid;
 	wire						InReady;
@@ -198,8 +200,7 @@ module Stash(
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
 	
-	wire						PrepNextPeak;
-	wire						WritebackDone;
+	wire						PrepNextPeak, CoreUpdatesComplete, WritebackDone;
 	
 	wire						CoreResetDone;
 	wire	[CMDWidth-1:0]		CoreCommand;
@@ -236,7 +237,8 @@ module Stash(
 	//--------------------------------------------------------------------------
 
 	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
-
+	assign	PerAccessReset =						WritebackDone & CoreUpdatesComplete;
+	
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete =						CSPathWriteback & CoreCommandReady;
 	
@@ -289,6 +291,7 @@ module Stash(
 	StashCore	
 			Core(			.Clock(					Clock), 
 							.Reset(					Reset),
+							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				CoreResetDone),
 						
 							.InData(				WriteData),
@@ -318,11 +321,13 @@ module Stash(
 							.InScanAccepted(		ScannedLeafAccepted),
 							.InScanValid(			ScannedLeafValid),
 							
-							.PrepNextPeak(			PrepNextPeak));
+							.PrepNextPeak(			PrepNextPeak),
+							.UpdatesComplete(		CoreUpdatesComplete));
 
 	StashScanTable 
 			ScanTable(		.Clock(					Clock),
 							.Reset(					Reset),
+							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
@@ -376,7 +381,7 @@ module Stash(
 	
 	Counter		#(			.Width(					ScanTableAWidth))
 			RdCounter(		.Clock(					Clock),
-							.Reset(					Reset | ~CSPathWriteback),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				PathWriteback_STReset),
@@ -385,7 +390,7 @@ module Stash(
 							
 	assign	InSTValid =								CSPathWriteback;
 	assign	WritebackDone =							InSTAddr == BlocksOnPath;
-						
+
 	//--------------------------------------------------------------------------	
 endmodule
 //--------------------------------------------------------------------------
