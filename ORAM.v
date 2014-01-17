@@ -17,9 +17,15 @@ module ORAM#
      MIGInstr, // 0 for write, 1 for read
      MIGAddr, // ORAM memory address
 
-     AppInstr, // application instruction
-     AppAddr, // addr from core
-     AppData, // data from core
+     LCCInstr, // application instruction
+     LCCAddr, // addr from lcc
+
+     LCCWData, // write data from lcc
+     LCCWAddr,
+
+     LCCRData, // read data to lcc
+     LCCRAddr, // read addr
+     LLCRValid, // read data is valid
 
      // write to memory
      WrEn, // write enable
@@ -41,14 +47,22 @@ module ORAM#
      );
 
     localparam AES_WIDTH = 128;
+    localparam LCC_WRITE = 0;
+    localparam LCC_READ = 1;
 
     input                           Clock, Reset;
 
     input                           MIGRdy;
 
-    input                           AppInstr;
-    input [APP_ADDR_WIDTH-1:0]      AppAddr;
-    input [APP_DATA_WIDTH-1:0]      AppData;
+    input                           LCCInstr;
+    input                           LCCInstrValid;
+    input [APP_ADDR_WIDTH-1:0]      LCCAddr;
+
+    input [APP_DATA_WIDTH-1:0]      LCCWData;
+
+    output [APP_DATA_WIDTH-1:0]     LCCRData;
+    output [APP_ADDR_WIDTH-1:0]     LCCRAddr;
+    output                          LLCRValid;
 
     output                          MIGEn;
     output [2:0]                    MIGInstr;
@@ -57,7 +71,6 @@ module ORAM#
     output                          WrEn;
     output [APP_DATA_WIDTH-1:0]     WrData;
     output                          WrDataEnd;
-
     input                           WrFull;
 
     output                          RdEn;
@@ -71,6 +84,8 @@ module ORAM#
     input [MAX_ORAM_L-1:0]          NumCompST;
     input [MAX_ORAM_L-1:0]          STSize_bot;
 
+
+    // Wires
 
     wire [MAX_ORAM_L-1:0]           Leaf; // comes from POSMAP
     wire                            LeafValid;
@@ -88,20 +103,32 @@ module ORAM#
     wire [APP_DATA_WIDTH-1:0]           PlainOut; // data from AES
     wire [APP_DATA_WIDTH/AES_WIDTH-1:0] AESInDone;  // done decrypt
 
-    wire [DRAM_ADDR_WIDTH-1:0]        PAddr;
+    wire [DRAM_ADDR_WIDTH-1:0]          PAddr;
 
-    wire                            AddrGenEn;
+    wire                                AddrGenEn;
+
+    wire                                StashReturnRdy;
+
+    wire                                StashEvictValid;
+    wire                                StashEvictRdy;
+
+    // Assignments
 
     assign AddrGenEn = MIGRdy & LeafValid;
 
     assign MIGAddr = PAddr;
 
+    assign StashReturnRdy = LCCInstrValid & (LCCInstr == LCC_READ);
+
+    assign StashEvictValid = StashEvictRdy & (LCCInstr == LCC_WRITE);
+
+    //Modules
 
     PosMap#(.MAX_ORAM_L (MAX_ORAM_L),
             .APP_ADDR_WIDTH (APP_ADDR_WIDTH))
     posMap (.Clock(Clock),
             .Reset(Reset),
-            .AppAddr(AppAddr),
+            .AppAddr(LCCAddr),
             .AppAddrValid(),
             .Leaf(Leaf),
             .LeafValid(LeafValid)
@@ -113,24 +140,24 @@ module ORAM#
            .ResetDone(),
 
            .AccessLeaf(Leaf),
-           .AccessPAddr(PAddr),
+           .AccessPAddr(PAddr), //this vs EvictPAddr?
            .AccessIsDummy(), //need to figure out what's dummy
 
            .StartScanOperation(LeafValid),
-           .StartReadOperation(),
+           .StartReadOperation(), //pulse after last block decrypted
 
-           .ReturnData(),
-           .ReturnPAddr(),
-           .ReturnLeaf(),
-           .ReturnDataOutValid(),
-           .ReturnDataOutReady(),
+           .ReturnData(LCCRData),
+           .ReturnPAddr(LCCRAddr),
+           .ReturnLeaf(), //why is this needed?
+           .ReturnDataOutValid(LCCRValid),
+           .ReturnDataOutReady(StashReturnRdy),
            .BlockReturnComplete(),
 
-           .EvictData(),
-           .EvictPAddr(),
-           .EvictLeaf(),
-           .EvictDataInValid(),
-           .EvictDataInReady(),
+           .EvictData(LCCWData),
+           .EvictPAddr(LCCAddr),
+           .EvictLeaf(Leaf),
+           .EvictDataInValid(StashEvictValid),
+           .EvictDataInReady(StashEvictRdy),
            .BlockEvictComplete(),
 
            .WriteData(),
