@@ -10,6 +10,7 @@
 //	Desc:		The Path ORAM stash.
 //
 //	- Leaf orientation: least significant bit is root bucket
+// 	- Writeback occurs in root -> leaf bucket order
 //
 //	TODO:
 //		- override all parameters
@@ -187,6 +188,9 @@ module Stash(
 	
 	wire						PerAccessReset;
 
+	reg		[STWidth-1:0]		CS, NS;
+	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
+		
 	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
 	wire	[StashEAWidth-1:0]	ScanSAddr;
@@ -195,15 +199,12 @@ module Stash(
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
 	wire						ScannedLeafAccepted, ScannedLeafValid;
 	
-	reg		[STWidth-1:0]		CS, NS;
-	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
-	
+	wire 						StillReadingPath;	
 	wire						BlockReadComplete_Pre;
 	
 	wire						PathWriteback_Waiting;
 	wire	[ScanTableAWidth-1:0] BlocksRead;
-	
-	
+		
 	wire	[SCWidth-1:0]		ScanCount;
 	wire						Scan2Complete_Actual, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
@@ -399,9 +400,7 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
-	wire StillReading;
-	
-	assign	StillReading = BlocksReading != (BlocksOnPath - 1);
+	assign	StillReadingPath = 							BlocksReading != (BlocksOnPath - 1);
 	
 	// ticks at start of block read
 	Counter		#(			.Width(					ScanTableAWidth))
@@ -409,7 +408,7 @@ module Stash(
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathWriteback_Tick & StillReading),
+							.Enable(				PathWriteback_Tick & StillReadingPath),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksReading));
 
@@ -432,7 +431,7 @@ module Stash(
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
 							
-	assign	InSTValid =								CSPathWriteback & StillReading & ~PathWriteback_Waiting;
+	assign	InSTValid =								CSPathWriteback & StillReadingPath & ~PathWriteback_Waiting;
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------	

@@ -67,6 +67,8 @@ module	StashTestbench;
 	wire 						StashAlmostFull;
 	wire						StashOverflow;
 	
+	integer						TestID;
+	
 	//--------------------------------------------------------------------------
 	//	Clock Source
 	//--------------------------------------------------------------------------
@@ -102,6 +104,9 @@ module	StashTestbench;
 							.In(					{DataWidth{1'bx}}),
 							.Count(					WriteData));
 		
+	/* 
+		Writes a cache line to the stash 
+	*/
 	task TASK_QueueWrite;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
@@ -117,6 +122,47 @@ module	StashTestbench;
 		end
 	endtask
 		
+	/*
+		Verify that a stash read has the data we expect
+	*/
+	task TASK_ReadCheck;
+		input	[DataWidth-1:0] BaseData;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		
+		reg		[DataWidth-1:0] Data;
+		integer done;
+		begin
+			done = 0;
+			Data = BaseData;
+			
+			while (done == 0) begin
+				if (ReadPAddr != DummyBlockAddress) begin
+					if (ReadOutValid & ReadOutReady) begin
+						if (ReadData != Data) begin
+							$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
+							$stop;
+						end
+						//$display("OK: Stash read data %d, expected %d", ReadData, Data);
+						if (BlockReadComplete) begin
+							if (ReadPAddr != PAddr || ReadLeaf != Leaf) begin
+								$display("FAIL: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
+								$stop;
+							end
+							//$display("OK: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
+							done = 1;
+						end
+						Data = Data + 1;
+					end
+				end
+				#(Cycle);
+			end
+			
+			$display("PASS: Test %d", TestID);
+			TestID = TestID + 1;
+		end
+	endtask
+	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
@@ -151,6 +197,10 @@ module	StashTestbench;
 		
 		while (~ResetDone) #(Cycle);
 		#(Cycle);
+
+		// ---------------------------------------------------------------------
+		// Test 1
+		// ---------------------------------------------------------------------
 		
 		$display("\n[%m @ %t] Test 1\n", $time);
 		
@@ -164,6 +214,10 @@ module	StashTestbench;
 		TASK_QueueWrite(32'hf0000003, 32'h0000ffff);
 		
 		TASK_StartRead();
+		
+		// ---------------------------------------------------------------------
+		// Test 2
+		// ---------------------------------------------------------------------		
 		
 		#(Cycle*1000);
 
@@ -214,6 +268,22 @@ module	StashTestbench;
 
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow));
+
+	//--------------------------------------------------------------------------
+	//	Verification
+	//--------------------------------------------------------------------------
+
+	initial begin
+		TestID = 0;
+
+		while (~ResetDone) #(Cycle);
+		#(Cycle);
+		
+		TASK_ReadCheck(16, 32'hf0000002, 32'h0000ffff);
+		TASK_ReadCheck(24, 32'hf0000003, 32'h0000ffff);
+		TASK_ReadCheck(0, 32'hf0000000, 32'h0000ffff);
+		TASK_ReadCheck(8, 32'hf0000001, 32'h0000ffff);
+	end
 
 	//--------------------------------------------------------------------------
 endmodule
