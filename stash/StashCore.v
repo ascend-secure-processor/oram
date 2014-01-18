@@ -145,7 +145,8 @@ module StashCore(
 	//--------------------------------------------------------------------------
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSReset, CSIdle, CSPeaking, CSPushing, CSOverwriting, CSDumping, CSSyncing;
+	wire						CSReset, CSIdle, CSPeaking, CSPushing, 
+								CSOverwriting, CSDumping, CSSyncing;
 	wire 						CNSPushing, CNSOverwriting;
 
 	wire						PerAccessReset;
@@ -204,18 +205,6 @@ module StashCore(
 		CSPeaking_Delayed = 1'b0;
 		CSDumping_Delayed = 1'b0;
 	end
-
-	//--------------------------------------------------------------------------
-	//	Hardware debug interface
-	//--------------------------------------------------------------------------
-	
-	Register	#(			.Width(					1))
-				Overflow(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					(StashOccupancy == StashCapacity) & WriteTransfer),
-							.Enable(				1'bx),
-							.In(					1'bx),
-							.Out(					StashOverflow));
 
 	//--------------------------------------------------------------------------
 	//	Software debugging

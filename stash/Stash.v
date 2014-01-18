@@ -89,6 +89,7 @@ module Stash(
 								// writeback the next block until it goes high
 			BlockReadComplete, 	// Pulsed during last cycle that a block is 
 								// being read
+			PathReadComplete,
 			
 			//
 			// Status interface
@@ -174,6 +175,7 @@ module Stash(
 	output						ReadOutValid;
 	input						ReadOutReady;	
 	output reg 					BlockReadComplete;
+	output						PathReadComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Status interface
@@ -259,6 +261,7 @@ module Stash(
 	
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete_Pre =					CSPathWriteback & CoreCommandReady;
+	assign	PathReadComplete =						PerAccessReset;
 	
 	assign	ReadOutValid =							CSPathWriteback & CoreOutValid;
 	
@@ -299,9 +302,10 @@ module Stash(
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
-	assign	CoreCommand =							(CSScan1 | CSScan2) ? CMD_Dump :
-													(CSPathRead) ? CMD_Push :
-													(CSPathWriteback) ? CMD_Peak : {CMDWidth{1'bx}};
+	assign	CoreCommand =							(CSScan1 | CSScan2) ? 	CMD_Dump :
+													(CSPathRead) ? 			CMD_Push :
+													(CSPathWriteback) ? 	CMD_Peak : 
+																			{CMDWidth{1'bx}};
 	
 	assign 	CoreCommandValid =						CSPathRead | 
 													CSScan1 | 

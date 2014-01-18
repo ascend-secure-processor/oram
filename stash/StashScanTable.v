@@ -106,7 +106,12 @@ module StashScanTable(
 	//--------------------------------------------------------------------------
 
 	`ifdef MODELSIM
+		integer ind;
+		reg ResetDone_Delayed;
+		
 		always @(posedge Clock) begin
+			ResetDone_Delayed <= ResetDone;
+			
 			if (InValid) begin
 				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InSAddr, InPAddr, CurrentLeaf, InLeaf);
 
@@ -120,6 +125,23 @@ module StashScanTable(
 					$display("\tScan accept: entry %d will be written back", OutSAddr);
 				if (~OutAccepted & OutValid)
 					$display("\tScan reject: entry %d will NOT be written back", OutSAddr);
+			end
+
+			if ( (OutAccepted | InValid) & InSTValid ) begin
+				$display("ERROR: ScanTable is multitasking");
+				$stop;
+			end
+			
+			if (PerAccessReset | (~ResetDone_Delayed & ResetDone)) begin
+				ind = 0;
+				while (ind != BlocksOnPath) begin
+					if (ScanTable.Mem[ind] != SNULL) begin					
+						$display("ERROR: Scan table address %d not initialized to SNULL (found %d)", ind, ScanTable.Mem[ind]);
+						$stop;
+					end
+					//$display("OK %d", ScanTable.Mem[ind]);
+					ind = ind + 1;
+				end
 			end
 		end
 	`endif
@@ -210,15 +232,6 @@ module StashScanTable(
 				BCMux(		.Select(				HighestLevel_Onehot), 
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
-
-	`ifdef MODELSIM
-		always @(posedge Clock) begin
-			if ( (OutAccepted | InValid) & InSTValid ) begin
-				$display("ERROR: ScanTable is multitasking");
-				$stop;
-			end
-		end
-	`endif
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
 													(InValid) ? 	{HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 

@@ -62,7 +62,7 @@ module	StashTestbench;
 	wire	[ORAML-1:0]			ReadLeaf;
 	wire						ReadOutValid;
 	reg							ReadOutReady;	
-	wire						BlockReadComplete;
+	wire						BlockReadComplete, PathReadComplete;
 	
 	wire 						StashAlmostFull;
 	wire						StashOverflow;
@@ -80,6 +80,20 @@ module	StashTestbench;
 	//	Tasks	
 	//--------------------------------------------------------------------------
 
+	task TASK_WaitForAccess;
+		begin
+			while (~PathReadComplete) #(Cycle);
+			#(Cycle);	
+		end
+	endtask
+		
+	task TASK_BigTest;
+		input [31:0] num;
+		begin
+		$display("\n\n[%m @ %t] Starting big test %d \n\n", $time, num);
+		end
+	endtask
+	
 	task TASK_StartScan;
 		begin
 			StartScanOperation = 1'b1;
@@ -210,10 +224,10 @@ module	StashTestbench;
 		#(Cycle);
 
 		// ---------------------------------------------------------------------
-		// Test 1
+		// Test 1: Basic backend test; all blocks written back
 		// ---------------------------------------------------------------------
 		
-		$display("\n[%m @ %t] Test 1\n", $time);
+		TASK_BigTest(1);
 		
 		TASK_StartScan();
 		
@@ -225,15 +239,58 @@ module	StashTestbench;
 		TASK_QueueWrite(32'hf0000003, 32'h0000ffff);
 		
 		TASK_StartRead();
+
+		TASK_WaitForAccess();
 		
 		// ---------------------------------------------------------------------
-		// Test 2
+		// Test 2: ""; no blocks written back
 		// ---------------------------------------------------------------------		
+
+		#(Cycle*1000); // TODO remove
+		
+		TASK_BigTest(2);
+		
+		TASK_StartScan();
+		
+		#(Cycle*10);
+
+		TASK_QueueWrite(32'hf0000004, 32'hffff0000);
+		TASK_QueueWrite(32'hf0000005, 32'hffff0000);
+		TASK_QueueWrite(32'hf0000006, 32'hffff0000);
+		TASK_QueueWrite(32'hf0000007, 32'hffff0000);
+		
+		TASK_StartRead();
+		
+		TASK_WaitForAccess();
+
+		// ---------------------------------------------------------------------
+		// Test 3:
+		// ---------------------------------------------------------------------		
+		
+		
 		
 		#(Cycle*1000);
 
 	end
 
+	//--------------------------------------------------------------------------
+	//	Verification
+	//--------------------------------------------------------------------------
+
+	initial begin
+		TestID = 0;
+
+		while (~ResetDone) #(Cycle);
+		#(Cycle);
+		
+		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
+		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
+		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
+		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
+		
+		TASK_CheckOccupancy(0);
+	end	
+	
 	//--------------------------------------------------------------------------
 	//	CUT
 	//--------------------------------------------------------------------------
@@ -283,28 +340,11 @@ module	StashTestbench;
 							.ReadOutValid(			ReadOutValid), 
 							.ReadOutReady(			ReadOutReady), 
 							.BlockReadComplete(		BlockReadComplete),
-
+							.PathReadComplete(		PathReadComplete),
+							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
 							.StashOccupancy(		StashOccupancy));
-							
-	//--------------------------------------------------------------------------
-	//	Verification
-	//--------------------------------------------------------------------------
-
-	initial begin
-		TestID = 0;
-
-		while (~ResetDone) #(Cycle);
-		#(Cycle);
-		
-		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
-		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
-		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
-		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
-		
-		TASK_CheckOccupancy(0);
-	end
 
 	//--------------------------------------------------------------------------
 endmodule
