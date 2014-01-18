@@ -253,6 +253,11 @@ module StashCore(
 		
 		initial begin
 			LS = 				ST_Reset;
+			
+			if (StashCapacity < BlocksOnPath) begin
+				$display("ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
+				$stop;
+			end
 		end
 		
 		assign	MS_FinishedSync	= ~SyncComplete_Delayed & SyncComplete;
@@ -624,8 +629,7 @@ module StashCore(
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					StashOccupancy));
 
-	assign	StashAlmostFull =						(StashCapacity < BlocksOnPath) ? 1'bx : // in that case this is a bogus signal anyway ... 
-													(StashOccupancy + BlocksOnPath) >= StashCapacity;
+	assign	StashAlmostFull =						(StashOccupancy + BlocksOnPath) >= StashCapacity;
 	assign	StashOverflow =							AddBlock & StashOccupancy == StashCapacity;	
 							
 	//--------------------------------------------------------------------------

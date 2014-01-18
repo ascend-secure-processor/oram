@@ -35,7 +35,7 @@ module	StashTestbench;
 	reg							AccessIsDummy;	
 	
 	reg							StartScanOperation;
-	reg							StartReadOperation;		
+	reg							StartWritebackOperation;		
 
 	wire	[DataWidth-1:0]		ReturnData;
 	wire	[ORAMU-1:0]			ReturnPAddr;
@@ -100,14 +100,15 @@ module	StashTestbench;
 			StartScanOperation = 1'b1;
 			#(Cycle);
 			StartScanOperation = 1'b0;
+			#(Cycle); // needed so that Scan can re-enter idle state (see Stash.v interface)
 		end
 	endtask
 
-	task TASK_StartRead;
+	task TASK_StartWriteback;
 		begin
-			StartReadOperation = 1'b1;
+			StartWritebackOperation = 1'b1;
 			#(Cycle);
-			StartReadOperation = 1'b0;
+			StartWritebackOperation = 1'b0;
 		end
 	endtask
 	
@@ -184,7 +185,7 @@ module	StashTestbench;
 				$display("FAIL: Stash occupancy %d, expected %d", StashOccupancy, Occupancy);
 				$stop;
 			end
-			$display("PASS: Test %d (occupancy)", TestID);
+			$display("PASS: Test %d (occupancy expected = %d)", TestID, Occupancy);
 			TestID = TestID + 1;
 		end
 	endtask
@@ -205,7 +206,7 @@ module	StashTestbench;
 		Reset = 1'b1;
 		
 		StartScanOperation = 1'b0;
-		StartReadOperation = 1'b0;
+		StartWritebackOperation = 1'b0;
 
 		WriteInValid = 1'b0;
 		EvictDataInValid = 1'b0;
@@ -229,7 +230,6 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 		
 		TASK_BigTest(1);
-		
 		TASK_StartScan();
 		
 		#(Cycle*10); // will be > 10, (probably) < 100 in practice
@@ -239,21 +239,15 @@ module	StashTestbench;
 		TASK_QueueWrite(32'hf0000002, 32'h0000ffff);
 		TASK_QueueWrite(32'hf0000003, 32'h0000ffff);
 		
-		TASK_StartRead();
-
+		TASK_StartWriteback();
 		TASK_WaitForAccess();
-		
-		// ---------------------------------------------------------------------
-		// Test 2: ""; no blocks written back
-		// ---------------------------------------------------------------------		
 
-		#(Cycle*1000); // TODO remove
-		
+		// ---------------------------------------------------------------------		
+		// Test 2: ""; no blocks written back
+		// ---------------------------------------------------------------------
+
 		TASK_BigTest(2);
-		
 		TASK_StartScan();
-		
-		#(Cycle*10);
 
 		// will be written back
 		TASK_QueueWrite(32'hf0000004, 32'hffff0000);
@@ -263,15 +257,19 @@ module	StashTestbench;
 		TASK_QueueWrite(32'hf0000006, 32'hffff0000);
 		TASK_QueueWrite(32'hf0000007, 32'hffff0000);
 		
-		TASK_StartRead();
-		
+		TASK_StartWriteback();
 		TASK_WaitForAccess();
 
 		// ---------------------------------------------------------------------
-		// Test 3:
-		// ---------------------------------------------------------------------		
+		// Test 3: write the rest back
+		// ---------------------------------------------------------------------
+
+		AccessLeaf = 32'h0000fff1;
 		
+		TASK_StartScan();
+		TASK_StartWriteback();
 		
+		TASK_WaitForAccess();
 		
 		#(Cycle*1000);
 
@@ -292,14 +290,19 @@ module	StashTestbench;
 		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
 		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
-		
 		TASK_CheckOccupancy(0);
 		
 		// big test 2
 		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
 		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
-		
 		TASK_CheckOccupancy(2);
+		
+		// big test 3
+		TASK_CheckRead(48, 32'hf0000006, 32'hffff0000);
+		TASK_CheckRead(56, 32'hf0000007, 32'hffff0000);
+		TASK_CheckOccupancy(0);
+		
+		// 
 	end	
 	
 	//--------------------------------------------------------------------------
@@ -322,7 +325,7 @@ module	StashTestbench;
 							.AccessIsDummy(			AccessIsDummy),
 							
 							.StartScanOperation(	StartScanOperation),  
-							.StartReadOperation(	StartReadOperation),
+							.StartWritebackOperation(	StartWritebackOperation),
 										
 							.ReturnData(			ReturnData),
 							.ReturnPAddr(			ReturnPAddr),
