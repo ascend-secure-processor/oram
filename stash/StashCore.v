@@ -8,7 +8,8 @@
 //------------------------------------------------------------------------------
 //	Module:		StashCore
 //	Desc:		Implements core stash operations		
-//
+//	Author:		Chris F.
+
 //	Commands:
 //		Push - 	add element to stash.  This is only used on a path read --- NOT 
 //				when a dirty LLC block gets evicted.
@@ -33,6 +34,7 @@
 //				locations we have already scanned.  Naively done, this is 
 //				another 200b but we can use a log(capacity) binary -> many hot 
 //				encoding to make it cheaper.
+//			-	Note: StashC is already asynchronous read ...
 //------------------------------------------------------------------------------
 module StashCore(
 			Clock, 
@@ -87,6 +89,13 @@ module StashCore(
 							ST_Peaking =			3'd4, // read, do not remove
 							ST_Dumping =			3'd5; // stash scan [rename?]
 
+	localparam				SyncSTWidth =			3,
+							ST_Sync_Idle =			3'd0,
+							ST_Sync_Main =			3'd1,
+							ST_Sync_CapUL = 		3'd2,
+							ST_Sync_CapFL = 		3'd3,
+							ST_Sync_Done =			3'd4;
+							
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
 							EN_Used =				1'b1;
@@ -160,7 +169,7 @@ module StashCore(
 
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSReset, CSIdle, CSPeaking, CSPushing, 
-								CSOverwriting, CSDumping, CSSyncing;
+								CSOverwriting, CSDumping;
 	wire 						CNSPushing, CNSOverwriting;
 
 	wire						PerAccessReset;
@@ -200,6 +209,9 @@ module StashCore(
 	wire						Dump_Preempt, Dump_Phase2;
 	wire	[StashEAWidth-1:0]	LastDumpAddress;
 
+	reg 	[SyncSTWidth-1:0] 	NS_Sync, CS_Sync;
+	wire 						CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
+	
 	wire	[StashEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
 	wire						ULHSet, FLHSet;
 	wire						Sync_SettingULH, Sync_SettingFLH;
@@ -235,12 +247,15 @@ module StashCore(
 		reg [StashEAWidth-1:0] 	MS_pt;
 		integer 				i;
 		// align the printouts in time
-		reg						MS_FinishedWrite, MS_StartingWrite, MS_FinishedSync;
+		reg						MS_FinishedWrite, MS_StartingWrite, SyncComplete_Delayed;
 		reg [STWidth-1:0]		CS_Delayed, LS;
+		wire					MS_FinishedSync;
 		
 		initial begin
 			LS = 				ST_Reset;
 		end
+		
+		assign	MS_FinishedSync	= ~SyncComplete_Delayed & SyncComplete;
 		
 		always @(posedge Clock) begin
 			if (MS_StartingWrite) begin
@@ -252,7 +267,7 @@ module StashCore(
 
 			MS_FinishedWrite <=	(CSPushing | CSOverwriting) & Transfer_Terminator;
 			MS_StartingWrite <= WriteTransfer & FirstChunk;
-			MS_FinishedSync <= CSSyncing & Sync_Terminator;
+			SyncComplete_Delayed <= SyncComplete;
 			CS_Delayed <= CS;
 			
 			if (CS_Delayed != CS & CS == ST_Idle)
@@ -286,7 +301,7 @@ module StashCore(
 				i = 0;
 				$display("\tUsedListHead = %d", MS_pt);
 				while (MS_pt != SNULL) begin
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt]);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
 					if (StashC.Mem[MS_pt] == EN_Free) begin
@@ -304,7 +319,7 @@ module StashCore(
 				i = 0;
 				$display("\tFreeListHead = %d", MS_pt);
 				while (MS_pt != SNULL) begin
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt]);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
 					if (i > StashCapacity) begin
@@ -532,7 +547,11 @@ module StashCore(
 													(CNSPushing) ? 	UsedListHead : 
 													(CSSyncing) ? 	SyncCount : 
 																	{StashEAWidth{1'bx}};
-	assign	StashP_WE =								CSReset | Add_Terminator | (CSSyncing & ~Sync_SettingULH & ~Sync_SettingFLH);
+	assign	StashP_WE =								CSReset | 
+													Add_Terminator | 
+													(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |
+													(CSSyncing_CapUL & ULHSet) | 
+													(CSSyncing_CapFL & FLHSet);
 		
 	RAM			#(			.DWidth(				StashEAWidth),
 							.AWidth(				StashEAWidth))
@@ -579,7 +598,7 @@ module StashCore(
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				StashEAWidth),
-							.RLatency(				0))
+							.RLatency(				0)) // THIS might be a problem
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				1'b1),
@@ -674,22 +693,36 @@ module StashCore(
 	//--------------------------------------------------------------------------
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------
-
-	// State.  This is decoupled from the main FSM to allow concurrent read/sync
-	Register	#(			.Width(					1))
-				Syncing(	.Clock(					Clock),
-							.Reset(					Reset | Sync_Terminator),
-							.Set(					CSPeaking & ~SyncComplete),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					CSSyncing));
-	Register	#(			.Width(					1))
-				SyncDone(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					Sync_Terminator),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					SyncComplete));	
+			
+	assign	CSSyncing_Main =						CS_Sync == ST_Sync_Main;
+	assign	CSSyncing_CapUL =						CS_Sync == ST_Sync_CapUL;
+	assign	CSSyncing_CapFL =						CS_Sync == ST_Sync_CapFL;
+	assign	CSSyncing =								CSSyncing_Main | CSSyncing_CapUL | CSSyncing_CapFL;
+	assign	SyncComplete = 							CS_Sync == ST_Sync_Done;
+	
+	always @(posedge Clock) begin
+		if (Reset) CS_Sync <= 						ST_Sync_Idle;
+		else CS_Sync <= 							NS_Sync;
+	end
+	
+	always @( * ) begin
+		NS_Sync = 									CS_Sync;
+		case (CS_Sync)
+			ST_Sync_Idle : 
+				if (CSPeaking) 
+					NS_Sync =						 ST_Sync_Main;
+			ST_Sync_Main : 
+				if (Sync_Terminator)
+					NS_Sync =						 ST_Sync_CapUL;
+			ST_Sync_CapUL : 
+					NS_Sync =						 ST_Sync_CapFL;
+			ST_Sync_CapFL :
+					NS_Sync =						 ST_Sync_Done;
+			ST_Sync_Done :
+				if (PerAccessReset)
+					NS_Sync =						 ST_Sync_Idle;
+		endcase
+	end
 	
 	/*
 		After determining which ORAM blocks to writeback to the tree, re-create 
@@ -707,7 +740,9 @@ module StashCore(
 			else: ... same logic for free list	
 	*/
 	
-	Counter		#(			.Width(					StashEAWidth))
+	Counter		#(			.Width(					StashEAWidth),
+							.Limited(				1),
+							.Limit(					StashCapacity))
 				SyncCounter(.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
@@ -718,13 +753,13 @@ module StashCore(
 
 	assign	Sync_Terminator = 						SyncCount == (StashCapacity - 1);
 	
-	assign	Sync_StashPUpdateSrc =					(StashC_DataOut == EN_Used) ? LastULE : LastFLE;
+	assign	Sync_StashPUpdateSrc =					((CSSyncing_CapUL | StashC_DataOut == EN_Used) & ~CSSyncing_CapFL) ? LastULE : LastFLE;
+													
+	assign	Sync_FoundUsedElement =					CSSyncing_Main & StashC_DataOut == EN_Used;
+	assign	Sync_FoundFreeElement =					CSSyncing_Main & StashC_DataOut == EN_Free;
 
-	assign	Sync_FoundUsedElement =					CSSyncing & StashC_DataOut == EN_Used;
-	assign	Sync_FoundFreeElement =					CSSyncing & StashC_DataOut == EN_Free;
-
-	assign	Sync_SettingULH =						CSSyncing & ~ULHSet & Sync_FoundUsedElement;
-	assign	Sync_SettingFLH =						CSSyncing & ~FLHSet & Sync_FoundFreeElement;	
+	assign	Sync_SettingULH =						CSSyncing_Main & ~ULHSet & Sync_FoundUsedElement;
+	assign	Sync_SettingFLH =						CSSyncing_Main & ~FLHSet & Sync_FoundFreeElement;	
 	
 	Register	#(			.Width(					1))
 				ULHSetReg(	.Clock(					Clock),

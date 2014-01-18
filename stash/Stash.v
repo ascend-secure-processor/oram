@@ -8,9 +8,11 @@
 //------------------------------------------------------------------------------
 //	Module:		Stash
 //	Desc:		The Path ORAM stash.
+//	Author:		Chris F.
 //
-//	- Leaf orientation: least significant bit is root bucket
-// 	- Writeback occurs in root -> leaf bucket order
+//	General notes:
+//		- Leaf orientation: least significant bit is root bucket
+// 		- Writeback occurs in root -> leaf bucket order
 //
 //	TODO:
 //		- eviction interface
