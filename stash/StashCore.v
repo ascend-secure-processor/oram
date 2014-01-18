@@ -19,6 +19,20 @@
 //				written back to.  This operation destroys the stash pointer 
 //				memory and must be followed by a Sync command.
 //		Sync - 	Reconstruct the stash pointer memory
+//
+//	Alternate implementation:
+//		Replace linked list with a 200b wide bitvector (similar to StashC).
+//		Pros: 
+//			- 	no more complicated linked list add operations
+//			- 	no more Sync operation
+//		Cons:
+//			- 	To convert bitvector into an address that points to first used/
+//				free slot, we need the A & -A bithack.  Expensive at this bit 
+//				width!
+//			- 	Cost of 200b in registers?  Also we need a way to mask out 
+//				locations we have already scanned.  Naively done, this is 
+//				another 200b but we can use a log(capacity) binary -> many hot 
+//				encoding to make it cheaper.
 //------------------------------------------------------------------------------
 module StashCore(
 			Clock, 
