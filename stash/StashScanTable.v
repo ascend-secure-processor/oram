@@ -189,7 +189,8 @@ module StashScanTable(
 		The number of real blocks mapped to this bucket so far during this 
 		access.  Implementing this as registers is done to (a) reduce internal 
 		fragmentation (BCLWidth bits << smallest SRAM?) and (b) to make reset a 
-		single-cycle operation.
+		single-cycle operation.  It is also convenient that this is asynchronous 
+		read...
 	*/
 	Register	#(			.Width(					BCLWidth))
 				BucketCnts(	.Clock(					Clock),

@@ -13,7 +13,6 @@
 // 	- Writeback occurs in root -> leaf bucket order
 //
 //	TODO:
-//		- override all parameters
 //		- eviction interface
 //		- return interface
 //		- dummy accesses
@@ -42,7 +41,7 @@ module Stash(
 								// This should be pulsed as soon as the last dummy block is decrypted
 								
 			//
-			// [FRONTEND] Stash -> LLC interface
+			// [FRONTEND] Stash -> LLC interface [TODO not implemented yet]
 			//
 			
 			ReturnData,
@@ -53,7 +52,7 @@ module Stash(
 			BlockReturnComplete,
 			
 			//
-			// [FRONTEND] LLC -> Stash interface
+			// [FRONTEND] LLC -> Stash interface [TODO not implemented yet]
 			//
 
 			EvictData,
@@ -87,7 +86,7 @@ module Stash(
 			ReadOutValid, 		
 			ReadOutReady, 		// If de-asserted, the Stash will finish writing 
 								// back the current block and then wait to 
-								// writeback the next block   
+								// writeback the next block until it goes high
 			BlockReadComplete, 	// Pulsed during last cycle that a block is 
 								// being read
 			
@@ -96,7 +95,8 @@ module Stash(
 			//
 			
 			StashAlmostFull,
-			StashOverflow
+			StashOverflow,
+			StashOccupancy
 	);
 		
 	//--------------------------------------------------------------------------
@@ -181,6 +181,7 @@ module Stash(
 
 	output 						StashAlmostFull;
 	output						StashOverflow;
+	output	[StashEAWidth-1:0] 	StashOccupancy;
 
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -308,8 +309,14 @@ module Stash(
 													(CSScan2 & ~Scan2Complete_Actual) | 
 													(CSPathWriteback & OutSTValid);
 													
-	StashCore	
-			Core(			.Clock(					Clock), 
+	StashCore	#(			.DataWidth(				DataWidth),
+							.StashCapacity(			StashCapacity),
+							.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ))
+							
+				Core(		.Clock(					Clock), 
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				CoreResetDone),
@@ -341,10 +348,20 @@ module Stash(
 							.InScanAccepted(		ScannedLeafAccepted),
 							.InScanValid(			ScannedLeafValid),
 							
+							.StashAlmostFull(		StashAlmostFull),
+							.StashOverflow(			StashOverflow),
+							.StashOccupancy(		StashOccupancy),
+							
 							.PrepNextPeak(			PrepNextPeak),
 							.SyncComplete(			Core_AccessComplete));
 
-	StashScanTable 
+	StashScanTable #(		.DataWidth(				DataWidth),
+							.StashCapacity(			StashCapacity),
+							.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ)) 
+							
 			ScanTable(		.Clock(					Clock),
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
@@ -400,7 +417,7 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
-	assign	StillReadingPath = 							BlocksReading != (BlocksOnPath - 1);
+	assign	StillReadingPath = 						BlocksReading != (BlocksOnPath - 1);
 	
 	// ticks at start of block read
 	Counter		#(			.Width(					ScanTableAWidth))

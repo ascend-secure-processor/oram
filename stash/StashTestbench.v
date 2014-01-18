@@ -66,6 +66,7 @@ module	StashTestbench;
 	
 	wire 						StashAlmostFull;
 	wire						StashOverflow;
+	wire	[StashEAWidth-1:0]	StashOccupancy;
 	
 	integer						TestID;
 	
@@ -125,7 +126,7 @@ module	StashTestbench;
 	/*
 		Verify that a stash read has the data we expect
 	*/
-	task TASK_ReadCheck;
+	task TASK_CheckRead;
 		input	[DataWidth-1:0] BaseData;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
@@ -135,7 +136,6 @@ module	StashTestbench;
 		begin
 			done = 0;
 			Data = BaseData;
-			
 			while (done == 0) begin
 				if (ReadPAddr != DummyBlockAddress) begin
 					if (ReadOutValid & ReadOutReady) begin
@@ -157,8 +157,19 @@ module	StashTestbench;
 				end
 				#(Cycle);
 			end
-			
-			$display("PASS: Test %d", TestID);
+			$display("PASS: Test %d (read)", TestID);
+			TestID = TestID + 1;
+		end
+	endtask
+	
+	task TASK_CheckOccupancy;
+		input	[StashEAWidth-1:0] Occupancy;
+		begin
+			if (Occupancy != StashOccupancy) begin
+				$display("FAIL: Stash occupancy %d, expected %d", StashOccupancy, Occupancy);
+				$stop;
+			end
+			$display("PASS: Test %d (occupancy)", TestID);
 			TestID = TestID + 1;
 		end
 	endtask
@@ -227,7 +238,14 @@ module	StashTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	Stash	CUT(			.Clock(					Clock),
+	Stash	#(				.DataWidth(				DataWidth),
+							.StashCapacity(			StashCapacity),
+							.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ))
+							
+			CUT(			.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				ResetDone),
 							
@@ -267,8 +285,9 @@ module	StashTestbench;
 							.BlockReadComplete(		BlockReadComplete),
 
 							.StashAlmostFull(		StashAlmostFull),
-							.StashOverflow(			StashOverflow));
-
+							.StashOverflow(			StashOverflow),
+							.StashOccupancy(		StashOccupancy));
+							
 	//--------------------------------------------------------------------------
 	//	Verification
 	//--------------------------------------------------------------------------
@@ -279,10 +298,12 @@ module	StashTestbench;
 		while (~ResetDone) #(Cycle);
 		#(Cycle);
 		
-		TASK_ReadCheck(16, 32'hf0000002, 32'h0000ffff);
-		TASK_ReadCheck(24, 32'hf0000003, 32'h0000ffff);
-		TASK_ReadCheck(0, 32'hf0000000, 32'h0000ffff);
-		TASK_ReadCheck(8, 32'hf0000001, 32'h0000ffff);
+		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
+		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
+		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
+		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
+		
+		TASK_CheckOccupancy(0);
 	end
 
 	//--------------------------------------------------------------------------

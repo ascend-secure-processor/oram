@@ -51,6 +51,10 @@ module StashCore(
 			InScanAccepted,
 			InScanValid,
 			
+			StashAlmostFull,
+			StashOverflow,
+			StashOccupancy,
+			
 			PrepNextPeak,
 			SyncComplete
 	);
@@ -122,6 +126,14 @@ module StashCore(
 	input						InScanValid;
 
 	//--------------------------------------------------------------------------
+	//	Status interface
+	//--------------------------------------------------------------------------
+
+	output 						StashAlmostFull;
+	output						StashOverflow;	
+	output	[StashEAWidth-1:0] 	StashOccupancy;
+
+	//--------------------------------------------------------------------------
 	//	Hacks that help get the job done ...
 	//--------------------------------------------------------------------------
 	
@@ -156,7 +168,7 @@ module StashCore(
 	wire 	[StashEAWidth-1:0]	UsedListHead, FreeListHead;
 	wire 	[StashEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
 
-	wire	[StashEAWidth-1:0] 	StashOccupancy;
+	wire 						AddBlock, RemoveBlock;
 	
 	wire	[StashEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
 	wire						StashP_WE;
@@ -200,7 +212,7 @@ module StashCore(
 	Register	#(			.Width(					1))
 				Overflow(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Set(					(StashOccupancy == BlockCount) & WriteTransfer),
+							.Set(					(StashOccupancy == StashCapacity) & WriteTransfer),
 							.Enable(				1'bx),
 							.In(					1'bx),
 							.Out(					StashOverflow));
@@ -251,6 +263,16 @@ module StashCore(
 			end
 			*/
 			
+			if (StashOverflow) begin
+				$display("ERROR: stash overflowed");
+				$stop;
+			end
+			
+			if (RemoveBlock & StashOccupancy == 0) begin
+				$display("ERROR: we removed a block from an empty stash");
+				$stop;			
+			end
+			
 			if (CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH) begin
 				$display("ERROR: both free/used list given same pointer during sync");
 				$stop;
@@ -269,7 +291,7 @@ module StashCore(
 						$stop;
 					end
 					
-					if (i > BlockCount) begin
+					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (UsedList)");
 						$stop;
 					end
@@ -282,7 +304,7 @@ module StashCore(
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt]);
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
-					if (i > BlockCount) begin
+					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (FreeList)");
 						$stop;
 					end
@@ -407,7 +429,7 @@ module StashCore(
 								.Enable(			~ResetDone),
 								.In(				{StashEAWidth{1'bx}}),
 								.Count(				ResetCount));
-	assign	ResetDone =								ResetCount == (BlockCount - 1);
+	assign	ResetDone =								ResetCount == (StashCapacity - 1);
 
 	//--------------------------------------------------------------------------
 	//	Core memories
@@ -563,17 +585,27 @@ module StashCore(
 							.DIn(					StashC_DataIn),
 							.DOut(					StashC_DataOut));
 
-	// We could also just update this at the end of the access ...
+	//--------------------------------------------------------------------------
+	//	Element counting
+	//--------------------------------------------------------------------------
+	
+	assign	AddBlock =								CSPushing & InScanValid & ~InScanAccepted;
+	assign	RemoveBlock =							CSDumping & InScanValid & InScanAccepted;
+	
 	UDCounter	#(			.Width(					StashEAWidth))
 				ElementCount(.Clock(				Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Up(					InScanValid & ~InScanAccepted),
-							.Down(					InScanValid & InScanAccepted),
+							.Up(					AddBlock),
+							.Down(					RemoveBlock),
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					StashOccupancy));
 
+	assign	StashAlmostFull =						(StashCapacity < BlocksOnPath) ? 1'bx : // in that case this is a bogus signal anyway ... 
+													(StashOccupancy + BlocksOnPath) >= StashCapacity;
+	assign	StashOverflow =							AddBlock & StashOccupancy == StashCapacity;	
+							
 	//--------------------------------------------------------------------------
 	//	Dumping the UsedList
 	//--------------------------------------------------------------------------
@@ -662,7 +694,7 @@ module StashCore(
 		implements the following psuedo-code:
 		
 		Set UsedListHead/FreeListHead to SNULL (both empty)
-		for SyncCount from 0...BlockCount:
+		for SyncCount from 0...StashCapacity:
 			if StashC[SyncCount] == EN_Used:
 				if UsedListHead == SNULL:
 					UsedListHead = SyncCount
@@ -681,7 +713,7 @@ module StashCore(
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					SyncCount));
 
-	assign	Sync_Terminator = 						SyncCount == (BlockCount - 1);
+	assign	Sync_Terminator = 						SyncCount == (StashCapacity - 1);
 	
 	assign	Sync_StashPUpdateSrc =					(StashC_DataOut == EN_Used) ? LastULE : LastFLE;
 
