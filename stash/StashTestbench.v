@@ -255,8 +255,11 @@ module	StashTestbench;
 		
 		#(Cycle*10);
 
+		// will be written back
 		TASK_QueueWrite(32'hf0000004, 32'hffff0000);
 		TASK_QueueWrite(32'hf0000005, 32'hffff0000);
+		
+		// won't be written back
 		TASK_QueueWrite(32'hf0000006, 32'hffff0000);
 		TASK_QueueWrite(32'hf0000007, 32'hffff0000);
 		
@@ -284,12 +287,19 @@ module	StashTestbench;
 		while (~ResetDone) #(Cycle);
 		#(Cycle);
 		
+		// big test 1
 		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
 		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
 		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
 		
 		TASK_CheckOccupancy(0);
+		
+		// big test 2
+		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
+		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
+		
+		TASK_CheckOccupancy(2);
 	end	
 	
 	//--------------------------------------------------------------------------
