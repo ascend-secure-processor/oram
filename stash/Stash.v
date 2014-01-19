@@ -18,6 +18,7 @@
 //		- eviction interface
 //		- return interface
 //		- dummy accesses
+//		- allow Z, L to be set at runtime
 //------------------------------------------------------------------------------
 module Stash(
 			Clock, 
