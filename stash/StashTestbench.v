@@ -279,6 +279,7 @@ module	StashTestbench;
 		
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
 
 		// ---------------------------------------------------------------------		
 		// Test 2: ""; no blocks written back
@@ -297,7 +298,8 @@ module	StashTestbench;
 		
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
-
+		TASK_CheckOccupancy(2);
+				
 		// ---------------------------------------------------------------------
 		// Test 3: write the rest back
 		// ---------------------------------------------------------------------
@@ -309,6 +311,7 @@ module	StashTestbench;
 
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);		
 
 		// ---------------------------------------------------------------------
 		// Test 4: Access with partial writeback, discontiguous dummy/real blocks 
@@ -332,6 +335,7 @@ module	StashTestbench;
 		
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
 
 		// ---------------------------------------------------------------------
 		// Test 5:  Load up stash and make sure the AlmostFull signal goes high
@@ -352,6 +356,7 @@ module	StashTestbench;
 
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(BlocksOnPath-ORAMZ); // for root bucket
 
 		// ---------------------------------------------------------------------
 		// Test 6:  Drain the stash
@@ -363,6 +368,7 @@ module	StashTestbench;
 		TASK_StartScan();
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
 		// Test 7:  Backpressure on ReadOutReady
@@ -374,7 +380,7 @@ module	StashTestbench;
 	end
 
 	//--------------------------------------------------------------------------
-	//	Verification
+	//	Read stream verification
 	//--------------------------------------------------------------------------
 
 	initial begin
@@ -389,22 +395,16 @@ module	StashTestbench;
 		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
 		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(0);
 		
 		// big test 2
 		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
 		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(2);
 		
 		// big test 3
 		TASK_CheckRead(48, 32'hf0000006, 32'hffff0000);
 		TASK_CheckRead(56, 32'hf0000007, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(0);
 		
 		// big test 4
 		TASK_CheckRead(96, 32'hf0000008, 32'h00000001);
@@ -417,19 +417,13 @@ module	StashTestbench;
 		TASK_CheckRead(88, 32'hf000000d, 32'h80000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(80, 32'hf000000c, 32'h00000000);
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(0);
 
 		// big test 5
 		TASK_CheckRead(112, 32'hf000000e, 32'hffffffff);
 		TASK_CheckRead(120, 32'hf000000e, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath);
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(BlocksOnPath);
 
 		// big test 6
-		TASK_WaitForAccess();
-		TASK_CheckOccupancy(0);
 		
 	end	
 	
