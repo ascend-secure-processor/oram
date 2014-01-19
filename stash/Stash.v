@@ -242,6 +242,7 @@ module Stash(
 	`ifdef MODELSIM
 		reg [STWidth-1:0] CS_Delayed;
 		reg StartScanOperation_Delayed;
+		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 			StartScanOperation_Delayed <= StartScanOperation;
@@ -395,18 +396,16 @@ module Stash(
 							
 							.CurrentLeaf(			AccessLeaf),
 
-							// from core
+							// to/from StashCore
 							.InLeaf(				ScanLeaf),
 							.InPAddr(				ScanPAddr),
 							.InSAddr(				ScanSAddr),
 							.InValid(				ScanLeafValid),
-			
-							// to core
 							.OutSAddr(				ScannedSAddr),
 							.OutAccepted(			ScannedLeafAccepted),
 							.OutValid(				ScannedLeafValid),
 						
-							// writeback control logic
+							// Path Writeback control logic
 							.InSTAddr(				BlocksReading),
 							.InSTValid(				InSTValid),
 							.InSTReset(				PathWriteback_Tick),

@@ -255,7 +255,7 @@ module StashCore(
 			LS = 				ST_Reset;
 			
 			if (StashCapacity < BlocksOnPath) begin
-				$display("ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
+				$display("[%m] ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
 				$stop;
 			end
 		end
@@ -287,20 +287,20 @@ module StashCore(
 			*/
 			
 			if (StashOverflow) begin
-				$display("ERROR: stash overflowed");
+				$display("[%m] ERROR: stash overflowed");
 				$stop;
 			end
 			
 			if (RemoveBlock & StashOccupancy == 0) begin
-				$display("ERROR: we removed a block from an empty stash");
+				$display("[%m] ERROR: we removed a block from an empty stash");
 				$stop;			
 			end
 			
 			if (CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH) begin
-				$display("ERROR: both free/used list given same pointer during sync");
+				$display("[%m] ERROR: both free/used list given same pointer during sync");
 				$stop;
 			end
-			
+	`ifdef MODELSIM_VERBOSE			
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
@@ -319,7 +319,6 @@ module StashCore(
 						$stop;
 					end
 				end
-	`ifdef MODELSIM_VERBOSE	
 				MS_pt = FreeListHead;
 				i = 0;
 				$display("\tFreeListHead = %d", MS_pt);
@@ -331,10 +330,9 @@ module StashCore(
 						$display("[ERROR] no terminator (FreeList)");
 						$stop;
 					end
-				end
-	`endif
+				end	
 			end
-
+	`endif
 			if (OutValid & OutPAddr != DummyBlockAddress)
 				$display("[%m @ %t] Reading %d", $time, OutData);
 	`ifdef MODELSIM_VERBOSE	

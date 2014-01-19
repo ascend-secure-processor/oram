@@ -217,7 +217,11 @@ module	StashTestbench;
 				$display("FAIL: Stash occupancy %d, expected %d", StashOccupancy, Occupancy);
 				$stop;
 			end
-			$display("PASS: Test %d (occupancy expected = %d)", TestID, Occupancy);
+			if ( ((StashOccupancy + BlocksOnPath) >= StashCapacity) != StashAlmostFull ) begin
+				$display("FAIL: StashAlmostFull = %b (%d >= %d)", StashAlmostFull, StashOccupancy + BlocksOnPath, StashCapacity);
+				$stop;
+			end
+			$display("PASS: Test %d (occupancy expected = %d, Almost full? %b)", TestID, Occupancy, StashAlmostFull);
 			TestID = TestID + 1;
 		end
 	endtask
@@ -234,6 +238,8 @@ module	StashTestbench;
 		3.) Dummy blocks in path, only real blocks in path
 	*/						
 
+	integer i;
+	
 	initial begin
 		Reset = 1'b1;
 		
@@ -331,11 +337,38 @@ module	StashTestbench;
 		// Test 5:  Load up stash and make sure the AlmostFull signal goes high
 		// ---------------------------------------------------------------------
 
+		AccessLeaf = 32'h00000000;
+		
+		TASK_BigTest(5);
+		TASK_StartScan();
+		
+		i = 0;
+		
+		while (i < BlocksOnPath) begin
+			// This is technically illegal (no path intersection) --- whatever
+			TASK_QueueWrite(32'hf000000e, 32'hffffffff);
+			i = i + 1;
+		end
+
+		TASK_StartWriteback();		
+		TASK_WaitForAccess();
+
 		// ---------------------------------------------------------------------
-		// Test 6:  Backpressure on ReadOutReady
+		// Test 6:  Drain the stash
+		// ---------------------------------------------------------------------
+
+		AccessLeaf = 32'hffffffff;
+		
+		TASK_BigTest(6);
+		TASK_StartScan();
+		TASK_StartWriteback();		
+		TASK_WaitForAccess();
+		
+		// ---------------------------------------------------------------------
+		// Test 7:  Backpressure on ReadOutReady
 		// ---------------------------------------------------------------------
 		
-		#(Cycle*1000);
+		#(Cycle*10000);
 
 		$display("*** ALL TESTS PASSED ***");
 	end
@@ -356,18 +389,21 @@ module	StashTestbench;
 		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
 		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
+		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
 		
 		// big test 2
 		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
 		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
+		TASK_WaitForAccess();
 		TASK_CheckOccupancy(2);
 		
 		// big test 3
 		TASK_CheckRead(48, 32'hf0000006, 32'hffff0000);
 		TASK_CheckRead(56, 32'hf0000007, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
+		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
 		
 		// big test 4
@@ -381,9 +417,19 @@ module	StashTestbench;
 		TASK_CheckRead(88, 32'hf000000d, 32'h80000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(80, 32'hf000000c, 32'h00000000);
+		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
 
 		// big test 5
+		TASK_CheckRead(112, 32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(120, 32'hf000000e, 32'hffffffff);
+		TASK_CheckReadDummy(BlocksOnPath);
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(BlocksOnPath);
+
+		// big test 6
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
 		
 	end	
 	

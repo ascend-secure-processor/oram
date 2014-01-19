@@ -113,6 +113,7 @@ module StashScanTable(
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
 			
+	`ifdef MODELSIM_VERBOSE	
 			if (InValid) begin
 				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InSAddr, InPAddr, CurrentLeaf, InLeaf);
 
@@ -127,9 +128,10 @@ module StashScanTable(
 				if (~OutAccepted & OutValid)
 					$display("\tScan reject: entry %d will NOT be written back", OutSAddr);
 			end
+	`endif		
 
 			if ( (OutAccepted | InValid) & InSTValid ) begin
-				$display("ERROR: ScanTable is multitasking");
+				$display("[%m] ERROR: ScanTable is multitasking");
 				$stop;
 			end
 			
@@ -137,7 +139,7 @@ module StashScanTable(
 				ind = 0;
 				while (ind != BlocksOnPath) begin
 					if (ScanTable.Mem[ind] != SNULL) begin					
-						$display("ERROR: Scan table address %d not initialized to SNULL (found %d)", ind, ScanTable.Mem[ind]);
+						$display("[%m] ERROR: Scan table address %d not initialized to SNULL (found %d)", ind, ScanTable.Mem[ind]);
 						$stop;
 					end
 					//$display("OK %d", ScanTable.Mem[ind]);
