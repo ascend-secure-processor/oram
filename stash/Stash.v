@@ -30,7 +30,7 @@ module Stash(
 			
 			AccessLeaf,
 			AccessPAddr,
-			AccessIsDummy,
+			AccessIsDummy, // If asserted, return no data on the ReturnData interface
 			
 			//
 			// External pulse commands 
@@ -42,8 +42,13 @@ module Stash(
 								// NOTE: After this signal is pulsed, you must wait >= 
 								// 2 cycles before presenting write data (which should 
 								// always be the case due to DRAM latency ...)
-			StartWritebackOperation, 	// Start dumping data to AES encrypt in the NEXT cycle
-										// This should be pulsed as soon as the last dummy block is decrypted
+								// [Low level note] this is so that Scan can transition 
+								// back to the Idle state ... I could also engineer the 
+								// module to force a delay but that costs logic that 
+								// will never be used in practice
+			StartWritebackOperation, 	// Start dumping data to AES encrypt in the 
+										// NEXT cycle.  This should be pulsed as soon 
+										// as the last dummy block is decrypted
 								
 			//
 			// [FRONTEND] Stash -> LLC interface [TODO not implemented yet]

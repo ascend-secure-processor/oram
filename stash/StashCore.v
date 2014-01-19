@@ -319,7 +319,7 @@ module StashCore(
 						$stop;
 					end
 				end
-				//
+	`ifdef MODELSIM_VERBOSE	
 				MS_pt = FreeListHead;
 				i = 0;
 				$display("\tFreeListHead = %d", MS_pt);
@@ -332,12 +332,15 @@ module StashCore(
 						$stop;
 					end
 				end
+	`endif
 			end
 
 			if (OutValid & OutPAddr != DummyBlockAddress)
 				$display("[%m @ %t] Reading %d", $time, OutData);
+	`ifdef MODELSIM_VERBOSE	
 			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
 				$display("[%m @ %t] Read dummy block", $time);
+	`endif
 		end	
 	`endif
 	

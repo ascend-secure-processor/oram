@@ -138,7 +138,7 @@ module	StashTestbench;
 			WriteInValid = 1'b0;
 		end
 	endtask
-		
+	
 	/*
 		Verify that a stash read has the data we expect
 	*/
@@ -177,6 +177,38 @@ module	StashTestbench;
 			TestID = TestID + 1;
 		end
 	endtask
+
+	task TASK_CheckReadDummy;
+		input	[31:0] Count;
+
+		integer sofar;
+		integer chunks;
+		begin
+			sofar = 0;
+			chunks = 0;
+			while (sofar != Count) begin
+				if (ReadOutValid & ReadOutReady) begin
+					chunks = chunks + 1;
+					if (BlockReadComplete) begin
+						if (ReadPAddr != DummyBlockAddress) begin
+							$display("FAIL: Stash read PAddr = %x, expected dummy block (saw %d out of %d)", ReadPAddr, sofar, Count);
+							$stop;
+						end
+						if (chunks != NumChunks) begin
+							$display("FAIL: Stash read dummy block, wrong block size");
+							$stop;
+						end
+						sofar = sofar + 1;
+						chunks = 0;
+						//$display("OK: Test %d (seen %d dummy blocks out of %d)", TestID, sofar, Count);
+					end
+				end
+				#(Cycle);
+			end
+			$display("PASS: Test %d (%d dummy reads)", TestID, Count);
+			TestID = TestID + 1;
+		end
+	endtask	
 	
 	task TASK_CheckOccupancy;
 		input	[StashEAWidth-1:0] Occupancy;
@@ -266,13 +298,46 @@ module	StashTestbench;
 
 		AccessLeaf = 32'h0000fff1;
 		
+		TASK_BigTest(3);
 		TASK_StartScan();
-		TASK_StartWriteback();
-		
+
+		TASK_StartWriteback();		
 		TASK_WaitForAccess();
+
+		// ---------------------------------------------------------------------
+		// Test 4: Access with partial writeback, discontiguous dummy/real blocks 
+		// ---------------------------------------------------------------------
+
+		AccessLeaf = 32'h00000000;
+		
+		TASK_BigTest(4);
+		TASK_StartScan();
+		
+		TASK_QueueWrite(32'hf000000a, 32'h00000002); // level 1
+		TASK_QueueWrite(32'hf000000b, 32'h00000002); // level 1
+
+		#(Cycle*10); // some random delay
+		
+		TASK_QueueWrite(32'hf000000c, 32'h00000000); // level 33
+		TASK_QueueWrite(32'hf000000d, 32'h80000000); // level 32
+		
+		TASK_QueueWrite(32'hf0000008, 32'h00000001); // level 0
+		TASK_QueueWrite(32'hf0000009, 32'h00000001); // level 0
+		
+		TASK_StartWriteback();		
+		TASK_WaitForAccess();
+
+		// ---------------------------------------------------------------------
+		// Test 5:  Load up stash and make sure the AlmostFull signal goes high
+		// ---------------------------------------------------------------------
+
+		// ---------------------------------------------------------------------
+		// Test 6:  Backpressure on ReadOutReady
+		// ---------------------------------------------------------------------
 		
 		#(Cycle*1000);
 
+		$display("*** ALL TESTS PASSED ***");
 	end
 
 	//--------------------------------------------------------------------------
@@ -286,6 +351,7 @@ module	StashTestbench;
 		#(Cycle);
 		
 		// big test 1
+		TASK_CheckReadDummy(BlocksOnPath - 4);
 		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
 		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
@@ -295,14 +361,30 @@ module	StashTestbench;
 		// big test 2
 		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
 		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
+		TASK_CheckReadDummy(BlocksOnPath - 2);
 		TASK_CheckOccupancy(2);
 		
 		// big test 3
 		TASK_CheckRead(48, 32'hf0000006, 32'hffff0000);
 		TASK_CheckRead(56, 32'hf0000007, 32'hffff0000);
+		TASK_CheckReadDummy(BlocksOnPath - 2);
 		TASK_CheckOccupancy(0);
 		
-		// 
+		// big test 4
+		TASK_CheckRead(96, 32'hf0000008, 32'h00000001);
+		TASK_CheckRead(104, 32'hf0000009, 32'h00000001);
+		TASK_CheckReadDummy(ORAMZ - 2);
+		TASK_CheckRead(64, 32'hf000000a, 32'h00000002);
+		TASK_CheckRead(72, 32'hf000000b, 32'h00000002);
+		TASK_CheckReadDummy(ORAMZ - 2);
+		TASK_CheckReadDummy(ORAMZ * 29);
+		TASK_CheckRead(88, 32'hf000000d, 32'h80000000);
+		TASK_CheckReadDummy(ORAMZ - 1);
+		TASK_CheckRead(80, 32'hf000000c, 32'h00000000);
+		TASK_CheckOccupancy(0);
+
+		// big test 5
+		
 	end	
 	
 	//--------------------------------------------------------------------------
@@ -325,7 +407,7 @@ module	StashTestbench;
 							.AccessIsDummy(			AccessIsDummy),
 							
 							.StartScanOperation(	StartScanOperation),  
-							.StartWritebackOperation(	StartWritebackOperation),
+							.StartWritebackOperation(StartWritebackOperation),
 										
 							.ReturnData(			ReturnData),
 							.ReturnPAddr(			ReturnPAddr),
