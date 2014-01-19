@@ -147,7 +147,7 @@ module	StashTestbench;
 			done = 0;
 			Data = BaseData;
 			while (done == 0) begin
-				if (ReadOutValid & ReadOutReady) begin
+				if (ReadOutValid /*& ReadOutReady*/) begin // NOTE: ReadOutReady is _block_ not chunk synchronous
 					if (ReadData != Data) begin
 						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
 						$stop;
@@ -179,7 +179,7 @@ module	StashTestbench;
 			sofar = 0;
 			chunks = 0;
 			while (sofar != Count) begin
-				if (ReadOutValid & ReadOutReady) begin
+				if (ReadOutValid /*& ReadOutReady*/) begin
 					chunks = chunks + 1;
 					if (BlockReadComplete) begin
 						if (ReadPAddr != DummyBlockAddress) begin
@@ -209,11 +209,12 @@ module	StashTestbench;
 		begin
 			sofar = 0;
 			while (sofar != Count) begin
-				if (ReadOutValid & ReadOutReady & BlockReadComplete) begin
+				if (ReadOutValid /*& ReadOutReady*/ & BlockReadComplete) begin
 					sofar = sofar + 1;
 				end
 				#(Cycle);
 			end
+			$display("PASS: Test %d (skipped %d / %d)", TestID, sofar, Count);
 		end
 	endtask
 	
@@ -410,6 +411,7 @@ module	StashTestbench;
 		#(Cycle);
 		ReadOutReady = 1'b0;
 		
+		// wreck some havoc
 		i = 1;
 		while (i < 512) begin
 			ReadOutReady = 1'b0;
@@ -419,13 +421,8 @@ module	StashTestbench;
 			i = i << 1;
 		end
 		
-		// ---------------------------------------------------------------------
-		// End of tests
-		// ---------------------------------------------------------------------
-
-		#(Cycle*10000);
-
-		$display("*** ALL TESTS PASSED ***");
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);		
 	end
 
 	//--------------------------------------------------------------------------
@@ -476,6 +473,18 @@ module	StashTestbench;
 		// big test 6
 		TASK_SkipRead(64);
 		
+		// big test 7
+		TASK_CheckRead(16, 32'hf0000011, 32'h00000000);
+		TASK_CheckRead(24, 32'hf0000012, 32'h00000000);
+		TASK_CheckReadDummy(ORAMZ * 15);
+		TASK_CheckRead(32, 32'hf0000013, 32'h0000ffff);
+		TASK_CheckRead(40, 32'hf0000014, 32'h0000ffff);
+		TASK_CheckReadDummy(ORAMZ * 15);
+		TASK_CheckRead(0, 32'hf000000f, 32'hffffffff);
+		TASK_CheckRead(8, 32'hf0000010, 32'hffffffff);
+		
+		#(Cycle*1000);
+		$display("*** ALL TESTS PASSED ***");		
 	end	
 	
 	//--------------------------------------------------------------------------
