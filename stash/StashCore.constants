@@ -14,9 +14,9 @@ parameter				DataWidth =				128,
 	localparam			DummyBlockAddress =		32'hdeadbeef;
 
 	localparam			NumChunks =				ORAMB / DataWidth;
-	localparam			ChunkAWidth =			(`popcount(NumChunks) == 1) ? `log2(NumChunks) : `log2(NumChunks+1); // TODO switch to logf
-	localparam			StashEAWidth =			(`popcount(StashCapacity) == 1) ? `log2(StashCapacity+1) : `log2(StashCapacity); // TODO WHY????
-	localparam			StashAWidth =			`log2(StashEAWidth) + NumChunks; // addr width into data-based memories
+	localparam			ChunkAWidth =			`log2(NumChunks);
+	localparam			StashEAWidth =			`log2(StashCapacity);
+	localparam			StashDAWidth =			StashEAWidth + ChunkAWidth; // addr width into data-based memories
 	localparam			StashHDWidth =			ORAMU + ORAML; // stash entry header
 	localparam			SNULL =					StashCapacity; // an invalid stash location
 
