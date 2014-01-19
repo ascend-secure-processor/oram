@@ -27,7 +27,7 @@ module	StashTestbench;
 	//--------------------------------------------------------------------------
 	
 	wire 						Clock;
-	reg							Reset; 
+	reg							Reset, ResetDataCounter; 
 	wire						ResetDone;
 	
 	reg		[ORAML-1:0]			AccessLeaf;
@@ -114,16 +114,13 @@ module	StashTestbench;
 	
 	Counter		#(			.Width(					DataWidth))
 				DataGen(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				WriteInValid & WriteInReady),
 							.In(					{DataWidth{1'bx}}),
 							.Count(					WriteData));
 		
-	/* 
-		Writes a cache line to the stash 
-	*/
 	task TASK_QueueWrite;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
@@ -139,9 +136,6 @@ module	StashTestbench;
 		end
 	endtask
 	
-	/*
-		Verify that a stash read has the data we expect
-	*/
 	task TASK_CheckRead;
 		input	[DataWidth-1:0] BaseData;
 		input	[ORAMU-1:0] PAddr;
@@ -153,31 +147,29 @@ module	StashTestbench;
 			done = 0;
 			Data = BaseData;
 			while (done == 0) begin
-				if (ReadPAddr != DummyBlockAddress) begin
-					if (ReadOutValid & ReadOutReady) begin
-						if (ReadData != Data) begin
-							$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
+				if (ReadOutValid & ReadOutReady) begin
+					if (ReadData != Data) begin
+						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
+						$stop;
+					end
+					//$display("OK: Stash read data %d, expected %d", ReadData, Data);
+					if (BlockReadComplete) begin
+						if (ReadPAddr != PAddr || ReadLeaf != Leaf) begin
+							$display("FAIL: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
 							$stop;
 						end
-						//$display("OK: Stash read data %d, expected %d", ReadData, Data);
-						if (BlockReadComplete) begin
-							if (ReadPAddr != PAddr || ReadLeaf != Leaf) begin
-								$display("FAIL: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
-								$stop;
-							end
-							//$display("OK: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
-							done = 1;
-						end
-						Data = Data + 1;
+						//$display("OK: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
+						done = 1;
 					end
+					Data = Data + 1;
 				end
 				#(Cycle);
 			end
 			$display("PASS: Test %d (read)", TestID);
 			TestID = TestID + 1;
 		end
-	endtask
-
+	endtask	
+	
 	task TASK_CheckReadDummy;
 		input	[31:0] Count;
 
@@ -209,6 +201,21 @@ module	StashTestbench;
 			TestID = TestID + 1;
 		end
 	endtask	
+	
+	task TASK_SkipRead;
+		input	[31:0] Count;
+
+		integer sofar;
+		begin
+			sofar = 0;
+			while (sofar != Count) begin
+				if (ReadOutValid & ReadOutReady & BlockReadComplete) begin
+					sofar = sofar + 1;
+				end
+				#(Cycle);
+			end
+		end
+	endtask
 	
 	task TASK_CheckOccupancy;
 		input	[StashEAWidth-1:0] Occupancy;
@@ -242,6 +249,7 @@ module	StashTestbench;
 	
 	initial begin
 		Reset = 1'b1;
+		ResetDataCounter = 1'b0;
 		
 		StartScanOperation = 1'b0;
 		StartWritebackOperation = 1'b0;
@@ -366,14 +374,55 @@ module	StashTestbench;
 		
 		TASK_BigTest(6);
 		TASK_StartScan();
-		TASK_StartWriteback();		
+		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
 		// Test 7:  Backpressure on ReadOutReady
 		// ---------------------------------------------------------------------
+
+		AccessLeaf = 32'hffffffff;
 		
+		ResetDataCounter = 1'b1;
+		#(Cycle);
+		ResetDataCounter = 1'b0;
+		
+		TASK_BigTest(7);
+		TASK_StartScan();
+
+		TASK_QueueWrite(32'hf000000f, 32'hffffffff); // level 33
+		TASK_QueueWrite(32'hf0000010, 32'hffffffff); // level 33
+
+		TASK_QueueWrite(32'hf0000011, 32'h00000000); // level 0
+		TASK_QueueWrite(32'hf0000012, 32'h00000000); // level 0
+		
+		TASK_QueueWrite(32'hf0000013, 32'h0000ffff); // level 16ish
+		TASK_QueueWrite(32'hf0000014, 32'h0000ffff); // level 16ish
+		
+		ReadOutReady = 1'b0;
+		TASK_StartWriteback();
+		
+		#(Cycle*128);
+		
+		// let one block go
+		ReadOutReady = 1'b1;
+		#(Cycle);
+		ReadOutReady = 1'b0;
+		
+		i = 1;
+		while (i < 512) begin
+			ReadOutReady = 1'b0;
+			#(Cycle*i);
+			ReadOutReady = 1'b1;
+			#(Cycle*i);
+			i = i << 1;
+		end
+		
+		// ---------------------------------------------------------------------
+		// End of tests
+		// ---------------------------------------------------------------------
+
 		#(Cycle*10000);
 
 		$display("*** ALL TESTS PASSED ***");
@@ -417,13 +466,15 @@ module	StashTestbench;
 		TASK_CheckRead(88, 32'hf000000d, 32'h80000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(80, 32'hf000000c, 32'h00000000);
-
+		TASK_CheckReadDummy(ORAMZ - 1);
+		
 		// big test 5
 		TASK_CheckRead(112, 32'hf000000e, 32'hffffffff);
 		TASK_CheckRead(120, 32'hf000000e, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath);
 
 		// big test 6
+		TASK_SkipRead(64);
 		
 	end	
 	

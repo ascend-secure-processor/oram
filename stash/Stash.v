@@ -334,7 +334,7 @@ module Stash(
 	assign 	CoreCommandValid =						CSPathRead | 
 													(CSScan1 & ~SentScanCommand) | 
 													(CSScan2 & ~SentScanCommand) | 
-													(CSPathWriteback & OutSTValid);
+													(CSPathWriteback & OutSTValid & ~PathWriteback_Waiting);
 													
 	StashCore	#(			.DataWidth(				DataWidth),
 							.StashCapacity(			StashCapacity),
@@ -417,7 +417,9 @@ module Stash(
 	//--------------------------------------------------------------------------
 
 	// count the worst-case scan latency (for security)
-	Counter		#(			.Width(					SCWidth))
+	Counter		#(			.Width(					SCWidth),
+							.Limited(				1),
+							.Limit(					ScanDelay))
 				ScanCounter(.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
@@ -472,7 +474,7 @@ module Stash(
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
 							
-	assign	InSTValid =								CSPathWriteback & StillReadingPath & ~PathWriteback_Waiting;
+	assign	InSTValid =								CSPathWriteback & StillReadingPath;
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------	
