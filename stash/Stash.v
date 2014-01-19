@@ -214,7 +214,7 @@ module Stash(
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
 	wire						ScannedLeafAccepted, ScannedLeafValid;
 	
-	wire 						StillReadingPath;	
+	wire						StopReading, StopReading_Hold;
 	wire						BlockReadComplete_Pre;
 	
 	wire						PathWriteback_Waiting;
@@ -443,18 +443,31 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
-	assign	StillReadingPath = 						BlocksReading != (BlocksOnPath - 1);
+	assign	ReadingLastBlock = 						BlocksReading == (BlocksOnPath - 1); // -1 because this is the address into the scan table
+	assign	StopReading =							CSPathWriteback & ReadingLastBlock & PrepNextPeak;
 	
 	// ticks at start of block read
-	Counter		#(			.Width(					ScanTableAWidth))
+	Counter		#(			.Width(					ScanTableAWidth),
+							.Limited(				1),
+							.Limit(					BlocksOnPath - 1))
 				RdStartCnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathWriteback_Tick & StillReadingPath),
+							.Enable(				PathWriteback_Tick),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksReading));
 
+	Register	#(			.Width(					1))
+				StopRdReg(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					StopReading),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					StopReading_Hold));	
+					
+	assign	InSTValid =								CSPathWriteback & ~StopReading & ~StopReading_Hold;
+					
 	// ticks at end of block read
 	Counter		#(			.Width(					ScanTableAWidth))
 				RdReturnCnt(.Clock(					Clock),
@@ -474,7 +487,6 @@ module Stash(
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
 							
-	assign	InSTValid =								CSPathWriteback & StillReadingPath;
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------	

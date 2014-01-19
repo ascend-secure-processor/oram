@@ -437,51 +437,51 @@ module	StashTestbench;
 		
 		// big test 1
 		TASK_CheckReadDummy(BlocksOnPath - 4);
-		TASK_CheckRead(16, 32'hf0000002, 32'h0000ffff);
-		TASK_CheckRead(24, 32'hf0000003, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 2, 32'hf0000002, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 3, 32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
-		TASK_CheckRead(8, 32'hf0000001, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 1, 32'hf0000001, 32'h0000ffff);
 		
 		// big test 2
-		TASK_CheckRead(32, 32'hf0000004, 32'hffff0000);
-		TASK_CheckRead(40, 32'hf0000005, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 4, 32'hf0000004, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 5, 32'hf0000005, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 3
-		TASK_CheckRead(48, 32'hf0000006, 32'hffff0000);
-		TASK_CheckRead(56, 32'hf0000007, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 6, 32'hf0000006, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 7, 32'hf0000007, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 4
-		TASK_CheckRead(96, 32'hf0000008, 32'h00000001);
-		TASK_CheckRead(104, 32'hf0000009, 32'h00000001);
+		TASK_CheckRead(NumChunks * 12, 32'hf0000008, 32'h00000001);
+		TASK_CheckRead(NumChunks * 13, 32'hf0000009, 32'h00000001);
 		TASK_CheckReadDummy(ORAMZ - 2);
-		TASK_CheckRead(64, 32'hf000000a, 32'h00000002);
-		TASK_CheckRead(72, 32'hf000000b, 32'h00000002);
+		TASK_CheckRead(NumChunks * 8, 32'hf000000a, 32'h00000002);
+		TASK_CheckRead(NumChunks * 9, 32'hf000000b, 32'h00000002);
 		TASK_CheckReadDummy(ORAMZ - 2);
 		TASK_CheckReadDummy(ORAMZ * 29);
-		TASK_CheckRead(88, 32'hf000000d, 32'h80000000);
+		TASK_CheckRead(NumChunks * 11, 32'hf000000d, 32'h80000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
-		TASK_CheckRead(80, 32'hf000000c, 32'h00000000);
+		TASK_CheckRead(NumChunks * 10, 32'hf000000c, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		
 		// big test 5
-		TASK_CheckRead(112, 32'hf000000e, 32'hffffffff);
-		TASK_CheckRead(120, 32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 14, 32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 15, 32'hf000000e, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath);
 
 		// big test 6
 		TASK_SkipRead(64);
 		
 		// big test 7
-		TASK_CheckRead(16, 32'hf0000011, 32'h00000000);
-		TASK_CheckRead(24, 32'hf0000012, 32'h00000000);
+		TASK_CheckRead(NumChunks * 2, 32'hf0000011, 32'h00000000);
+		TASK_CheckRead(NumChunks * 3, 32'hf0000012, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ * 15);
-		TASK_CheckRead(32, 32'hf0000013, 32'h0000ffff);
-		TASK_CheckRead(40, 32'hf0000014, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 4, 32'hf0000013, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 5, 32'hf0000014, 32'h0000ffff);
 		TASK_CheckReadDummy(ORAMZ * 15);
 		TASK_CheckRead(0, 32'hf000000f, 32'hffffffff);
-		TASK_CheckRead(8, 32'hf0000010, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 1, 32'hf0000010, 32'hffffffff);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		

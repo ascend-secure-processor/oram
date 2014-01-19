@@ -22,19 +22,26 @@
 //		Sync - 	Reconstruct the stash pointer memory
 //
 //	Alternate implementation:
-//		Replace linked list with a 200b wide bitvector (similar to StashC).
+//		Replace linked list with an ORAMC bit wide bitvector (similar to StashC).
 //		Pros: 
-//			- 	no more complicated linked list add operations
+//			- 	no more complicated linked list add operations [easier to 
+//				implement wide stashes]
 //			- 	no more Sync operation
 //		Cons:
 //			- 	To convert bitvector into an address that points to first used/
 //				free slot, we need the A & -A bithack.  Expensive at this bit 
 //				width!
-//			- 	Cost of 200b in registers?  Also we need a way to mask out 
+//			- 	Cost of ORAMC bits in registers?  Also we need a way to mask out 
 //				locations we have already scanned.  Naively done, this is 
-//				another 200b but we can use a log(capacity) binary -> many hot 
+//				another ORAMC bits but we can use a log(capacity) binary -> many 
+//				hot 
 //				encoding to make it cheaper.
-//			-	Note: StashC is already asynchronous read ...
+//		Notes: 
+//			-	StashC is already asynchronous read ... we already pay this cost
+//			-	The old design isn't performance (in cycles) scalable to large 
+//				ORAMC: the scan/sync will dominate
+//			-	This new design isn't performance (in combinational latency) 
+//				scalable to large ORAMC: the bitvector and logic get slow 
 //------------------------------------------------------------------------------
 module StashCore(
 			Clock, 
@@ -182,7 +189,7 @@ module StashCore(
 	wire						WriteTransfer, DataTransfer, Add_Terminator;
 	wire						Transfer_Terminator, Transfer_Terminator_Pre;
 
-	wire	[StashAWidth-1:0]	StashD_Address;
+	wire	[StashDAWidth-1:0]	StashD_Address;
 	wire	[StashEAWidth-1:0]	StashE_Address;
 	reg		[StashEAWidth-1:0]	StashE_Address_Delayed;
 	wire						FirstChunk, LastChunk_Pre, LastChunk;
@@ -469,7 +476,7 @@ module StashCore(
 		{EntryID, EntryOffset}. 
 	*/
 	RAM			#(			.DWidth(				DataWidth),
-							.AWidth(				StashAWidth))
+							.AWidth(				StashDAWidth))
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
