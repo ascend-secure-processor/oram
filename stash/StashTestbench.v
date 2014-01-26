@@ -3,7 +3,7 @@
 //	Includes
 //==============================================================================
 
-`include "Const.v"
+`include "Const.vh"
 
 `timescale		1 ns/1 ps		// Display things in ns, compute them in ps
 
@@ -13,7 +13,7 @@
 //------------------------------------------------------------------------------
 module	StashTestbench;
 
-	`include "StashCore.constants"
+	`include "Stash.vh"
 
 	//--------------------------------------------------------------------------
 	//	Constants

@@ -2,7 +2,7 @@
 /* Pros and cons of this style:
 
 */
-				
+			
 parameter				DataWidth =				128,
 						StashCapacity =			100, // isn't restricted to be > path length
 						ORAMB =					512,
