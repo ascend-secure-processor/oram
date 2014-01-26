@@ -13,7 +13,8 @@
 //------------------------------------------------------------------------------
 module	StashCoreTestbench;
 
-	`include "StashCore.constants"
+	`include "Stash.vh";
+	`include "StashLocal.vh"
 
 	//--------------------------------------------------------------------------
 	//	Constants

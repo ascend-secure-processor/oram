@@ -9,78 +9,49 @@
 //	Module:		StashScanTable
 //	Author:		Chris F.
 //------------------------------------------------------------------------------
-module StashScanTable(
-			Clock, 
-			Reset,
-			PerAccessReset,
-			ResetDone,
-			
-			CurrentLeaf,
-
-			//
-			// Stash is being scanned
-			//
-			
-			InLeaf,
-			InPAddr, // debugging
-			InSAddr,
-			InValid,
-			
-			OutSAddr,
-			OutAccepted,
-			OutValid,
-			
-			// Scanned stash is being read
-			
-			InSTAddr,
-			InSTValid,
-			InSTReset, // perform scan table resets in the background
-			
-			OutSTAddr,
-			OutSTValid
-		);
-
-	//--------------------------------------------------------------------------
-	//	Parameters & constants
-	//--------------------------------------------------------------------------
-	
-	`include "Stash.vh"
-
+module StashScanTable #(`include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, PerAccessReset; 	
-	output						ResetDone;
+  	input 						Clock, Reset, PerAccessReset, 	
+	output						ResetDone,
 	
 	//--------------------------------------------------------------------------
 	//	Input interface
 	//--------------------------------------------------------------------------
 		
-	input	[ORAML-1:0]			CurrentLeaf;
+	input	[ORAML-1:0]			CurrentLeaf,
 
-	input	[ORAML-1:0]			InLeaf;
-	input	[ORAMU-1:0]			InPAddr; // debugging
-	input	[StashEAWidth-1:0]	InSAddr;
-	input						InValid;
+	input	[ORAML-1:0]			InLeaf,
+	input	[ORAMU-1:0]			InPAddr, // debugging
+	input	[StashEAWidth-1:0]	InSAddr,
+	input						InValid,
 
 	//--------------------------------------------------------------------------
 	//	Accept/reject interface
 	//--------------------------------------------------------------------------
 	
-	output	[StashEAWidth-1:0]	OutSAddr;
-	output						OutAccepted;
-	output						OutValid;
+	output	[StashEAWidth-1:0]	OutSAddr,
+	output						OutAccepted,
+	output						OutValid,
 
 	//--------------------------------------------------------------------------
 	//	Scan interface
 	//--------------------------------------------------------------------------
 		
-	input	[ScanTableAWidth-1:0] InSTAddr;
-	input						InSTValid, InSTReset;
+	input	[ScanTableAWidth-1:0] InSTAddr,
+	input						InSTValid, InSTReset,
 	
-	output	[StashEAWidth-1:0]	OutSTAddr;
-	output reg					OutSTValid;	
+	output	[StashEAWidth-1:0]	OutSTAddr,
+	output reg					OutSTValid
+	);
+	
+	//--------------------------------------------------------------------------
+	//	Constants
+	//--------------------------------------------------------------------------
+	
+	`include "StashLocal.vh"	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs

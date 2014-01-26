@@ -43,50 +43,76 @@
 //			-	This new design isn't performance (in combinational latency) 
 //				scalable to large ORAMC: the bitvector and logic get slow 
 //------------------------------------------------------------------------------
-module StashCore(
-			Clock, 
-			Reset,
-			PerAccessReset,
-			ResetDone,
-			
-			InCommand,
-			InSAddr,
-			InCommandValid,
-			InCommandReady,
-
-			InData,
-			InPAddr,
-			InLeaf,
-			InValid,
-			InReady,
-
-			OutData,
-			OutPAddr,
-			OutLeaf,
-			OutValid,
-
-			OutScanPAddr,
-			OutScanLeaf,
-			OutScanSAddr,
-			OutScanValid,
-
-			InScanSAddr,
-			InScanAccepted,
-			InScanValid,
-			
-			StashAlmostFull,
-			StashOverflow,
-			StashOccupancy,
-			
-			PrepNextPeak,
-			SyncComplete
-	);
+module StashCore #(`include "Stash.vh") (
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 						Clock, Reset, PerAccessReset,
+	output						ResetDone,
 
 	//--------------------------------------------------------------------------
-	//	Parameters & constants
+	//	Command interface
+	//--------------------------------------------------------------------------
+		
+	input	[CMDWidth-1:0] 		InCommand,
+	input	[StashEAWidth-1:0]	InSAddr,
+	input						InCommandValid,
+	output 						InCommandReady,
+
+	//--------------------------------------------------------------------------
+	//	Input interface
 	//--------------------------------------------------------------------------
 	
-	`include "Stash.vh"
+	input	[DataWidth-1:0]		InData,
+	input	[ORAMU-1:0]			InPAddr,
+	input	[ORAML-1:0]			InLeaf,
+	input						InValid,
+	output 						InReady,
+
+	//--------------------------------------------------------------------------
+	//	Output interface
+	//--------------------------------------------------------------------------
+	
+	output	[DataWidth-1:0]		OutData,
+	output	[ORAMU-1:0]			OutPAddr,
+	output	[ORAML-1:0]			OutLeaf,
+	output 						OutValid,
+
+	//--------------------------------------------------------------------------
+	//	Scan interface
+	//--------------------------------------------------------------------------
+	
+	output	[ORAMU-1:0]			OutScanPAddr,
+	output	[ORAML-1:0]			OutScanLeaf,
+	output	[StashEAWidth-1:0]	OutScanSAddr,
+	output						OutScanValid,
+
+	input	[StashEAWidth-1:0]	InScanSAddr,
+	input						InScanAccepted,
+	input						InScanValid,
+
+	//--------------------------------------------------------------------------
+	//	Status interface
+	//--------------------------------------------------------------------------
+
+	output 						StashAlmostFull,
+	output						StashOverflow,	
+	output	[StashEAWidth-1:0] 	StashOccupancy,
+
+	//--------------------------------------------------------------------------
+	//	Hacks that help get the job done ...
+	//--------------------------------------------------------------------------
+	
+	output						PrepNextPeak,
+	output						SyncComplete
+	);
+	
+	//--------------------------------------------------------------------------
+	//	Constants
+	//--------------------------------------------------------------------------
+	
+	`include "StashLocal.vh"
 
 	localparam				STWidth =				3,
 							ST_Reset =				3'd0,
@@ -105,70 +131,7 @@ module StashCore(
 							
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
-							EN_Used =				1'b1;
-
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 						Clock, Reset, PerAccessReset;
-	output						ResetDone;
-
-	//--------------------------------------------------------------------------
-	//	Command interface
-	//--------------------------------------------------------------------------
-		
-	input	[CMDWidth-1:0] 		InCommand;
-	input	[StashEAWidth-1:0]	InSAddr;
-	input						InCommandValid;
-	output 						InCommandReady;
-
-	//--------------------------------------------------------------------------
-	//	Input interface
-	//--------------------------------------------------------------------------
-	
-	input	[DataWidth-1:0]		InData;
-	input	[ORAMU-1:0]			InPAddr;
-	input	[ORAML-1:0]			InLeaf;
-	input						InValid;
-	output 						InReady;
-
-	//--------------------------------------------------------------------------
-	//	Output interface
-	//--------------------------------------------------------------------------
-	
-	output	[DataWidth-1:0]		OutData;
-	output	[ORAMU-1:0]			OutPAddr;
-	output	[ORAML-1:0]			OutLeaf;
-	output 						OutValid;
-
-	//--------------------------------------------------------------------------
-	//	Scan interface
-	//--------------------------------------------------------------------------
-	
-	output	[ORAMU-1:0]			OutScanPAddr;
-	output	[ORAML-1:0]			OutScanLeaf;
-	output	[StashEAWidth-1:0]	OutScanSAddr;
-	output						OutScanValid;
-
-	input	[StashEAWidth-1:0]	InScanSAddr;
-	input						InScanAccepted;
-	input						InScanValid;
-
-	//--------------------------------------------------------------------------
-	//	Status interface
-	//--------------------------------------------------------------------------
-
-	output 						StashAlmostFull;
-	output						StashOverflow;	
-	output	[StashEAWidth-1:0] 	StashOccupancy;
-
-	//--------------------------------------------------------------------------
-	//	Hacks that help get the job done ...
-	//--------------------------------------------------------------------------
-	
-	output						PrepNextPeak;
-	output						SyncComplete;
+							EN_Used =				1'b1;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs

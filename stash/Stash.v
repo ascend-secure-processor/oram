@@ -20,182 +20,93 @@
 //		- dummy accesses
 //		- allow Z, L to be set at runtime
 //------------------------------------------------------------------------------
-module Stash(
-			Clock, 
-			Reset,
-			ResetDone,
-			
-			//
-			// Level signals for current ORAM access
-			//
-			
-			AccessLeaf,
-			AccessPAddr,
-			AccessIsDummy, // If asserted, return no data on the ReturnData interface
-			
-			//
-			// External pulse commands 
-			//
-			
-			StartScanOperation, // Start scanning the contents of the stash
-								// This should be pulsed as soon as the PosMap is read
-								// The level command signals must be valid at this time
-								// NOTE: After this signal is pulsed, you must wait >= 
-								// 2 cycles before presenting write data (which should 
-								// always be the case due to DRAM latency ...)
-								// [Low level note] this is so that Scan can transition 
-								// back to the Idle state ... I could also engineer the 
-								// module to force a delay but that costs logic that 
-								// will never be used in practice
-			StartWritebackOperation, 	// Start dumping data to AES encrypt in the 
-										// NEXT cycle.  This should be pulsed as soon 
-										// as the last dummy block is decrypted
-								
-			//
-			// [FRONTEND] Stash -> LLC interface [TODO not implemented yet]
-			//
-			
-			ReturnData,
-			ReturnPAddr,
-			ReturnLeaf,
-			ReturnDataOutValid,
-			ReturnDataOutReady,
-			BlockReturnComplete,
-			
-			//
-			// [FRONTEND] LLC -> Stash interface [TODO not implemented yet]
-			//
+module Stash #(`include "Stash.vh") (       
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 						Clock, Reset,
+	output						ResetDone,
 
-			EvictData,
-			EvictPAddr,
-			EvictLeaf,
-			EvictDataInValid,
-			EvictDataInReady,
-			BlockEvictComplete,
+	//--------------------------------------------------------------------------
+	//	Commands
+	//--------------------------------------------------------------------------
 			
-			//
-			// [BACKEND] (LLC eviction, AES decrypt) -> Stash interface
-			//
-			
-			WriteData,
-			WriteInValid,
-			WriteInReady,
-			WritePAddr,
-			WriteLeaf,
-			BlockWriteComplete, // Pulsed during the last cycle that a block is 
-								// being written [this will be read by albert to 
-								// tick the next PAddr/Leaf]
-			
-			//
-			// [BACKEND] Stash -> AES encrypt interface (Stash scan and writeback)
-			//
-			
-			ReadData,
-			ReadPAddr, 			// set to DummyBlockAddress (see StashCore.constants) 
-								// for dummy block
-			ReadLeaf,
-			ReadOutValid, 		
-			ReadOutReady, 		// If de-asserted, the Stash will finish writing 
-								// back the current block and then wait to 
-								// writeback the next block until it goes high
-			BlockReadComplete, 	// Pulsed during last cycle that a block is 
-								// being read
-			PathReadComplete,
-			
-			//
-			// Status interface
-			//
-			
-			StashAlmostFull,
-			StashOverflow,
-			StashOccupancy
-	);
+	input	[ORAML-1:0]			AccessLeaf,
+	input	[ORAMU-1:0]			AccessPAddr,
+	input						AccessIsDummy,
+
+	input						StartScanOperation,
+	input						StartWritebackOperation,		
 		
 	//--------------------------------------------------------------------------
-	//	Parameters & constants
+	//	Data return interface (ORAM controller -> LLC)
+	//--------------------------------------------------------------------------
+	
+	output	[DataWidth-1:0]		ReturnData,
+	output	[ORAMU-1:0]			ReturnPAddr,
+	output	[ORAML-1:0]			ReturnLeaf,
+	output						ReturnDataOutValid,
+	input						ReturnDataOutReady,	
+	output						BlockReturnComplete,
+	
+	//--------------------------------------------------------------------------
+	//	Data return interface (LLC -> Stash)
+	//--------------------------------------------------------------------------	
+	
+	input	[DataWidth-1:0]		EvictData,
+	input	[ORAMU-1:0]			EvictPAddr,
+	input	[ORAML-1:0]			EvictLeaf,
+	input						EvictDataInValid,
+	output						EvictDataInReady,
+	output						BlockEvictComplete,	
+	
+	//--------------------------------------------------------------------------
+	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	`include "Stash.vh"
+	input	[DataWidth-1:0]		WriteData,
+	input	[ORAMU-1:0]			WritePAddr,
+	input	[ORAML-1:0]			WriteLeaf,
+	input						WriteInValid,
+	output						WriteInReady,	
+	output						BlockWriteComplete,
+	
+	//--------------------------------------------------------------------------
+	//	ORAM read interface (stash -> encryption -> external memory)
+	//--------------------------------------------------------------------------
 
+	output	[DataWidth-1:0]		ReadData,
+	output	[ORAMU-1:0]			ReadPAddr,
+	output	[ORAML-1:0]			ReadLeaf,
+	output						ReadOutValid,
+	input						ReadOutReady,	
+	output reg 					BlockReadComplete,
+	output						PathReadComplete,
+	
+	//--------------------------------------------------------------------------
+	//	Status interface
+	//--------------------------------------------------------------------------
+
+	output 						StashAlmostFull,
+	output						StashOverflow,
+	output	[StashEAWidth-1:0] 	StashOccupancy
+	);
+
+	//--------------------------------------------------------------------------
+	//	Locals
+	//-------------------------------------------------------------------------- 
+	
+	`include "StashLocal.vh"
+	
 	localparam					STWidth =				3,
 								ST_Reset =				3'd0,
 								ST_Idle = 				3'd1,
 								ST_Scan1 =				3'd2,
 								ST_PathRead =			3'd3,
 								ST_Scan2 =				3'd4,
-								ST_PathWriteback = 		3'd5;	
+								ST_PathWriteback = 		3'd5;		
 	
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 						Clock, Reset;
-	output						ResetDone; 
-
-	//--------------------------------------------------------------------------
-	//	Commands
-	//--------------------------------------------------------------------------
-			
-	input	[ORAML-1:0]			AccessLeaf;
-	input	[ORAMU-1:0]			AccessPAddr;
-	input						AccessIsDummy;
-
-	input						StartScanOperation;
-	input						StartWritebackOperation;		
-		
-	//--------------------------------------------------------------------------
-	//	Data return interface (ORAM controller -> LLC)
-	//--------------------------------------------------------------------------
-	
-	output	[DataWidth-1:0]		ReturnData;
-	output	[ORAMU-1:0]			ReturnPAddr;
-	output	[ORAML-1:0]			ReturnLeaf;
-	output						ReturnDataOutValid;
-	input						ReturnDataOutReady;	
-	output						BlockReturnComplete;
-	
-	//--------------------------------------------------------------------------
-	//	Data return interface (LLC -> Stash)
-	//--------------------------------------------------------------------------	
-	
-	input	[DataWidth-1:0]		EvictData;
-	input	[ORAMU-1:0]			EvictPAddr;
-	input	[ORAML-1:0]			EvictLeaf;
-	input						EvictDataInValid;
-	output						EvictDataInReady;
-	output						BlockEvictComplete;	
-	
-	//--------------------------------------------------------------------------
-	//	ORAM write interface (external memory -> Decryption -> stash)
-	//--------------------------------------------------------------------------
-
-	input	[DataWidth-1:0]		WriteData;
-	input	[ORAMU-1:0]			WritePAddr;
-	input	[ORAML-1:0]			WriteLeaf;
-	input						WriteInValid;
-	output						WriteInReady;	
-	output						BlockWriteComplete;
-	
-	//--------------------------------------------------------------------------
-	//	ORAM read interface (stash -> encryption -> external memory)
-	//--------------------------------------------------------------------------
-
-	output	[DataWidth-1:0]		ReadData;
-	output	[ORAMU-1:0]			ReadPAddr;
-	output	[ORAML-1:0]			ReadLeaf;
-	output						ReadOutValid;
-	input						ReadOutReady;	
-	output reg 					BlockReadComplete;
-	output						PathReadComplete;
-	
-	//--------------------------------------------------------------------------
-	//	Status interface
-	//--------------------------------------------------------------------------
-
-	output 						StashAlmostFull;
-	output						StashOverflow;
-	output	[StashEAWidth-1:0] 	StashOccupancy;
-
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
