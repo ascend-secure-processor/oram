@@ -36,7 +36,22 @@ module Stash #(`include "Stash.vh") (
 	input	[ORAMU-1:0]			AccessPAddr,
 	input						AccessIsDummy,
 
+	/*
+		Start scanning the contents of the stash.  This should be pulsed as soon 
+		as the PosMap is read.  The level command signals must be valid at this 
+		time.  NOTE: After this signal is pulsed, you must wait >= 2 cycles 
+		before presenting write data (which should always be the case due to 
+		DRAM latency ...)
+		[Low level note] this is so that Scan can transition back to the Idle 
+		state ... I could also engineer the module to force a delay but that 
+		costs logic that will never be used in practice	
+	*/
 	input						StartScanOperation,
+	
+	/*
+		Start dumping data to AES encrypt in the NEXT cycle.  This should be 
+		pulsed as soon as the last dummy block is decrypted
+	*/
 	input						StartWritebackOperation,		
 		
 	//--------------------------------------------------------------------------
@@ -70,6 +85,11 @@ module Stash #(`include "Stash.vh") (
 	input	[ORAML-1:0]			WriteLeaf,
 	input						WriteInValid,
 	output						WriteInReady,	
+	
+	/* 
+		Pulsed during the last cycle that a block is being written [this will be 
+		read by albert to tick the next PAddr/Leaf.
+	*/
 	output						BlockWriteComplete,
 	
 	//--------------------------------------------------------------------------
@@ -77,11 +97,17 @@ module Stash #(`include "Stash.vh") (
 	//--------------------------------------------------------------------------
 
 	output	[DataWidth-1:0]		ReadData,
+	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,
 	output						ReadOutValid,
+	/* 
+		If de-asserted, the Stash will finish writing back the current block and 
+		then wait to writeback the next block until it goes high.
+	*/
 	input						ReadOutReady,	
 	output reg 					BlockReadComplete,
+	/* Pulsed during last cycle that a block is being read */
 	output						PathReadComplete,
 	
 	//--------------------------------------------------------------------------
