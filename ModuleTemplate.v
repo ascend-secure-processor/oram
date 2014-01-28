@@ -7,6 +7,23 @@
 
 // NOTE: assumes tab = 4 spaces
 
+/*
+	Paramter passing convention
+
+	1.) Include all parameters, that will be needed by multiple files and 
+	overridden between parent-child modules, in a *.vh header file.
+
+	2.) Include all constants (derived parameters like ORAMLogL = `log(ORAML)) 
+	either as localparams or *Local.vh header files (depending on how many 
+	modules need them).
+
+	3.) When _instantiating_ a child module, MANUALLY pass all parameters needed 
+	by that child module using #(...).  Reason = we want to build 
+	parameterizable test benches that sweep parameter spaces and cannot change 
+	parameters if they are only defined in .vh files (and not passed when 
+	children are instantiated).
+*/
+
 //==============================================================================
 //	Module:		
 //	Desc:		
