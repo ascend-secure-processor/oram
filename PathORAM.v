@@ -27,7 +27,7 @@ module PathORAM #(`include "PathORAM.vh", `include "DDR3SDRAM.vh") (
 	//--------------------------------------------------------------------------
 
 	output	[DDRAWidth-1:0]		DRAMCommandAddress,
-	output	[-1:0]				DRAMCommand,
+	output	[DDRCWidth-1:0]		DRAMCommand,
 	output						DRAMCommandValid,
 	input						DRAMCommandReady,
 	

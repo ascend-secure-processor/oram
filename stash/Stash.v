@@ -80,7 +80,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	input	[StashDWidth-1:0]		WriteData,
+	input	[StashDWidth-1:0]	WriteData,
 	input	[ORAMU-1:0]			WritePAddr,
 	input	[ORAML-1:0]			WriteLeaf,
 	input						WriteInValid,
@@ -96,7 +96,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	ORAM read interface (stash -> encryption -> external memory)
 	//--------------------------------------------------------------------------
 
-	output	[StashDWidth-1:0]		ReadData,
+	output	[StashDWidth-1:0]	ReadData,
 	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,

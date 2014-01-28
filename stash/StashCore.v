@@ -114,24 +114,24 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`include "StashLocal.vh"
 
-	localparam				STWidth =				3,
-							ST_Reset =				3'd0,
-							ST_Idle = 				3'd1,
-							ST_Pushing = 			3'd2, // write, add
-							ST_Overwriting = 		3'd3, // overwrite current entry
-							ST_Peaking =			3'd4, // read, do not remove
-							ST_Dumping =			3'd5; // stash scan [rename?]
+	localparam					STWidth =			3,
+								ST_Reset =			3'd0,
+								ST_Idle = 			3'd1,
+								ST_Pushing = 		3'd2, // write, add
+								ST_Overwriting = 	3'd3, // overwrite current entry
+								ST_Peaking =		3'd4, // read, do not remove
+								ST_Dumping =		3'd5; // stash scan [rename?]
 
-	localparam				SyncSTWidth =			3,
-							ST_Sync_Idle =			3'd0,
-							ST_Sync_Main =			3'd1,
-							ST_Sync_CapUL = 		3'd2,
-							ST_Sync_CapFL = 		3'd3,
-							ST_Sync_Done =			3'd4;
+	localparam					SyncSTWidth =		3,
+								ST_Sync_Idle =		3'd0,
+								ST_Sync_Main =		3'd1,
+								ST_Sync_CapUL = 	3'd2,
+								ST_Sync_CapFL = 	3'd3,
+								ST_Sync_Done =		3'd4;
 							
-	localparam				ENWidth =				1,
-							EN_Free =				1'b0,
-							EN_Used =				1'b1;	
+	localparam					ENWidth =			1,
+								EN_Free =			1'b0,
+								EN_Used =			1'b1;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
