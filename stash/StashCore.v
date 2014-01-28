@@ -64,7 +64,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Input interface
 	//--------------------------------------------------------------------------
 	
-	input	[StashDWidth-1:0]		InData,
+	input	[StashDWidth-1:0]	InData,
 	input	[ORAMU-1:0]			InPAddr,
 	input	[ORAML-1:0]			InLeaf,
 	input						InValid,
@@ -74,7 +74,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Output interface
 	//--------------------------------------------------------------------------
 	
-	output	[StashDWidth-1:0]		OutData,
+	output	[StashDWidth-1:0]	OutData,
 	output	[ORAMU-1:0]			OutPAddr,
 	output	[ORAML-1:0]			OutLeaf,
 	output 						OutValid,
@@ -148,7 +148,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	wire	[ORAMU-1:0]			OutPAddr_Pre;
 	
-	wire	[StashDWidth-1:0]		StashD_DataOut;
+	wire	[StashDWidth-1:0]	StashD_DataOut;
 	wire						WriteTransfer, DataTransfer, Add_Terminator;
 	wire						Transfer_Terminator, Transfer_Terminator_Pre;
 
