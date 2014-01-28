@@ -42,14 +42,14 @@ module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
 		
 	// Local params; e.g., `include "DDR3SDRAMLocal.vh"	
 	
-	// col 5				// col 29				// col 53
-	localparam				STWidth =				3,
-							ST_Reset =				3'd0,
-							ST_Idle = 				3'd1,
-							ST_Pushing = 			3'd2,
-							ST_Overwriting = 		3'd3, 
-							ST_Peaking =			3'd4, 
-							ST_Dumping =			3'd5; 
+	// col 5					// col 33				// col 53
+	localparam					STWidth =			3,
+								ST_Reset =			3'd0,
+								ST_Idle = 			3'd1,
+								ST_Pushing = 		3'd2,
+								ST_Overwriting = 	3'd3, 
+								ST_Peaking =		3'd4, 
+								ST_Dumping =		3'd5; 
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -96,7 +96,8 @@ module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
 	Counter		#(			.Width(					ScanTableAWidth),
 							.Limited(				1),
 							.Limit(					BlocksOnPath - 1))
-				RdStartCnt(	.Clock(					Clock),
+				// module instance name is lower case with _ separating words
+				rd_start(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
