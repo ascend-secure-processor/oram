@@ -5,6 +5,8 @@
 `include "Const.vh"
 //==============================================================================
 
+// NOTE: assumes tab = 4 spaces
+
 //==============================================================================
 //	Module:		
 //	Desc:		
@@ -101,6 +103,11 @@ module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
 							.Enable(				PathWriteback_Tick),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksReading));
+	
+	genvar					i;
+	generate for(i = 0; i < PARAM; i = i + 1) begin:MY_GENERATE
+		assign 	MyBus[i] = 							Foo[SomeParam*(i+1)-1:SomeParam*i] == SomeWire;
+	end endgenerate
 	
 	//--------------------------------------------------------------------------	
 endmodule
