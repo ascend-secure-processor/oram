@@ -11,9 +11,8 @@
 //	Module:		StashCoreTestbench
 //	Author:		Chris F.
 //------------------------------------------------------------------------------
-module	StashTestbench;
+module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 
-	`include "Stash.vh";
     `include "StashLocal.vh"
     
 	//--------------------------------------------------------------------------
@@ -38,28 +37,28 @@ module	StashTestbench;
 	reg							StartScanOperation;
 	reg							StartWritebackOperation;		
 
-	wire	[DataWidth-1:0]		ReturnData;
+	wire	[StashDWidth-1:0]	ReturnData;
 	wire	[ORAMU-1:0]			ReturnPAddr;
 	wire	[ORAML-1:0]			ReturnLeaf;
 	wire						ReturnDataOutValid;
 	reg							ReturnDataOutReady;	
 	wire						BlockReturnComplete;
 	
-	reg		[DataWidth-1:0]		EvictData;
+	reg		[StashDWidth-1:0]	EvictData;
 	reg		[ORAMU-1:0]			EvictPAddr;
 	reg		[ORAML-1:0]			EvictLeaf;
 	reg							EvictDataInValid;
 	wire						EvictDataInReady;
 	wire						BlockEvictComplete;	
 	
-	wire 	[DataWidth-1:0]		WriteData;
+	wire 	[StashDWidth-1:0]	WriteData;
 	reg		[ORAMU-1:0]			WritePAddr;
 	reg		[ORAML-1:0]			WriteLeaf;
 	reg							WriteInValid;
 	wire						WriteInReady;	
 	wire						BlockWriteComplete;
 	
-	wire	[DataWidth-1:0]		ReadData;
+	wire	[StashDWidth-1:0]	ReadData;
 	wire	[ORAMU-1:0]			ReadPAddr;
 	wire	[ORAML-1:0]			ReadLeaf;
 	wire						ReadOutValid;
@@ -113,13 +112,13 @@ module	StashTestbench;
 		end
 	endtask
 	
-	Counter		#(			.Width(					DataWidth))
+	Counter		#(			.Width(					StashDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				WriteInValid & WriteInReady),
-							.In(					{DataWidth{1'bx}}),
+							.In(					{StashDWidth{1'bx}}),
 							.Count(					WriteData));
 		
 	task TASK_QueueWrite;
@@ -138,11 +137,11 @@ module	StashTestbench;
 	endtask
 	
 	task TASK_CheckRead;
-		input	[DataWidth-1:0] BaseData;
+		input	[StashDWidth-1:0] BaseData;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
 		
-		reg		[DataWidth-1:0] Data;
+		reg		[StashDWidth-1:0] Data;
 		integer done;
 		begin
 			done = 0;
@@ -492,7 +491,7 @@ module	StashTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	Stash	#(				.DataWidth(				DataWidth),
+	Stash	#(				.StashDWidth(				StashDWidth),
 							.StashCapacity(			StashCapacity),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

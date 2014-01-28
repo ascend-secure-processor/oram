@@ -43,7 +43,7 @@
 //			-	This new design isn't performance (in combinational latency) 
 //				scalable to large ORAMC: the bitvector and logic get slow 
 //------------------------------------------------------------------------------
-module StashCore #(`include "Stash.vh") (
+module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -64,7 +64,7 @@ module StashCore #(`include "Stash.vh") (
 	//	Input interface
 	//--------------------------------------------------------------------------
 	
-	input	[DataWidth-1:0]		InData,
+	input	[StashDWidth-1:0]		InData,
 	input	[ORAMU-1:0]			InPAddr,
 	input	[ORAML-1:0]			InLeaf,
 	input						InValid,
@@ -74,7 +74,7 @@ module StashCore #(`include "Stash.vh") (
 	//	Output interface
 	//--------------------------------------------------------------------------
 	
-	output	[DataWidth-1:0]		OutData,
+	output	[StashDWidth-1:0]		OutData,
 	output	[ORAMU-1:0]			OutPAddr,
 	output	[ORAML-1:0]			OutLeaf,
 	output 						OutValid,
@@ -148,7 +148,7 @@ module StashCore #(`include "Stash.vh") (
 
 	wire	[ORAMU-1:0]			OutPAddr_Pre;
 	
-	wire	[DataWidth-1:0]		StashD_DataOut;
+	wire	[StashDWidth-1:0]		StashD_DataOut;
 	wire						WriteTransfer, DataTransfer, Add_Terminator;
 	wire						Transfer_Terminator, Transfer_Terminator_Pre;
 
@@ -438,7 +438,7 @@ module StashCore #(`include "Stash.vh") (
 		Stores data blocks.  This memory is indexed using 
 		{EntryID, EntryOffset}. 
 	*/
-	RAM			#(			.DWidth(				DataWidth),
+	RAM			#(			.DWidth(				StashDWidth),
 							.AWidth(				StashDAWidth))
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),

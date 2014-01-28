@@ -9,7 +9,7 @@
 //	Module:		StashScanTable
 //	Author:		Chris F.
 //------------------------------------------------------------------------------
-module StashScanTable #(`include "Stash.vh") (
+module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------

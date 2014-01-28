@@ -20,7 +20,7 @@
 //		- dummy accesses
 //		- allow Z, L to be set at runtime
 //------------------------------------------------------------------------------
-module Stash #(`include "Stash.vh") (       
+module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -31,7 +31,7 @@ module Stash #(`include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	Commands
 	//--------------------------------------------------------------------------
-			
+	
 	input	[ORAML-1:0]			AccessLeaf,
 	input	[ORAMU-1:0]			AccessPAddr,
 	input						AccessIsDummy,
@@ -58,7 +58,7 @@ module Stash #(`include "Stash.vh") (
 	//	Data return interface (ORAM controller -> LLC)
 	//--------------------------------------------------------------------------
 	
-	output	[DataWidth-1:0]		ReturnData,
+	output	[StashDWidth-1:0]	ReturnData,
 	output	[ORAMU-1:0]			ReturnPAddr,
 	output	[ORAML-1:0]			ReturnLeaf,
 	output						ReturnDataOutValid,
@@ -69,7 +69,7 @@ module Stash #(`include "Stash.vh") (
 	//	Data return interface (LLC -> Stash)
 	//--------------------------------------------------------------------------	
 	
-	input	[DataWidth-1:0]		EvictData,
+	input	[StashDWidth-1:0]	EvictData,
 	input	[ORAMU-1:0]			EvictPAddr,
 	input	[ORAML-1:0]			EvictLeaf,
 	input						EvictDataInValid,
@@ -80,7 +80,7 @@ module Stash #(`include "Stash.vh") (
 	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	input	[DataWidth-1:0]		WriteData,
+	input	[StashDWidth-1:0]		WriteData,
 	input	[ORAMU-1:0]			WritePAddr,
 	input	[ORAML-1:0]			WriteLeaf,
 	input						WriteInValid,
@@ -96,7 +96,7 @@ module Stash #(`include "Stash.vh") (
 	//	ORAM read interface (stash -> encryption -> external memory)
 	//--------------------------------------------------------------------------
 
-	output	[DataWidth-1:0]		ReadData,
+	output	[StashDWidth-1:0]		ReadData,
 	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,
@@ -120,7 +120,7 @@ module Stash #(`include "Stash.vh") (
 	);
 
 	//--------------------------------------------------------------------------
-	//	Locals
+	//	Constants
 	//-------------------------------------------------------------------------- 
 	
 	`include "StashLocal.vh"
@@ -274,7 +274,7 @@ module Stash #(`include "Stash.vh") (
 													(CSScan2 & ~SentScanCommand) | 
 													(CSPathWriteback & OutSTValid & ~PathWriteback_Waiting);
 													
-	StashCore	#(			.DataWidth(				DataWidth),
+	StashCore	#(			.StashDWidth(			StashDWidth),
 							.StashCapacity(			StashCapacity),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -320,7 +320,7 @@ module Stash #(`include "Stash.vh") (
 							.PrepNextPeak(			PrepNextPeak),
 							.SyncComplete(			Core_AccessComplete));
 
-	StashScanTable #(		.DataWidth(				DataWidth),
+	StashScanTable #(		.StashDWidth(			StashDWidth),
 							.StashCapacity(			StashCapacity),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

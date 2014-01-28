@@ -2,7 +2,7 @@
 `ifdef MACROSAFE
 	localparam			DummyBlockAddress =		32'hdeadbeef;
 
-	localparam			NumChunks =				ORAMB / DataWidth;
+	localparam			NumChunks =				ORAMB / StashDWidth;
 	localparam			ChunkAWidth =			`log2(NumChunks);
 	localparam			StashEAWidth =			`log2(StashCapacity);
 	localparam			StashDAWidth =			StashEAWidth + ChunkAWidth; // addr width into data-based memories
@@ -28,4 +28,4 @@
 						CMD_Overwrite =			3'd1,
 						CMD_Peak = 				3'd2,
 						CMD_Dump =				3'd3,
-						CMD_Sync =				3'd4;
+					  	CMD_Sync =				3'd4;
