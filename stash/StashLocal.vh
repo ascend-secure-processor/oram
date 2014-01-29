@@ -22,7 +22,7 @@
 	localparam					SCWidth =			`log2(ScanDelay);
 `endif
 
-	// Commands understood by StashCore
+	// Commands understood by StashCore, called by Stash
 	localparam					CMDWidth =			3,
 								CMD_Push =			3'd0,
 								CMD_Overwrite =		3'd1,

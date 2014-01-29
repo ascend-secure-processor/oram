@@ -1,0 +1,3 @@
+
+	localparam					ORAMN = 			(1 << (ORAML + 1)) - 1, // number of buckets in ORAM tree
+	localparam					ORAMLogL =			6 // TODO move to `log2 when Ling's simulator works ...
