@@ -5,11 +5,12 @@
 `include "Const.vh"
 //==============================================================================
 
-//------------------------------------------------------------------------------
+//==============================================================================
 //	Module:		PathORAM
 //	Desc:		
-//------------------------------------------------------------------------------
-module PathORAM #(`include "PathORAM.vh", `include "DDR3SDRAM.vh") (
+//==============================================================================
+module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
+					`include "AES.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -35,51 +36,33 @@ module PathORAM #(`include "PathORAM.vh", `include "DDR3SDRAM.vh") (
 	input						DRAMReadDataValid,
 	
 	output	[DDRDWidth-1:0]		DRAMWriteData,
+	output	[DDRMWidth-1:0]		DRAMWriteMask,
 	output						DRAMWriteDataValid,
 	input						DRAMWriteDataReady
 	);
-	
-	//--------------------------------------------------------------------------
+		
+	//------------------------------------------------------------------------------
+	//	Constants
+	//------------------------------------------------------------------------------ 
+
+	`include "DDR3SDRAMLocal.vh"
+
+	//------------------------------------------------------------------------------
 	//	Wires & Regs
-	//-------------------------------------------------------------------------- 
+	//------------------------------------------------------------------------------ 
+
+	//------------------------------------------------------------------------------
+	//	Front end
+	//------------------------------------------------------------------------------
+
 	
-
-
-    // Wires
-
-    wire [MAX_ORAM_L-1:0]           Leaf; // comes from POSMAP
-    wire                            LeafValid;
-
-    wire                            SymKey; // from key exchange
-
-    wire                            OutLd; // indicate load
-    wire [APP_DATA_WIDTH-1:0]       PlainIn; // plain text to AES
-    wire [APP_DATA_WIDTH-1:0]       CipherOut; // data from AES
-    wire [APP_DATA_WIDTH/AES_WIDTH-1:0] AESOutDone; // done encrypt
-
-    wire                                InKld; // indicate key load
-    wire                                InLd; //indicate load
-    wire [APP_DATA_WIDTH-1:0]           CipherIn; // plain text to AES
-    wire [APP_DATA_WIDTH-1:0]           PlainOut; // data from AES
-    wire [APP_DATA_WIDTH/AES_WIDTH-1:0] AESInDone;  // done decrypt
-
-    wire [DRAM_ADDR_WIDTH-1:0]          PAddr;
-
-    wire                                AddrGenEn;
-
-    wire                                StashReturnRdy;
-
-    wire                                StashEvictValid;
-    wire                                StashEvictRdy;
-
+	
+	
 	//------------------------------------------------------------------------------
-	// Front end
+	//	Back end
 	//------------------------------------------------------------------------------
 
-	//------------------------------------------------------------------------------
-	// Back end
-	//------------------------------------------------------------------------------
-
+	/*
 	Stash	#(				.StashDWidth(			StashDWidth),
 							.StashCapacity(			ORAMC),
 							.ORAMB(					ORAMB),
@@ -149,6 +132,29 @@ module PathORAM #(`include "PathORAM.vh", `include "DDR3SDRAM.vh") (
 							.PhyAddr(				PAddr),
 							.STIdx(					),
 							.BktIdx(				));
+	*/
+							
+	DRAMInitializer #(		.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
+			dram_init(		.Clock(					Clock),
+							.Reset(					Reset),
+							// TODO generalize this to addr gen, etc
+							.DRAMCommandAddress(	DRAMCommandAddress),
+							.DRAMCommand(			DRAMCommand),
+							.DRAMCommandValid(		DRAMCommandValid),
+							.DRAMCommandReady(		DRAMCommandReady),
+							.DRAMWriteData(			DRAMWriteData),
+							.DRAMWriteMask(			DRAMWriteMask),
+							.DRAMWriteDataValid(	DRAMWriteDataValid),
+							.DRAMWriteDataReady(	DRAMWriteDataReady),
+							.Done(					));					
 
 	//------------------------------------------------------------------------------
 endmodule

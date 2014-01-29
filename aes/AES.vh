@@ -1,2 +1,2 @@
 
-	parameter					IVEntropyWidth =	64;
+	parameter					IVEntropyWidth =	64
