@@ -7,14 +7,15 @@ module AddrGen
   
   // interface with backend ORAM controller
   input Reset, Start, 
-  input RWIn, BHIn,       // if this is a read (0) or a write (1), for the entire bucket (0) or the header (1)
+  input RWIn;		// if this is a read (0) or a write (1)
+  input	BHIn;       // for the entire bucket (0) or the header (1)
   input [ORAML-1:0] leaf,
   output Ready,
     
   // interface with DRAM controller
   input CmdReady,
   output CmdValid,
-  output [2:0] Cmd,
+  output [DDRCWidth-1:0] Cmd,
   output [DDRAWidth-1:0] Addr,
   
   // tmp output for debugging
@@ -29,8 +30,9 @@ module AddrGen
   reg [ORAMLogL-1:0] BktCounter;
   wire [DDRAWidth-1:0] BktStartAddr;
   
+  // TODO add parameter passing
   AddrGenBktHead addGenBktHead
-  (Clock, Reset, Start, Enable, 
+  (Clock, Reset, Start & Ready, Enable, 
     leaf, 
     currentLevel, BktStartAddr,
     STIdx, BktIdx // tmp output for debugging
@@ -42,10 +44,11 @@ module AddrGen
   assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
   assign Enable = SwitchLevel && CmdValid;
   
+  assign Cmd = (RW) ? DDR3CMD_Write : DDR3CMD_Read;
+  
   // output 
   assign Ready = currentLevel > ORAML;
   assign CmdValid = currentLevel <= ORAML;
-  assign Cmd = RW;
   assign Addr = BktStartAddr + BktCounter * DDRBstLen;
   
   always@(posedge Clock) begin

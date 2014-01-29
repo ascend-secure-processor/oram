@@ -3,7 +3,7 @@
 module AddrGenBktHead 
 #(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
 (
-  input Clock, Reset, Start, Enable, 
+  input Clock, Reset, Start, Enable, // TODO rename Start signal to something like "PerAccessReset"
   input [ORAML-1:0] leaf,                     // the input leaf label
   output reg [ORAMLogL-1:0]  currentLevel, 
   output [DDRAWidth-1:0] PhyAddr,
