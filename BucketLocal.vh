@@ -1,4 +1,6 @@
 
+	// TODO merge with Ling's parameters for calculating BktSize_DDRWords
+
 	// Calculate size of fields in the bucket header
 	localparam					BktSize_ValidBits =	`divceil(ORAMZ,8) * 8; // = 8 bits for Z < 9
 	localparam					BktSize_HeaderRaw = IVEntropyWidth + BktSize_ValidBits + IVEntropyWidth + (ORAMU * ORAMZ) + (ORAML * ORAMZ);

@@ -21,21 +21,20 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
-	input	[BECMDWidth-1:0] 	InCommand,
-	input	[ORAMU-1:0]			InPAddr,
-	input	[ORAML-1:0]			InLeaf,
-	input						InCommandValid,
-	output 						InCommandReady,
+	input	[BECMDWidth-1:0] 	Command,
+	input	[ORAMU-1:0]			PAddr,
+	input	[ORAML-1:0]			CurrentLeaf, 
+	input	[ORAML-1:0]			RemappedLeaf,
+	input						CommandValid,
+	output 						CommandReady,
 
 	input	[StashDWidth-1:0]	LoadData,
 	input						LoadValid,
 	output 						LoadReady,
 
-	output	[StashDWidth-1:0]	StoreData,
-	output	[ORAMU-1:0]			StorePAddr,
-	output	[ORAML-1:0]			StoreLeaf,
-	output 						StoreValid,
-	input 						StoreReady,
+	input	[StashDWidth-1:0]	StoreData,
+	input 						StoreValid,
+	output 						StoreReady,
 	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface

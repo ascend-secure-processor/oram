@@ -10,7 +10,7 @@
 //==============================================================================
 //	Module:		PathORAMTestbench
 //==============================================================================
-module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh", 
+module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh", 
 							`include "AES.vh");
 
 	//--------------------------------------------------------------------------
@@ -29,7 +29,30 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire 						Clock;
 	reg							Reset; 
 
-	reg							DRAMCommandReady, DRAMWriteDataReady;
+	// Frontend interface
+	
+	wire	[BECMDWidth-1:0] 	Command,
+	wire	[ORAMU-1:0]			PAddr,
+	wire	[ORAML-1:0]			CurrentLeaf, 
+	wire	[ORAML-1:0]			RemappedLeaf,
+	wire						CommandValid,
+	wire 						CommandReady,
+	wire	[StashDWidth-1:0]	LoadData,
+	wire						LoadValid,
+	wire 						LoadReady,
+	wire	[StashDWidth-1:0]	StoreData,
+	wire 						StoreValid,
+	wire 						StoreReady,	
+	
+	// DRAM interface
+	
+	wire	[DDRCWidth-1:0]		DRAM_Command;
+	wire	[DDRAWidth-1:0]		DRAM_Address;
+	wire	[DDRDWidth-1:0]		DRAM_WriteData, DRAM_ReadData; 
+	wire	[DDRMWidth-1:0]		DRAM_WriteMask;
+	wire						DRAM_CommandValid, DRAM_CommandReady;
+	wire						DRAM_WriteDataValid, DRAM_WriteDataReady;
+	wire						DRAM_ReadDataValid;	
 	
 	//--------------------------------------------------------------------------
 	//	Clock Source
@@ -57,8 +80,8 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//--------------------------------------------------------------------------
 	//	CUT
 	//--------------------------------------------------------------------------
-
-	PathORAM #(				.ORAMB(					ORAMB),
+	
+	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					Test_ORAML),
 							.ORAMZ(					ORAMZ),
@@ -68,19 +91,67 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
 				CUT(		.Clock(					Clock),
-							.Reset(					Reset),
-							// TODO LLC interface //
-							.DRAMCommandAddress(	),
-							.DRAMCommand(			),
-							.DRAMCommandValid(		),
-							.DRAMCommandReady(		DRAMCommandReady),			
-							.DRAMReadData(			),
-							.DRAMReadDataValid(		1'b0),			
-							.DRAMWriteData(			),
-							.DRAMWriteMask(			),
-							.DRAMWriteDataValid(	),
-							.DRAMWriteDataReady(	DRAMWriteDataReady));		
-	
+							.Reset(					Reset),			
+							.Command(				),
+							.PAddr(					),
+							.CurrentLeaf(			),
+							.RemappedLeaf(			),
+							.CommandValid(			),
+							.CommandReady(			),
+							.LoadData(				),
+							.LoadValid(				),
+							.LoadReady(				),
+							.StoreData(				),
+							.StoreValid(			),
+							.StoreReady(			),
+							.DRAMCommandAddress(	DRAM_Address),
+							.DRAMCommand(			DRAM_Command),
+							.DRAMCommandValid(		DRAM_CommandValid),
+							.DRAMCommandReady(		DRAM_CommandReady),			
+							.DRAMReadData(			DRAM_ReadData),
+							.DRAMReadDataValid(		DRAM_ReadDataValid),			
+							.DRAMWriteData(			DRAM_WriteData),
+							.DRAMWriteMask(			DRAM_WriteMask),
+							.DRAMWriteDataValid(	DRAM_WriteDataValid),
+							.DRAMWriteDataReady(	DRAM_WriteDataReady));
+							
 	//--------------------------------------------------------------------------
+
+	//--------------------------------------------------------------------------
+	//	DDR -> BRAM (to make simulation faster)
+	//--------------------------------------------------------------------------
+	
+	SynthesizedDRAM	#(		.UWidth(				8),
+							.AWidth(				DDRAWidth),
+							.DWidth(				DDRDWidth),
+							.BurstLen(				DDRBstLen),
+							.EnableMask(			1),
+							.Class1(				1),
+							.RLatency(				1),
+							.WLatency(				1)); 
+				ddr3model(	.Clock(					Clock),
+							.Reset(					Reset),
+
+							.Initialized(			),
+							.PoweredUp(				),
+
+							.CommandAddress(		DRAM_Address),
+							.Command(				DRAM_Command),
+							.CommandValid(			DRAM_CommandValid),
+							.CommandReady(			DRAM_CommandReady),
+
+							.DataIn(				DRAM_WriteData),
+							.DataInMask(			DRAM_WriteMask),
+							.DataInValid(			DRAM_WriteDataValid),
+							.DataInReady(			DRAM_WriteDataReady),
+
+							.DataOut(				DRAM_ReadData),
+							.DataOutErrorChecked(	),
+							.DataOutErrorCorrected(	),
+							.DataOutValid(			DRAM_ReadDataValid),
+							.DataOutReady(			1'b1));
+		
+	//--------------------------------------------------------------------------
+	
 endmodule
 //------------------------------------------------------------------------------
