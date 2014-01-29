@@ -20,6 +20,8 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	localparam					Freq =				200_000_000,
 								Cycle = 			1000000000/Freq;	
 	
+	localparam					Test_ORAML =		15;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -27,6 +29,8 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire 						Clock;
 	reg							Reset; 
 
+	reg							DRAMCommandReady, DRAMWriteDataReady;
+	
 	//--------------------------------------------------------------------------
 	//	Clock Source
 	//--------------------------------------------------------------------------
@@ -38,11 +42,16 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//--------------------------------------------------------------------------
 
 	initial begin
+		DRAMWriteDataReady = 1'b0;
+		DRAMCommandReady = 1'b1;
 	
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
 
+		#(Cycle*100000);
+		
+		DRAMWriteDataReady = 1'b1;
 	end
 	
 	//--------------------------------------------------------------------------
@@ -51,7 +60,7 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	PathORAM #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
-							.ORAML(					15),
+							.ORAML(					Test_ORAML),
 							.ORAMZ(					ORAMZ),
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
@@ -64,13 +73,13 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMCommandAddress(	),
 							.DRAMCommand(			),
 							.DRAMCommandValid(		),
-							.DRAMCommandReady(		1'b1),			
+							.DRAMCommandReady(		DRAMCommandReady),			
 							.DRAMReadData(			),
 							.DRAMReadDataValid(		1'b0),			
 							.DRAMWriteData(			),
 							.DRAMWriteMask(			),
 							.DRAMWriteDataValid(	),
-							.DRAMWriteDataReady(	1'b1));		
+							.DRAMWriteDataReady(	DRAMWriteDataReady));		
 	
 	//--------------------------------------------------------------------------
 endmodule

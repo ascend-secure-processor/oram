@@ -49,13 +49,14 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "BucketLocal.vh"
 	
 	localparam					SpaceRemaining = 	BktSize_HeaderRnd - 2 * IVEntropyWidth - BktSize_ValidBits;
-	localparam					EndOfTreeAddr =		BktSize_DDRWords * (ORAMN + 1); // this is the first non-existant bucket
+	localparam					EndOfTreeAddr =		BktSize_DDRWords * ORAMN; // this is the first non-existant bucket
+	localparam					BAWidth =			`log2(ORAMN);
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
-	wire	[DDRAWidth-1:0] 	DRAMWriteCount;
+	wire	[BAWidth-1:0] 		DRAMWriteCount;
 	
 	//--------------------------------------------------------------------------
 	//	Address generation
@@ -71,18 +72,17 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.In(					{DDRAWidth{1'bx}}),
 							.Count(					DRAMCommandAddress));
 							
-	Counter		#(			.Width(					DDRAWidth),
-							.Factor(				BktSize_DDRWords))
+	Counter		#(			.Width(					BAWidth))
 				wrt_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
-							.In(					{DDRAWidth{1'bx}}),
+							.In(					{BAWidth{1'bx}}),
 							.Count(					DRAMWriteCount));							
 	
 	assign	DRAMCommandValid =						DRAMCommandAddress != EndOfTreeAddr;
-	assign	DRAMWriteDataValid =					DRAMWriteCount != EndOfTreeAddr;
+	assign	DRAMWriteDataValid =					DRAMWriteCount != ORAMN;
 	assign	Done =									~DRAMCommandValid & ~DRAMWriteDataValid;
 	
 	assign	DRAMCommand =							DDR3CMD_Write;
