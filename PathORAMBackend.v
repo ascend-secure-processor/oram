@@ -22,8 +22,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//--------------------------------------------------------------------------
 
 	input	[BECMDWidth-1:0] 	InCommand,
-	input	[ORAMU-1:0]			LoadPAddr,
-	input	[ORAML-1:0]			LoadLeaf,
+	input	[ORAMU-1:0]			InPAddr,
+	input	[ORAML-1:0]			InLeaf,
 	input						InCommandValid,
 	output 						InCommandReady,
 
