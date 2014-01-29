@@ -1,5 +1,3 @@
-`include "Const.vh"
-
 module AddrGen
 #(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
 (
@@ -7,23 +5,24 @@ module AddrGen
   
   // interface with backend ORAM controller
   input Reset, Start, 
-  input RWIn,		// if this is a read (0) or a write (1)
-  input	BHIn,       // for the entire bucket (0) or the header (1)
+  input RWIn,              // 0 for write, 1 for read, 
+  input BHIn,              // 0 for the entire bucket, 1 for the header
   input [ORAML-1:0] leaf,
   output Ready,
     
   // interface with DRAM controller
   input CmdReady,
   output CmdValid,
-  output [DDRCWidth-1:0] Cmd,
+  output [DDRCWidth:0] Cmd,
   output [DDRAWidth-1:0] Addr,
   
   // tmp output for debugging
   output [ORAMLogL-1:0]  currentLevel, 
   output [ORAML-1:0] STIdx, BktIdx
 );
-
-    `include "PathORAMLocal.vh"
+  
+  `include "PathORAMLocal.vh"
+  `include "DDR3SDRAMLocal.vh"
   
   // controller for AddrGenBktHead
   wire Enable, SwitchLevel;
@@ -32,25 +31,21 @@ module AddrGen
   reg [ORAMLogL-1:0] BktCounter;
   wire [DDRAWidth-1:0] BktStartAddr;
   
-  // TODO add parameter passing
-  AddrGenBktHead #(.ORAML(ORAML), .DDRAWidth(DDRAWidth))
-  addGenBktHead (Clock, Reset, Start & Ready, Enable, 
+  AddrGenBktHead #(.ORAML(ORAML), .DDRAWidth(DDRAWidth)) addGenBktHead
+  (Clock, Reset, Start && Ready, Enable, 
     leaf, 
     currentLevel, BktStartAddr,
     STIdx, BktIdx // tmp output for debugging
   );  
   
-  `include "DDR3SDRAMLocal.vh"
-  
   localparam BktSize = (ORAMZ + 1) * DDRBstLen;
   assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
   assign Enable = SwitchLevel && CmdValid;
   
-  assign Cmd = (RW) ? DDR3CMD_Write : DDR3CMD_Read;
-  
   // output 
   assign Ready = currentLevel > ORAML;
   assign CmdValid = currentLevel <= ORAML;
+  assign Cmd = RW ? DDR3CMD_Read : DDR3CMD_Write;          // 000 for write, 001 for read
   assign Addr = BktStartAddr + BktCounter * DDRBstLen;
   
   always@(posedge Clock) begin

@@ -3,7 +3,7 @@
 module AddrGenBktHead 
 #(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
 (
-  input Clock, Reset, Start, Enable, // TODO rename Start signal to something like "PerAccessReset"
+  input Clock, Reset, Start, Enable, 
   input [ORAML-1:0] leaf,                     // the input leaf label
   output reg [ORAMLogL-1:0]  currentLevel, 
   output [DDRAWidth-1:0] PhyAddr,
@@ -14,8 +14,8 @@ module AddrGenBktHead
     currentLevel = -1;
   end
 
-  `include "DDR3SDRAMLocal.vh"
   `include "PathORAMLocal.vh"
+  `include "DDR3SDRAMLocal.vh"
  
   // subtree related parameters
   localparam BktSize = (ORAMZ + 1) * DDRBstLen;
@@ -32,13 +32,13 @@ module AddrGenBktHead
   generate for(genvar i = 0; i < ORAML; i = i + 1) begin:REVERSE
     assign leaf_reverse[i] = leaf[ORAML-1-i];
 	end endgenerate
-  reg [ORAML-1:0] leaf_reverse_shift;
+  reg [ORAML-1:0] leaf_shift;
   
   // One PathGen module walks the subtrees and the other inside a subtree
   // wire [ORAML-1:0] STIdx, BktIdx;
   wire switchST;
-  PathGen #(.ORAML(ORAML)) STGen(Clock, Reset || Start, Enable, switchST, leaf_reverse_shift[0], STIdx); 
-  PathGen #(.ORAML(ORAML)) BktGen(Clock, Reset || Start || switchST, Enable, Enable, leaf_reverse_shift[0], BktIdx);
+  PathGen #(ORAML) STGen(Clock, Start, Enable, switchST, leaf_shift[0], STIdx); 
+  PathGen #(ORAML) BktGen(Clock, Start || switchST, Enable, Enable, leaf_shift[0], BktIdx);
     // or equivalently
     // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
   
@@ -52,12 +52,13 @@ module AddrGenBktHead
     else if (Start) begin
       currentLevel <= 0;
       currentLvlinST <= 0;
-      leaf_reverse_shift <= leaf_reverse;
+      // leaf_reverse_shift <= leaf_reverse;
+      leaf_shift <= leaf;
     end 
     else if (Enable) begin
       currentLevel <= currentLevel + 1;
       currentLvlinST <= switchST ? 0 : currentLvlinST + 1;
-      leaf_reverse_shift <= leaf_reverse_shift >> 1;    
+      leaf_shift <= leaf_shift >> 1;    
     end
   end
   

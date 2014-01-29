@@ -1,6 +1,7 @@
 module testAddrGen;
   
   `include "PathORAM.vh";
+  `include "PathORAMLocal.vh";
   `include "DDR3SDRAM.vh";
   
 	localparam   Freq =	100_000_000;
