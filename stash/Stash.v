@@ -7,8 +7,7 @@
 
 //------------------------------------------------------------------------------
 //	Module:		Stash
-//	Desc:		The Path ORAM stash.
-//	Author:		Chris F.
+//	Desc:		The Path ORAM stash
 //
 //	General notes:
 //		- Leaf orientation: least significant bit is root bucket

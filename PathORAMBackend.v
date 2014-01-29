@@ -6,11 +6,11 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		PathORAM
+//	Module:		PathORAMBackend
 //	Desc:		
 //==============================================================================
-module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
-					`include "AES.vh") (
+module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
+							`include "AES.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -18,10 +18,24 @@ module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
   	input 						Clock, Reset,
 	
 	//--------------------------------------------------------------------------
-	//	Processor Interface
+	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
-	// TODO 
+	input	[BECMDWidth-1:0] 	InCommand,
+	input	[ORAMU-1:0]			LoadPAddr,
+	input	[ORAML-1:0]			LoadLeaf,
+	input						InCommandValid,
+	output 						InCommandReady,
+
+	input	[StashDWidth-1:0]	LoadData,
+	input						LoadValid,
+	output 						LoadReady,
+
+	output	[StashDWidth-1:0]	StoreData,
+	output	[ORAMU-1:0]			StorePAddr,
+	output	[ORAML-1:0]			StoreLeaf,
+	output 						StoreValid,
+	input 						StoreReady,
 	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
@@ -87,16 +101,9 @@ module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire						AddrGen_InReady, AddrGen_InValid;
 	
 	//------------------------------------------------------------------------------
-	//	Front end
+	//	Control logic
 	//------------------------------------------------------------------------------
 
-	
-	
-	
-	//------------------------------------------------------------------------------
-	//	Back end
-	//------------------------------------------------------------------------------
-	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
 		else CS <= 									NS;
@@ -114,60 +121,6 @@ module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	CSInitialize =							CS == ST_Initialize;
 	assign	AllResetsDone =							Stash_ResetDone & DRAMInit_Done;
 	
-	assign	DRAMCommandAddress =					(CSInitialize) ? DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
-	assign	DRAMCommand =							(CSInitialize) ? DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
-	assign	DRAMCommandValid =						(CSInitialize) ? DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
-	
-	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady & ~CSInitialize;
-	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & CSInitialize;
-	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady & CSInitialize;
-	
-	// TODO for debugging
-	assign	AddrGen_InValid =						1'b1;
-	assign	AddrGen_Leaf =							15'hffff;
-	
-    AddrGen #(				.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth))
-			addr_gen(		.Clock(					Clock),
-							.Reset(					Reset | CSInitialize),
-							.Start(					AddrGen_InValid), 
-							.Ready(					AddrGen_InReady),
-							.RWIn(					1'b1), // TODO for debugging 
-							.BHIn(					1'b0), // TODO change when we do REW ORAM
-							.leaf(					AddrGen_Leaf),
-							.CmdReady(				AddrGen_DRAMCommandReady),
-							.CmdValid(				AddrGen_DRAMCommandValid),
-							.Cmd(					AddrGen_DRAMCommand),
-							.Addr(					AddrGen_DRAMCommandAddress));
-							
-	DRAMInitializer #(		.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
-			dram_init(		.Clock(					Clock),
-							.Reset(					Reset),
-							// TODO generalize this to addr gen, etc
-							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
-							.DRAMCommand(			DRAMInit_DRAMCommand),
-							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
-							.DRAMCommandReady(		DRAMInit_DRAMCommandReady),
-							.DRAMWriteData(			DRAMInit_DRAMWriteData),
-							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
-							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInit_Done));					
-
 	//------------------------------------------------------------------------------
 	//	Stash
 	//------------------------------------------------------------------------------
@@ -227,6 +180,65 @@ module PathORAM #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.StashOccupancy(		StashOccupancy));
 	*/	
 	
+	//------------------------------------------------------------------------------	
+	
 	//------------------------------------------------------------------------------
+	//	Address generation & initialization
+	//------------------------------------------------------------------------------
+
+	// Initializer / AddrGen arbitration
+	assign	DRAMCommandAddress =					(CSInitialize) ? DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
+	assign	DRAMCommand =							(CSInitialize) ? DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
+	assign	DRAMCommandValid =						(CSInitialize) ? DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
+	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady & ~CSInitialize;
+	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & CSInitialize;
+	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady & CSInitialize;
+	
+	// TODO for debugging
+	assign	AddrGen_InValid =						1'b1;
+	assign	AddrGen_Leaf =							15'hffff;
+	
+    AddrGen #(				.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth))
+			addr_gen(		.Clock(					Clock),
+							.Reset(					Reset | CSInitialize),
+							.Start(					AddrGen_InValid), 
+							.Ready(					AddrGen_InReady),
+							.RWIn(					1'b1), // TODO for debugging 
+							.BHIn(					1'b0), // TODO change when we do REW ORAM
+							.leaf(					AddrGen_Leaf),
+							.CmdReady(				AddrGen_DRAMCommandReady),
+							.CmdValid(				AddrGen_DRAMCommandValid),
+							.Cmd(					AddrGen_DRAMCommand),
+							.Addr(					AddrGen_DRAMCommandAddress));
+							
+	DRAMInitializer #(		.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
+			dram_init(		.Clock(					Clock),
+							.Reset(					Reset),
+							// TODO generalize this to addr gen, etc
+							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
+							.DRAMCommand(			DRAMInit_DRAMCommand),
+							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
+							.DRAMCommandReady(		DRAMInit_DRAMCommandReady),
+							.DRAMWriteData(			DRAMInit_DRAMWriteData),
+							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
+							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
+							.Done(					DRAMInit_Done));					
+
 endmodule
 //------------------------------------------------------------------------------

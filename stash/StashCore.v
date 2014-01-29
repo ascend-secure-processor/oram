@@ -7,8 +7,7 @@
 
 //------------------------------------------------------------------------------
 //	Module:		StashCore
-//	Desc:		Implements core stash operations		
-//	Author:		Chris F.
+//	Desc:		Implements core stash operations
 
 //	Commands:
 //		Push - 	add element to stash.  This is only used on a path read --- NOT 
@@ -57,6 +56,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		
 	input	[CMDWidth-1:0] 		InCommand,
 	input	[StashEAWidth-1:0]	InSAddr,
+	input	[ORAMU-1:0]			InPAddr,
+	input	[ORAML-1:0]			InLeaf,	
 	input						InCommandValid,
 	output 						InCommandReady,
 
@@ -65,8 +66,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	
 	input	[StashDWidth-1:0]	InData,
-	input	[ORAMU-1:0]			InPAddr,
-	input	[ORAML-1:0]			InLeaf,
 	input						InValid,
 	output 						InReady,
 

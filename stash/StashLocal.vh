@@ -23,7 +23,7 @@
 `endif
 
 	// Commands understood by StashCore, called by Stash
-	localparam					CMDWidth =			3,
+	localparam					SCMDWidth =			3,
 								CMD_Push =			3'd0,
 								CMD_Overwrite =		3'd1,
 								CMD_Peak = 			3'd2,
