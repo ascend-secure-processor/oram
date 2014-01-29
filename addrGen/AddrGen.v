@@ -7,8 +7,8 @@ module AddrGen
   
   // interface with backend ORAM controller
   input Reset, Start, 
-  input RWIn;		// if this is a read (0) or a write (1)
-  input	BHIn;       // for the entire bucket (0) or the header (1)
+  input RWIn,		// if this is a read (0) or a write (1)
+  input	BHIn,       // for the entire bucket (0) or the header (1)
   input [ORAML-1:0] leaf,
   output Ready,
     
@@ -22,6 +22,8 @@ module AddrGen
   output [ORAMLogL-1:0]  currentLevel, 
   output [ORAML-1:0] STIdx, BktIdx
 );
+
+    `include "PathORAMLocal.vh"
   
   // controller for AddrGenBktHead
   wire Enable, SwitchLevel;
@@ -31,8 +33,8 @@ module AddrGen
   wire [DDRAWidth-1:0] BktStartAddr;
   
   // TODO add parameter passing
-  AddrGenBktHead addGenBktHead
-  (Clock, Reset, Start & Ready, Enable, 
+  AddrGenBktHead #(.ORAML(ORAML), .DDRAWidth(DDRAWidth))
+  addGenBktHead (Clock, Reset, Start & Ready, Enable, 
     leaf, 
     currentLevel, BktStartAddr,
     STIdx, BktIdx // tmp output for debugging

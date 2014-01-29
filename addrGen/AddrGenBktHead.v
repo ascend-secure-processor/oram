@@ -15,6 +15,7 @@ module AddrGenBktHead
   end
 
   `include "DDR3SDRAMLocal.vh"
+  `include "PathORAMLocal.vh"
  
   // subtree related parameters
   localparam BktSize = (ORAMZ + 1) * DDRBstLen;
@@ -36,8 +37,8 @@ module AddrGenBktHead
   // One PathGen module walks the subtrees and the other inside a subtree
   // wire [ORAML-1:0] STIdx, BktIdx;
   wire switchST;
-  PathGen #(ORAML) STGen(Clock, Reset || Start, Enable, switchST, leaf_reverse_shift[0], STIdx); 
-  PathGen #(ORAML) BktGen(Clock, Reset || Start || switchST, Enable, Enable, leaf_reverse_shift[0], BktIdx);
+  PathGen #(.ORAML(ORAML)) STGen(Clock, Reset || Start, Enable, switchST, leaf_reverse_shift[0], STIdx); 
+  PathGen #(.ORAML(ORAML)) BktGen(Clock, Reset || Start || switchST, Enable, Enable, leaf_reverse_shift[0], BktIdx);
     // or equivalently
     // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
   
