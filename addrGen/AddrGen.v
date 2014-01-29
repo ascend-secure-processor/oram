@@ -1,54 +1,64 @@
+`include "Const.vh"
+
 module AddrGen
-#(
-  parameter MAX_ORAM_L = 32,
-  parameter MAX_LOG_L = 5,
-  parameter ADDR_WIDTH = 30
-)
+#(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
 (
-  input Clock, Reset, Enable, 
-  input [MAX_ORAM_L-1:0] leaf,                     // the input leaf label
-  input [MAX_LOG_L-1:0] ORAMLevels, L_st, numST,   // ORAM depth related
-  input [MAX_ORAM_L-1:0] BktSize, STSize, numCompST, STSize_bot,  // Bytes related parameters
-  output reg [MAX_LOG_L-1:0]  currentLevel, 
-  output [ADDR_WIDTH-1:0] PhyAddr,
-  output [MAX_ORAM_L-1:0] STIdx, BktIdx   // tmp output for debugging
+  input Clock, 
+  
+  // interface with backend ORAM controller
+  input Reset, Start, 
+  input RWIn, BHIn,       // if this is a read (0) or a write (1), for the entire bucket (0) or the header (1)
+  input [ORAML-1:0] leaf,
+  output Ready,
+    
+  // interface with DRAM controller
+  input CmdReady,
+  output CmdValid,
+  output [2:0] Cmd,
+  output [DDRAWidth-1:0] Addr,
+  
+  // tmp output for debugging
+  output [ORAMLogL-1:0]  currentLevel, 
+  output [ORAML-1:0] STIdx, BktIdx
 );
-
-
-  // reverse leaf and leaf shifter
-  wire [MAX_ORAM_L-1:0] leaf_reverse;
-  Reverse #(MAX_ORAM_L, 1, MAX_ORAM_L) rev(leaf, leaf_reverse);
-  reg [MAX_ORAM_L-1:0] leaf_reverse_shift;
   
-  // One PathGen module walks the subtrees and the other inside a subtree
-  // wire [MAX_ORAM_L-1:0] STIdx, BktIdx;
-  wire switchST;
-  PathGen #(MAX_ORAM_L, MAX_LOG_L, ADDR_WIDTH) 
-    STGen(Clock, Reset, Enable, switchST, leaf_reverse_shift[0], STIdx); 
-  PathGen #(MAX_ORAM_L, MAX_LOG_L, ADDR_WIDTH) 
-    BktGen(Clock, Reset || switchST, Enable, Enable, leaf_reverse_shift[0], BktIdx);
-    // or equivalently
-    // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
+  // controller for AddrGenBktHead
+  wire Enable, SwitchLevel;
+  reg RW, BH;
+  //reg [ORAML-1:0] Leaf;
+  reg [ORAMLogL-1:0] BktCounter;
+  wire [DDRAWidth-1:0] BktStartAddr;
   
-  // control logic for STGen and BktGen
-  reg [MAX_LOG_L-1:0] currentLvlinST;
-  assign switchST = currentLvlinST >= L_st - 1;
+  AddrGenBktHead addGenBktHead
+  (Clock, Reset, Start, Enable, 
+    leaf, 
+    currentLevel, BktStartAddr,
+    STIdx, BktIdx // tmp output for debugging
+  );  
+  
+  `include "DDR3SDRAMLocal.vh"
+  
+  localparam BktSize = (ORAMZ + 1) * DDRBstLen;
+  assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
+  assign Enable = SwitchLevel && CmdValid;
+  
+  // output 
+  assign Ready = currentLevel > ORAML;
+  assign CmdValid = currentLevel <= ORAML;
+  assign Cmd = RW;
+  assign Addr = BktStartAddr + BktCounter * DDRBstLen;
+  
   always@(posedge Clock) begin
-    if (Reset) begin
-      currentLevel <= 0;
-      currentLvlinST <= 0;
-      leaf_reverse_shift <= leaf_reverse >> (MAX_ORAM_L - ORAMLevels + 1);
-    end 
-    else if (Enable) begin
-      currentLevel <= currentLevel + 1;
-      currentLvlinST <= switchST ? 0 : currentLvlinST + 1;
-      leaf_reverse_shift <= leaf_reverse_shift >> 1;    
+    // accept inputs
+    if (Start && Ready) begin
+      RW <= RWIn;
+      BH <= BHIn;
+      BktCounter <= 0; 
     end
+    
+    if (CmdReady && !Ready) begin
+      BktCounter = SwitchLevel ? 0 : BktCounter + 1;
+    end      
   end
-  
-  // adjust for the (possibly) shorter subtrees at the bottom 
-  wire shortTreeAtBottom;
-  assign shortTreeAtBottom = (numST * L_st != ORAMLevels) && currentLevel >= (numST-1) * L_st;
-  assign PhyAddr = STIdx * STSize + BktIdx * BktSize - shortTreeAtBottom * (STSize - STSize_bot) * (STIdx - numCompST); 
-  
+    
 endmodule

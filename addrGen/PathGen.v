@@ -1,17 +1,19 @@
 module PathGen
-#(
-  parameter MAX_ORAM_L = 32,
-  parameter MAX_LOG_L = 5,
-  parameter ADDR_WIDTH = 30
-)
+#(parameter ORAML)
 (
   input Clock, Reset, Enable,
   input Switch,     // indicating the degree of the tree. Assertion every k Enable means 2^k-ary tree. 
   input BinChild,   // left-or-right child 
-  output reg [MAX_ORAM_L-1:0]  NodeIdx
+  output reg [ORAML-1:0]  NodeIdx
 );
  
-  reg [MAX_ORAM_L-1:0] Accum, Child;  
+  reg [ORAML-1:0] Accum, Child;  
+  
+  initial begin
+      NodeIdx <= 0;
+      Accum <= 0;
+      Child <= 0;
+  end
   
   always@(posedge Clock) begin
     if (Reset) begin
