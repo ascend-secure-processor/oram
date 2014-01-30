@@ -31,18 +31,15 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 
 	// Frontend interface
 	
-	wire	[BECMDWidth-1:0] 	Command,
-	wire	[ORAMU-1:0]			PAddr,
-	wire	[ORAML-1:0]			CurrentLeaf, 
-	wire	[ORAML-1:0]			RemappedLeaf,
-	wire						CommandValid,
-	wire 						CommandReady,
-	wire	[StashDWidth-1:0]	LoadData,
-	wire						LoadValid,
-	wire 						LoadReady,
-	wire	[StashDWidth-1:0]	StoreData,
-	wire 						StoreValid,
-	wire 						StoreReady,	
+	wire	[BECMDWidth-1:0] 	Command;
+	wire	[ORAMU-1:0]			PAddr;
+	wire	[ORAML-1:0]			CurrentLeaf;
+	wire	[ORAML-1:0]			RemappedLeaf;
+	wire						CommandValid, CommandReady;
+	wire	[StashDWidth-1:0]	LoadData;
+	wire						LoadValid, LoadReady,
+	wire	[StashDWidth-1:0]	StoreData;
+	wire 						StoreValid, StoreReady;
 	
 	// DRAM interface
 	
@@ -59,22 +56,54 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 	//--------------------------------------------------------------------------
 	
 	ClockSource #(Freq) ClockF200Gen(.Enable(1'b1), .Clock(Clock));
+
+	//--------------------------------------------------------------------------
+	//	Tasks
+	//--------------------------------------------------------------------------	
+
+	task TASK_Command;
+		input	[BECMDWidth-1:0] 	In_Command;
+		input	[ORAMU-1:0]			In_PAddr;
+		input	[ORAML-1:0]			In_CurrentLeaf;
+		input	[ORAML-1:0]			In_RemappedLeaf;
+		
+		begin
+			CommandValid = 1'b1;
+			Command = In_Command;
+			PAddr = In_PAddr;
+			CurrentLeaf = In_CurrentLeaf;
+			RemappedLeaf = In_RemappedLeaf;
+			
+			while (~CommandReady) #(Cycle);
+			#(Cycle);
+			
+			CommandValid = 1'b0;
+		end
+	endtask	
+	
+	task TASK_Data;
+		begin
+			CommandValid = 1'b1;
+			
+			while (~BlockWriteComplete) #(Cycle);
+			#(Cycle);
+			
+			Command
+
+			CMD_Append
+		end
+	endtask	
 	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
 	initial begin
-		DRAMWriteDataReady = 1'b0;
-		DRAMCommandReady = 1'b1;
 	
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
-
-		#(Cycle*100000);
 		
-		DRAMWriteDataReady = 1'b1;
 	end
 	
 	//--------------------------------------------------------------------------
@@ -92,18 +121,18 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 							.IVEntropyWidth(		IVEntropyWidth))
 				CUT(		.Clock(					Clock),
 							.Reset(					Reset),			
-							.Command(				),
-							.PAddr(					),
-							.CurrentLeaf(			),
-							.RemappedLeaf(			),
-							.CommandValid(			),
-							.CommandReady(			),
-							.LoadData(				),
-							.LoadValid(				),
-							.LoadReady(				),
-							.StoreData(				),
-							.StoreValid(			),
-							.StoreReady(			),
+							.Command(				Command),
+							.PAddr(					PAddr),
+							.CurrentLeaf(			CurrentLeaf),
+							.RemappedLeaf(			RemappedLeaf),
+							.CommandValid(			CommandValid),
+							.CommandReady(			CommandReady),
+							.LoadData(				LoadData),
+							.LoadValid(				LoadValid),
+							.LoadReady(				LoadReady),
+							.StoreData(				StoreData),
+							.StoreValid(			StoreValid),
+							.StoreReady(			StoreReady),
 							.DRAMCommandAddress(	DRAM_Address),
 							.DRAMCommand(			DRAM_Command),
 							.DRAMCommandValid(		DRAM_CommandValid),

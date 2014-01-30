@@ -7,7 +7,11 @@
 
 //==============================================================================
 //	Module:		PathORAMBackend
-//	Desc:		
+//	Desc:		The stash, AES, address generation, and throughput backpressure 
+//				logic (e.g., dummy access control, R^(E+1)W pattern control)
+//
+//	TODO
+//		- Append command
 //==============================================================================
 module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							`include "AES.vh") (
@@ -237,7 +241,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInit_Done));					
-
+							.Done(					DRAMInit_Done));			
+							
+	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------
