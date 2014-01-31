@@ -32,11 +32,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input						CommandValid,
 	output 						CommandReady,
 
-	input	[StashDWidth-1:0]	LoadData,
+	input	[FEDWidth-1:0]		LoadData,
 	input						LoadValid,
 	output 						LoadReady,
 
-	input	[StashDWidth-1:0]	StoreData,
+	input	[FEDWidth-1:0]		StoreData,
 	input 						StoreValid,
 	output 						StoreReady,
 	

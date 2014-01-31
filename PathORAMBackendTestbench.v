@@ -86,13 +86,22 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 			CommandValid = 1'b1;
 			
 			while (~BlockWriteComplete) #(Cycle);
-			#(Cycle);
-			
-			Command
+			#(Cycle); 
 
 			CMD_Append
 		end
-	endtask	
+	endtask
+
+	FIFOShiftRound	#(		.IWidth(				),
+							.OWidth(				))
+				data_shift	.Clock(					),
+							.Reset(					),
+							.InData(				),
+							.InValid(				),
+							.InAccept(				),								
+							.OutData(				),
+							.OutValid(				),
+							.OutReady(				));
 	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
