@@ -1,6 +1,10 @@
 
-	// TODO who is responsible for remapping?
-
+	localparam					FEBEChunks =		BEDWidth / FEDWidth;
+	
+	// TODO this command naming scheme is terrible.  And make it correspond better to the convention in Stash.v
+	
+	// TODO do we need ReadRmv for inclusive ORAM?
+	
 	// Commands understood by PathORAMBackend, called by PathORAMFrontend/top module
 	localparam					BECMDWidth =		2,
 								CMD_Update =		2'd0, // update existing block (Write)

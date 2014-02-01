@@ -1,8 +1,7 @@
 
-`ifdef MACROSAFE
-	localparam					DummyBlockAddress =	32'hdeadbeef;
+	localparam					DummyBlockAddress =	32'hdeadbeef; // TODO this was replaced by valid bits?
 
-	localparam					NumChunks =			ORAMB / StashDWidth;
+	localparam					NumChunks =			ORAMB / BEDWidth;
 	localparam					ChunkAWidth =		`log2(NumChunks);
 	localparam					StashEAWidth =		`log2(StashCapacity);
 	localparam					StashDAWidth =		StashEAWidth + ChunkAWidth; // addr width into data-based memories
@@ -20,12 +19,12 @@
 	localparam					ScanTableLatency =	0; // UPDATE if this changes
 	localparam					ScanDelay =			StashCapacity + ScanTableLatency;
 	localparam					SCWidth =			`log2(ScanDelay);
-`endif
 
 	// Commands understood by StashCore, called by Stash
+	// TODO change naming to match PathORAMBackend
 	localparam					SCMDWidth =			3,
-								CMD_Push =			3'd0,
-								CMD_Overwrite =		3'd1,
-								CMD_Peak = 			3'd2,
-								CMD_Dump =			3'd3,
-								CMD_Sync =			3'd4;
+								SCMD_Push =			3'd0,
+								SCMD_Overwrite =	3'd1,
+								SCMD_Peak = 		3'd2,
+								SCMD_Dump =			3'd3,
+								SCMD_Sync =			3'd4;

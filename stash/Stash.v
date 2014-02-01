@@ -13,6 +13,13 @@
 //		- Leaf orientation: least significant bit is root bucket
 // 		- Writeback occurs in root -> leaf bucket order
 //
+//	Low level notes on PathORAMBackend operations:
+//		Evict: Just mux in the block and go back to idle mode.
+//		 
+//		Peak/ReadRmv/Read: As a path read occurs, the scan marks when it finds 
+//		the block in question.  We can then perform update/read/remove on that 
+//		block by interacting with StashCore.
+//
 //	TODO:
 //		- eviction interface
 //		- return interface
@@ -57,7 +64,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Data return interface (ORAM controller -> LLC)
 	//--------------------------------------------------------------------------
 	
-	output	[StashDWidth-1:0]	ReturnData,
+	output	[BEDWidth-1:0]		ReturnData,
 	output	[ORAMU-1:0]			ReturnPAddr,
 	output	[ORAML-1:0]			ReturnLeaf,
 	output						ReturnDataOutValid,
@@ -65,10 +72,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	output						BlockReturnComplete,
 	
 	//--------------------------------------------------------------------------
-	//	Data return interface (LLC -> Stash)
+	//	Data eviction interface (LLC -> Stash)
 	//--------------------------------------------------------------------------	
 	
-	input	[StashDWidth-1:0]	EvictData,
+	input	[BEDWidth-1:0]		EvictData,
 	input	[ORAMU-1:0]			EvictPAddr,
 	input	[ORAML-1:0]			EvictLeaf,
 	input						EvictDataInValid,
@@ -79,7 +86,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	input	[StashDWidth-1:0]	WriteData,
+	input	[BEDWidth-1:0]		WriteData,
 	input	[ORAMU-1:0]			WritePAddr,
 	input	[ORAML-1:0]			WriteLeaf,
 	input						WriteInValid,
@@ -95,7 +102,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	ORAM read interface (stash -> encryption -> external memory)
 	//--------------------------------------------------------------------------
 
-	output	[StashDWidth-1:0]	ReadData,
+	output	[BEDWidth-1:0]		ReadData,
 	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,
@@ -130,7 +137,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								ST_Scan1 =				3'd2,
 								ST_PathRead =			3'd3,
 								ST_Scan2 =				3'd4,
-								ST_PathWriteback = 		3'd5;		
+								ST_PathWriteback = 		3'd5,
+								ST_Evict =				3'd6;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -141,7 +149,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire 						StateTransition;
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2;
+	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2, CSEvict;
+		
+	wire	[BEDWidth-1:0]		StashCore_InData;
+	wire	[ORAMU-1:0]			StashCore_InPAddr;
+	wire	[ORAML-1:0]			StashCore_InLeaf;
+	wire						StashCore_InValid, StashCore_InReady;			
 		
 	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
@@ -164,7 +177,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						PrepNextPeak, Core_AccessComplete, Top_AccessComplete;
 	
 	wire						CoreResetDone;
-	wire	[CMDWidth-1:0]		CoreCommand;
+	wire	[SCMDWidth-1:0]		CoreCommand;
 	wire						CoreCommandValid, CoreCommandReady, CoreOutValid;
 
 	wire	[ScanTableAWidth-1:0]BlocksReading;
@@ -176,7 +189,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Debugging interface
 	//--------------------------------------------------------------------------
 	
-	`ifdef MODELSIM
+	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
 		reg StartScanOperation_Delayed;
 		
@@ -218,6 +231,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
+	assign	BlockEvictComplete =					CSEvict & CoreCommandReady;
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
 	assign	BlockReadComplete_Pre =					CSPathWriteback & CoreCommandReady;
 	assign	PathReadComplete =						PerAccessReset;
@@ -229,6 +243,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSPathWriteback = 						CS == ST_PathWriteback; 
 	assign	CSScan1 = 								CS == ST_Scan1; 
 	assign	CSScan2 = 								CS == ST_Scan2;
+	assign	CSEvict =								CS == ST_Evict;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -243,19 +258,31 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Reset : 
 				if (CoreResetDone) NS =				ST_Idle;
 			ST_Idle :
-				if (WriteInValid) NS =		 		ST_PathRead;
-				else if (StartScanOperation) NS =	ST_Scan1;
-				else if (StartWritebackOperation) NS = ST_Scan2;
+				if (WriteInValid) 
+					NS =					 		ST_PathRead;
+				else if (StartScanOperation) 
+					NS =							ST_Scan1;
+				else if (StartWritebackOperation) // TODO will this ever happen? 
+					NS = 							ST_Scan2;
+				else if (EvictDataInValid)
+					NS =							ST_Evict;
 			ST_Scan1 :
-				if (WriteInValid) NS = 				ST_PathRead;
-				else if (StartWritebackOperation) NS = ST_Scan2;
+				if (WriteInValid) 
+					NS =			 				ST_PathRead;
+				else if (StartWritebackOperation) 
+					NS = 							ST_Scan2;
 			ST_PathRead :
-				if (StartWritebackOperation) NS =	ST_Scan2;
+				if (StartWritebackOperation) 
+					NS =							ST_Scan2;
 			ST_Scan2 : 
 				if (Scan2Complete_Conservative & ReadOutReady) 
 					NS = 							ST_PathWriteback;
 			ST_PathWriteback :
-				if (Top_AccessComplete) NS =		ST_Idle;
+				if (Top_AccessComplete) 
+					NS =							ST_Idle;
+			ST_Evict :
+				if (CoreCommandReady)
+					NS =							ST_Idle;
 		endcase
 	end
 	
@@ -263,18 +290,26 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
-	assign	CoreCommand =							(CSScan1 | CSScan2) ? 	CMD_Dump :
-													(CSPathRead) ? 			CMD_Push :
-													(CSPathWriteback) ? 	CMD_Peak : 
-																			{CMDWidth{1'bx}};
+	assign	CoreCommand =							(CSScan1 | CSScan2) ? 	SCMD_Dump :
+													(CSPathRead | CSEvict) ? SCMD_Push :
+													(CSPathWriteback) ? 	SCMD_Peak : 
+																			{SCMDWidth{1'bx}};
 	
-	assign 	CoreCommandValid =						CSPathRead | 
+	assign 	CoreCommandValid =						CSPathRead | CSEvict |
 													(CSScan1 & ~SentScanCommand) | 
 													(CSScan2 & ~SentScanCommand) | 
 													(CSPathWriteback & OutSTValid & ~PathWriteback_Waiting);
+	
+	// Write/Evict arbitration
+	assign	StashCore_InData = 						(CSEvict) ? EvictData 			: WriteData;
+	assign	StashCore_InPAddr = 					(CSEvict) ? EvictPAddr 			: WritePAddr;
+	assign	StashCore_InLeaf = 						(CSEvict) ? EvictLeaf			: WriteLeaf;
+	assign	StashCore_InValid =						(CSEvict) ? EvictDataInValid 	: WriteInValid;
+	assign	EvictDataInReady =						CSEvict & StashCore_InReady;
+	assign	WriteInReady =							~CSEvict & StashCore_InReady;
 													
-	StashCore	#(			.StashDWidth(			StashDWidth),
-							.StashCapacity(			StashCapacity),
+	StashCore	#(			.StashCapacity(			StashCapacity),
+							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -285,11 +320,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				CoreResetDone),
 						
-							.InData(				WriteData),
-							.InPAddr(				WritePAddr),
-							.InLeaf(				WriteLeaf),
-							.InValid(				WriteInValid),
-							.InReady(				WriteInReady),
+							.InData(				StashCore_InData),
+							.InPAddr(				StashCore_InPAddr),
+							.InLeaf(				StashCore_InLeaf),
+							.InValid(				StashCore_InValid),
+							.InReady(				StashCore_InReady),
 
 							.OutData(				ReadData),
 							.OutPAddr(				ReadPAddr),
@@ -319,8 +354,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.PrepNextPeak(			PrepNextPeak),
 							.SyncComplete(			Core_AccessComplete));
 
-	StashScanTable #(		.StashDWidth(			StashDWidth),
-							.StashCapacity(			StashCapacity),
+	StashScanTable #(		.StashCapacity(			StashCapacity),
+							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),

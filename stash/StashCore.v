@@ -54,7 +54,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Command interface
 	//--------------------------------------------------------------------------
 		
-	input	[CMDWidth-1:0] 		InCommand,
+	input	[SCMDWidth-1:0] 	InCommand,
 	input	[StashEAWidth-1:0]	InSAddr,
 	input	[ORAMU-1:0]			InPAddr,
 	input	[ORAML-1:0]			InLeaf,	
@@ -65,7 +65,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Input interface
 	//--------------------------------------------------------------------------
 	
-	input	[StashDWidth-1:0]	InData,
+	input	[BEDWidth-1:0]		InData,
 	input						InValid,
 	output 						InReady,
 
@@ -73,7 +73,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Output interface
 	//--------------------------------------------------------------------------
 	
-	output	[StashDWidth-1:0]	OutData,
+	output	[BEDWidth-1:0]		OutData,
 	output	[ORAMU-1:0]			OutPAddr,
 	output	[ORAML-1:0]			OutLeaf,
 	output 						OutValid,
@@ -147,7 +147,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	wire	[ORAMU-1:0]			OutPAddr_Pre;
 	
-	wire	[StashDWidth-1:0]	StashD_DataOut;
+	wire	[BEDWidth-1:0]		StashD_DataOut;
 	wire						WriteTransfer, DataTransfer, Add_Terminator;
 	wire						Transfer_Terminator, Transfer_Terminator_Pre;
 
@@ -212,7 +212,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		3 - after sync, each list is of expected length
 	*/
 
-	`ifdef MODELSIM
+	`ifdef SIMULATION
 		reg [StashEAWidth-1:0] 	MS_pt;
 		integer 				i;
 		// align the printouts in time
@@ -269,7 +269,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m] ERROR: both free/used list given same pointer during sync");
 				$stop;
 			end
-	`ifdef MODELSIM_VERBOSE			
+	`ifdef SIMULATION_VERBOSE			
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
@@ -304,7 +304,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	`endif
 			if (OutValid & OutPAddr != DummyBlockAddress)
 				$display("[%m @ %t] Reading %d", $time, OutData);
-	`ifdef MODELSIM_VERBOSE	
+	`ifdef SIMULATION_VERBOSE	
 			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
 				$display("[%m @ %t] Read dummy block", $time);
 	`endif
@@ -337,7 +337,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
 	assign	Transfer_Terminator_Pre =				LastChunk_Pre & DataTransfer;
-	assign	Dump_Preempt =							InCommand == CMD_Push & InValid & InCommandValid;
+	assign	Dump_Preempt =							InCommand == SCMD_Push & InValid & InCommandValid;
 	
 	// We need this cycle early because the stash scan table is a synchronous memory
 	assign	PrepNextPeak =							Transfer_Terminator_Pre;
@@ -383,13 +383,13 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =						 	ST_Idle;
 			ST_Idle :
 				if (InCommandValid) begin
-					if (InCommand == CMD_Push & InValid)
+					if (InCommand == SCMD_Push & InValid)
 						NS =						ST_Pushing;
-					if (InCommand == CMD_Overwrite & InValid)
+					if (InCommand == SCMD_Overwrite & InValid)
 						NS =						ST_Overwriting;
-					if (InCommand == CMD_Peak)
+					if (InCommand == SCMD_Peak)
 						NS =						ST_Peaking;
-					if (InCommand == CMD_Dump)
+					if (InCommand == SCMD_Dump)
 						NS =						ST_Dumping;
 				end
 			ST_Pushing :
@@ -437,7 +437,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		Stores data blocks.  This memory is indexed using 
 		{EntryID, EntryOffset}. 
 	*/
-	RAM			#(			.DWidth(				StashDWidth),
+	RAM			#(			.DWidth(				BEDWidth),
 							.AWidth(				StashDAWidth))
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),

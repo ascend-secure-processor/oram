@@ -10,12 +10,22 @@
 //==============================================================================
 //	Module:		StashTestbench
 //==============================================================================
-module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
+module	StashTestbench;
 
 	//--------------------------------------------------------------------------
-	//	Constants
+	//	Constants & overrides
 	//--------------------------------------------------------------------------
 
+	parameter					ORAMB =				512,
+								ORAMU =				32,
+								ORAML =				32,
+								ORAMZ =				2;
+
+	parameter					FEDWidth =			64,
+								BEDWidth =			128;
+		
+	parameter					StashCapacity =		100; // isn't restricted to be > path length
+		
     `include "StashLocal.vh"
     
 	localparam					Freq =				100_000_000,
@@ -36,28 +46,28 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 	reg							StartScanOperation;
 	reg							StartWritebackOperation;		
 
-	wire	[StashDWidth-1:0]	ReturnData;
+	wire	[BEDWidth-1:0]		ReturnData;
 	wire	[ORAMU-1:0]			ReturnPAddr;
 	wire	[ORAML-1:0]			ReturnLeaf;
 	wire						ReturnDataOutValid;
 	reg							ReturnDataOutReady;	
 	wire						BlockReturnComplete;
 	
-	reg		[StashDWidth-1:0]	EvictData;
+	reg		[BEDWidth-1:0]		EvictData;
 	reg		[ORAMU-1:0]			EvictPAddr;
 	reg		[ORAML-1:0]			EvictLeaf;
 	reg							EvictDataInValid;
 	wire						EvictDataInReady;
 	wire						BlockEvictComplete;	
 	
-	wire 	[StashDWidth-1:0]	WriteData;
+	wire 	[BEDWidth-1:0]		WriteData;
 	reg		[ORAMU-1:0]			WritePAddr;
 	reg		[ORAML-1:0]			WriteLeaf;
 	reg							WriteInValid;
 	wire						WriteInReady;	
 	wire						BlockWriteComplete;
 	
-	wire	[StashDWidth-1:0]	ReadData;
+	wire	[BEDWidth-1:0]		ReadData;
 	wire	[ORAMU-1:0]			ReadPAddr;
 	wire	[ORAML-1:0]			ReadLeaf;
 	wire						ReadOutValid;
@@ -111,15 +121,16 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 		end
 	endtask
 	
-	Counter		#(			.Width(					StashDWidth))
+	Counter		#(			.Width(					BEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				WriteInValid & WriteInReady),
-							.In(					{StashDWidth{1'bx}}),
-							.Count(					WriteData));
-		
+							.Enable(				(WriteInValid & WriteInReady) | 
+													(EvictDataInValid & EvictDataInReady)),
+							.In(					{BEDWidth{1'bx}}),
+							.Count(					WriteData));		
+
 	task TASK_QueueWrite;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
@@ -135,12 +146,27 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 		end
 	endtask
 	
+	task TASK_QueueEvict;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		begin
+			EvictDataInValid = 1'b1;
+			EvictPAddr = PAddr;
+			EvictLeaf = Leaf;
+		
+			while (~BlockEvictComplete) #(Cycle);
+			#(Cycle);
+
+			EvictDataInValid = 1'b0;
+		end
+	endtask
+
 	task TASK_CheckRead;
-		input	[StashDWidth-1:0] BaseData;
+		input	[BEDWidth-1:0] BaseData;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
 		
-		reg		[StashDWidth-1:0] Data;
+		reg		[BEDWidth-1:0] Data;
 		integer done;
 		begin
 			done = 0;
@@ -421,7 +447,33 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 		end
 		
 		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
+
+		// ---------------------------------------------------------------------
+		// Test 8:  Eviction interface
+		// ---------------------------------------------------------------------
+
+		TODO actually test this
+		
+		AccessLeaf = 32'h00000000;
+		
+		ResetDataCounter = 1'b1;
+		#(Cycle);
+		ResetDataCounter = 1'b0;		
+		
+		TASK_BigTest(8);
+
+		TASK_QueueEvict(32'hf00000ff, 32'h00000000); // level 33
+		
+		TASK_StartScan();
+
+		TASK_QueueWrite(32'hf00002ff, 32'hffffffff); // level 0
+		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0
+
+		TASK_StartWriteback();
+		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);		
+		
 	end
 
 	//--------------------------------------------------------------------------
@@ -482,6 +534,8 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 		TASK_CheckRead(0, 32'hf000000f, 32'hffffffff);
 		TASK_CheckRead(NumChunks * 1, 32'hf0000010, 32'hffffffff);
 		
+		// big test 8
+		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
 	end	
@@ -490,7 +544,7 @@ module	StashTestbench #(`include "PathORAM.vh", `include "Stash.vh");
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	Stash	#(				.StashDWidth(				StashDWidth),
+	Stash	#(				.BEDWidth(				BEDWidth),
 							.StashCapacity(			StashCapacity),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

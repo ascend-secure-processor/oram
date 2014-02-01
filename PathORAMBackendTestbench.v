@@ -36,9 +36,9 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 	wire	[ORAML-1:0]			CurrentLeaf;
 	wire	[ORAML-1:0]			RemappedLeaf;
 	wire						CommandValid, CommandReady;
-	wire	[StashDWidth-1:0]	LoadData;
+	wire	[FEDWidth-1:0]		LoadData;
 	wire						LoadValid, LoadReady,
-	wire	[StashDWidth-1:0]	StoreData;
+	wire	[FEDWidth-1:0]		StoreData;
 	wire 						StoreValid, StoreReady;
 	
 	// DRAM interface
@@ -82,37 +82,60 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 	endtask	
 	
 	task TASK_Data;
+		integer i;
 		begin
-			CommandValid = 1'b1;
+			i = 0;
+			StoreValid = 1'b1;
 			
-			while (~BlockWriteComplete) #(Cycle);
-			#(Cycle); 
-
-			CMD_Append
+			while (StoreValid & StoreReady & i < FEBEChunks) begin
+				#(Cycle);
+				i = i + 1;
+			end
+			#(Cycle);
+			
+			StoreValid = 1'b0;
 		end
 	endtask
 
-	FIFOShiftRound	#(		.IWidth(				),
-							.OWidth(				))
-				data_shift	.Clock(					),
-							.Reset(					),
-							.InData(				),
-							.InValid(				),
-							.InAccept(				),								
-							.OutData(				),
-							.OutValid(				),
-							.OutReady(				));
+	Counter		#(			.Width(					ORAML))
+				LeafGen(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CommandValid & CommandReady),
+							.In(					{{1'bx}}),
+							.Count(					RemappedLeaf));
+	
+	Counter		#(			.Width(					ORAMU))
+				PAddrGen(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CommandValid & CommandReady),
+							.In(					{{1'bx}}),
+							.Count(					PAddr));	
+	
+	Counter		#(			.Width(					FEDWidth))
+				DataGen(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				StoreValid & StoreReady),
+							.In(					{{1'bx}}),
+							.Count(					StoreData));
 	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
 	initial begin
-	
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
+
+		TASK_Command(CMD_Append, 32'hff, 32'hx, 32'h0);
 		
+		TASK_Data();
 	end
 	
 	//--------------------------------------------------------------------------
@@ -132,7 +155,7 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 							.Reset(					Reset),			
 							.Command(				Command),
 							.PAddr(					PAddr),
-							.CurrentLeaf(			CurrentLeaf),
+							.CurrentLeaf(			),
 							.RemappedLeaf(			RemappedLeaf),
 							.CommandValid(			CommandValid),
 							.CommandReady(			CommandReady),

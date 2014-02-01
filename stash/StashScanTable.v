@@ -76,14 +76,14 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Software debugging 
 	//--------------------------------------------------------------------------
 
-	`ifdef MODELSIM
+	`ifdef SIMULATION
 		integer ind;
 		reg ResetDone_Delayed;
 		
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
 			
-	`ifdef MODELSIM_VERBOSE	
+	`ifdef SIMULATION_VERBOSE	
 			if (InValid) begin
 				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InSAddr, InPAddr, CurrentLeaf, InLeaf);
 

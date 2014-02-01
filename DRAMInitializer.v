@@ -10,6 +10,9 @@
 //	Desc:		Initializes each bucket's valid bits, after DDR3 initialization
 //				is complete.  This must occur before the first real/dummy ORAM
 //				request.
+//
+//				TODO: 	this module can be re-implemented as the F-bit scheme 
+//						from the ISCA paper
 //------------------------------------------------------------------------------
 module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh", 
 							`include "AES.vh") (
@@ -49,7 +52,7 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "BucketLocal.vh"
 	
 	localparam					SpaceRemaining = 	BktSize_HeaderRnd - 2 * IVEntropyWidth - BktSize_ValidBits;
-	localparam					EndOfTreeAddr =		BktSize_DDRWords * ORAMN; // this is the first non-existant bucket
+	localparam					EndOfTreeAddr =		BktSize_DDRWords * ORAMN; // this is the first non-existent bucket
 	localparam					BAWidth =			`log2(ORAMN);
 	
 	//--------------------------------------------------------------------------
