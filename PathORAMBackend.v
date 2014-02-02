@@ -67,12 +67,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	`include "DDR3SDRAMLocal.vh"
 
-	localparam					STWidth =			2,
-								ST_Initialize =		2'd0,
-								ST_Idle =			2'd1,
+	localparam					STWidth =			3,
+								ST_Initialize =		3'd0,
+								ST_Idle =			3'd1,
 								ST_Append =			3'd2,
-								ST_AccessStart =	2'd2,
-								ST_DummyAccess =	2'd3;
+								ST_StartRead =		3'd3,
+								ST_PathRead =		3'd4,
+								ST_StartWriteback =	3'd5,
+								ST_PathWriteback =	3'd6;
 								
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
@@ -96,9 +98,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						Stash_ResetDone;
 	
-	wire	[BECMDWidth-1:0] 	Command_c;
-	wire	[ORAMU-1:0]			PAddr_c;
-	wire	[ORAML-1:0]			CurrentLeaf_c, RemappedLeaf_c;
+	wire	[BECMDWidth-1:0] 	Command_reg;
+	wire	[ORAMU-1:0]			PAddr_reg;
+	wire	[ORAML-1:0]			CurrentLeaf_reg, RemappedLeaf_reg;
 	wire						LockedValid, LockedReady;
 	
 	// ORAM initialization
@@ -118,6 +120,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress;
 	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand;
 	wire						AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
+	
+	wire						AddrGen_Writing;
 	
 	wire	[ORAML-1:0]			AddrGen_Leaf;
 	wire						AddrGen_InReady, AddrGen_InValid;
@@ -142,6 +146,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			if (StashOverflow) begin
 				// This is checked in StashCore.v ...
 			end
+			
+			if (PathBuffer_InReady & DRAMReadDataValid) begin
+				$display("[%m @ %t] DRAM was sending data and we had no space", $time);
+				$stop;
+			end
 
 		end
 	`endif
@@ -150,15 +159,30 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Control logic
 	//------------------------------------------------------------------------------
 
+	CSIdle
+	AccessIsDummy
+	
+	CSStartRead
+	CSStartWriteback
+	CSPathRead
+	CSPathWriteback
+	
+	assign	CSInitialize =							CS == ST_Initialize;
+	assign	CSStartRead =							CS == ST_StartRead;
+	assign	CSStartWriteback =						CS == ST_StartWriteback;
+	assign	CSPathRead =							CS == ST_PathRead;
+	assign	CSPathWriteback =						CS == ST_PathWriteback;
+	
+	assign	AllResetsDone =							Stash_ResetDone & DRAMInit_Done;
+
+	assign	Stash_StartScanOp =						CSStartRead;
+	assign	Stash_StartWritebackOp =				CSStartWriteback;
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
 		else CS <= 									NS;
 	end
-	
-	SetDummy
-	CSIdle
-	AccessIsDummy
-	
+
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
@@ -168,11 +192,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			ST_Idle :
 				if (StashAlmostFull) // highest priority
 					NS =							ST_StartAccess;
-				else if (LockedValid & Command_c == CMD_Append)
+				else if (LockedValid & Command_reg == CMD_Append)
 					NS =							ST_Append;
-				else if (LockedValid & (Command_c == CMD_Update | 
-										Command_c == CMD_Read | 
-										Command_c == CMD_ReadRmv))
+				else if (LockedValid & (Command_reg == CMD_Update | 
+										Command_reg == CMD_Read | 
+										Command_reg == CMD_ReadRmv))
 					NS =							ST_StartAccess;
 			ST_Append :
 				if (Stash_AppendComplete)
@@ -181,21 +205,22 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				NS =								ST_PathRead;
 			ST_PathRead : 							
 				if ()
+					NS =							ST_StartWriteback;
 			ST_StartWriteback :
-			ST_PathWriteback
+				NS =								ST_PathWriteback
+			ST_PathWriteback : 
+				if ()
+					NS =							ST_Idle;
 		endcase
 	end
 	
 	Register	#(			.Width(					1))
 				DummyReg(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					SetDummy),
+							.Reset(					Reset | (CSIdle & ~StashAlmostFull)),
+							.Set(							 CSIdle & StashAlmostFull),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					AccessIsDummy));	
-	
-	assign	CSInitialize =							CS == ST_Initialize;
-	assign	AllResetsDone =							Stash_ResetDone & DRAMInit_Done;
+							.Out(					AccessIsDummy));
 	
 	//------------------------------------------------------------------------------
 	//	Frontend interface
@@ -204,10 +229,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{Command, 	PAddr, 	CurrentLeaf, 	RemappedLeaf}),
+							.InData(				{Command, 		PAddr, 		CurrentLeaf, 	RemappedLeaf}),
 							.InValid(				CommandValid),
 							.InAccept(				CommandReady),
-							.OutData(				{Command_c,	PAddr_c,CurrentLeaf_c, 	RemappedLeaf_c}),
+							.OutData(				{Command_reg,	PAddr_reg,	CurrentLeaf_reg,RemappedLeaf_reg}),
 							.OutSend(				LockedValid),
 							.OutReady(				LockedReady));
 	
@@ -248,6 +273,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Stash
 	//------------------------------------------------------------------------------
 	
+	Stash_BlockWriteComplete
+	
 	Stash	#(				.StashCapacity(			StashCapacity),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
@@ -259,34 +286,34 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
-							.AccessLeaf(			),
-							.AccessPAddr(			),
+							.AccessLeaf(			CurrentLeaf_reg),
+							.AccessPAddr(			PAddr_reg),
 							.AccessIsDummy(			AccessIsDummy),
 							
 							.StartScanOperation(	Stash_StartScanOp),  
 							.StartWritebackOperation(Stash_StartWritebackOp),
 							
 							.ReturnData(			StashFE_ReadData),
-							.ReturnPAddr(			),
-							.ReturnLeaf(			),
+							.ReturnPAddr(			), // not connected
+							.ReturnLeaf(			), // not connected
 							.ReturnDataOutValid(	StashFE_ReadDataValid),
 							.ReturnDataOutReady(	StashFE_ReadDataReady),
 							.BlockReturnComplete(	), // not connected
 							
 							// TODO add flag to indicate append?
 							.EvictData(				FEStash_WriteData),
-							.EvictPAddr(			PAddr_c),
-							.EvictLeaf(				RemappedLeaf_c),
+							.EvictPAddr(			PAddr_reg),
+							.EvictLeaf(				RemappedLeaf_reg),
 							.EvictDataInValid(		FEStash_WriteDataValid),
 							.EvictDataInReady(		StashFE_ReadDataReady),
 							.BlockEvictComplete(	Stash_AppendComplete), // not connected
 
-							.WriteData(				WriteData),
-							.WriteInValid(			WriteInValid),
-							.WriteInReady(			WriteInReady), 
-							.WritePAddr(			WritePAddr),
-							.WriteLeaf(				WriteLeaf),
-							.BlockWriteComplete(	BlockWriteComplete), 
+							.WriteData(				DataDownShift_OutData),
+							.WriteInValid(			DataDownShift_OutValid),
+							.WriteInReady(			DataDownShift_OutReady), 
+							.WritePAddr(			),
+							.WriteLeaf(				),
+							.BlockWriteComplete(	Stash_BlockWriteComplete), 
 							
 							.ReadData(				ReadData),
 							.ReadPAddr(				ReadPAddr),
@@ -312,6 +339,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & CSInitialize;
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady & CSInitialize;
 	
+	assign	AddrGen_Writing = 						CSStartWriteback | CSPathWriteback;
+	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -324,7 +353,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset | CSInitialize),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					1'b1), // TODO for debugging 
+							.RWIn(					AddrGen_Writing),
 							.BHIn(					1'b0), // TODO change when we do REW ORAM
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady),
@@ -355,7 +384,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Done(					DRAMInit_Done));			
 	
 	//------------------------------------------------------------------------------
-	//	AES pipelines
+	//	AES pipeline counters
 	//------------------------------------------------------------------------------
 	
 	PathReadCtr
@@ -370,8 +399,112 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Load(					1'b0),
 							.Enable(				PathWriteback_Tick),
 							.In(					{ScanTableAWidth{1'bx}}),
-							.Count(					PathReadCtr));	
+							.Count(					PathReadCtr));
+	CountCompare(Count, TerminalCount)
+
+	//------------------------------------------------------------------------------
+	//	AES pipelines
+	//------------------------------------------------------------------------------
 	
+	PathBuffer_InReady
+	PathBuffer_OutValid
+	PathBuffer_OutData
+	PathBuffer_OutReady	
+	
+	HeaderDownShift_InData
+	HeaderDownShift_InValid
+	HeaderDownShift_InReady
+
+	
+	DataDownShift_InValid
+	DataDownShift_InReady
+	DataDownShift_OutValid
+	DataDownShift_OutReady
+	DataDownShift_OutData
+	
+	ShiftingData
+	
+	DataDownShift_InValid
+	DataDownShift_InReady
+	DataDownShift_OutValid
+	DataDownShift_OutReady
+	DataDownShift_OutData
+	
+	
+	
+	Counter		#(			.Width(					))
+				hdr_cnt(	.Clock(					Clock),
+							.Reset(					Reset | ),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				),
+							.In(					{{1'bx}}),
+							.Count(					));
+	CountCompare #(			.Width(					), 
+							.Compare(				))
+				hdr_stop(	.Count(					), 
+							.TerminalCount(			ShiftingData));
+	
+	Counter		#(			.Width(					))
+				dta_cnt(	.Clock(					Clock),
+							.Reset(					Reset | ),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				),
+							.In(					{{1'bx}}),
+							.Count(					));
+	CountCompare #(			.Width(					), 
+							.Compare(				))
+				dta_stop(	.Count(					), 
+							.TerminalCount(			));
+	
+	// interleaves
+	FIFOShiftRound #(		.IWidth(				DDRDWidth),
+							.OWidth(				ORAML + ORAMU))
+				hdr_shift(	.Clock(					Clock),
+							.Reset(					Reset),
+							.RepeatLimit(			), // not connected
+							.RepeatMin(				), // not connected
+							.RepeatPreMax(			), // not connected
+							.RepeatMax(				), // not connected
+							.InData(				HeaderDownShift_InData),
+							.InValid(				HeaderDownShift_InValid),
+							.InAccept(				HeaderDownShift_InReady),
+							.OutData(				),
+							.OutValid(				DataDownShift_OutValid),
+							.OutReady(				Stash_BlockWriteComplete));		
+	
+	generate if (BEDWidth != DDRDWidth) begin:DT_SHFT_DOWN
+		FIFOShiftRound #(	.IWidth(				DDRDWidth),
+							.OWidth(				BEDWidth))
+				dta_shift(	.Clock(					Clock),
+							.Reset(					Reset),
+							.RepeatLimit(			), // not connected
+							.RepeatMin(				), // not connected
+							.RepeatPreMax(			), // not connected
+							.RepeatMax(				), // not connected
+							.InData(				PathBuffer_OutData),
+							.InValid(				DataDownShift_InValid),
+							.InAccept(				DataDownShift_InReady),
+							.OutData(				DataDownShift_OutData),
+							.OutValid(				DataDownShift_OutValid),
+							.OutReady(				DataDownShift_OutReady));
+	end endgenerate
+	
+	// TODO we don't need a complete buffer if we add back pressure to the AddrGen 
+	// This buffer requires ~1% of the LUT RAM on the chip
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathLen_BEDWords))
+				path_buffer(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady),
+							.InEmptyCount(			),
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady),
+							.OutFullCount(			));	
 	
 	//------------------------------------------------------------------------------	
 endmodule

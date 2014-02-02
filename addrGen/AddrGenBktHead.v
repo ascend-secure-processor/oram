@@ -18,7 +18,8 @@ module AddrGenBktHead
   `include "DDR3SDRAMLocal.vh"
  
   // subtree related parameters
-  localparam BktSize = (ORAMZ + 1) * DDRBstLen;
+  //
+  localparam BktSize = (ORAMZ + 1) * DDRBstLen; // TODO parameterize this so that + 1 changes to + 2 if say we add integirty verification
   
   localparam L_st = `log2f(DDRROWWidth / BktSize + 1);
   localparam numST = (ORAML + 1 + L_st - 1) / L_st;
