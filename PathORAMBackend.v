@@ -147,7 +147,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				// This is checked in StashCore.v ...
 			end
 			
-			if (PathBuffer_InReady & DRAMReadDataValid) begin
+			if (~PathBuffer_InReady & DRAMReadDataValid) begin
 				$display("[%m @ %t] DRAM was sending data and we had no space", $time);
 				$stop;
 			end
@@ -311,17 +311,17 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.WriteData(				DataDownShift_OutData),
 							.WriteInValid(			DataDownShift_OutValid),
 							.WriteInReady(			DataDownShift_OutReady), 
-							.WritePAddr(			),
-							.WriteLeaf(				),
+							.WritePAddr(			HeaderDownShift_PAddr),
+							.WriteLeaf(				HeaderDownShift_Leaf),
 							.BlockWriteComplete(	Stash_BlockWriteComplete), 
 							
-							.ReadData(				ReadData),
-							.ReadPAddr(				ReadPAddr),
-							.ReadLeaf(				ReadLeaf),
-							.ReadOutValid(			ReadOutValid), 
-							.ReadOutReady(			ReadOutReady), 
-							.BlockReadComplete(		BlockReadComplete),
-							.PathReadComplete(		PathReadComplete),
+							.ReadData(				),
+							.ReadPAddr(				),
+							.ReadLeaf(				),
+							.ReadOutValid(			), 
+							.ReadOutReady(			), 
+							.BlockReadComplete(		),
+							.PathReadComplete(		),
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
@@ -382,84 +382,84 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
 							.Done(					DRAMInit_Done));			
-	
+
 	//------------------------------------------------------------------------------
-	//	AES pipeline counters
+	//	AES decrypt pipeline [TODO: add AES ;-) ]
 	//------------------------------------------------------------------------------
 	
-	PathReadCtr
+	wire						PathBuffer_InReady;
+
+	wire						PathBuffer_OutValid, PathBuffer_OutReady;
+	wire	[DDRDWidth-1:0]		PathBuffer_OutData;
+		
+	wire						HeaderDownShift_InValid, HeaderDownShift_InReady;
+	wire						DataDownShift_InValid, DataDownShift_InReady;
+		
+	wire	[BHWidth-1:0]		RdBucketCounter;
+	wire						ProcessingHeader;	
+		
+	wire	[BHULWidth-1:0]		HeaderDownShift_Template;
+	wire	[ORAMZ*ORAMU-1:0]	HeaderDownShift_PAddrs;
+	wire	[ORAMZ*ORAML-1:0]	HeaderDownShift_Leaves;
+		
+	// Buffers the whole incoming path so that AddrGen doesn't need backpressure
+	// TODO we don't need a complete buffer if we add back pressure to the AddrGen 
+	// NOTE: This buffer requires ~1% of the LUT RAM on the chip (not a big deal?)
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				path_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady), // debugging
+							.InEmptyCount(			), // not connected
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady),
+							.OutFullCount(			)); // not connected	
 	
-	// count number of blocks on path and 
-	Counter		#(			.Width(					ScanTableAWidth),
-							.Limited(				1),
-							.Limit(					BlocksOnPath - 1))
-				rd_cnt(		.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
+	// Keep track of whether we are processing header or payload for each bucket
+	Counter		#(			.Width(					BHWidth))
+				bkt_cnt(	.Clock(					Clock),
+							.Reset(					Reset | RdBucketCounter_Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathWriteback_Tick),
-							.In(					{ScanTableAWidth{1'bx}}),
-							.Count(					PathReadCtr));
-	CountCompare(Count, TerminalCount)
-
-	//------------------------------------------------------------------------------
-	//	AES pipelines
-	//------------------------------------------------------------------------------
+							.Enable(				PathBuffer_OutValid & PathBuffer_OutReady),
+							.In(					{BHWidth{1'bx}}),
+							.Count(					RdBucketCounter));	
+	CountCompare #(			.Width(					BHWidth),
+							.Compare(				BktSize_DRBursts))
+				bkt_cmp(	.Count(					RdBucketCounter), 
+							.TerminalCount(			RdBucketCounter_Reset));
 	
-	PathBuffer_InReady
-	PathBuffer_OutValid
-	PathBuffer_OutData
-	PathBuffer_OutReady	
+	// Per-bucket header/payload arbitration
+	assign	ProcessingHeader =						RdBucketCounter < BktHSize_DRBursts;
+	assign	HeaderDownShift_InValid =				PathBuffer_OutValid & ProcessingHeader;
+	assign	DataDownShift_InValid =					PathBuffer_OutValid & ~ProcessingHeader;
+	assign	PathBuffer_OutReady =					(ProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
 	
-	HeaderDownShift_InData
-	HeaderDownShift_InValid
-	HeaderDownShift_InReady
-
+	// Take the UUUULLLL bucket packing and translate it to ULULULUL 
+	InsertMask	#(			.OWidth(				BHULWidth),
+							.Mask(					{ORAMZ {{ORAMU{1'b1}}, {ORAML{1'b0}}}} ))							
+				im_paddr(	.In(					HeaderDownShift_PAddrs), 
+							.Base(					{BHULWidth{1'b0}}), 
+							.Out(					HeaderDownShift_Template));
+	InsertMask	#(			.OWidth(				BHULWidth),
+							.Mask(					{ORAMZ {{ORAMU{1'b0}}, {ORAML{1'b1}}}} ))							
+				im_leaf(	.In(					HeaderDownShift_Leaves), 
+							.Base(					HeaderDownShift_Template), 
+							.Out(					HeaderDownShift_InData));
 	
-	DataDownShift_InValid
-	DataDownShift_InReady
 	DataDownShift_OutValid
 	DataDownShift_OutReady
 	DataDownShift_OutData
 	
-	ShiftingData
-	
-	DataDownShift_InValid
-	DataDownShift_InReady
-	DataDownShift_OutValid
-	DataDownShift_OutReady
-	DataDownShift_OutData
-	
-	
-	
-	Counter		#(			.Width(					))
-				hdr_cnt(	.Clock(					Clock),
-							.Reset(					Reset | ),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				),
-							.In(					{{1'bx}}),
-							.Count(					));
-	CountCompare #(			.Width(					), 
-							.Compare(				))
-				hdr_stop(	.Count(					), 
-							.TerminalCount(			ShiftingData));
-	
-	Counter		#(			.Width(					))
-				dta_cnt(	.Clock(					Clock),
-							.Reset(					Reset | ),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				),
-							.In(					{{1'bx}}),
-							.Count(					));
-	CountCompare #(			.Width(					), 
-							.Compare(				))
-				dta_stop(	.Count(					), 
-							.TerminalCount(			));
+	HeaderDownShift_OutPAddr, 
+	HeaderDownShift_OutLeaf	
+	HeaderDownShift_OutValid	
 	
 	// interleaves
-	FIFOShiftRound #(		.IWidth(				DDRDWidth),
+	FIFOShiftRound #(		.IWidth(				BHULWidth),
 							.OWidth(				ORAML + ORAMU))
 				hdr_shift(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -470,8 +470,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				HeaderDownShift_InData),
 							.InValid(				HeaderDownShift_InValid),
 							.InAccept(				HeaderDownShift_InReady),
-							.OutData(				),
-							.OutValid(				DataDownShift_OutValid),
+							.OutData(			    {HeaderDownShift_OutPAddr, HeaderDownShift_OutLeaf}),
+							.OutValid(				HeaderDownShift_OutValid),
 							.OutReady(				Stash_BlockWriteComplete));		
 	
 	generate if (BEDWidth != DDRDWidth) begin:DT_SHFT_DOWN
@@ -491,20 +491,23 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutReady(				DataDownShift_OutReady));
 	end endgenerate
 	
-	// TODO we don't need a complete buffer if we add back pressure to the AddrGen 
-	// This buffer requires ~1% of the LUT RAM on the chip
-	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				PathLen_BEDWords))
-				path_buffer(.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady),
-							.InEmptyCount(			),
-							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid),
-							.OutReady(				PathBuffer_OutReady),
-							.OutFullCount(			));	
+	// count number of blocks on path and 
+	Counter		#(			.Width(					),
+							.Limited(				1),
+							.Limit(					))
+				rd_cnt(		.Clock(					Clock),
+							.Reset(					Reset | ),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				),
+							.In(					{{1'bx}}),
+							.Count(					PathReadCtr));
+	CountCompare(Count, TerminalCount)
+	
+	//------------------------------------------------------------------------------
+	//	AES encrypt pipeline [TODO: add AES ;-) ]
+	//------------------------------------------------------------------------------
+		
 	
 	//------------------------------------------------------------------------------	
 endmodule
