@@ -60,7 +60,7 @@ module	StashTestbench;
 	reg							ReturnDataOutReady;	
 	wire						BlockReturnComplete;
 	
-	reg		[BEDWidth-1:0]		EvictData;
+	wire	[BEDWidth-1:0]		EvictData;
 	reg		[ORAMU-1:0]			EvictPAddr;
 	reg		[ORAML-1:0]			EvictLeaf;
 	reg							EvictDataInValid;
@@ -129,14 +129,22 @@ module	StashTestbench;
 	endtask
 	
 	Counter		#(			.Width(					BEDWidth))
+				EvictGen(	.Clock(					Clock),
+							.Reset(					Reset | ResetDataCounter),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				EvictDataInValid & EvictDataInReady),
+							.In(					{BEDWidth{1'bx}}),
+							.Count(					EvictData));
+	
+	Counter		#(			.Width(					BEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				(WriteInValid & WriteInReady) | 
-													(EvictDataInValid & EvictDataInReady)),
+							.Enable(				WriteInValid & WriteInReady),
 							.In(					{BEDWidth{1'bx}}),
-							.Count(					WriteData));		
+							.Count(					WriteData));
 
 	task TASK_QueueWrite;
 		input	[ORAMU-1:0] PAddr;
@@ -180,13 +188,13 @@ module	StashTestbench;
 			Data = BaseData;
 			while (done == 0) begin
 				if (ReadOutValid /*& ReadOutReady*/) begin // NOTE: ReadOutReady is _block_ not chunk synchronous
-					if (ReadData != Data) begin
+					if (ReadData !== Data) begin
 						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
 						$stop;
 					end
 					//$display("OK: Stash read data %d, expected %d", ReadData, Data);
 					if (BlockReadComplete) begin
-						if (ReadPAddr != PAddr || ReadLeaf != Leaf) begin
+						if (ReadPAddr !== PAddr || ReadLeaf !== Leaf) begin
 							$display("FAIL: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
 							$stop;
 						end
@@ -214,7 +222,7 @@ module	StashTestbench;
 				if (ReadOutValid /*& ReadOutReady*/) begin
 					chunks = chunks + 1;
 					if (BlockReadComplete) begin
-						if (ReadPAddr != DummyBlockAddress) begin
+						if (ReadPAddr !== DummyBlockAddress) begin
 							$display("FAIL: Stash read PAddr = %x, expected dummy block (saw %d out of %d)", ReadPAddr, sofar, Count);
 							$stop;
 						end
@@ -457,11 +465,7 @@ module	StashTestbench;
 
 		// First, evict the block before the access starts (easy case)
 		
-		AccessLeaf = 32'h00000000;
-		
-		ResetDataCounter = 1'b1;
-		#(Cycle);
-		ResetDataCounter = 1'b0;		
+		AccessLeaf = 32'h00000000;		
 		
 		TASK_BigTest(8);
 
@@ -469,9 +473,9 @@ module	StashTestbench;
 		
 		TASK_StartScan();
 
-		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33
-		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0
-		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0
+		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33, 6
+		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0, 7
+		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0, 8
 
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
@@ -483,11 +487,19 @@ module	StashTestbench;
 		
 		// Now try an eviction in the middle of another access
 		
+		
+		
+		// ---------------------------------------------------------------------
+		
 		#(Cycle*1000);
 		$display("*** ALL COMMANDS COMPLETED ***");	
 	end
 
-	// This must be triggered concurrently to the main trace
+	//--------------------------------------------------------------------------
+	//	Concurrent test stimuli
+	//--------------------------------------------------------------------------
+
+	// Irregular ReadOutReady
 	initial begin
 		while (ActivateBurstReady == 0) #(Cycle);
 		#(Cycle);
@@ -514,58 +526,58 @@ module	StashTestbench;
 		
 		// big test 1
 		TASK_CheckReadDummy(BlocksOnPath - 4);
-		TASK_CheckRead(NumChunks * 2, 32'hf0000002, 32'h0000ffff);
-		TASK_CheckRead(NumChunks * 3, 32'hf0000003, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 2, 	32'hf0000002, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 3, 	32'hf0000003, 32'h0000ffff);
 		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
-		TASK_CheckRead(NumChunks * 1, 32'hf0000001, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 1, 	32'hf0000001, 32'h0000ffff);
 		
 		// big test 2
-		TASK_CheckRead(NumChunks * 4, 32'hf0000004, 32'hffff0000);
-		TASK_CheckRead(NumChunks * 5, 32'hf0000005, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 4, 	32'hf0000004, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 5, 	32'hf0000005, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 3
-		TASK_CheckRead(NumChunks * 6, 32'hf0000006, 32'hffff0000);
-		TASK_CheckRead(NumChunks * 7, 32'hf0000007, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 6, 	32'hf0000006, 32'hffff0000);
+		TASK_CheckRead(NumChunks * 7, 	32'hf0000007, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 4
-		TASK_CheckRead(NumChunks * 12, 32'hf0000008, 32'h00000001);
-		TASK_CheckRead(NumChunks * 13, 32'hf0000009, 32'h00000001);
+		TASK_CheckRead(NumChunks * 12, 	32'hf0000008, 32'h00000001);
+		TASK_CheckRead(NumChunks * 13, 	32'hf0000009, 32'h00000001);
 		TASK_CheckReadDummy(ORAMZ - 2);
-		TASK_CheckRead(NumChunks * 8, 32'hf000000a, 32'h00000002);
-		TASK_CheckRead(NumChunks * 9, 32'hf000000b, 32'h00000002);
+		TASK_CheckRead(NumChunks * 8, 	32'hf000000a, 32'h00000002);
+		TASK_CheckRead(NumChunks * 9, 	32'hf000000b, 32'h00000002);
 		TASK_CheckReadDummy(ORAMZ - 2);
 		TASK_CheckReadDummy(ORAMZ * 29);
-		TASK_CheckRead(NumChunks * 11, 32'hf000000d, 32'h80000000);
+		TASK_CheckRead(NumChunks * 11, 	32'hf000000d, 32'h80000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
-		TASK_CheckRead(NumChunks * 10, 32'hf000000c, 32'h00000000);
+		TASK_CheckRead(NumChunks * 10, 	32'hf000000c, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		
 		// big test 5
-		TASK_CheckRead(NumChunks * 14, 32'hf000000e, 32'hffffffff);
-		TASK_CheckRead(NumChunks * 15, 32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 14, 	32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 15, 	32'hf000000e, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath);
 
 		// big test 6
 		TASK_SkipRead(64);
 		
 		// big test 7
-		TASK_CheckRead(NumChunks * 2, 32'hf0000011, 32'h00000000);
-		TASK_CheckRead(NumChunks * 3, 32'hf0000012, 32'h00000000);
+		TASK_CheckRead(NumChunks * 2, 	32'hf0000011, 32'h00000000);
+		TASK_CheckRead(NumChunks * 3, 	32'hf0000012, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ * 15);
-		TASK_CheckRead(NumChunks * 4, 32'hf0000013, 32'h0000ffff);
-		TASK_CheckRead(NumChunks * 5, 32'hf0000014, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 4, 	32'hf0000013, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 5, 	32'hf0000014, 32'h0000ffff);
 		TASK_CheckReadDummy(ORAMZ * 15);
 		TASK_CheckRead(0, 32'hf000000f, 32'hffffffff);
-		TASK_CheckRead(NumChunks * 1, 32'hf0000010, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 1, 	32'hf0000010, 32'hffffffff);
 		
 		// big test 8
-		TASK_CheckRead(NumChunks * 2, 	32'hf00003ff, 32'hffffffff);
-		TASK_CheckRead(NumChunks * 3, 	32'hf00004ff, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 7, 	32'hf00003ff, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 8, 	32'hf00004ff, 32'hffffffff);
 		TASK_CheckReadDummy(ORAMZ * 31);
 		TASK_CheckRead(0, 				32'hf00000ff, 32'h00000000);
-		TASK_CheckRead(NumChunks, 		32'hf00002ff, 32'h00000000);
+		TASK_CheckRead(NumChunks * 6,	32'hf00002ff, 32'h00000000);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
