@@ -35,9 +35,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input						CommandValid,
 	output 						CommandReady,
 
-	input	[FEDWidth-1:0]		LoadData,
-	input						LoadValid,
-	output 						LoadReady,
+	output	[FEDWidth-1:0]		LoadData,
+	output						LoadValid,
+	input 						LoadReady,
 
 	input	[FEDWidth-1:0]		StoreData,
 	input 						StoreValid,
@@ -140,7 +140,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[BECMDWidth-1:0] 	Command_reg;
 	wire	[ORAMU-1:0]			PAddr_reg;
 	wire	[ORAML-1:0]			CurrentLeaf_reg, RemappedLeaf_reg;
-	wire						LockedValid, LockedReady;
+	wire						LockedCommandValid, LockedCommandReady;
 	
 	wire						Stash_BlockWriteComplete;
 	
@@ -197,6 +197,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	
 	assign	CSInitialize =							CS == ST_Initialize;
+	assign	CSIdle =								CS == ST_Idle;
 	assign	CSStartRead =							CS == ST_StartRead;
 	assign	CSStartWriteback =						CS == ST_StartWriteback;
 	assign	CSPathRead =							CS == ST_PathRead;
@@ -206,6 +207,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	assign	Stash_StartScanOp =						CSStartRead;
 	assign	Stash_StartWritebackOp =				CSStartWriteback;
+	
+	assign	LockedCommandReady =					CSPathWriteback & PathWritebackComplete & ~AccessIsDummy;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -221,11 +224,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			ST_Idle :
 				if (StashAlmostFull) // highest priority
 					NS =							ST_StartRead;
-				else if (LockedValid & Command_reg == BECMD_Append) // appends aren't much work --- do them first
+				else if (LockedCommandValid & Command_reg == BECMD_Append) // appends aren't much work --- do them first
 					NS =							ST_Append;
-				else if (LockedValid & (Command_reg == BECMD_Update | 
-										Command_reg == BECMD_Read | 
-										Command_reg == BECMD_ReadRmv))
+				else if (LockedCommandValid & (	Command_reg == BECMD_Update | 
+												Command_reg == BECMD_Read | 
+												Command_reg == BECMD_ReadRmv))
 					NS =							ST_StartRead;
 			ST_Append :
 				if (Stash_AppendComplete)
@@ -262,8 +265,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InValid(				CommandValid),
 							.InAccept(				CommandReady),
 							.OutData(				{Command_reg,	PAddr_reg,	CurrentLeaf_reg,RemappedLeaf_reg}),
-							.OutSend(				LockedValid),
-							.OutReady(				LockedReady));
+							.OutSend(				LockedCommandValid),
+							.OutReady(				LockedCommandReady));
 	
 	// TODO we may not need these expensive shifts if we can incrementally write 
 	// FEDWidth chunks to the stash; check: are they really that expensive?  If we 
@@ -272,10 +275,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OWidth(				BEDWidth))
 				st_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.RepeatLimit(			), // not connected
-							.RepeatMin(				), // not connected
-							.RepeatPreMax(			), // not connected
-							.RepeatMax(				), // not connected
 							.InData(				StoreData),
 							.InValid(				StoreValid),
 							.InAccept(				StoreReady),
@@ -287,10 +286,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OWidth(				FEDWidth))
 				ld_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.RepeatLimit(			), // not connected
-							.RepeatMin(				), // not connected
-							.RepeatPreMax(			), // not connected
-							.RepeatMax(				), // not connected
 							.InData(				StashFE_ReadData),
 							.InValid(				StashFE_ReadDataValid),
 							.InAccept(				StashFE_ReadDataReady),
@@ -311,6 +306,12 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady & CSInitialize;
 	
 	assign	AddrGen_Writing = 						CSStartWriteback | CSPathWriteback;
+	
+	// Initializer / AES encrypt arbitration
+	assign	DRAMWriteData =							DRAMInit_DRAMWriteData;
+	assign	DRAMWriteMask =							DRAMInit_DRAMWriteMask;
+	assign	DRAMWriteDataValid =					DRAMInit_DRAMWriteDataValid;
+	assign	DRAMInit_DRAMWriteDataReady = 			DRAMWriteDataReady;
 	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -352,8 +353,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInit_Done));			
-
+							.Done(					DRAMInit_Done));
+							
 	//------------------------------------------------------------------------------
 	//	AES decrypt pipeline [TODO: add AES itself]
 	//------------------------------------------------------------------------------
@@ -429,10 +430,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OWidth(				ORAML + ORAMU))
 				hdr_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.RepeatLimit(			), // not connected
-							.RepeatMin(				), // not connected
-							.RepeatPreMax(			), // not connected
-							.RepeatMax(				), // not connected
 							.InData(				HeaderDownShift_InData),
 							.InValid(				HeaderDownShift_InValid),
 							.InAccept(				HeaderDownShift_InReady),
@@ -446,10 +443,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OWidth(				BEDWidth))
 				dta_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.RepeatLimit(			), // not connected
-							.RepeatMin(				), // not connected
-							.RepeatPreMax(			), // not connected
-							.RepeatMax(				), // not connected
 							.InData(				PathBuffer_OutData),
 							.InValid(				DataDownShift_InValid),
 							.InAccept(				DataDownShift_InReady),

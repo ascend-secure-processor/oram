@@ -9,6 +9,13 @@
 
 //==============================================================================
 //	Module:		StashTestbench
+//	Desc:		If the tests all pass, the following should printout:
+//
+//				*** ALL TESTS PASSED ***
+//				*** ALL COMMANDS COMPLETED ***
+//
+//				(i.e., both must be printed out!  the order that they print 
+//				isn't important)
 //==============================================================================
 module	StashTestbench;
 
@@ -190,7 +197,7 @@ module	StashTestbench;
 				end
 				#(Cycle);
 			end
-			$display("PASS: Test %d (read)", TestID);
+			$display("PASS: Test %d (read @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData);
 			TestID = TestID + 1;
 		end
 	endtask	
@@ -271,9 +278,11 @@ module	StashTestbench;
 		3.) Dummy blocks in path, only real blocks in path
 	*/						
 
-	integer i;
+	integer i, j;
+	integer ActivateBurstReady = 0;
 	
 	initial begin
+		
 		Reset = 1'b1;
 		ResetDataCounter = 1'b0;
 		
@@ -437,24 +446,16 @@ module	StashTestbench;
 		ReadOutReady = 1'b0;
 		
 		// wreck some havoc
-		i = 1;
-		while (i < 512) begin
-			ReadOutReady = 1'b0;
-			#(Cycle*i);
-			ReadOutReady = 1'b1;
-			#(Cycle*i);
-			i = i << 1;
-		end
+		ActivateBurstReady = 1;
 		
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
-
+		
 		// ---------------------------------------------------------------------
 		// Test 8:  Eviction interface
 		// ---------------------------------------------------------------------
 
-		/*
-		TODO actually test this
+		// First, evict the block before the access starts (easy case)
 		
 		AccessLeaf = 32'h00000000;
 		
@@ -468,16 +469,39 @@ module	StashTestbench;
 		
 		TASK_StartScan();
 
-		TASK_QueueWrite(32'hf00002ff, 32'hffffffff); // level 0
+		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33
 		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0
+		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0
 
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);		
-		*/
+
+		// ---------------------------------------------------------------------
+		// Test 9:  Eviction interface 2
+		// ---------------------------------------------------------------------
 		
+		// Now try an eviction in the middle of another access
+		
+		#(Cycle*1000);
+		$display("*** ALL COMMANDS COMPLETED ***");	
 	end
 
+	// This must be triggered concurrently to the main trace
+	initial begin
+		while (ActivateBurstReady == 0) #(Cycle);
+		#(Cycle);
+		
+		j = 1;
+		while (j < 512) begin
+			ReadOutReady = 1'b0;
+			#(Cycle*j);
+			ReadOutReady = 1'b1;
+			#(Cycle*j);
+			j = j << 1;
+		end
+	end
+	
 	//--------------------------------------------------------------------------
 	//	Read stream verification
 	//--------------------------------------------------------------------------
@@ -537,8 +561,11 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 1, 32'hf0000010, 32'hffffffff);
 		
 		// big test 8
-		
-		// TODO do append test
+		TASK_CheckRead(NumChunks * 2, 	32'hf00003ff, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 3, 	32'hf00004ff, 32'hffffffff);
+		TASK_CheckReadDummy(ORAMZ * 31);
+		TASK_CheckRead(0, 				32'hf00000ff, 32'h00000000);
+		TASK_CheckRead(NumChunks, 		32'hf00002ff, 32'h00000000);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		

@@ -31,4 +31,4 @@
 	localparam					PBSTWidth =				`log2(`divceil(BktPSize_RawBits, BEDWidth));
 	
 	// Translate into how many bursts of data the AES units will get
-	localparam					PathSize_DRBursts =		(ORAML + 1) * ORAMZ * BktSize_DRBursts;
+	localparam					PathSize_DRBursts =		(ORAML + 1) * BktSize_DRBursts;

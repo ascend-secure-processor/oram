@@ -19,7 +19,7 @@ module	PathORAMTestbench;
 	parameter					ORAMB =				512,
 								ORAMU =				32,
 								ORAML =				15,
-								ORAMZ =				3;
+								ORAMZ =				5;
 
 	parameter					FEDWidth =			64,
 								BEDWidth =			128;										
@@ -56,7 +56,8 @@ module	PathORAMTestbench;
 	wire						CommandReady;
 	
 	wire	[FEDWidth-1:0]		LoadData;
-	wire						LoadValid, LoadReady;
+	wire						LoadValid;
+	reg							LoadReady;
 	wire	[FEDWidth-1:0]		StoreData;
 	reg 						StoreValid;
 	wire						StoreReady;
@@ -83,16 +84,10 @@ module	PathORAMTestbench;
 
 	task TASK_Command;
 		input	[BECMDWidth-1:0] 	In_Command;
-		//input	[ORAMU-1:0]			In_PAddr;
-		//input	[ORAML-1:0]			In_CurrentLeaf;
-		//input	[ORAML-1:0]			In_RemappedLeaf;
 		
 		begin
 			CommandValid = 1'b1;
 			Command = In_Command;
-			//PAddr = In_PAddr;
-			//CurrentLeaf = In_CurrentLeaf;
-			//RemappedLeaf = In_RemappedLeaf;
 			
 			while (~CommandReady) #(Cycle);
 			#(Cycle);
@@ -149,13 +144,17 @@ module	PathORAMTestbench;
 	//--------------------------------------------------------------------------
 
 	initial begin
+		CommandValid = 1'b0;
+		StoreValid = 1'b0;
+		LoadReady = 1'b1;
+		
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
 
-		//TASK_Command(CMD_Append, 32'hff, 32'hx, 32'h0);
+		TASK_Command(BECMD_Append);
 		
-		//TASK_Data();
+		TASK_Data();
 	end
 	
 	//--------------------------------------------------------------------------
@@ -208,7 +207,7 @@ module	PathORAMTestbench;
 	SynthesizedDRAM	#(		.UWidth(				8),
 							.AWidth(				DDRAWidth),
 							.DWidth(				DDRDWidth),
-							.BurstLen(				DDRBstLen),
+							.BurstLen(				1), // just for this module ...
 							.EnableMask(			1),
 							.Class1(				1),
 							.RLatency(				1),
