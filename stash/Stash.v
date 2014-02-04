@@ -40,8 +40,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAMU-1:0]			AccessPAddr,
 	input						AccessIsDummy,
 
-	// TODO remove word "Operation"
-	
 	/*
 		Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
@@ -52,13 +50,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		state ... I could also engineer the module to force a delay but that 
 		costs logic that will never be used in practice	
 	*/
-	input						StartScanOperation,
+	input						StartScan,
 	
 	/*
 		Start dumping data to AES encrypt in the NEXT cycle.  This should be 
 		pulsed as soon as the last dummy block is decrypted
 	*/
-	input						StartWritebackOperation,		
+	input						StartWriteback,		
 		
 	//--------------------------------------------------------------------------
 	//	Data return interface (ORAM controller -> LLC)
@@ -195,7 +193,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
-			StartScanOperation_Delayed <= StartScanOperation;
+			StartScanOperation_Delayed <= StartScan;
 			
 			if (CS_Delayed != CS) begin
 				if (CSScan1)
@@ -260,19 +258,19 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Idle :
 				if (WriteInValid) 
 					NS =					 		ST_PathRead;
-				else if (StartScanOperation) 
+				else if (StartScan) 
 					NS =							ST_Scan1;
-				else if (StartWritebackOperation) // TODO will this ever happen? 
+				else if (StartWriteback) // TODO will this ever happen? 
 					NS = 							ST_Scan2;
 				else if (EvictDataInValid)
 					NS =							ST_Evict;
 			ST_Scan1 :
 				if (WriteInValid) 
 					NS =			 				ST_PathRead;
-				else if (StartWritebackOperation) 
+				else if (StartWriteback) 
 					NS = 							ST_Scan2;
 			ST_PathRead :
-				if (StartWritebackOperation) 
+				if (StartWriteback) 
 					NS =							ST_Scan2;
 			ST_Scan2 : 
 				if (Scan2Complete_Conservative & ReadOutReady) 

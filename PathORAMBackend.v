@@ -493,8 +493,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.AccessPAddr(			PAddr_reg),
 							.AccessIsDummy(			AccessIsDummy),
 							
-							.StartScanOperation(	Stash_StartScanOp),  
-							.StartWritebackOperation(Stash_StartWritebackOp),
+							.StartScan(				Stash_StartScanOp),  
+							.StartWriteback(		Stash_StartWritebackOp),
 							
 							.ReturnData(			StashFE_ReadData),
 							.ReturnPAddr(			), // not connected

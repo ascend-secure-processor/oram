@@ -50,8 +50,8 @@ module	StashTestbench;
 	reg		[ORAMU-1:0]			AccessPAddr;
 	reg							AccessIsDummy;	
 	
-	reg							StartScanOperation;
-	reg							StartWritebackOperation;		
+	reg							StartScan;
+	reg							StartWriteback;		
 
 	wire	[BEDWidth-1:0]		ReturnData;
 	wire	[ORAMU-1:0]			ReturnPAddr;
@@ -113,18 +113,18 @@ module	StashTestbench;
 	
 	task TASK_StartScan;
 		begin
-			StartScanOperation = 1'b1;
+			StartScan = 1'b1;
 			#(Cycle);
-			StartScanOperation = 1'b0;
+			StartScan = 1'b0;
 			#(Cycle); // needed so that Scan can re-enter idle state (see Stash.v interface)
 		end
 	endtask
 
 	task TASK_StartWriteback;
 		begin
-			StartWritebackOperation = 1'b1;
+			StartWriteback = 1'b1;
 			#(Cycle);
-			StartWritebackOperation = 1'b0;
+			StartWriteback = 1'b0;
 		end
 	endtask
 	
@@ -294,8 +294,8 @@ module	StashTestbench;
 		Reset = 1'b1;
 		ResetDataCounter = 1'b0;
 		
-		StartScanOperation = 1'b0;
-		StartWritebackOperation = 1'b0;
+		StartScan = 1'b0;
+		StartWriteback = 1'b0;
 
 		WriteInValid = 1'b0;
 		EvictDataInValid = 1'b0;
@@ -594,8 +594,8 @@ module	StashTestbench;
 							.AccessPAddr(			AccessPAddr),
 							.AccessIsDummy(			AccessIsDummy),
 							
-							.StartScanOperation(	StartScanOperation),  
-							.StartWritebackOperation(StartWritebackOperation),
+							.StartScan(				StartScan),  
+							.StartWriteback(		StartWriteback),
 										
 							.ReturnData(			ReturnData),
 							.ReturnPAddr(			ReturnPAddr),
