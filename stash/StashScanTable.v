@@ -108,7 +108,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			if (PerAccessReset | (~ResetDone_Delayed & ResetDone)) begin
 				ind = 0;
 				while (ind != BlocksOnPath) begin
-					if (ScanTable.Mem[ind] != SNULL) begin					
+					if (ScanTable.Mem[ind] != SNULL) begin
 						$display("[%m] ERROR: Scan table address %d not initialized to SNULL (found %d)", ind, ScanTable.Mem[ind]);
 						$stop;
 					end

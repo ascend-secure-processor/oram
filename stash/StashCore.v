@@ -171,7 +171,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						StashC_WE;
 	
 	wire	[StashEAWidth-1:0]	StashWalk;
-	wire						StashWalk_Terminator;
+	wire						SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire 						OutScanValidCutoff;
 	wire						OutScanValidPush, OutScanValidDump;
 	
@@ -269,6 +269,12 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m] ERROR: both free/used list given same pointer during sync");
 				$stop;
 			end
+			
+			if (WriteTransfer & StashE_Address == SNULL) begin
+				$display("[%m] ERROR: overwriting the SNULL entry");
+				$stop;
+			end
+			
 	`ifdef SIMULATION_VERBOSE			
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
@@ -302,12 +308,15 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				end	
 			end
 	`endif
+	
 			if (OutValid & OutPAddr != DummyBlockAddress)
 				$display("[%m @ %t] Reading %d", $time, OutData);
+
 	`ifdef SIMULATION_VERBOSE	
 			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
 				$display("[%m @ %t] Read dummy block", $time);
 	`endif
+
 		end	
 	`endif
 	
@@ -320,6 +329,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		high during the last write cycle and _second to last_ read cycle because 
 		reads have fdlat = 1.  This allows read->write turnovers to happen 
 		without a cycle gap. 
+		
+		NOTE: 	This interface isn't RV... we assume CommandValid is high when 
+				CommandReady is high
 	*/
 	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
 													(CSDumping) ? CSDumping_FirstCycle : // this is so we will see push commands in the queue
@@ -607,22 +619,18 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 
 	/*
-	
-		TODO this logic is kind of hacky because of the concurrent write logic ...
-	
-	*/
-	
-	/*
 		Connect the UsedList scanning logic to the ScanTable logic.  The 
 		termination condition is based on the ScanInValid logic (NOT 
 		ScanOutValid) so that we can add pipelining to StashScanTable as needed.
 	*/
 
-	assign	StashWalk = 							(CSDumping_FirstCycle & Dump_Phase2) ? LastDumpAddress : 
+	assign	StashWalk = 							(CSDumping_FirstCycle & Dump_Phase2) ? 	LastDumpAddress : 
 													(CSDumping_FirstCycle & ~Dump_Phase2) ? UsedListHead : 
-													StashP_DataOut;
-	assign 	StashWalk_Terminator =					CSDumping & ((~InScanValid & InScanValid_Delayed) | // we've stopped getting scan data
-																(CSDumping_FirstCycle & StashWalk == SNULL)); // the stash was empty to begin with
+																							StashP_DataOut;
+																							
+	assign	SWTerminator_Finished =					CSDumping & (~InScanValid & InScanValid_Delayed);
+	assign	SWTerminator_Empty =					CSDumping & (CSDumping_FirstCycle & StashWalk == SNULL);
+	assign 	StashWalk_Terminator =					SWTerminator_Finished | SWTerminator_Empty;
 
 	assign	OutScanSAddr =							(CSPushing) ? FreeListHead : StashWalk_Delayed;
 	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
@@ -661,7 +669,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Enable(				CSDumping & (Dump_Preempt | StashWalk_Terminator)),
-							.In(					StashWalk),
+							.In(					(StashWalk_Terminator) ? SNULL : StashWalk),
 							.Out(					LastDumpAddress));
 							
 	//--------------------------------------------------------------------------

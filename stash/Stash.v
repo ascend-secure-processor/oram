@@ -42,6 +42,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAMU-1:0]			AccessPAddr,
 	input						AccessIsDummy,
 
+	// TODO remove word "Operation"
+	
 	/*
 		Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
@@ -368,6 +370,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 							.CurrentLeaf(			AccessLeaf),
 
+							// TODO Rename this to scan interface
+							
 							// to/from StashCore
 							.InLeaf(				ScanLeaf),
 							.InPAddr(				ScanPAddr),
@@ -376,6 +380,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutSAddr(				ScannedSAddr),
 							.OutAccepted(			ScannedLeafAccepted),
 							.OutValid(				ScannedLeafValid),
+						
+							// TODO rename this to writeback interface
 						
 							// Path Writeback control logic
 							.InSTAddr(				BlocksReading),
@@ -403,7 +409,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Register	#(			.Width(					1))
 				SentCmd(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset | StateTransition),
-							.Set(					CSScan1 | CSScan2),
+							.Set(					CoreCommandValid & CoreCommandReady & (CSScan1 | CSScan2)),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					SentScanCommand));
