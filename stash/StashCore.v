@@ -440,9 +440,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Core memories
 	//--------------------------------------------------------------------------
 
-	assign	StashE_Address = 						(CSPeaking | CNSOverwriting) ? InSAddr : 
-													(CSDumping) ? StashWalk : 
-													FreeListHead;
+	assign	StashE_Address = 						(CSPeaking | CNSOverwriting) ? 	InSAddr : 
+													(CNSPushing) ? 					FreeListHead : 
+																					StashWalk;
 	assign	StashD_Address =						{StashE_Address, {ChunkAWidth{1'b0}}} + CurrentChunk;
 
 	/* 
