@@ -315,7 +315,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ))
 							
-				Core(		.Clock(					Clock), 
+				stash_core(	.Clock(					Clock), 
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				CoreResetDone),
@@ -361,7 +361,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ)) 
 							
-			ScanTable(		.Clock(					Clock),
+				scan_table(	.Clock(					Clock),
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				ScanTableResetDone),

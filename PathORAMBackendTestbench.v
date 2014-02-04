@@ -10,17 +10,34 @@
 //==============================================================================
 //	Module:		PathORAMTestbench
 //==============================================================================
-module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh", 
-							`include "AES.vh");
+module	PathORAMTestbench;
 
 	//--------------------------------------------------------------------------
-	//	Constants
+	//	Constants & overrides
 	//--------------------------------------------------------------------------
 
-	localparam					Freq =				200_000_000,
-								Cycle = 			1000000000/Freq;	
+	parameter					ORAMB =				512,
+								ORAMU =				32,
+								ORAML =				15,
+								ORAMZ =				3;
+
+	parameter					FEDWidth =			64,
+								BEDWidth =			128;										
+								
+	parameter 					DDR_nCK_PER_CLK = 	4,
+								DDRDQWidth =		64,
+								DDRCWidth =			3,
+								DDRAWidth =			28;
+								
+	parameter					StashCapacity =		100;
 	
-	localparam					Test_ORAML =		15;
+	parameter					IVEntropyWidth =	64;
+	
+	`include "DDR3SDRAMLocal.vh"
+	`include "PathORAMBackendLocal.vh"
+	
+	localparam					Freq =				200_000_000,
+								Cycle = 			1000000000/Freq;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -31,15 +48,18 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 
 	// Frontend interface
 	
-	wire	[BECMDWidth-1:0] 	Command;
+	reg		[BECMDWidth-1:0] 	Command;
 	wire	[ORAMU-1:0]			PAddr;
 	wire	[ORAML-1:0]			CurrentLeaf;
 	wire	[ORAML-1:0]			RemappedLeaf;
-	wire						CommandValid, CommandReady;
+	reg							CommandValid;
+	wire						CommandReady;
+	
 	wire	[FEDWidth-1:0]		LoadData;
-	wire						LoadValid, LoadReady,
+	wire						LoadValid, LoadReady;
 	wire	[FEDWidth-1:0]		StoreData;
-	wire 						StoreValid, StoreReady;
+	reg 						StoreValid;
+	wire						StoreReady;
 	
 	// DRAM interface
 	
@@ -63,16 +83,16 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 
 	task TASK_Command;
 		input	[BECMDWidth-1:0] 	In_Command;
-		input	[ORAMU-1:0]			In_PAddr;
-		input	[ORAML-1:0]			In_CurrentLeaf;
-		input	[ORAML-1:0]			In_RemappedLeaf;
+		//input	[ORAMU-1:0]			In_PAddr;
+		//input	[ORAML-1:0]			In_CurrentLeaf;
+		//input	[ORAML-1:0]			In_RemappedLeaf;
 		
 		begin
 			CommandValid = 1'b1;
 			Command = In_Command;
-			PAddr = In_PAddr;
-			CurrentLeaf = In_CurrentLeaf;
-			RemappedLeaf = In_RemappedLeaf;
+			//PAddr = In_PAddr;
+			//CurrentLeaf = In_CurrentLeaf;
+			//RemappedLeaf = In_RemappedLeaf;
 			
 			while (~CommandReady) #(Cycle);
 			#(Cycle);
@@ -133,19 +153,22 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 		#(Cycle);
 		Reset = 1'b0;
 
-		TASK_Command(CMD_Append, 32'hff, 32'hx, 32'h0);
+		//TASK_Command(CMD_Append, 32'hff, 32'hx, 32'h0);
 		
-		TASK_Data();
+		//TASK_Data();
 	end
 	
 	//--------------------------------------------------------------------------
 	//	CUT
 	//--------------------------------------------------------------------------
 	
-	PathORAMBackend #(		.ORAMB(					ORAMB),
+	PathORAMBackend #(		.StashCapacity(			StashCapacity),					
+							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
-							.ORAML(					Test_ORAML),
+							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
 							.DDRCWidth(				DDRCWidth),
@@ -189,7 +212,7 @@ module	PathORAMTestbench #(`include "PathORAM.vh", `include "DRAM.vh",
 							.EnableMask(			1),
 							.Class1(				1),
 							.RLatency(				1),
-							.WLatency(				1)); 
+							.WLatency(				1)) 
 				ddr3model(	.Clock(					Clock),
 							.Reset(					Reset),
 

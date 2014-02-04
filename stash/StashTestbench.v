@@ -453,6 +453,7 @@ module	StashTestbench;
 		// Test 8:  Eviction interface
 		// ---------------------------------------------------------------------
 
+		/*
 		TODO actually test this
 		
 		AccessLeaf = 32'h00000000;
@@ -473,6 +474,7 @@ module	StashTestbench;
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);		
+		*/
 		
 	end
 
@@ -535,6 +537,8 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 1, 32'hf0000010, 32'hffffffff);
 		
 		// big test 8
+		
+		// TODO do append test
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
