@@ -7,7 +7,7 @@
 
 //==============================================================================
 //	Module:		PathORAMBackend
-//	Desc:		The stash, AES, address generation, and throughput backpressure 
+//	Desc:		The stash, AES, address generation, and throughput back-pressure 
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //
 //	TODO

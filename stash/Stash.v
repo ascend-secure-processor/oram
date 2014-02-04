@@ -21,10 +21,8 @@
 //		block by interacting with StashCore.
 //
 //	TODO:
-//		- eviction interface
 //		- return interface
-//		- dummy accesses
-//		- allow Z, L to be set at runtime
+//		- dummy/real accesses
 //------------------------------------------------------------------------------
 module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
@@ -183,8 +181,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						CoreCommandValid, CoreCommandReady, CoreOutValid;
 
 	wire	[ScanTableAWidth-1:0]BlocksReading;
-	wire	[StashEAWidth-1:0]	OutSTAddr;	
-	wire						InSTValid, OutSTValid;
+	wire	[StashEAWidth-1:0]	OutDMAAddr;	
+	wire						InDMAValid, OutDMAValid;
 	wire						PathWriteback_Tick;
 
 	//--------------------------------------------------------------------------
@@ -300,7 +298,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign 	CoreCommandValid =						CSPathRead | CSEvict |
 													(CSScan1 & ~SentScanCommand) | 
 													(CSScan2 & ~SentScanCommand) | 
-													(CSPathWriteback & OutSTValid & ~PathWriteback_Waiting);
+													(CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
 	
 	// Write/Evict arbitration
 	assign	StashCore_InData = 						(CSEvict) ? EvictData 			: WriteData;
@@ -333,7 +331,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutLeaf(				ReadLeaf),
 							.OutValid(				CoreOutValid),
 
-							.InSAddr(				OutSTAddr),
+							.InSAddr(				OutDMAAddr),
 							.InCommand(				CoreCommand),
 							.InCommandValid(		CoreCommandValid),
 							.InCommandReady(		CoreCommandReady),
@@ -370,25 +368,19 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 							.CurrentLeaf(			AccessLeaf),
 
-							// TODO Rename this to scan interface
-							
-							// to/from StashCore
-							.InLeaf(				ScanLeaf),
-							.InPAddr(				ScanPAddr),
-							.InSAddr(				ScanSAddr),
-							.InValid(				ScanLeafValid),
-							.OutSAddr(				ScannedSAddr),
-							.OutAccepted(			ScannedLeafAccepted),
-							.OutValid(				ScannedLeafValid),
+							.InScanLeaf(			ScanLeaf),
+							.InScanPAddr(			ScanPAddr),
+							.InScanSAddr(			ScanSAddr),
+							.InScanValid(			ScanLeafValid),
+							.OutScanSAddr(			ScannedSAddr),
+							.OutScanAccepted(		ScannedLeafAccepted),
+							.OutScanValid(			ScannedLeafValid),
 						
-							// TODO rename this to writeback interface
-						
-							// Path Writeback control logic
-							.InSTAddr(				BlocksReading),
-							.InSTValid(				InSTValid),
-							.InSTReset(				PathWriteback_Tick),
-							.OutSTAddr(				OutSTAddr),
-							.OutSTValid(			OutSTValid));	
+							.InDMAAddr(				BlocksReading),
+							.InDMAValid(			InDMAValid),
+							.InDMAReset(			PathWriteback_Tick),
+							.OutDMAAddr(			OutDMAAddr),
+							.OutDMAValid(			OutDMAValid));	
 
 	//--------------------------------------------------------------------------
 	//	Scan control
@@ -444,7 +436,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					1'bx),
 							.Out(					StopReading_Hold));	
 					
-	assign	InSTValid =								CSPathWriteback & ~StopReading & ~StopReading_Hold;
+	assign	InDMAValid =								CSPathWriteback & ~StopReading & ~StopReading_Hold;
 					
 	// ticks at end of block read
 	Counter		#(			.Width(					ScanTableAWidth))

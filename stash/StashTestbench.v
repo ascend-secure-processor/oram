@@ -480,14 +480,6 @@ module	StashTestbench;
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);		
-
-		// ---------------------------------------------------------------------
-		// Test 9:  Eviction interface 2
-		// ---------------------------------------------------------------------
-		
-		// Now try an eviction in the middle of another access
-		
-		
 		
 		// ---------------------------------------------------------------------
 		
@@ -587,8 +579,8 @@ module	StashTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	Stash	#(				.BEDWidth(				BEDWidth),
-							.StashCapacity(			StashCapacity),
+	Stash	#(				.StashCapacity(			StashCapacity),
+							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),

@@ -22,28 +22,28 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		
 	input	[ORAML-1:0]			CurrentLeaf,
 
-	input	[ORAML-1:0]			InLeaf,
-	input	[ORAMU-1:0]			InPAddr, // debugging
-	input	[StashEAWidth-1:0]	InSAddr,
-	input						InValid,
+	input	[ORAML-1:0]			InScanLeaf,
+	input	[ORAMU-1:0]			InScanPAddr, // debugging
+	input	[StashEAWidth-1:0]	InScanSAddr,
+	input						InScanValid,
 
 	//--------------------------------------------------------------------------
 	//	Accept/reject interface
 	//--------------------------------------------------------------------------
 	
-	output	[StashEAWidth-1:0]	OutSAddr,
-	output						OutAccepted,
-	output						OutValid,
+	output	[StashEAWidth-1:0]	OutScanSAddr,
+	output						OutScanAccepted,
+	output						OutScanValid,
 
 	//--------------------------------------------------------------------------
 	//	Scan interface
 	//--------------------------------------------------------------------------
 		
-	input	[ScanTableAWidth-1:0] InSTAddr,
-	input						InSTValid, InSTReset,
+	input	[ScanTableAWidth-1:0] InDMAAddr,
+	input						InDMAValid, InDMAReset,
 	
-	output	[StashEAWidth-1:0]	OutSTAddr,
-	output reg					OutSTValid
+	output	[StashEAWidth-1:0]	OutDMAAddr,
+	output reg					OutDMAValid
 	);
 	
 	//--------------------------------------------------------------------------
@@ -84,8 +84,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			ResetDone_Delayed <= ResetDone;
 			
 	`ifdef SIMULATION_VERBOSE	
-			if (InValid) begin
-				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InSAddr, InPAddr, CurrentLeaf, InLeaf);
+			if (InScanValid) begin
+				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr, InScanPAddr, CurrentLeaf, InScanLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
 				$display("\tCommonSubpath:       %x", CommonSubpath);
@@ -93,14 +93,14 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("\tCommonSubpath_Space: %x", CommonSubpath_Space);
 				$display("\tHighest level:       %x", HighestLevel_Onehot);
 				
-				if (OutAccepted & OutValid)
-					$display("\tScan accept: entry %d will be written back", OutSAddr);
-				if (~OutAccepted & OutValid)
-					$display("\tScan reject: entry %d will NOT be written back", OutSAddr);
+				if (OutScanAccepted & OutScanValid)
+					$display("\tScan accept: entry %d will be written back", OutScanSAddr);
+				if (~OutScanAccepted & OutScanValid)
+					$display("\tScan reject: entry %d will NOT be written back", OutScanSAddr);
 			end
 	`endif		
 
-			if ( (OutAccepted | InValid) & InSTValid ) begin
+			if ( (OutScanAccepted | InScanValid) & InDMAValid ) begin
 				$display("[%m] ERROR: ScanTable is multitasking");
 				$stop;
 			end
@@ -139,7 +139,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	// all leaves share the root bucket
 	assign	CurrentLeafP1 = 						{CurrentLeaf, 1'b0};
-	assign	InLeafP1 = 								{InLeaf, 1'b0};
+	assign	InLeafP1 = 								{InScanLeaf, 1'b0};
 	
 	// Depending on leaf orientation ...
 	//Reverse		#(			.Width(					ORAMLP1))
@@ -166,9 +166,9 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutAccepted =  							InValid & |HighestLevel_Onehot;
-	assign	OutSAddr =								InSAddr;
-	assign	OutValid = 								InValid;
+	assign 	OutScanAccepted =  							InScanValid & |HighestLevel_Onehot;
+	assign	OutScanSAddr =								InScanSAddr;
+	assign	OutScanValid = 								InScanValid;
 
 	//--------------------------------------------------------------------------
 	//	Usage tables
@@ -191,7 +191,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				BucketCnts(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
-							.Enable(				OutAccepted),
+							.Enable(				OutScanAccepted),
 							.In(					BCounts_New),
 							.Out(					BCounts));
 
@@ -207,11 +207,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Output(				BucketOccupancy));
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
-													(InValid) ? 	{HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
-																	InSTAddr;
-	assign	ScanTable_WE =							OutAccepted | InSTReset | ~ResetDone;
+													(InScanValid) ? 	{HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
+																	InDMAAddr;
+	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
 
-	assign	ScanTable_DataIn =						(~ResetDone | InSTReset) ? SNULL : InSAddr;
+	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset) ? SNULL : InScanSAddr;
 	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
@@ -228,11 +228,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Write(					ScanTable_WE),
 							.Address(				ScanTable_Address),
 							.DIn(					ScanTable_DataIn),
-							.DOut(					OutSTAddr));
+							.DOut(					OutDMAAddr));
 
 	// Synchronize with ScanTable latency
 	always @(posedge Clock) begin
-		OutSTValid <=								InSTValid;
+		OutDMAValid <=								InDMAValid;
 	end
 							
 	//--------------------------------------------------------------------------
