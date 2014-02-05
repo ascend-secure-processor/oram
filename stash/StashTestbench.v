@@ -112,11 +112,12 @@ module	StashTestbench;
 	endtask
 	
 	task TASK_StartScan;
+		input	[ORAML-1:0] Leaf;
 		begin
+			AccessLeaf = Leaf;
 			StartScan = 1'b1;
 			#(Cycle);
 			StartScan = 1'b0;
-			#(Cycle); // needed so that Scan can re-enter idle state (see Stash.v interface)
 		end
 	endtask
 
@@ -307,7 +308,6 @@ module	StashTestbench;
 	
 		Reset = 1'b0;
 
-		AccessLeaf = 32'h0000ffff;
 		AccessPAddr = 32'hdeadbeef;
 		AccessIsDummy = 1'b0;
 		
@@ -319,7 +319,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 		
 		TASK_BigTest(1);
-		TASK_StartScan();
+		TASK_StartScan(32'h0000ffff);
 		
 		#(Cycle*10); // will be > 10, (probably) < 100 in practice
 
@@ -337,7 +337,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(2);
-		TASK_StartScan();
+		TASK_StartScan(32'h0000ffff);
 
 		// will be written back
 		TASK_QueueWrite(32'hf0000004, 32'hffff0000);
@@ -355,10 +355,8 @@ module	StashTestbench;
 		// Test 3: write the rest back
 		// ---------------------------------------------------------------------
 
-		AccessLeaf = 32'h0000fff1;
-		
 		TASK_BigTest(3);
-		TASK_StartScan();
+		TASK_StartScan(32'h0000fff1);
 
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
@@ -368,10 +366,8 @@ module	StashTestbench;
 		// Test 4: Access with partial writeback, discontiguous dummy/real blocks 
 		// ---------------------------------------------------------------------
 
-		AccessLeaf = 32'h00000000;
-		
 		TASK_BigTest(4);
-		TASK_StartScan();
+		TASK_StartScan(32'h00000000);
 		
 		TASK_QueueWrite(32'hf000000a, 32'h00000002); // level 1
 		TASK_QueueWrite(32'hf000000b, 32'h00000002); // level 1
@@ -392,10 +388,8 @@ module	StashTestbench;
 		// Test 5:  Load up stash and make sure the AlmostFull signal goes high
 		// ---------------------------------------------------------------------
 
-		AccessLeaf = 32'h00000000;
-		
 		TASK_BigTest(5);
-		TASK_StartScan();
+		TASK_StartScan(32'h00000000);
 		
 		i = 0;
 		
@@ -413,10 +407,8 @@ module	StashTestbench;
 		// Test 6:  Drain the stash
 		// ---------------------------------------------------------------------
 
-		AccessLeaf = 32'hffffffff;
-		
 		TASK_BigTest(6);
-		TASK_StartScan();
+		TASK_StartScan(32'hffffffff);
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
@@ -425,14 +417,12 @@ module	StashTestbench;
 		// Test 7:  Backpressure on ReadOutReady
 		// ---------------------------------------------------------------------
 
-		AccessLeaf = 32'hffffffff;
-		
 		ResetDataCounter = 1'b1;
 		#(Cycle);
 		ResetDataCounter = 1'b0;
 		
 		TASK_BigTest(7);
-		TASK_StartScan();
+		TASK_StartScan(32'hffffffff);
 
 		TASK_QueueWrite(32'hf000000f, 32'hffffffff); // level 33
 		TASK_QueueWrite(32'hf0000010, 32'hffffffff); // level 33
@@ -465,17 +455,15 @@ module	StashTestbench;
 
 		// First, evict the block before the access starts (easy case)
 		
-		AccessLeaf = 32'h00000000;		
-		
 		TASK_BigTest(8);
 
 		TASK_QueueEvict(32'hf00000ff, 32'h00000000); // level 33
 		
-		TASK_StartScan();
-
-		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33, 6
-		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0, 7
-		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0, 8
+		TASK_StartScan(32'h00000000);
+		
+		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33, data chunk 6
+		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0, data chunk 7
+		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0, data chunk 8
 
 		TASK_StartWriteback();
 		TASK_WaitForAccess();

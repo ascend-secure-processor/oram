@@ -21,7 +21,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 		
 	input	[ORAML-1:0]			CurrentLeaf,
-
+	input						CurrentLeafValid,
+	
 	input	[ORAML-1:0]			InScanLeaf,
 	input	[ORAMU-1:0]			InScanPAddr, // debugging
 	input	[StashEAWidth-1:0]	InScanSAddr,
@@ -137,7 +138,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Stash matching logic
 	//--------------------------------------------------------------------------
 
-	// all leaves share the root bucket
+	// add a spot for the root bucket
 	assign	CurrentLeafP1 = 						{CurrentLeaf, 1'b0};
 	assign	InLeafP1 = 								{InScanLeaf, 1'b0};
 	
@@ -166,7 +167,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted =  							InScanValid & |HighestLevel_Onehot;
+	assign 	OutScanAccepted =  							CurrentLeafValid & InScanValid & |HighestLevel_Onehot; // TODO InScanValid is redundant
 	assign	OutScanSAddr =								InScanSAddr;
 	assign	OutScanValid = 								InScanValid;
 
@@ -207,7 +208,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Output(				BucketOccupancy));
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
-													(InScanValid) ? 	{HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
+													(InScanValid) ? {HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
 																	InDMAAddr;
 	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
 

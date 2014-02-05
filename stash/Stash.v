@@ -14,8 +14,6 @@
 // 		- Writeback occurs in root -> leaf bucket order
 //
 //	Low level notes on PathORAMBackend operations:
-//		Evict: Just mux in the block and go back to idle mode.
-//		 
 //		Peak/ReadRmv/Read: As a path read occurs, the scan marks when it finds 
 //		the block in question.  We can then perform update/read/remove on that 
 //		block by interacting with StashCore.
@@ -43,12 +41,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	/*
 		Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
-		time.  NOTE: After this signal is pulsed, you must wait >= 2 cycles 
-		before presenting write data (which should always be the case due to 
-		DRAM latency ...)
-		[Low level note] this is so that Scan can transition back to the Idle 
-		state ... I could also engineer the module to force a delay but that 
-		costs logic that will never be used in practice	
+		time.
 	*/
 	input						StartScan,
 	
@@ -147,8 +140,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire 						StateTransition;
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSPathRead, CSPathWriteback, CSScan1, CSScan2, CSEvict;
+	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan1, CSScan2, CSEvict;
 		
+	wire						StartScan_pass, StartScan_set, StartScan_primed;
+	wire						TimeInScan, PermitScanPreemption;
+				
 	wire	[BEDWidth-1:0]		StashCore_InData;
 	wire	[ORAMU-1:0]			StashCore_InPAddr;
 	wire	[ORAML-1:0]			StashCore_InLeaf;
@@ -189,11 +185,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
-		reg StartScanOperation_Delayed;
 		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
-			StartScanOperation_Delayed <= StartScan;
 			
 			if (CS_Delayed != CS) begin
 				if (CSScan1)
@@ -214,11 +208,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m @ %t] ERROR: scan took longer than worst-case time...", $time);
 				$stop;
 			end*/
-			
-			if (StartScanOperation_Delayed & WriteInValid) begin
-				$display("[%m] ERROR (usage): must wait >= 2 cycles after start of scan to start writing data");
-				$stop;
-			end
 		end
 	`endif
 	
@@ -237,6 +226,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ReadOutValid =							CSPathWriteback & CoreOutValid;
 	
 	assign 	StateTransition =						NS != CS;
+	assign	CSIdle =								CS == ST_Idle;
 	assign	CSPathRead = 							CS == ST_PathRead; 
 	assign	CSPathWriteback = 						CS == ST_PathWriteback; 
 	assign	CSScan1 = 								CS == ST_Scan1; 
@@ -256,16 +246,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Reset : 
 				if (CoreResetDone) NS =				ST_Idle;
 			ST_Idle :
-				if (WriteInValid) 
-					NS =					 		ST_PathRead;
-				else if (StartScan) 
+				if (AccessLeafValid) 
 					NS =							ST_Scan1;
-				else if (StartWriteback) // TODO will this ever happen? 
-					NS = 							ST_Scan2;
 				else if (EvictDataInValid)
 					NS =							ST_Evict;
 			ST_Scan1 :
-				if (WriteInValid) 
+				if (WriteInValid & PermitScanPreemption) 
 					NS =			 				ST_PathRead;
 				else if (StartWriteback) 
 					NS = 							ST_Scan2;
@@ -283,6 +269,43 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =							ST_Idle;
 		endcase
 	end
+	
+	//--------------------------------------------------------------------------
+	//	Input control & timing
+	//--------------------------------------------------------------------------
+	
+	// Don't start the access until we are back in the Idle state; this ensures 
+	// AccessLeaf is valid when the scan starts
+	Register	#(				.Width(				1))
+				scan_hold(		.Clock(				Clock),
+								.Reset(				Reset | PerAccessReset),
+								.Set(				StartScan),
+								.Enable(			1'b0),
+								.In(				1'bx),
+								.Out(				StartScan_primed));
+	assign	StartScan_pass = 						CSIdle & (StartScan | StartScan_primed);
+
+	// Generate valid signals for this access
+	Register	#(				.Width(				1))
+				access_start(	.Clock(				Clock),
+								.Reset(				Reset | PerAccessReset),
+								.Set(				StartScan_pass),
+								.Enable(			1'b0),
+								.In(				1'bx),
+								.Out(				StartScan_set));
+	assign	AccessLeafValid =						StartScan_set | StartScan_pass;
+		
+	// We need to wait an implementation-dependent # of cycles in Scan before 
+	// transitioning to PathRead
+	Counter		#(			.Width(					1))
+				scan_time(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CSScan1 & ~PermitScanPreemption),
+							.In(					1'bx),
+							.Count(					TimeInScan));
+	assign	PermitScanPreemption =					TimeInScan == 1; // 1 = implementation dependent
 	
 	//--------------------------------------------------------------------------
 	//	Inner modules
@@ -365,7 +388,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
-
+							.CurrentLeafValid(		AccessLeafValid),
+							
 							.InScanLeaf(			ScanLeaf),
 							.InScanPAddr(			ScanPAddr),
 							.InScanSAddr(			ScanSAddr),
@@ -434,7 +458,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					1'bx),
 							.Out(					StopReading_Hold));	
 					
-	assign	InDMAValid =								CSPathWriteback & ~StopReading & ~StopReading_Hold;
+	assign	InDMAValid =							CSPathWriteback & ~StopReading & ~StopReading_Hold;
 					
 	// ticks at end of block read
 	Counter		#(			.Width(					ScanTableAWidth))
