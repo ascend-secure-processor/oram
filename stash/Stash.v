@@ -108,7 +108,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	output						PathReadComplete,
 	
 	//--------------------------------------------------------------------------
-	//	Status interface
+	//	Status/Debugging interface
 	//--------------------------------------------------------------------------
 
 	output 						StashAlmostFull,

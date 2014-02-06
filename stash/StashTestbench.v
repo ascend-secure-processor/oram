@@ -279,14 +279,6 @@ module	StashTestbench;
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
-	/*
-		Cases to test:
-	
-		1.) Scan finishes before, after, during write data arrives
-		2.) Stash is initially empty/not empty
-		3.) Dummy blocks in path, only real blocks in path
-	*/						
-
 	integer i, j;
 	integer ActivateBurstReady = 0;
 	
@@ -453,17 +445,19 @@ module	StashTestbench;
 		// Test 8:  Eviction interface
 		// ---------------------------------------------------------------------
 
-		// First, evict the block before the access starts (easy case)
+		// Note: this test starts at data chunk 6 for writes
 		
 		TASK_BigTest(8);
 
 		TASK_QueueEvict(32'hf00000ff, 32'h00000000); // level 33
+		TASK_QueueEvict(32'hf00005ff, 32'h00000002); // level 1		
+		TASK_CheckOccupancy(2);
 		
 		TASK_StartScan(32'h00000000);
 		
-		TASK_QueueWrite(32'hf00002ff, 32'h00000000); // level 33, data chunk 6
+		TASK_QueueWrite(32'hf00002ff, 32'h80000000); // level 32, data chunk 6
 		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0, data chunk 7
-		TASK_QueueWrite(32'hf00004ff, 32'hffffffff); // level 0, data chunk 8
+		TASK_QueueWrite(32'hf00004ff, 32'hfffffffc); // level 2, data chunk 8
 
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
@@ -554,10 +548,16 @@ module	StashTestbench;
 		
 		// big test 8
 		TASK_CheckRead(NumChunks * 7, 	32'hf00003ff, 32'hffffffff);
-		TASK_CheckRead(NumChunks * 8, 	32'hf00004ff, 32'hffffffff);
-		TASK_CheckReadDummy(ORAMZ * 31);
+		TASK_CheckReadDummy(ORAMZ - 1);
+		TASK_CheckRead(NumChunks,		32'hf00005ff, 32'h00000002);
+		TASK_CheckReadDummy(ORAMZ - 1);
+		TASK_CheckRead(NumChunks * 8, 	32'hf00004ff, 32'hfffffffc);
+		TASK_CheckReadDummy(ORAMZ - 1);
+		TASK_CheckReadDummy(ORAMZ * 28);
+		TASK_CheckRead(NumChunks * 6,	32'hf00002ff, 32'h80000000);
+		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(0, 				32'hf00000ff, 32'h00000000);
-		TASK_CheckRead(NumChunks * 6,	32'hf00002ff, 32'h00000000);
+		TASK_CheckReadDummy(ORAMZ - 1);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
