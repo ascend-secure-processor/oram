@@ -8,7 +8,7 @@
 //------------------------------------------------------------------------------
 //	Module:		StashCore
 //	Desc:		Implements core stash operations
-
+//
 //	Commands:
 //		Push - 	add element to stash.  This is only used on a path read --- NOT 
 //				when a dirty LLC block gets evicted.

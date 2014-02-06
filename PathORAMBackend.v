@@ -11,7 +11,6 @@
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //
 //	TODO
-//		- Append command
 //		- Read command
 //		- Read/remove command
 //		- Update command
@@ -90,7 +89,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								CSStartWriteback, CSPathRead, CSPathWriteback;
 	wire						AccessIsDummy;
 	
-	wire						PathReadComplete, PathWritebackComplete;
+	wire						AppendComplete, PathReadComplete, PathWritebackComplete;
 	
 	// AES encrypt pipeline
 
@@ -137,10 +136,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						Stash_ResetDone;
 	
-	wire	[BECMDWidth-1:0] 	Command_reg;
-	wire	[ORAMU-1:0]			PAddr_reg;
-	wire	[ORAML-1:0]			CurrentLeaf_reg, RemappedLeaf_reg;
-	wire						LockedCommandValid, LockedCommandReady;
+	wire	[BECMDWidth-1:0] 	FEStash_Command;
+	wire	[ORAMU-1:0]			FEStash_PAddr;
+	wire	[ORAML-1:0]			FEStash_CurrentLeaf, FEStash_RemappedLeaf;
+	wire						FEStash_CommandValid, FEStash_CommandReady;
 	
 	wire						Stash_BlockWriteComplete;
 	
@@ -208,13 +207,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	Stash_StartScanOp =						CSStartRead;
 	assign	Stash_StartWritebackOp =				CSStartWriteback;
 	
-	assign	LockedCommandReady =					CSPathWriteback & PathWritebackComplete & ~AccessIsDummy;
+	assign	FEStash_CommandReady =					AppendComplete | 
+													(CSPathWriteback & PathWritebackComplete & ~AccessIsDummy);
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
 		else CS <= 									NS;
 	end
-
+	
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
@@ -224,14 +224,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			ST_Idle :
 				if (StashAlmostFull) // highest priority
 					NS =							ST_StartRead;
-				else if (LockedCommandValid & Command_reg == BECMD_Append) // appends aren't much work --- do them first
+				else if (FEStash_CommandValid & 	FEStash_Command == BECMD_Append) // appends aren't much work --- do them first
 					NS =							ST_Append;
-				else if (LockedCommandValid & (	Command_reg == BECMD_Update | 
-												Command_reg == BECMD_Read | 
-												Command_reg == BECMD_ReadRmv))
+				else if (FEStash_CommandValid & (	FEStash_Command == BECMD_Update | 
+												FEStash_Command == BECMD_Read | 
+												FEStash_Command == BECMD_ReadRmv))
 					NS =							ST_StartRead;
 			ST_Append :
-				if (Stash_AppendComplete)
+				if (AppendComplete)
 					NS = 							ST_Idle;
 			ST_StartRead : 
 				NS =								ST_PathRead;
@@ -247,7 +247,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	end
 	
 	Register	#(			.Width(					1))
-				DummyReg(	.Clock(					Clock),
+				dummy_reg(	.Clock(					Clock),
 							.Reset(					Reset | (CSIdle & ~StashAlmostFull)),
 							.Set(							 CSIdle & StashAlmostFull),
 							.Enable(				1'b0),
@@ -261,12 +261,12 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{Command, 		PAddr, 		CurrentLeaf, 	RemappedLeaf}),
+							.InData(				{Command,			PAddr, 			CurrentLeaf, 		RemappedLeaf}),
 							.InValid(				CommandValid),
 							.InAccept(				CommandReady),
-							.OutData(				{Command_reg,	PAddr_reg,	CurrentLeaf_reg,RemappedLeaf_reg}),
-							.OutSend(				LockedCommandValid),
-							.OutReady(				LockedCommandReady));
+							.OutData(				{FEStash_Command,	FEStash_PAddr,	FEStash_CurrentLeaf,FEStash_RemappedLeaf}),
+							.OutSend(				FEStash_CommandValid),
+							.OutReady(				FEStash_CommandReady));
 	
 	// TODO we may not need these expensive shifts if we can incrementally write 
 	// FEDWidth chunks to the stash; check: are they really that expensive?  If we 
@@ -280,7 +280,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				StoreReady),
 							.OutData(				FEStash_WriteData),
 							.OutValid(				FEStash_WriteDataValid),
-							.OutReady(				FEStash_WriteDataReady));
+							.OutReady(				FEStash_WriteDataReady & FEStash_CommandValid));
 	
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				FEDWidth))
@@ -489,8 +489,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
-							.AccessLeaf(			CurrentLeaf_reg),
-							.AccessPAddr(			PAddr_reg),
+							.AccessLeaf(			FEStash_CurrentLeaf),
+							.AccessPAddr(			FEStash_PAddr),
 							.AccessIsDummy(			AccessIsDummy),
 							
 							.StartScan(				Stash_StartScanOp),  
@@ -505,11 +505,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							
 							// TODO add flag to indicate append?
 							.EvictData(				FEStash_WriteData),
-							.EvictPAddr(			PAddr_reg),
-							.EvictLeaf(				RemappedLeaf_reg),
-							.EvictDataInValid(		FEStash_WriteDataValid),
-							.EvictDataInReady(		StashFE_ReadDataReady),
-							.BlockEvictComplete(	Stash_AppendComplete), // not connected
+							.EvictPAddr(			FEStash_PAddr),
+							.EvictLeaf(				FEStash_RemappedLeaf),
+							.EvictDataInValid(		FEStash_WriteDataValid & FEStash_CommandValid),
+							.EvictDataInReady(		FEStash_WriteDataReady),
+							.BlockEvictComplete(	AppendComplete),
 
 							.WriteData(				DataDownShift_OutData),
 							.WriteInValid(			DataDownShift_OutValid_Checked),

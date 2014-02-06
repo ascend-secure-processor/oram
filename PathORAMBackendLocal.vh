@@ -1,5 +1,5 @@
 
-	localparam					FEBEChunks =		BEDWidth / FEDWidth;
+	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
 	
 	// TODO this command naming scheme is terrible.  And make it correspond better to the convention in Stash.v
 	

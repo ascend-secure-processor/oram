@@ -356,14 +356,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InCommand(				CoreCommand),
 							.InCommandValid(		CoreCommandValid),
 							.InCommandReady(		CoreCommandReady),
-												
-							// to scan table
+											
 							.OutScanPAddr(			ScanPAddr),
 							.OutScanLeaf(			ScanLeaf),
 							.OutScanSAddr(			ScanSAddr),
 							.OutScanValid(			ScanLeafValid),
 
-							// from scan table
 							.InScanSAddr(			ScannedSAddr),
 							.InScanAccepted(		ScannedLeafAccepted),
 							.InScanValid(			ScannedLeafValid),

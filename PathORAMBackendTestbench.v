@@ -18,7 +18,7 @@ module	PathORAMBackendTestbench;
 
 	parameter					ORAMB =				512,
 								ORAMU =				32,
-								ORAML =				15,
+								ORAML =				10,
 								ORAMZ =				5;
 
 	parameter					FEDWidth =			64,
@@ -36,7 +36,7 @@ module	PathORAMBackendTestbench;
 	`include "DDR3SDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam					Freq =				200_000_000,
+	localparam					Freq =				100_000_000,
 								Cycle = 			1000000000/Freq;
 	
 	//--------------------------------------------------------------------------
@@ -50,7 +50,7 @@ module	PathORAMBackendTestbench;
 	
 	reg		[BECMDWidth-1:0] 	Command;
 	wire	[ORAMU-1:0]			PAddr;
-	wire	[ORAML-1:0]			CurrentLeaf;
+	reg		[ORAML-1:0]			CurrentLeaf;
 	wire	[ORAML-1:0]			RemappedLeaf;
 	reg							CommandValid;
 	wire						CommandReady;
@@ -102,9 +102,11 @@ module	PathORAMBackendTestbench;
 			i = 0;
 			StoreValid = 1'b1;
 			
-			while (StoreValid & StoreReady & i < FEBEChunks) begin
+			while (i < (FEORAMBChunks - 1)) begin
 				#(Cycle);
-				i = i + 1;
+				if (StoreValid & StoreReady) begin
+					i = i + 1;
+				end
 			end
 			#(Cycle);
 			
@@ -118,7 +120,7 @@ module	PathORAMBackendTestbench;
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CommandValid & CommandReady),
-							.In(					{{1'bx}}),
+							.In(					{ORAML{1'bx}}),
 							.Count(					RemappedLeaf));
 	
 	Counter		#(			.Width(					ORAMU))
@@ -127,7 +129,7 @@ module	PathORAMBackendTestbench;
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CommandValid & CommandReady),
-							.In(					{{1'bx}}),
+							.In(					{ORAMU{1'bx}}),
 							.Count(					PAddr));	
 	
 	Counter		#(			.Width(					FEDWidth))
@@ -144,6 +146,7 @@ module	PathORAMBackendTestbench;
 	//--------------------------------------------------------------------------
 
 	initial begin
+		CurrentLeaf = {ORAML{1'b1}};
 		CommandValid = 1'b0;
 		StoreValid = 1'b0;
 		LoadReady = 1'b1;
@@ -153,7 +156,15 @@ module	PathORAMBackendTestbench;
 		Reset = 1'b0;
 
 		TASK_Command(BECMD_Append);
-		
+		TASK_Command(BECMD_Append);
+		TASK_Command(BECMD_Append);
+	end
+	
+	initial begin
+		#(Cycle*25);
+	
+		TASK_Data();
+		TASK_Data();
 		TASK_Data();
 	end
 	
@@ -177,7 +188,7 @@ module	PathORAMBackendTestbench;
 							.Reset(					Reset),			
 							.Command(				Command),
 							.PAddr(					PAddr),
-							.CurrentLeaf(			),
+							.CurrentLeaf(			CurrentLeaf),
 							.RemappedLeaf(			RemappedLeaf),
 							.CommandValid(			CommandValid),
 							.CommandReady(			CommandReady),
