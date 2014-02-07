@@ -609,7 +609,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					{StashEAWidth{1'bx}}),
 							.Count(					StashOccupancy));
 
-	assign	StashAlmostFull =						(StashOccupancy + BlocksOnPath) >= StashCapacity;
+	assign	StashAlmostFull =						(StashOccupancy + BlocksOnPath) >= StashCapacity - 1; // - 1 because we reserve last spotfor SNULL
 	assign	StashOverflow =							AddBlock & StashOccupancy == StashCapacity;	
 							
 	//--------------------------------------------------------------------------

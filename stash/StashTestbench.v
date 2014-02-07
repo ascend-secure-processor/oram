@@ -9,7 +9,7 @@
 
 //==============================================================================
 //	Module:		StashTestbench
-//	Desc:		If the tests all pass, the following should printout:
+//	Desc:		If the tests all pass, the following should print out:
 //
 //				*** ALL TESTS PASSED ***
 //				*** ALL COMMANDS COMPLETED ***

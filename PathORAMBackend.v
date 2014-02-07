@@ -14,6 +14,7 @@
 //		- Read command
 //		- Read/remove command
 //		- Update command
+//		- Timing obfuscation
 //==============================================================================
 module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							`include "AES.vh", `include "Stash.vh") (
@@ -141,6 +142,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAML-1:0]			FEStash_CurrentLeaf, FEStash_RemappedLeaf;
 	wire						FEStash_CommandValid, FEStash_CommandReady;
 	
+	wire						FEStash_EvictBlockValid, FEStash_EvictBlockReady;
+
 	wire						Stash_BlockWriteComplete;
 	
 	// ORAM initialization
@@ -209,6 +212,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	assign	FEStash_CommandReady =					AppendComplete | 
 													(CSPathWriteback & PathWritebackComplete & ~AccessIsDummy);
+
+	// Don't allow evictions when we only have space for a path
+	assign	FEStash_WriteDataReady = 				FEStash_EvictBlockReady & 	FEStash_CommandValid & ~StashAlmostFull;
+	assign	FEStash_EvictBlockValid = 				FEStash_WriteDataValid & 	FEStash_CommandValid & ~StashAlmostFull;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -227,8 +234,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				else if (FEStash_CommandValid & 	FEStash_Command == BECMD_Append) // appends aren't much work --- do them first
 					NS =							ST_Append;
 				else if (FEStash_CommandValid & (	FEStash_Command == BECMD_Update | 
-												FEStash_Command == BECMD_Read | 
-												FEStash_Command == BECMD_ReadRmv))
+													FEStash_Command == BECMD_Read | 
+													FEStash_Command == BECMD_ReadRmv))
 					NS =							ST_StartRead;
 			ST_Append :
 				if (AppendComplete)
@@ -280,7 +287,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				StoreReady),
 							.OutData(				FEStash_WriteData),
 							.OutValid(				FEStash_WriteDataValid),
-							.OutReady(				FEStash_WriteDataReady & FEStash_CommandValid));
+							.OutReady(				FEStash_WriteDataReady));
 	
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				FEDWidth))
@@ -507,8 +514,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.EvictData(				FEStash_WriteData),
 							.EvictPAddr(			FEStash_PAddr),
 							.EvictLeaf(				FEStash_RemappedLeaf),
-							.EvictDataInValid(		FEStash_WriteDataValid & FEStash_CommandValid),
-							.EvictDataInReady(		FEStash_WriteDataReady),
+							.EvictDataInValid(		FEStash_EvictBlockValid),
+							.EvictDataInReady(		FEStash_EvictBlockReady),
 							.BlockEvictComplete(	AppendComplete),
 
 							.WriteData(				DataDownShift_OutData),

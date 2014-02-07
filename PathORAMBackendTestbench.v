@@ -145,6 +145,8 @@ module	PathORAMBackendTestbench;
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
+	integer i, j;
+	
 	initial begin
 		CurrentLeaf = {ORAML{1'b1}};
 		CommandValid = 1'b0;
@@ -154,18 +156,39 @@ module	PathORAMBackendTestbench;
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
+		
+		//----------------------------------------------------------------------
+		//	Test 1: fill up the stash and force background evictions
+		//----------------------------------------------------------------------	
 
-		TASK_Command(BECMD_Append);
-		TASK_Command(BECMD_Append);
-		TASK_Command(BECMD_Append);
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_Command(BECMD_Append);
+			i = i + 1;
+		end
+		
+		//----------------------------------------------------------------------
+		//	Test 2
+		//----------------------------------------------------------------------	
 	end
 	
 	initial begin
 		#(Cycle*25);
 	
-		TASK_Data();
-		TASK_Data();
-		TASK_Data();
+		j = 0;
+	
+		//----------------------------------------------------------------------
+		//	Test 1
+		//----------------------------------------------------------------------	
+
+		while (j < StashCapacity) begin
+			TASK_Data();
+			j = j + 1;
+		end	
+	
+		//----------------------------------------------------------------------
+		//	Test 2
+		//----------------------------------------------------------------------			
 	end
 	
 	//--------------------------------------------------------------------------
