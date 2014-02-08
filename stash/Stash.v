@@ -191,17 +191,17 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			
 			if (CS_Delayed != CS) begin
 				if (CSScan1)
-					$display("[%m @ %t] Stash: Scan1", $time);
+					$display("[%m @ %t] Stash: start Scan1", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: PathRead", $time);
+					$display("[%m @ %t] Stash: start PathRead", $time);
 				if (CSScan2)
-					$display("[%m @ %t] Stash: Scan2", $time);
+					$display("[%m @ %t] Stash: start Scan2", $time);
 				if (CSPathWriteback)
-					$display("[%m @ %t] Stash: PathWriteback", $time);
+					$display("[%m @ %t] Stash: start PathWriteback", $time);
 			end
 			
 			if (PerAccessReset)
-				$display("[%m @ %t] *** Per-module reset *** (ORAM access should be complete)", $time);
+				$display("[%m @ %t] Stash *** Per-module reset *** (ORAM access should be complete)", $time);
 				
 			/* This is a nice sanity check, but we got rid of _actual ...
 			if (~Scan2Complete_Actual & Scan2Complete_Conservative) begin

@@ -91,7 +91,10 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMCommand =							DDR3CMD_Write;
 	
 	// TODO set initialization vectors to real values when we add AES
-	assign	DRAMWriteData = 						{{IVEntropyWidth{1'bx}}, {BktHSize_ValidBits{1'b0}}, {IVEntropyWidth{1'bx}}, {SpaceRemaining{1'bx}}};
+	assign	DRAMWriteData = 						{	{SpaceRemaining{1'bx}}, 
+														{IVEntropyWidth{1'bx}}, 
+														{BktHSize_ValidBits{1'b0}}, 
+														{IVEntropyWidth{1'bx}}	};
 	assign	DRAMWriteMask =							{DDRMWidth{1'b0}}; // enable all bits
 	
 	//--------------------------------------------------------------------------	
