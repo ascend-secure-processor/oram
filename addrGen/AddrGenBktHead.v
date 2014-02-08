@@ -18,8 +18,7 @@ module AddrGenBktHead
   `include "DDR3SDRAMLocal.vh"
  
   // subtree related parameters
-  //
-  localparam BktSize = (ORAMZ + 1) * DDRBstLen; // TODO parameterize this so that + 1 changes to + 2 if say we add integirty verification
+  localparam BktSize = (ORAMZ + 1) * DDRBstLen;
   
   localparam L_st = `log2f(DDRROWWidth / BktSize + 1);
   localparam numST = (ORAML + 1 + L_st - 1) / L_st;
@@ -32,14 +31,14 @@ module AddrGenBktHead
   wire [ORAML-1:0] leaf_reverse;
   generate for(genvar i = 0; i < ORAML; i = i + 1) begin:REVERSE
     assign leaf_reverse[i] = leaf[ORAML-1-i];
-	end endgenerate
+  end endgenerate
   reg [ORAML-1:0] leaf_shift;
   
   // One PathGen module walks the subtrees and the other inside a subtree
   // wire [ORAML-1:0] STIdx, BktIdx;
   wire switchST;
   PathGen #(ORAML) STGen(Clock, Start, Enable, switchST, leaf_shift[0], STIdx); 
-  PathGen #(ORAML) BktGen(Clock, Start || switchST, Enable, Enable, leaf_shift[0], BktIdx);
+  PathGen #(ORAML) BktGen(Clock, Start || (Enable && switchST), Enable, Enable, leaf_shift[0], BktIdx);
     // or equivalently
     // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
   

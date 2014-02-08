@@ -40,7 +40,7 @@ module AddrGen
   
   localparam BktSize = (ORAMZ + 1) * DDRBstLen;
   assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
-  assign Enable = SwitchLevel && CmdValid;
+  assign Enable = !Ready && CmdReady && SwitchLevel;
   
   // output 
   assign Ready = currentLevel > ORAML;
@@ -56,7 +56,7 @@ module AddrGen
       BktCounter <= 0; 
     end
     
-    if (CmdReady && !Ready) begin
+    if (!Ready && CmdReady) begin
       BktCounter = SwitchLevel ? 0 : BktCounter + 1;
     end      
   end
