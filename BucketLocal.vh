@@ -16,9 +16,6 @@
 	localparam					BktHSize_RawBits = 		BktHULStart + BHULWidth;
 	localparam					BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth);
 	localparam					BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth; // = 512 for all configs we care about
-	
-	// Width of a counter for the # of DDR3 bursts in a bucket header
-	localparam					BHBSTWidth =			`max(1, `log2(BktHSize_DRBursts));
 
 	// Calculate size of whole bucket
 	localparam					BktPSize_RawBits =		ORAMZ * ORAMB;
@@ -26,6 +23,9 @@
 	localparam					BktSize_DRBursts =		`divceil(BktSize_RawBits, DDRDWidth);
 	localparam					BktSize_RndBits =		BktSize_DRBursts * DDRDWidth;
 	localparam					BktSize_DRWords =		BktSize_RndBits / DDRDQWidth; // = E.g., for Z = 5, BktSize_TotalRnd = 3072 and BktSize_DDRWords = 48
+	
+	// Width of a counter for the # of DDR3 bursts in a bucket
+	localparam					BBSTWidth =				`log2(BktSize_DRBursts);
 	
 	// Width of a counter for the # of BEDWidth chunks in a path (worth of data payloads)
 	localparam					PBSTWidth =				`log2(`divceil(BktPSize_RawBits, BEDWidth));

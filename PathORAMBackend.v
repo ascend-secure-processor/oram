@@ -15,6 +15,7 @@
 //		- Read/remove command
 //		- Update command
 //		- Timing obfuscation
+//		- Integrity verification
 //==============================================================================
 module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							`include "AES.vh", `include "Stash.vh") (
@@ -35,6 +36,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input						CommandValid,
 	output 						CommandReady,
 
+	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
+	
 	output	[FEDWidth-1:0]		LoadData,
 	output						LoadValid,
 	input 						LoadReady,
@@ -69,6 +72,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "DDR3SDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
+	localparam					BigUWidth =			ORAMU * ORAMZ,
+								BigLWidth =			ORAML * ORAMZ;
+	
 	localparam					STWidth =			3,
 								ST_Initialize =		3'd0,
 								ST_Idle =			3'd1,
@@ -92,6 +98,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						AppendComplete, PathReadComplete, PathWritebackComplete;
 	
+	wire	[ORAML-1:0]			DummyLeaf;
+	
 	// AES encrypt pipeline
 
 	wire						PathBuffer_InReady;
@@ -102,12 +110,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire						HeaderDownShift_InValid, HeaderDownShift_InReady;
 	wire						DataDownShift_InValid, DataDownShift_InReady;
 		
-	wire	[BHBSTWidth-1:0]	BucketReadCtr;
-	wire						ProcessingHeader;	
+	wire	[BBSTWidth-1:0]		BucketReadCtr;
+	wire						LoadHeader, ProcessingHeader;	
 		
-	wire	[BHULWidth-1:0]		HeaderDownShift_Template;
-	wire	[ORAMZ*ORAMU-1:0]	HeaderDownShift_PAddrs;
-	wire	[ORAMZ*ORAML-1:0]	HeaderDownShift_Leaves;
+	wire	[BigUWidth-1:0]		HeaderDownShift_PAddrs;
+	wire	[BigLWidth-1:0]		HeaderDownShift_Leaves;
 		
 	wire						BlockIsValid;
 	
@@ -116,7 +123,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire						DataDownShift_OutValid_Checked;
 	
 	wire	[ORAMU-1:0]			HeaderDownShift_OutPAddr; 
-	wire	[ORAML-1:0]			HeaderDownShift_OutLeaf, HeaderDownShift_OutValid;		
+	wire	[ORAML-1:0]			HeaderDownShift_OutLeaf;
+	wire						HeaderDownShift_OutValid;		
 	
 	wire	[PBSTWidth-1:0]		PathReadCtr;
 	wire						IncrementReadCtr;
@@ -164,7 +172,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand;
 	wire						AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 	
-	wire						AddrGen_Writing;
+	wire						AddrGen_Reading;
 	
 	wire	[ORAML-1:0]			AddrGen_Leaf;
 	wire						AddrGen_InReady, AddrGen_InValid;
@@ -217,6 +225,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	FEStash_WriteDataReady = 				FEStash_EvictBlockReady & 	FEStash_CommandValid & ~StashAlmostFull;
 	assign	FEStash_EvictBlockValid = 				FEStash_WriteDataValid & 	FEStash_CommandValid & ~StashAlmostFull;
 	
+	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
 		else CS <= 									NS;
@@ -241,12 +251,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				if (AppendComplete)
 					NS = 							ST_Idle;
 			ST_StartRead : 
-				NS =								ST_PathRead;
+				if (AddrGen_InReady)
+					NS =							ST_PathRead;
 			ST_PathRead : 							
 				if (PathReadComplete)
 					NS =							ST_StartWriteback;
 			ST_StartWriteback :
-				NS =								ST_PathWriteback;
+				if (AddrGen_InReady)
+					NS =							ST_PathWriteback;
 			ST_PathWriteback : 
 				if (PathWritebackComplete)
 					NS =							ST_Idle;
@@ -301,6 +313,25 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutReady(				LoadReady));
 	
 	//------------------------------------------------------------------------------
+	//	Random leaf generator
+	//------------------------------------------------------------------------------ 
+	
+	// TODO use AES for this
+	
+	/*
+	Counter		#(			.Width(					ORAML))
+				SyncCounter(.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CSStartRead),
+							.In(					{ORAML{1'bx}}),
+							.Count(					DummyLeaf));
+	*/
+	
+	assign	DummyLeaf = 							0;
+	
+	//------------------------------------------------------------------------------
 	//	Address generation & initialization
 	//------------------------------------------------------------------------------
 
@@ -312,9 +343,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & CSInitialize;
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady & CSInitialize;
 	
-	assign	AddrGen_Writing = 						CSStartWriteback | CSPathWriteback;
+	assign	AddrGen_Reading = 						CSStartRead;
+	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : FEStash_CurrentLeaf;
 	
 	// Initializer / AES encrypt arbitration
+	// TODO this will change when we have the AES encrypt path
 	assign	DRAMWriteData =							DRAMInit_DRAMWriteData;
 	assign	DRAMWriteMask =							DRAMInit_DRAMWriteMask;
 	assign	DRAMWriteDataValid =					DRAMInit_DRAMWriteDataValid;
@@ -332,7 +365,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset | CSInitialize),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					AddrGen_Writing),
+							.RWIn(					AddrGen_Reading),
 							.BHIn(					1'b0), // TODO change when we do REW ORAM
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady),
@@ -366,45 +399,41 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	AES decrypt pipeline [TODO: add AES itself]
 	//------------------------------------------------------------------------------
 	
-	// Buffers the whole incoming path (... this is a lazy design)
-	// TODO: 	We don't need a complete buffer if we add back pressure to the 
-	//			AddrGen
-	// NOTE: 	This buffer requires ~1% of the LUT RAM on the chip (so its not 
-	//			a big deal?)
+	// Buffers the whole incoming path (... this is a lazy design?)
+	// NOTE: This buffer requires ~1% of the LUT RAM on the chip (so its not a big 
+	// deal?)
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				PathSize_DRBursts))
-				path_buf(	.Clock(					Clock),
+				in_path_buf(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMReadData),
 							.InValid(				DRAMReadDataValid),
 							.InAccept(				PathBuffer_InReady), // debugging
-							.InEmptyCount(			), // not connected
 							.OutData(				PathBuffer_OutData),
 							.OutSend(				PathBuffer_OutValid),
-							.OutReady(				PathBuffer_OutReady),
-							.OutFullCount(			)); // not connected	
+							.OutReady(				PathBuffer_OutReady));
 	
-	// Keep track of whether we are processing header or payload for each bucket
-	Counter		#(			.Width(					BHBSTWidth))
-				bkt_cnt(	.Clock(					Clock),
+	// Count where we are in a bucket (so we can determine when we are at a header)
+	Counter		#(			.Width(					BBSTWidth))
+				in_bkt_cnt(	.Clock(					Clock),
 							.Reset(					Reset | BucketReadCtr_Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				PathBuffer_OutValid & PathBuffer_OutReady),
-							.In(					{BHBSTWidth{1'bx}}),
+							.In(					{BBSTWidth{1'bx}}),
 							.Count(					BucketReadCtr));	
-	CountCompare #(			.Width(					BHBSTWidth),
+	CountCompare #(			.Width(					BBSTWidth),
 							.Compare(				BktSize_DRBursts))
-				bkt_cmp(	.Count(					BucketReadCtr), 
+				in_bkt_cmp(	.Count(					BucketReadCtr), 
 							.TerminalCount(			BucketReadCtr_Reset));
 	
 	// Don't present dummy blocks to the stash
 	ShiftRegister #(		.PWidth(				ORAMZ),
 							.SWidth(				1),
 							.Reverse(				0))
-				valid_bits(	.Clock(					Clock), 
+				in_vld_bits(.Clock(					Clock), 
 							.Reset(					Reset | BucketReadCtr_Reset), 
-							.Load(					BucketReadCtr == 0), 
+							.Load(					LoadHeader), 
 							.Enable(				Stash_BlockWriteComplete), 
 							.PIn(					PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth]), 
 							.SIn(					1'bx), 
@@ -412,6 +441,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.SOut(					BlockIsValid));
 							
 	// Per-bucket header/payload arbitration
+	assign	LoadHeader =							BucketReadCtr == 0;
 	assign	ProcessingHeader =						BucketReadCtr < BktHSize_DRBursts;
 	assign	HeaderDownShift_InValid =				PathBuffer_OutValid & ProcessingHeader;
 	assign	DataDownShift_InValid =					PathBuffer_OutValid & ~ProcessingHeader;
@@ -420,35 +450,30 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+BHULWidth-1:BktHULStart+ORAMZ*ORAMU];
 	
-	// Take the UUUULLLL bucket packing and translate it to ULULULUL to the stash
-	InsertMask	#(			.OWidth(				BHULWidth),
-							.Mask(					{ORAMZ {{ORAMU{1'b1}}, {ORAML{1'b0}}}} ))							
-				im_paddr(	.In(					HeaderDownShift_PAddrs), 
-							.Base(					{BHULWidth{1'b0}}), 
-							.Out(					HeaderDownShift_Template));
-	InsertMask	#(			.OWidth(				BHULWidth),
-							.Mask(					{ORAMZ {{ORAMU{1'b0}}, {ORAML{1'b1}}}} ))							
-				im_leaf(	.In(					HeaderDownShift_Leaves), 
-							.Base(					HeaderDownShift_Template), 
-							.Out(					HeaderDownShift_InData));
-	
-	// shift the bucket header into the stash
-	FIFOShiftRound #(		.IWidth(				BHULWidth),
-							.OWidth(				ORAML + ORAMU))
-				hdr_shift(	.Clock(					Clock),
+	FIFOShiftRound #(		.IWidth(				BigUWidth),
+							.OWidth(				ORAMU))
+				in_U_shft(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				HeaderDownShift_InData),
+							.InData(				HeaderDownShift_PAddrs),
 							.InValid(				HeaderDownShift_InValid),
 							.InAccept(				HeaderDownShift_InReady),
-							.OutData(			    {HeaderDownShift_OutPAddr, HeaderDownShift_OutLeaf}),
+							.OutData(			    HeaderDownShift_OutPAddr),
 							.OutValid(				HeaderDownShift_OutValid),
-							.OutReady(				Stash_BlockWriteComplete));		
-	
-	// shift the bucket data blocks into the stash
-	generate if (BEDWidth != DDRDWidth) begin:DT_SHFT_DOWN
-		FIFOShiftRound #(	.IWidth(				DDRDWidth),
+							.OutReady(				Stash_BlockWriteComplete));
+	FIFOShiftRound #(		.IWidth(				BigLWidth),
+							.OWidth(				ORAML))
+				in_L_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				HeaderDownShift_Leaves),
+							.InValid(				HeaderDownShift_InValid),
+							.InAccept(				), // will be the same as in_L_shft
+							.OutData(			    HeaderDownShift_OutLeaf),
+							.OutValid(				), // will be the same as in_L_shft
+							.OutReady(				Stash_BlockWriteComplete));	
+
+	FIFOShiftRound #(		.IWidth(				DDRDWidth),
 							.OWidth(				BEDWidth))
-				dta_shift(	.Clock(					Clock),
+				in_dat_shft(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				PathBuffer_OutData),
 							.InValid(				DataDownShift_InValid),
@@ -456,20 +481,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(				DataDownShift_OutData),
 							.OutValid(				DataDownShift_OutValid),
 							.OutReady(				DataDownShift_OutReady));
-							
-		assign	DataDownShift_OutValid_Checked =	DataDownShift_OutValid & 	HeaderDownShift_OutValid & BlockIsValid;
-	end else begin:DT_PASS
-		assign	DataDownShift_OutValid_Checked =	DataDownShift_InValid & 	HeaderDownShift_OutValid & BlockIsValid;
-		assign	DataDownShift_InReady =				DataDownShift_OutReady;
-		assign	DataDownShift_OutData =				PathBuffer_OutData;
-	end endgenerate
-	
+	assign	DataDownShift_OutValid_Checked =		DataDownShift_OutValid & HeaderDownShift_OutValid & BlockIsValid;
+
 	assign	IncrementReadCtr =						DataDownShift_OutValid & HeaderDownShift_OutValid & DataDownShift_OutReady;
 	
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 
 	Counter		#(			.Width(					PBSTWidth))
-				rd_cnt(		.Clock(					Clock),
+				in_stash_cnt(.Clock(				Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					1'b0),
 							.Load(					1'b0),
@@ -478,7 +497,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Count(					PathReadCtr));
 	CountCompare #(			.Width(					PBSTWidth),
 							.Compare(				PathSize_DRBursts))
-				rd_cmp(		.Count(					PathReadCtr), 
+				in_stash_cmp(.Count(				PathReadCtr), 
 							.TerminalCount(			PathReadComplete));
 	
 	//------------------------------------------------------------------------------
@@ -525,12 +544,12 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.WriteLeaf(				HeaderDownShift_Leaf),
 							.BlockWriteComplete(	Stash_BlockWriteComplete), 
 							
-							.ReadData(				),
-							.ReadPAddr(				),
-							.ReadLeaf(				),
-							.ReadOutValid(			), 
-							.ReadOutReady(			1'b0), 
-							.BlockReadComplete(		),
+							.ReadData(				DataUpShift_InData),
+							.ReadPAddr(				HeaderUpShift_InPAddr),
+							.ReadLeaf(				HeaderUpShift_InLeaf),
+							.ReadOutValid(			DataInShift_Valid), 
+							.ReadOutReady(			DataInShift_Ready), 
+							.BlockReadComplete(		Stash_BlockReadComplete),
 							.PathReadComplete(		PathWritebackComplete),
 							
 							.StashAlmostFull(		StashAlmostFull),
@@ -540,6 +559,54 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	//	AES encrypt pipeline [TODO: add AES itself]
 	//------------------------------------------------------------------------------
+
+	/*
+	wire						Stash_BlockReadComplete;
+	
+	wire	[ORAMU-1:0]			HeaderUpShift_InPAddr; 
+	wire	[ORAML-1:0]			HeaderUpShift_InLeaf;
+	wire						HeaderUpShift_OutValid;
+	
+	wire	[BigUWidth-1:0]		HeaderUpShift_PAddrs;
+	wire	[BigLWidth-1:0]		HeaderUpShift_Leaves;
+	
+	wire	[BEDWidth-1:0]		DataUpShift_InData;
+	wire						DataInShift_Valid, DataInShift_Ready;
+	
+	FIFOShiftRound #(		.IWidth(				ORAMU),
+							.OWidth(				BigUWidth))
+				out_U_shift(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				HeaderUpShift_InPAddr),
+							.InValid(				Stash_BlockReadComplete),
+							.InAccept(				),
+							.OutData(			    HeaderUpShift_PAddrs),
+							.OutValid(				),
+							.OutReady(				));
+							
+	FIFOShiftRound #(		.IWidth(				ORAML),
+							.OWidth(				BigLWidth))
+				out_L_shift(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				HeaderUpShift_InLeaf),
+							.InValid(				Stash_BlockReadComplete),
+							.InAccept(				),
+							.OutData(			    HeaderUpShift_Leaves),
+							.OutValid(				),
+							.OutReady(				));
+
+	FIFOShiftRound #(		.IWidth(				BEDWidth),
+							.OWidth(				DDRDWidth))
+				out_dat_shft(.Clock(				Clock),
+							.Reset(					Reset),
+							.InData(				DataUpShift_InData),
+							.InValid(				DataInShift_Valid),
+							.InAccept(				DataInShift_Ready),
+							.OutData(			    ),
+							.OutValid(				),
+							.OutReady(				));	
+	*/
+	
 	
 	//------------------------------------------------------------------------------	
 endmodule
