@@ -481,16 +481,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(			    HeaderDownShift_OutPAddr),
 							.OutValid(				HeaderDownShift_OutValid),
 							.OutReady(				BlockReadComplete));
-	FIFOShiftRound #(		.IWidth(				BigLWidth),
-							.OWidth(				ORAML))
-				in_L_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderDownShift_Leaves),
-							.InValid(				HeaderDownShift_InValid),
-							.InAccept(				), // will be the same as in_U_shft
-							.OutData(			    HeaderDownShift_OutLeaf),
-							.OutValid(				), // will be the same as in_U_shft
-							.OutReady(				BlockReadComplete));
+	ShiftRegister #(		.PWidth(				BigLWidth),
+							.SWidth(				ORAML))
+				in_L_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					HeaderDownShift_InValid), 
+							.Enable(				BlockReadComplete), 
+							.PIn(					HeaderDownShift_Leaves), 
+							.SOut(					HeaderDownShift_OutLeaf));
 
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
 							.OWidth(				BEDWidth))
@@ -636,26 +634,22 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(			    HeaderUpShift_PAddrs),
 							.OutValid(				HeaderUpShift_OutValid),
 							.OutReady(				HeaderUpShift_OutReady));
-	FIFOShiftRound #(		.IWidth(				ORAML),
-							.OWidth(				BigLWidth))
-				out_L_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderUpShift_InLeaf),
-							.InValid(				Stash_BlockReadComplete),
-							.InAccept(				), // will be the same as out_U_shft
-							.OutData(			    HeaderUpShift_Leaves),
-							.OutValid(				), // will be the same as out_U_shft
-							.OutReady(				HeaderUpShift_OutReady));
-	FIFOShiftRound #(		.IWidth(				1),
-							.OWidth(				ORAMZ))
-				out_V_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				WritebackBlockIsValid),
-							.InValid(				Stash_BlockReadComplete),
-							.InAccept(				), // will be the same as out_U_shft
-							.OutData(			    HeaderUpShift_ValidBits),
-							.OutValid(				), // will be the same as out_U_shft
-							.OutReady(				HeaderUpShift_OutReady));	
+	ShiftRegister #(		.PWidth(				BigLWidth),
+							.SWidth(				ORAML))
+				out_L_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				Stash_BlockReadComplete), 
+							.SIn(					HeaderUpShift_InLeaf), 
+							.POut(					HeaderUpShift_Leaves));							
+	ShiftRegister #(		.PWidth(				ORAMZ),
+							.SWidth(				1))
+				out_V_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				Stash_BlockReadComplete), 
+							.SIn(					WritebackBlockIsValid), 
+							.POut(					HeaderUpShift_ValidBits));
 							
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				DDRDWidth))
