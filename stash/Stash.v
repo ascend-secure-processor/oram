@@ -442,7 +442,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Scan2Complete_Conservative =			CSScan2 & ScanCount == ScanDelay;
 	
 	//--------------------------------------------------------------------------
-	//	Read interface
+	//	Read control
 	//--------------------------------------------------------------------------
 	
 	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
@@ -496,7 +496,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------
-	// Output buffering
+	// Read buffering
 	//--------------------------------------------------------------------------
 
 	assign	OutBufferHasSpace =						OutBufferEmptyCount >= BlkSize_BEDChunks;

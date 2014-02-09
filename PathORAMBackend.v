@@ -118,7 +118,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 	wire	[BktBSTWidth-1:0]	BucketReadCtr;
 	wire						ReadProcessingHeader;	
-		
+	wire						BucketReadCtr_Reset, ReadBucketTransition;	
+	
 	wire	[ORAMZ-1:0] 		HeaderDownShift_ValidBits;
 	wire	[BigUWidth-1:0]		HeaderDownShift_PAddrs;
 	wire	[BigLWidth-1:0]		HeaderDownShift_Leaves;
@@ -165,7 +166,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							
 	wire						BucketWritebackValid;
 	wire	[BktBSTWidth-1:0]	BucketWritebackCtr;
-	wire						BucketWritebackCtr_Reset;
+	wire						BucketWritebackCtr_Reset, WritebackBucketTransition;
 							
 	wire	[DDRDWidth-1:0]		UpShift_DRAMWriteData;
 	wire	[DDRMWidth-1:0]		UpShift_DRAMWriteMask;
@@ -448,7 +449,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// Count where we are in a bucket (so we can determine when we are at a header)
 	Counter		#(			.Width(					BktBSTWidth))
 				in_bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset | (BucketReadCtr_Reset & PathBuffer_OutValid & PathBuffer_OutReady)),
+							.Reset(					Reset | ReadBucketTransition),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				PathBuffer_OutValid & PathBuffer_OutReady),
@@ -458,6 +459,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Compare(				BktSize_DRBursts - 1))
 				in_bkt_cmp(	.Count(					BucketReadCtr), 
 							.TerminalCount(			BucketReadCtr_Reset));
+	assign	ReadBucketTransition =					BucketReadCtr_Reset & PathBuffer_OutValid & PathBuffer_OutReady;
 	
 	// Per-bucket header/payload arbitration
 	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
@@ -468,8 +470,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	HeaderDownShift_ValidBits =				PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
-	
-	// TODO switch in_L_shift, in_V_shift into shift registers (same for output direction ...)
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
@@ -490,7 +490,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				), // will be the same as in_U_shft
 							.OutData(			    HeaderDownShift_OutLeaf),
 							.OutValid(				), // will be the same as in_U_shft
-							.OutReady(				BlockReadComplete));	
+							.OutReady(				BlockReadComplete));
 
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
 							.OWidth(				BEDWidth))
@@ -677,7 +677,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				DataUpShift_OutData),
 							.InValid(				DataUpShift_OutValid),
 							.InAccept(				DataUpShift_OutReady),
-							.InEmptyCount(			),
 							.OutData(				BucketBuf_OutData),
 							.OutSend(				BucketBuf_OutValid),
 							.OutReady(				BucketBuf_OutReady));
@@ -700,7 +699,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	Counter		#(			.Width(					BktBSTWidth))
 				out_bkt_cnt(.Clock(					Clock),
-							.Reset(					Reset | BucketWritebackCtr_Reset),
+							.Reset(					Reset | WritebackBucketTransition),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
@@ -710,6 +709,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Compare(				BktSize_DRBursts - 1))
 				out_bkt_cmp(.Count(					BucketWritebackCtr), 
 							.TerminalCount(			BucketWritebackCtr_Reset));
+	assign	WritebackBucketTransition =				BucketWritebackCtr_Reset & BucketWritebackValid & DRAMWriteDataReady;
 	
 	//------------------------------------------------------------------------------
 	//	DRAM interface multiplexing

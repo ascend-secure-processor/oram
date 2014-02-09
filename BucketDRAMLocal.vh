@@ -1,4 +1,6 @@
 
+	// TODO merge with Ling's parameters for calculating BktSize_DDRWords
+
 	// Suffix meanings:
 	// 	RawBits = what it sounds like ...
 	// 	RndBits = bits rounded to some value (usually a DDR3 burst)
