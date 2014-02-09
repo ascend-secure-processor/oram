@@ -31,8 +31,9 @@ module	StashTestbench;
 	parameter					FEDWidth =			64,
 								BEDWidth =			128;
 		
-	parameter					StashCapacity =		100; // isn't restricted to be > path length
-		
+	parameter					StashCapacity =		100, // isn't restricted to be > path length
+								StashOutBuffering = 2;
+								
     `include "StashLocal.vh"
     
 	localparam					Freq =				100_000_000,
@@ -188,7 +189,7 @@ module	StashTestbench;
 			done = 0;
 			Data = BaseData;
 			while (done == 0) begin
-				if (ReadOutValid /*& ReadOutReady*/) begin // NOTE: ReadOutReady is _block_ not chunk synchronous
+				if (ReadOutValid & ReadOutReady) begin
 					if (ReadData !== Data) begin
 						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
 						$stop;
@@ -220,7 +221,7 @@ module	StashTestbench;
 			sofar = 0;
 			chunks = 0;
 			while (sofar != Count) begin
-				if (ReadOutValid /*& ReadOutReady*/) begin
+				if (ReadOutValid & ReadOutReady) begin
 					chunks = chunks + 1;
 					if (BlockReadComplete) begin
 						if (ReadPAddr !== DummyBlockAddress) begin
@@ -250,7 +251,7 @@ module	StashTestbench;
 		begin
 			sofar = 0;
 			while (sofar != Count) begin
-				if (ReadOutValid /*& ReadOutReady*/ & BlockReadComplete) begin
+				if (ReadOutValid & ReadOutReady & BlockReadComplete) begin
 					sofar = sofar + 1;
 				end
 				#(Cycle);
@@ -568,6 +569,7 @@ module	StashTestbench;
 	//--------------------------------------------------------------------------
 
 	Stash	#(				.StashCapacity(			StashCapacity),
+							.StashOutBuffering(		StashOutBuffering),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

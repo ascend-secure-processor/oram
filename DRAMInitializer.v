@@ -49,7 +49,7 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	`include "PathORAMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketLocal.vh"
+	`include "BucketDRAMLocal.vh"
 	
 	localparam					SpaceRemaining = 	BktHSize_RndBits - 2 * IVEntropyWidth - BktHSize_ValidBits;
 	localparam					EndOfTreeAddr =		BktSize_DRWords * ORAMN; // this is the first non-existent bucket

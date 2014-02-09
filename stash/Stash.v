@@ -52,7 +52,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input						StartWriteback,		
 		
 	//--------------------------------------------------------------------------
-	//	Data return interface (ORAM controller -> LLC)
+	//	Data return interface (Stash -> LLC)
 	//--------------------------------------------------------------------------
 	
 	output	[BEDWidth-1:0]		ReturnData,
@@ -82,11 +82,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAML-1:0]			WriteLeaf,
 	input						WriteInValid,
 	output						WriteInReady,	
-	
-	/* 
-		Pulsed during the last cycle that a block is being written [this will be 
-		read by albert to tick the next PAddr/Leaf.
-	*/
+	/* Pulsed during the last cycle that a block is being written */
 	output						BlockWriteComplete,
 	
 	//--------------------------------------------------------------------------
@@ -98,13 +94,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,
 	output						ReadOutValid,
-	/* 
-		If de-asserted, the Stash will finish writing back the current block and 
-		then wait to writeback the next block until it goes high.
-	*/
 	input						ReadOutReady,	
-	output reg 					BlockReadComplete,
 	/* Pulsed during last cycle that a block is being read */
+	output	 					BlockReadComplete,
 	output						PathReadComplete,
 	
 	//--------------------------------------------------------------------------
@@ -121,6 +113,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//-------------------------------------------------------------------------- 
 	
 	`include "StashLocal.vh"
+	`include "BucketLocal.vh"
+	
+	localparam					OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering) + 1;
 	
 	localparam					STWidth =				3,
 								ST_Reset =				3'd0,
@@ -145,11 +140,16 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						StartScan_pass, StartScan_set, StartScan_primed;
 	wire						TimeInScan, PermitScanPreemption;
 				
-	wire	[BEDWidth-1:0]		StashCore_InData;
-	wire	[ORAMU-1:0]			StashCore_InPAddr;
-	wire	[ORAML-1:0]			StashCore_InLeaf;
-	wire						StashCore_InValid, StashCore_InReady;			
-		
+	wire	[BEDWidth-1:0]		Core_InData;
+	wire	[ORAMU-1:0]			Core_InPAddr;
+	wire	[ORAML-1:0]			Core_InLeaf;
+	wire						Core_InValid, Core_InReady;			
+	
+	wire	[BEDWidth-1:0]		Core_OutData;
+	wire	[ORAMU-1:0]			Core_OutPAddr;
+	wire	[ORAML-1:0]			Core_OutLeaf;
+	wire						Core_OutValid;
+	
 	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
 	wire	[StashEAWidth-1:0]	ScanSAddr;
@@ -159,7 +159,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						ScannedLeafAccepted, ScannedLeafValid;
 	
 	wire						StopReading, StopReading_Hold;
-	wire						BlockReadComplete_Pre;
+	wire						BlockReadComplete_InternalPre;
+	reg							BlockReadComplete_Internal;
 	
 	wire						PathWriteback_Waiting;
 	wire	[ScanTableAWidth-1:0] BlocksRead;
@@ -172,12 +173,16 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire						CoreResetDone;
 	wire	[SCMDWidth-1:0]		CoreCommand;
-	wire						CoreCommandValid, CoreCommandReady, CoreOutValid;
+	wire						CoreCommandValid, CoreCommandReady;
 
 	wire	[ScanTableAWidth-1:0]BlocksReading;
 	wire	[StashEAWidth-1:0]	OutDMAAddr;	
 	wire						InDMAValid, OutDMAValid;
 	wire						PathWriteback_Tick;
+	
+	wire	[OBWidth-1:0]		OutBufferEmptyCount, OutBufferCount;	
+	wire						OutBufferHasSpace, TickOutHeader, OutHeaderValid;
+	wire						OutBufferInReady, OutHBufferInReady, OutBufferInValid;
 
 	//--------------------------------------------------------------------------
 	//	Debugging interface
@@ -186,8 +191,22 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
 		
+		initial begin
+			if (StashOutBuffering < 1) begin
+				$display("[%m @ %t] ERROR (usage): StashOutBuffering must be >= 1", $time);
+				$stop;
+			end
+		end
+		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
+			
+			if (	(TickOutHeader & ~OutHeaderValid) |
+					(OutBufferInValid & ~OutBufferInReady) |
+					(OutBufferHInValid & ~OutHBufferInReady)	) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
+				$stop;
+			end
 			
 			if (CS_Delayed != CS) begin
 				if (CSScan1)
@@ -220,10 +239,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign	BlockEvictComplete =					CSEvict & CoreCommandReady;
 	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
-	assign	BlockReadComplete_Pre =					CSPathWriteback & CoreCommandReady;
+	assign	BlockReadComplete_InternalPre =			CSPathWriteback & CoreCommandReady;
 	assign	PathReadComplete =						PerAccessReset;
-	
-	assign	ReadOutValid =							CSPathWriteback & CoreOutValid;
 	
 	assign 	StateTransition =						NS != CS;
 	assign	CSIdle =								CS == ST_Idle;
@@ -237,7 +254,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
 		
-		BlockReadComplete <=						BlockReadComplete_Pre;
+		BlockReadComplete_Internal <=				BlockReadComplete_InternalPre;
 	end
 	
 	always @( * ) begin
@@ -259,7 +276,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (StartWriteback) 
 					NS =							ST_Scan2;
 			ST_Scan2 : 
-				if (Scan2Complete_Conservative & ReadOutReady) 
+				if (Scan2Complete_Conservative & OutBufferHasSpace) 
 					NS = 							ST_PathWriteback;
 			ST_PathWriteback :
 				if (Top_AccessComplete) 
@@ -322,12 +339,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
 	
 	// Write/Evict arbitration
-	assign	StashCore_InData = 						(CSEvict) ? EvictData 			: WriteData;
-	assign	StashCore_InPAddr = 					(CSEvict) ? EvictPAddr 			: WritePAddr;
-	assign	StashCore_InLeaf = 						(CSEvict) ? EvictLeaf			: WriteLeaf;
-	assign	StashCore_InValid =						(CSEvict) ? EvictDataInValid 	: WriteInValid;
-	assign	EvictDataInReady =						CSEvict & StashCore_InReady;
-	assign	WriteInReady =							~CSEvict & StashCore_InReady;
+	assign	Core_InData = 							(CSEvict) ? EvictData 			: WriteData;
+	assign	Core_InPAddr = 							(CSEvict) ? EvictPAddr 			: WritePAddr;
+	assign	Core_InLeaf = 							(CSEvict) ? EvictLeaf			: WriteLeaf;
+	assign	Core_InValid =							(CSEvict) ? EvictDataInValid 	: WriteInValid;
+	assign	EvictDataInReady =						CSEvict & Core_InReady;
+	assign	WriteInReady =							~CSEvict & Core_InReady;
 													
 	StashCore	#(			.StashCapacity(			StashCapacity),
 							.BEDWidth(				BEDWidth),
@@ -341,16 +358,16 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.PerAccessReset(		PerAccessReset),
 							.ResetDone(				CoreResetDone),
 						
-							.InData(				StashCore_InData),
-							.InPAddr(				StashCore_InPAddr),
-							.InLeaf(				StashCore_InLeaf),
-							.InValid(				StashCore_InValid),
-							.InReady(				StashCore_InReady),
+							.InData(				Core_InData),
+							.InPAddr(				Core_InPAddr),
+							.InLeaf(				Core_InLeaf),
+							.InValid(				Core_InValid),
+							.InReady(				Core_InReady),
 
-							.OutData(				ReadData),
-							.OutPAddr(				ReadPAddr),
-							.OutLeaf(				ReadLeaf),
-							.OutValid(				CoreOutValid),
+							.OutData(				Core_OutData),
+							.OutPAddr(				Core_OutPAddr),
+							.OutLeaf(				Core_OutLeaf),
+							.OutValid(				Core_OutValid),
 
 							.InSAddr(				OutDMAAddr),
 							.InCommand(				CoreCommand),
@@ -410,7 +427,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Counter		#(			.Width(					SCWidth),
 							.Limited(				1),
 							.Limit(					ScanDelay))
-				ScanCounter(.Clock(					Clock),
+				scan_count(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
@@ -419,7 +436,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Count(					ScanCount));
 	
 	Register	#(			.Width(					1))
-				SentCmd(	.Clock(					Clock),
+				sent_cmd(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset | StateTransition),
 							.Set(					CoreCommandValid & CoreCommandReady & (CSScan1 | CSScan2)),
 							.Enable(				1'b0),
@@ -433,23 +450,26 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	
 	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
-	assign	ReadingLastBlock = 						BlocksReading == (BlocksOnPath - 1); // -1 because this is the address into the scan table
 	assign	StopReading =							CSPathWriteback & ReadingLastBlock & PrepNextPeak;
 	
 	// ticks at start of block read
 	Counter		#(			.Width(					ScanTableAWidth),
 							.Limited(				1),
 							.Limit(					BlocksOnPath - 1))
-				RdStartCnt(	.Clock(					Clock),
+				rd_st_count(.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				PathWriteback_Tick),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksReading));
+	CountCompare #(			.Width(					ScanTableAWidth),
+							.Compare(				BlocksOnPath - 1))
+				rd_st_cmp(	.Count(					BlocksReading), 
+							.TerminalCount(			ReadingLastBlock));							
 
 	Register	#(			.Width(					1))
-				StopRdReg(	.Clock(					Clock),
+				stop_rd(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					StopReading),
 							.Enable(				1'b0),
@@ -460,25 +480,72 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 					
 	// ticks at end of block read
 	Counter		#(			.Width(					ScanTableAWidth))
-				RdReturnCnt(.Clock(					Clock),
+				rd_ret_count(.Clock(				Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CSPathWriteback & BlockReadComplete),
+							.Enable(				CSPathWriteback & BlockReadComplete_Internal),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksRead));
 							
 	// Block-level backpressure for reads (due to random DRAM delays)
 	Register	#(			.Width(					1))
-				ReadWait(	.Clock(					Clock),
-							.Reset(					Reset | ReadOutReady),
-							.Set(					PathWriteback_Tick & ~ReadOutReady),
+				read_wait(	.Clock(					Clock),
+							.Reset(					Reset | OutBufferHasSpace),
+							.Set(					PathWriteback_Tick & ~OutBufferHasSpace),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
 							
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
+	//--------------------------------------------------------------------------
+	// Output buffering
+	//--------------------------------------------------------------------------
+
+	assign	OutBufferHasSpace =						OutBufferEmptyCount >= BlkSize_BEDChunks;
+
+	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
+	assign	OutBufferHInValid =						CSPathWriteback & Core_OutValid & BlockReadComplete_Internal;
+	
+	assign	BlockReadComplete =						TickOutHeader & ReadOutValid & ReadOutReady;
+	
+	FIFORAM		#(			.Width(					BEDWidth),
+							.Buffering(				BlkSize_BEDChunks * StashOutBuffering))
+				out_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				Core_OutData),
+							.InValid(				OutBufferInValid),
+							.InAccept(				OutBufferInReady),
+							.InEmptyCount(			OutBufferEmptyCount),
+							.OutData(				ReadData),
+							.OutSend(				ReadOutValid),
+							.OutReady(				ReadOutReady));
+
+	FIFORAM		#(			.Width(					ORAMU + ORAML),
+							.Buffering(				StashOutBuffering))
+				out_H_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{Core_OutPAddr, Core_OutLeaf}),
+							.InValid(				OutBufferHInValid),
+							.InAccept(				OutHBufferInReady),
+							.OutData(				{ReadPAddr, ReadLeaf}),
+							.OutSend(				OutHeaderValid),
+							.OutReady(				TickOutHeader));		
+
+	Counter		#(			.Width(					OBWidth))
+				out_H_cnt(	.Clock(					Clock),
+							.Reset(					Reset | BlockReadComplete),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				ReadOutValid & ReadOutReady),
+							.In(					{OBWidth{1'bx}}),
+							.Count(					OutBufferCount));
+	CountCompare #(			.Width(					OBWidth),
+							.Compare(				BlkSize_BEDChunks - 1))
+				out_H_cmp(	.Count(					OutBufferCount), 
+							.TerminalCount(			TickOutHeader));
+							
 	//--------------------------------------------------------------------------	
 endmodule
 //--------------------------------------------------------------------------

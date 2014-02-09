@@ -309,7 +309,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	`endif
 	
 			if (OutValid & OutPAddr != DummyBlockAddress)
-				$display("[%m @ %t] Reading %d", $time, OutData);
+				$display("[%m @ %t] Reading %x", $time, OutData);
 
 	`ifdef SIMULATION_VERBOSE	
 			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)

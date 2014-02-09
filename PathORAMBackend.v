@@ -71,8 +71,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------ 
 
 	`include "StashLocal.vh"
-	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketLocal.vh"
+	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
 	localparam					BigUWidth =			ORAMU * ORAMZ,
@@ -173,8 +174,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						Stash_StartScanOp, Stash_StartWritebackOp;
 	
-	wire	[FEDWidth-1:0]		FEStash_WriteData;						
-	wire						FEStash_WriteDataValid, FEStash_WriteDataReady;
+	wire	[BEDWidth-1:0]		FEStash_EvictData;						
+	wire						FEStash_EvictDataValid, FEStash_EvictDataReady;
 	
 	wire	[BEDWidth-1:0]		StashFE_ReadData;
 	wire						StashFE_ReadDataValid, StashFE_ReadDataReady;
@@ -270,8 +271,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 													(CSPathWriteback & Stash_PathWritebackComplete & ~AccessIsDummy);
 
 	// Don't allow evictions when we only have space for a path
-	assign	FEStash_WriteDataReady = 				FEStash_EvictBlockReady & 	FEStash_CommandValid & ~StashAlmostFull;
-	assign	FEStash_EvictBlockValid = 				FEStash_WriteDataValid & 	FEStash_CommandValid & ~StashAlmostFull;
+	assign	FEStash_EvictDataReady = 				FEStash_EvictBlockReady & 	FEStash_CommandValid & ~StashAlmostFull;
+	assign	FEStash_EvictBlockValid = 				FEStash_EvictDataValid & 	FEStash_CommandValid & ~StashAlmostFull;
 	
 	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
 	
@@ -345,9 +346,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				StoreData),
 							.InValid(				StoreValid),
 							.InAccept(				StoreReady),
-							.OutData(				FEStash_WriteData),
-							.OutValid(				FEStash_WriteDataValid),
-							.OutReady(				FEStash_WriteDataReady));
+							.OutData(				FEStash_EvictData),
+							.OutValid(				FEStash_EvictDataValid),
+							.OutReady(				FEStash_EvictDataReady));
 	
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				FEDWidth))
@@ -357,7 +358,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InValid(				StashFE_ReadDataValid),
 							.InAccept(				StashFE_ReadDataReady),
 							.OutData(				LoadData),
-							.OutValid(				LoadData),
+							.OutValid(				LoadValid),
 							.OutReady(				LoadReady));
 	
 	//------------------------------------------------------------------------------
@@ -417,7 +418,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.IVEntropyWidth(		IVEntropyWidth))
 			dram_init(		.Clock(					Clock),
 							.Reset(					Reset),
-							// TODO generalize this to addr gen, etc
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
 							.DRAMCommand(			DRAMInit_DRAMCommand),
 							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
@@ -468,6 +468,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	HeaderDownShift_ValidBits =				PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
+	
+	// TODO switch in_L_shift, in_V_shift into shift registers (same for output direction ...)
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
@@ -570,7 +572,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
-							.AccessLeaf(			FEStash_CurrentLeaf),
+							.AccessLeaf(			AddrGen_Leaf),
 							.AccessPAddr(			FEStash_PAddr),
 							.AccessIsDummy(			AccessIsDummy),
 							
@@ -585,7 +587,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.BlockReturnComplete(	), // not connected
 							
 							// TODO add flag to indicate append?
-							.EvictData(				FEStash_WriteData),
+							.EvictData(				FEStash_EvictData),
 							.EvictPAddr(			FEStash_PAddr),
 							.EvictLeaf(				FEStash_RemappedLeaf),
 							.EvictDataInValid(		FEStash_EvictBlockValid),
@@ -595,8 +597,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.WriteData(				DataDownShift_OutData),
 							.WriteInValid(			BlockReadValid),
 							.WriteInReady(			BlockReadReady), 
-							.WritePAddr(			HeaderDownShift_PAddr),
-							.WriteLeaf(				HeaderDownShift_Leaf),
+							.WritePAddr(			HeaderDownShift_OutPAddr),
+							.WriteLeaf(				HeaderDownShift_OutLeaf),
 							.BlockWriteComplete(	Stash_BlockWriteComplete), 
 							
 							.ReadData(				DataUpShift_InData),
@@ -615,7 +617,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	[Writeback path] Buffers and up shifters
 	//------------------------------------------------------------------------------
 	
-	// Translate {Z{ULD}} (the stash's format) to { {Z{U}}, {Z{L}}, {Z{L}} }
+	// Translate:
+	//		{Z{ULD}} (the stash's format) 
+	//		to 
+	//		{ {Z{U}}, {Z{L}}, {Z{L}} } (the DRAM's format)
 	
 	// TODO change the stash interface so that dummies are single bit signals
 	assign	WritebackBlockIsValid =					HeaderUpShift_InPAddr != DummyBlockAddress;
@@ -662,13 +667,16 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutValid(				DataUpShift_OutValid),
 							.OutReady(				DataUpShift_OutReady));
 							
+	// The extra block's worth of capacity is because the Stash's OutReady 
+	// signal is block-synchronous
 	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				BktPSize_DRBursts))
+							.Buffering(				BlkSize_DRBursts + BktPSize_DRBursts))
 				out_bkt_buf(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DataUpShift_OutData),
 							.InValid(				DataUpShift_OutValid),
 							.InAccept(				DataUpShift_OutReady),
+							.InEmptyCount(			),
 							.OutData(				BucketBuf_OutData),
 							.OutSend(				BucketBuf_OutValid),
 							.OutReady(				BucketBuf_OutReady));
