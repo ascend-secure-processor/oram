@@ -13,7 +13,7 @@ module AddrGen
   // interface with DRAM controller
   input CmdReady,
   output CmdValid,
-  output [DDRCWidth:0] Cmd,
+  output [DDRCWidth-1:0] Cmd,
   output [DDRAWidth-1:0] Addr,
   
   // tmp output for debugging

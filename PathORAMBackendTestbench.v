@@ -138,7 +138,7 @@ module	PathORAMBackendTestbench;
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				StoreValid & StoreReady),
-							.In(					{{1'bx}}),
+							.In(					{FEDWidth{1'bx}}),
 							.Count(					StoreData));
 	
 	//--------------------------------------------------------------------------

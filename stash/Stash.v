@@ -38,17 +38,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAMU-1:0]			AccessPAddr,
 	input						AccessIsDummy,
 
-	/*
-		Start scanning the contents of the stash.  This should be pulsed as soon 
+	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
-		time.
-	*/
+		time. */
 	input						StartScan,
 	
-	/*
-		Start dumping data to AES encrypt in the NEXT cycle.  This should be 
-		pulsed as soon as the last dummy block is decrypted
-	*/
+	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
+		pulsed as soon as the last dummy block is decrypted */
 	input						StartWriteback,		
 		
 	//--------------------------------------------------------------------------

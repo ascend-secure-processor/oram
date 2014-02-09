@@ -562,6 +562,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	
 	Stash	#(				.StashCapacity(			StashCapacity),
+							.StashOutBuffering(		2), // this should be good enough ...
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
