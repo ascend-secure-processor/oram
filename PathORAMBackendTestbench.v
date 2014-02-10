@@ -158,7 +158,7 @@ module	PathORAMBackendTestbench;
 		Reset = 1'b0;
 		
 		//----------------------------------------------------------------------
-		//	Test 1: fill up the stash and force background evictions
+		//	Test 1: Append until stash is full and force background evictions
 		//----------------------------------------------------------------------	
 
 		i = 0;
@@ -168,8 +168,16 @@ module	PathORAMBackendTestbench;
 		end
 		
 		//----------------------------------------------------------------------
-		//	Test 2
-		//----------------------------------------------------------------------	
+		//	Test 2: ReadRmv
+		//----------------------------------------------------------------------
+
+		//----------------------------------------------------------------------
+		//	Test : Read
+		//----------------------------------------------------------------------
+
+		//----------------------------------------------------------------------
+		//	Test : Update
+		//----------------------------------------------------------------------		
 	end
 	
 	initial begin
@@ -238,8 +246,10 @@ module	PathORAMBackendTestbench;
 	//	DDR -> BRAM (to make simulation faster)
 	//--------------------------------------------------------------------------
 	
+	
+	
 	SynthesizedDRAM	#(		.UWidth(				8),
-							.AWidth(				DDRAWidth),
+							.AWidth(				DDRAWidth + 6),
 							.DWidth(				DDRDWidth),
 							.BurstLen(				1), // just for this module ...
 							.EnableMask(			1),
@@ -252,7 +262,7 @@ module	PathORAMBackendTestbench;
 							.Initialized(			),
 							.PoweredUp(				),
 
-							.CommandAddress(		DRAM_Address),
+							.CommandAddress(		{DRAM_Address, 6'b000000}),
 							.Command(				DRAM_Command),
 							.CommandValid(			DRAM_CommandValid),
 							.CommandReady(			DRAM_CommandReady),

@@ -139,7 +139,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						BlockReadCtr_Reset;
 	wire	[BlkBEDWidth-1:0] 	BlockReadCtr; 	
-	wire 						BlockReadComplete;	
+	wire 						InPath_BlockReadComplete;	
 	
 	// Writeback pipeline
 
@@ -161,7 +161,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire						WritebackBlockIsValid;
 	
 	wire 						WritebackProcessingHeader;		
-	wire	[DDRDWidth-1:0]		BucketBuf_OutData;
+	wire	[DDRDWidth-1:0]		UpShift_HeaderFlit, BucketBuf_OutData;
 	wire						BucketBuf_OutValid, BucketBuf_OutReady;
 							
 	wire						BucketWritebackValid;
@@ -480,13 +480,13 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				HeaderDownShift_InReady),
 							.OutData(			    HeaderDownShift_OutPAddr),
 							.OutValid(				HeaderDownShift_OutValid),
-							.OutReady(				BlockReadComplete));
+							.OutReady(				InPath_BlockReadComplete));
 	ShiftRegister #(		.PWidth(				BigLWidth),
 							.SWidth(				ORAML))
 				in_L_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Load(					HeaderDownShift_InValid), 
-							.Enable(				BlockReadComplete), 
+							.Enable(				InPath_BlockReadComplete), 
 							.PIn(					HeaderDownShift_Leaves), 
 							.SOut(					HeaderDownShift_OutLeaf));
 
@@ -505,7 +505,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	[Read path] Dummy block handling
 	//------------------------------------------------------------------------------
 
-	assign	BlockReadComplete =						Stash_BlockWriteComplete | BlockReadCtr_Reset;
+	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | BlockReadCtr_Reset;
 	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ReadBlockIsValid & BlockPresent);
 	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
 	
@@ -518,7 +518,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				), // will be the same as in_L_shft
 							.OutData(			    ReadBlockIsValid),
 							.OutValid(				BlockPresent),
-							.OutReady(				BlockReadComplete));	
+							.OutReady(				InPath_BlockReadComplete));	
 	
 	Counter		#(			.Width(					BlkBEDWidth))
 				in_blk_cnt(	.Clock(					Clock),

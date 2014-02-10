@@ -254,11 +254,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			*/
 			
-			if (StashOverflow) begin
-				$display("[%m] ERROR: stash overflowed");
-				$stop;
-			end
-			
 			if (RemoveBlock & StashOccupancy == 0) begin
 				$display("[%m] ERROR: we removed a block from an empty stash");
 				$stop;			
@@ -274,13 +269,16 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
-	`ifdef SIMULATION_VERBOSE			
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
+	`ifdef SIMULATION_VERBOSE
 				$display("\tUsedListHead = %d", MS_pt);
+	`endif
 				while (MS_pt != SNULL) begin
+	`ifdef SIMULATION_VERBOSE
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
+	`endif
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
 					if (StashC.Mem[MS_pt] == EN_Free) begin
@@ -295,9 +293,13 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				end
 				MS_pt = FreeListHead;
 				i = 0;
+	`ifdef SIMULATION_VERBOSE
 				$display("\tFreeListHead = %d", MS_pt);
+	`endif
 				while (MS_pt != SNULL) begin
+	`ifdef SIMULATION_VERBOSE
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
+	`endif
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
 					if (i > StashCapacity) begin
@@ -306,7 +308,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					end
 				end	
 			end
-	`endif
 	
 		if (CSPeaking & InCommandReady)
 			if (OutPAddr == DummyBlockAddress)

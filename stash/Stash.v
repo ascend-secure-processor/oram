@@ -134,7 +134,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan1, CSScan2, CSEvict;
 		
 	wire						StartScan_pass, StartScan_set, StartScan_primed;
-	wire						TimeInScan, PermitScanPreemption;
 				
 	wire	[BEDWidth-1:0]		Core_InData;
 	wire	[ORAMU-1:0]			Core_InPAddr;
@@ -204,6 +203,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
+			if (	(~Core_InReady & CoreCommandValid & CoreCommandReady & (	(CoreCommand == SCMD_Push) | 
+																				(CoreCommand == SCMD_Overwrite))) | 
+					(~Core_OutValid & CoreCommandValid & CoreCommandReady & (	(CoreCommand == SCMD_Peak)))) begin
+				$display("[%m @ %t] ERROR: Illegal command/data transaction (data will be lost)", $time);
+				$stop;
+			end
+			
+			if (StashOverflow) begin
+				$display("[%m] ERROR: stash overflowed");
+				$stop;
+			end
+			
 			if (CS_Delayed != CS) begin
 				if (CSScan1)
 					$display("[%m @ %t] Stash: start Scan1", $time);
@@ -264,7 +275,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (EvictDataInValid)
 					NS =							ST_Evict;
 			ST_Scan1 :
-				if (WriteInValid & PermitScanPreemption) 
+				if (WriteInValid & SentScanCommand) 
 					NS =			 				ST_PathRead;
 				else if (StartWriteback) 
 					NS = 							ST_Scan2;
@@ -272,10 +283,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (StartWriteback) 
 					NS =							ST_Scan2;
 			ST_Scan2 : 
-				if (Scan2Complete_Conservative & OutBufferHasSpace) 
+				if (Scan2Complete_Conservative & SentScanCommand & OutBufferHasSpace) 
 					NS = 							ST_PathWriteback;
 			ST_PathWriteback :
-				if (Top_AccessComplete) 
+				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
 				if (CoreCommandReady)
@@ -307,18 +318,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								.In(				1'bx),
 								.Out(				StartScan_set));
 	assign	AccessLeafValid =						StartScan_set | StartScan_pass;
-		
-	// We need to wait an implementation-dependent # of cycles in Scan before 
-	// transitioning to PathRead
-	Counter		#(			.Width(					1))
-				scan_time(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				CSScan1 & ~PermitScanPreemption),
-							.In(					1'bx),
-							.Count(					TimeInScan));
-	assign	PermitScanPreemption =					TimeInScan == 1; // 1 = implementation dependent
 	
 	//--------------------------------------------------------------------------
 	//	Inner modules
@@ -483,6 +482,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				CSPathWriteback & BlockReadComplete_Internal),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksRead));
+	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 							
 	// Block-level backpressure for reads (due to random DRAM delays)
 	Register	#(			.Width(					1))
