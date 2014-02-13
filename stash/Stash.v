@@ -36,8 +36,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	input	[ORAML-1:0]			AccessLeaf,
 	input	[ORAMU-1:0]			AccessPAddr,
+	
+	/*	Command code:
+			AccessIsDummy ==	1
+			AccessIsDummy ==	0		Look for and return block AccessPAddr if 
+										found */
 	input						AccessIsDummy,
-
+	
 	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
 		time. */
