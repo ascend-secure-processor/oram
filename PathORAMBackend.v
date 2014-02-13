@@ -148,6 +148,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAMU-1:0]			HeaderUpShift_InPAddr; 
 	wire	[ORAML-1:0]			HeaderUpShift_InLeaf;
 	wire						HeaderUpShift_OutValid, HeaderUpShift_OutReady;
+	wire						HeaderUpShift_InReady;
 	
 	wire	[BEDWidth-1:0]		DataUpShift_InData;
 	wire						DataUpShift_InValid, DataUpShift_InReady;
@@ -368,7 +369,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	// TODO use AES for this
 	
-	/*
 	Counter		#(			.Width(					ORAML))
 				SyncCounter(.Clock(					Clock),
 							.Reset(					Reset),
@@ -377,9 +377,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Enable(				CSStartRead),
 							.In(					{ORAML{1'bx}}),
 							.Count(					DummyLeaf));
-	*/
-	
-	assign	DummyLeaf = 							0;
 	
 	//------------------------------------------------------------------------------
 	//	Address generation & initialization
@@ -485,7 +482,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.SWidth(				ORAML))
 				in_L_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Load(					HeaderDownShift_InValid), 
+							.Load(					HeaderDownShift_InValid & HeaderDownShift_InReady), 
 							.Enable(				InPath_BlockReadComplete), 
 							.PIn(					HeaderDownShift_Leaves), 
 							.SOut(					HeaderDownShift_OutLeaf));
@@ -624,13 +621,22 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// TODO change the stash interface so that dummies are single bit signals
 	assign	WritebackBlockIsValid =					HeaderUpShift_InPAddr != DummyBlockAddress;
 	
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (~HeaderUpShift_InReady & Stash_BlockReadComplete) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
+				$stop;
+			end
+		end
+	`endif
+	
 	FIFOShiftRound #(		.IWidth(				ORAMU),
 							.OWidth(				BigUWidth))
 				out_U_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				HeaderUpShift_InPAddr),
 							.InValid(				Stash_BlockReadComplete),
-							.InAccept(				),
+							.InAccept(				HeaderUpShift_InReady),
 							.OutData(			    HeaderUpShift_PAddrs),
 							.OutValid(				HeaderUpShift_OutValid),
 							.OutReady(				HeaderUpShift_OutReady));
@@ -661,11 +667,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(			    DataUpShift_OutData),
 							.OutValid(				DataUpShift_OutValid),
 							.OutReady(				DataUpShift_OutReady));
-							
-	// The extra block's worth of capacity is because the Stash's OutReady 
-	// signal is block-synchronous
 	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				BlkSize_DRBursts + BktPSize_DRBursts))
+							.Buffering(				BktPSize_DRBursts))
 				out_bkt_buf(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DataUpShift_OutData),

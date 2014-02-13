@@ -15,3 +15,16 @@
 		
 	Known performance bugs:
 		- MIG is introducing 14 cycles of latency between CommandValid -> RAS and 5 cycles between DQ valid and ReadOutValid
+		
+		
+		
+		
+		
+		
+	Questions to ask:
+		- 	Does MIT have Synopsis Synplify?  
+			No.  Arvind's group never bothered with it b/c Bluespec's backend is in terms of raw BRAM blocks
+			
+		-	Ease to get ASIC SRAMs
+		
+		-	

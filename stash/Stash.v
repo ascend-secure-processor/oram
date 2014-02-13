@@ -210,6 +210,19 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
+			if (	(WriteInValid & WriteInReady & BlockWriteComplete) &
+					((^WriteLeaf === 1'bx) | (^WritePAddr === 1'bx))) begin
+				$display("[%m @ %t] ERROR: writing block with X paddr/leaf", $time);
+				$stop;
+			end
+			
+			if (	(ReadOutValid & ReadOutReady & BlockReadComplete) &
+					(ReadPAddr != DummyBlockAddress) & 
+					((^ReadLeaf === 1'bx) | (^ReadPAddr === 1'bx))) begin
+				$display("[%m @ %t] ERROR: reading block with X paddr/leaf", $time);
+				$stop;
+			end			
+			
 			if (StashOverflow) begin
 				$display("[%m] ERROR: stash overflowed");
 				$stop;

@@ -27,7 +27,7 @@ module	PathORAMBackendTestbench;
 	parameter 					DDR_nCK_PER_CLK = 	4,
 								DDRDQWidth =		64,
 								DDRCWidth =			3,
-								DDRAWidth =			28;
+								DDRAWidth =			`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
 								
 	parameter					StashCapacity =		100;
 	

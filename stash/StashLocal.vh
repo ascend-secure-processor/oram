@@ -1,5 +1,6 @@
 
-	localparam					DummyBlockAddress =	32'hdeadbeef; // TODO this was replaced by valid bits?
+	localparam					BASEDUMMY =			32'hdeadbeef;
+	localparam					DummyBlockAddress =	(ORAMU > 32) ? { {ORAMU{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAMU-1:0]; // TODO this was replaced by valid bits?
 
 	localparam					NumChunks =			ORAMB / BEDWidth;
 	localparam					ChunkAWidth =		`log2(NumChunks);
