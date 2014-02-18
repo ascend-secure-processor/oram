@@ -1,2 +1,2 @@
-    parameter   NumValidBlock = 16384,
+    parameter   NumValidBlock = 8192,
                 Recursion = 4   

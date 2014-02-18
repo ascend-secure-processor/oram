@@ -1,5 +1,7 @@
 `include "Const.vh"
 
+// temp replacement for FIFORAM, which gives me X output
+
 module FIFO
 #(parameter Width = 32, Depth = 8)
 (

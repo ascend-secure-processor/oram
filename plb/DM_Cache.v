@@ -64,26 +64,33 @@ module DM_Cache
     assign DataIn = Writing ? DIn_reg : DIn;
 
     // data and tag array
-    RAM #(DataWidth, DArrayAddrWidth) DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
-    RAM #(TagWidth+1+ExtraTagWidth, TArrayAddrWidth) TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
+    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)) 
+        DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
+    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth),
+        .EnableInitial(1), .Initial(  {(1 << TArrayAddrWidth) * ((TagWidth+ExtraTagWidth)+1) {1'b0} } )) 
+        TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
+    
+   // {(1 << TArrayAddrWidth){0, {(TagWidth+ExtraTagWidth){1'bx}}}}
     
     // output for cache outcome
-    reg Enable_reg;             // hack: assuming all latency = 1
-    assign Valid = Enable_reg; 
+    reg EnableReg, ValidReg;             // hack: assuming all latency = 1
+    assign Valid = ValidReg; 
     assign Hit = (Cmd_reg == CacheWrite || Cmd_reg == CacheRead) 
                     && Addr_reg[AddrWidth-1:LogLineSize] == TagOut[TagWidth-1:0] && TagOut[TagWidth+ExtraTagWidth];  // valid && tag match
-    assign Evicting = (Cmd_reg == CacheRefill) && TagOut[TagWidth+ExtraTagWidth] && (Refilling || RefillFinish); // a valid line is there
+    assign Evicting = EnableReg && (Cmd_reg == CacheRefill) && TagOut[TagWidth+ExtraTagWidth] && (Refilling || RefillFinish); // a valid line is there
     assign AddrOut = TagOut[TagWidth-1:0] << LogLineSize;
     assign ExtraTagOut = TagOut[TagWidth+ExtraTagWidth-1:TagWidth];
     
     initial begin
-        Enable_reg <= 0;
+        EnableReg <= 0;
+        ValidReg <= 0;
         CmdCounter <= -1;
     end
         
     always@(posedge Clock) begin
         if (Reset) begin
-            Enable_reg <= 0;
+            EnableReg <= 0;
+            ValidReg <= 0;
             CmdCounter <= -1;
         end
         else if (Ready && Enable) begin
@@ -109,7 +116,8 @@ module DM_Cache
             CmdCounter <= CmdCounter + 1;
         end
                 
-        Enable_reg <= Enable && Ready;
+        EnableReg <= Enable;
+        ValidReg <= Enable && Ready;
     end
 
 endmodule
