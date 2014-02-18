@@ -1,5 +1,6 @@
 
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
+	localparam                  LogFEORAMBChunks = `log2(FEORAMBChunks);
 	
 	// TODO this command naming scheme is terrible.  And make it correspond better to the convention in Stash.v
 	
