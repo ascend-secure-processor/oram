@@ -34,6 +34,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Commands
 	//--------------------------------------------------------------------------
 	
+	input	[ORAML-1:0]			RemapLeaf,
 	input	[ORAML-1:0]			AccessLeaf,
 	input	[ORAMU-1:0]			AccessPAddr,
 	
@@ -61,7 +62,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[ORAMU-1:0]			ReturnPAddr,
 	output	[ORAML-1:0]			ReturnLeaf,
 	output						ReturnDataOutValid,
-	input						ReturnDataOutReady,	
+	//input						ReturnDataOutReady,	// reads are block DMAs
 	output						BlockReturnComplete,
 	
 	//--------------------------------------------------------------------------
@@ -96,7 +97,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[ORAMU-1:0]			ReadPAddr,
 	output	[ORAML-1:0]			ReadLeaf,
 	output						ReadOutValid,
-	input						ReadOutReady,	
+	input						ReadOutReady,
 	/* Pulsed during last cycle that a block is being read */
 	output	 					BlockReadComplete,
 	output						PathReadComplete,
@@ -125,8 +126,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								ST_Scan1 =				3'd2,
 								ST_PathRead =			3'd3,
 								ST_Scan2 =				3'd4,
-								ST_PathWriteback = 		3'd5,
-								ST_Evict =				3'd6;
+								ST_Turnaround =			3'd5,
+								ST_PathWriteback = 		3'd6,
+								ST_Evict =				3'd7;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -284,8 +286,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign 	StateTransition =						NS != CS;
 	assign	CSIdle =								CS == ST_Idle;
-	assign	CSPathRead = 							CS == ST_PathRead; 
-	assign	CSPathWriteback = 						CS == ST_PathWriteback; 
+	assign	CSPathRead = 							CS == ST_PathRead;
+	assign	CSTurnaround =							CS == ST_Turnaround;
+	assign	CSPathWriteback = 						CS == ST_PathWriteback;
 	assign	CSScan1 = 								CS == ST_Scan1; 
 	assign	CSScan2 = 								CS == ST_Scan2;
 	assign	CSEvict =								CS == ST_Evict;
@@ -317,7 +320,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =							ST_Scan2;
 			ST_Scan2 : 
 				if (Scan2Complete_Conservative & SentScanCommand & OutBufferHasSpace) 
-					NS = 							ST_PathWriteback;
+					NS = 							ST_Turnaround;
+			ST_Turnaround : 
+				if (BlockReadComplete_Internal)
+					NS =							ST_PathWriteback;
 			ST_PathWriteback :
 				if (PerAccessReset) 
 					NS =							ST_Idle;
@@ -356,6 +362,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
+	assign	CoreCommandSAddr =						(CSTurnaround) ? CRUD_SAddr : OutDMAAddr;
+	
 	assign	CoreCommand =							(CSScan1 | CSScan2) ? 	SCMD_Dump :
 													(CSPathRead | CSEvict) ? SCMD_Push :
 													(CSPathWriteback) ? 	SCMD_Peak : 
@@ -364,6 +372,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign 	CoreCommandValid =						CSPathRead | CSEvict |
 													(CSScan1 & ~SentScanCommand) | 
 													(CSScan2 & ~SentScanCommand) | 
+													CSTurnaround |
 													(CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
 	
 	// Write/Evict arbitration
@@ -397,7 +406,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutLeaf(				Core_OutLeaf),
 							.OutValid(				Core_OutValid),
 
-							.InSAddr(				OutDMAAddr),
+							.InSAddr(				CoreCommandSAddr),
 							.InCommand(				CoreCommand),
 							.InCommandValid(		CoreCommandValid),
 							.InCommandReady(		CoreCommandReady),
@@ -451,10 +460,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	// Front-end command handling
 	//--------------------------------------------------------------------------
 	
+	CoreCommandSAddr
+	
 	LookForBlock
 		
 	FoundBlock
-	CRUD_BlockAddress
+	CRUD_SAddr
 	
 	Register	#(			.Width(					1))
 				CRUD_op(	.Clock(					Clock),
@@ -467,14 +478,19 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Out(					LookForBlock));
 
 	assign	FoundBlock =							ScanLeafValid & (ScanPAddr == AccessPAddr);
-							
+	
 	Register	#(			.Width(					StashEAWidth))
 				block_addr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					FoundBlock),
 							.Enable(				1'b0),
 							.In(					ScanSAddr),
-							.Out(					CRUD_BlockAddress));
+							.Out(					CRUD_SAddr));
+
+	assign	ReturnData =							Core_OutData;
+	assign	ReturnPAddr =							Core_OutPAddr;
+	assign	ReturnLeaf =							Core_OutLeaf;
+	assign	ReturnDataOutValid =					CSTurnaround & Core_OutValid & ~AccessIsDummy;
 							
 	//--------------------------------------------------------------------------
 	//	Scan control

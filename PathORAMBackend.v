@@ -120,7 +120,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[BEDWidth-1:0]		Store_ShiftBufData;	
 	wire						Store_ShiftBufValid, Store_ShiftBufReady;
 	
-	wire	[FEDWidth-1:0]		Load_ShiftBufData;
+	wire	[BEDWidth-1:0]		Load_ShiftBufData;
 	wire						Load_ShiftBufValid, Load_ShiftBufReady;
 	
 	wire						EvictGate;
@@ -262,6 +262,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				$display("[%m @ %t] ERROR: DRAM was sending data and we had no space", $time);
 				$stop;
 			end
+			
+			if (Stash_ReturnDataValid & ~Stash_ReturnDataReady) begin
+				$display("[%m @ %t] ERROR: we didn't have space to put return data (Read/Rm started when it shouldn't have)", $time);
+				$stop;
+			end
 
 		end
 	`endif
@@ -388,29 +393,31 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	//	Front-end loads
 	//------------------------------------------------------------------------------								
-							
-	FIFOShiftRound #(		.IWidth(				BEDWidth),
-							.OWidth(				FEDWidth))
-				ld_shift(	.Clock(					Clock),
+	
+	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
+	// NOTE: this should come before the shifter because the Stash ReturnData path 
+	// doesn't have backpressure
+	FIFORAM		#(			.Width(					BEDWidth),
+							.Buffering(				BlkSize_BEDChunks))
+				ld_buf(		.Clock(					Clock),
 							.Reset(					Reset),
+							.InEmptyCount(			ReturnBuf_Space)
 							.InData(				Stash_ReturnData),
 							.InValid(				Stash_ReturnDataValid),
 							.InAccept(				Stash_ReturnDataReady),
 							.OutData(				Load_ShiftBufData),
-							.OutValid(				Load_ShiftBufValid),
-							.OutReady(				Load_ShiftBufReady));
+							.OutSend(				Load_ShiftBufValid),
+							.OutReady(				Load_ShiftBufReady));	
 	
-	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
-	FIFORAM		#(			.Width(					FEDWidth),
-							.Buffering(				BlkSize_FEDChunks))
-				ld_buf(		.Clock(					Clock),
+	FIFOShiftRound #(		.IWidth(				BEDWidth),
+							.OWidth(				FEDWidth))
+				ld_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InEmptyCount(			ReturnBuf_Space)
 							.InData(				Load_ShiftBufData),
 							.InValid(				Load_ShiftBufValid),
 							.InAccept(				Load_ShiftBufReady),
 							.OutData(				LoadData),
-							.OutSend(				LoadValid),
+							.OutValid(				LoadValid),
 							.OutReady(				LoadReady));	
 	
 	//------------------------------------------------------------------------------
@@ -618,6 +625,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
+							.RemapLeaf(				) -- TODO --
 							.AccessLeaf(			AddrGen_Leaf),
 							.AccessPAddr(			PAddr_Internal),
 							.AccessIsDummy(			AccessIsDummy),
@@ -630,7 +638,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ReturnPAddr(			), // not connected
 							.ReturnLeaf(			), // not connected
 							.ReturnDataOutValid(	Stash_ReturnDataValid),
-							.ReturnDataOutReady(	Stash_ReturnDataReady),
+							//.ReturnDataOutReady(	Stash_ReturnDataReady),
 							.BlockReturnComplete(	), // not connected
 							
 							.EvictData(				Stash_EvictData),
