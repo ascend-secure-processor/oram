@@ -37,11 +37,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAML-1:0]			AccessLeaf,
 	input	[ORAMU-1:0]			AccessPAddr,
 	
-	/*	Command code:
-			AccessIsDummy ==	1
-			AccessIsDummy ==	0		Look for and return block AccessPAddr if 
-										found */
+	/*	Controls the Return/Eviction interfaces 
+		Command code:
+			IsDummy ==	1		Command ==	X
+			IsDummy ==	0		Perform command */
 	input						AccessIsDummy,
+	input	[BECMDWidth-1:0]	AccessCommand,
 	
 	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
@@ -190,6 +191,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
+		wire BlockFound;
 		
 		initial begin
 			if (StashOutBuffering < 1) begin
@@ -197,6 +199,14 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 		end
+	
+		Register	#(	.Width(					1))
+			found_block(.Clock(					Clock),
+						.Reset(					Reset | CSIdle),
+						.Set(					FoundBlock),
+						.Enable(				1'b0),
+						.In(					1'bx),
+						.Out(					BlockFound));
 		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
@@ -227,6 +237,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m @ %t] ERROR: reading block with X paddr/leaf", $time);
 				$stop;
 			end			
+			
+			if (StartWriteback & LookForBlock & ~BlockFound) begin
+				$display("[%m @ %t] ERROR: the FE block wasn't in ORAM/stash", $time);
+				$stop;
+			end
 			
 			if (StashOverflow) begin
 				$display("[%m] ERROR: stash overflowed");
@@ -288,9 +303,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Reset : 
 				if (CoreResetDone) NS =				ST_Idle;
 			ST_Idle :
-				if (AccessLeafValid) 
+				if (AccessStart) 
 					NS =							ST_Scan1;
-				else if (EvictDataInValid)
+				else if (EvictDataInValid & AccessCommand == BECMD_Append)
 					NS =							ST_Evict;
 			ST_Scan1 :
 				if (WriteInValid & SentScanCommand) 
@@ -311,7 +326,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =							ST_Idle;
 		endcase
 	end
-	
+		
 	//--------------------------------------------------------------------------
 	//	Input control & timing
 	//--------------------------------------------------------------------------
@@ -335,7 +350,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								.Enable(			1'b0),
 								.In(				1'bx),
 								.Out(				StartScan_set));
-	assign	AccessLeafValid =						StartScan_set | StartScan_pass;
+	assign	AccessStart =							StartScan_set | StartScan_pass;
 	
 	//--------------------------------------------------------------------------
 	//	Inner modules
@@ -416,7 +431,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
-							.CurrentLeafValid(		AccessLeafValid),
+							.CurrentLeafValid(		AccessStart),
 							
 							.InScanLeaf(			ScanLeaf),
 							.InScanPAddr(			ScanPAddr),
@@ -432,6 +447,35 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutDMAAddr(			OutDMAAddr),
 							.OutDMAValid(			OutDMAValid));	
 
+	//--------------------------------------------------------------------------
+	// Front-end command handling
+	//--------------------------------------------------------------------------
+	
+	LookForBlock
+		
+	FoundBlock
+	CRUD_BlockAddress
+	
+	Register	#(			.Width(					1))
+				CRUD_op(	.Clock(					Clock),
+							.Reset(					Reset | (CSIdle & ~AccessStart)),
+							.Set(					1'b0),
+							.Enable(				CSIdle & AccessStart),
+							.In(					(AccessCommand == BECMD_Update) |
+													(AccessCommand == BECMD_Read) |
+													(AccessCommand == BECMD_ReadRmv)),
+							.Out(					LookForBlock));
+
+	assign	FoundBlock =							ScanLeafValid & (ScanPAddr == AccessPAddr);
+							
+	Register	#(			.Width(					StashEAWidth))
+				block_addr(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					FoundBlock),
+							.Enable(				1'b0),
+							.In(					ScanSAddr),
+							.Out(					CRUD_BlockAddress));
+							
 	//--------------------------------------------------------------------------
 	//	Scan control
 	//--------------------------------------------------------------------------
@@ -514,7 +558,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
 
 	//--------------------------------------------------------------------------
-	// Read buffering
+	// Read interface buffering
 	//--------------------------------------------------------------------------
 
 	assign	OutBufferHasSpace =						OutBufferEmptyCount >= BlkSize_BEDChunks;

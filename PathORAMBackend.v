@@ -100,11 +100,30 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSInitialize, CSIdle, CSAppend, CSStartRead, 
 								CSStartWriteback, CSPathRead, CSPathWriteback;
+	wire						CSORAMAccess;
 	wire						AccessIsDummy;
 	
 	wire						AppendComplete, PathReadComplete, Stash_PathWritebackComplete;
 	
 	wire	[ORAML-1:0]			DummyLeaf;
+	
+	// Front-end interfaces
+	
+	wire	[BECMDWidth-1:0] 	Command_Internal;
+	wire	[ORAMU-1:0]			PAddr_Internal;
+	wire	[ORAML-1:0]			CurrentLeaf_Internal, RemappedLeaf_Internal;
+	wire						Command_InternalValid, Command_InternalReady;
+
+	wire	[BlkBEDWidth-1:0]	EvictBuf_Chunks;
+	wire	[BlkFEDWidth-1:0]	ReturnBuf_Space;
+		
+	wire	[BEDWidth-1:0]		Store_ShiftBufData;	
+	wire						Store_ShiftBufValid, Store_ShiftBufReady;
+	
+	wire	[FEDWidth-1:0]		Load_ShiftBufData;
+	wire						Load_ShiftBufValid, Load_ShiftBufReady;
+	
+	wire						EvictGate;
 	
 	// Read pipeline
 
@@ -172,24 +191,19 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[DDRDWidth-1:0]		UpShift_DRAMWriteData;
 	wire	[DDRMWidth-1:0]		UpShift_DRAMWriteMask;
 	
-	// Stash & frontend
+	// Stash
 	
 	wire						Stash_StartScanOp, Stash_StartWritebackOp;
 	
-	wire	[BEDWidth-1:0]		FEStash_EvictData;						
-	wire						FEStash_EvictDataValid, FEStash_EvictDataReady;
+	wire	[BEDWidth-1:0]		Stash_EvictData;						
+	wire						Stash_EvictDataValid, Stash_EvictDataReady;
 	
-	wire	[BEDWidth-1:0]		StashFE_ReadData;
-	wire						StashFE_ReadDataValid, StashFE_ReadDataReady;
+	wire	[BEDWidth-1:0]		Stash_ReturnData;
+	wire						Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
 	wire						Stash_ResetDone;
 	
-	wire	[BECMDWidth-1:0] 	FEStash_Command;
-	wire	[ORAMU-1:0]			FEStash_PAddr;
-	wire	[ORAML-1:0]			FEStash_CurrentLeaf, FEStash_RemappedLeaf;
-	wire						FEStash_CommandValid, FEStash_CommandReady;
-	
-	wire						FEStash_EvictBlockValid, FEStash_EvictBlockReady;
+	wire						Stash_EvictBlockValid, Stash_EvictBlockReady;
 
 	wire						Stash_BlockWriteComplete;
 	
@@ -235,7 +249,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 			if (CS_Delayed != CS) begin
 				if (CSStartRead)
-					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, FEStash_Command, AddrGen_Leaf);
+					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, Command_Internal, AddrGen_Leaf);
 				if (CSAppend)
 					$display("[%m @ %t] Backend: start append", $time);
 			end
@@ -255,7 +269,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	//	Control logic
 	//------------------------------------------------------------------------------
-	
+		
 	assign	CSInitialize =							CS == ST_Initialize;
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSAppend =								CS == ST_Append;
@@ -264,18 +278,16 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	CSPathRead =							CS == ST_PathRead;
 	assign	CSPathWriteback =						CS == ST_PathWriteback;
 	
+	assign	CSORAMAccess =							~CSInitialize & ~CSIdle;
+	
 	assign	AllResetsDone =							Stash_ResetDone & DRAMInit_Done;
 
 	assign	Stash_StartScanOp =						CSStartRead;
 	assign	Stash_StartWritebackOp =				CSStartWriteback;
 	
-	assign	FEStash_CommandReady =					AppendComplete | 
+	assign	Command_InternalReady =					AppendComplete | 
 													(CSPathWriteback & Stash_PathWritebackComplete & ~AccessIsDummy);
 
-	// Don't allow evictions when we only have space for a path
-	assign	FEStash_EvictDataReady = 				FEStash_EvictBlockReady & 	FEStash_CommandValid & ~StashAlmostFull;
-	assign	FEStash_EvictBlockValid = 				FEStash_EvictDataValid & 	FEStash_CommandValid & ~StashAlmostFull;
-	
 	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
 	
 	always @(posedge Clock) begin
@@ -290,14 +302,17 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				if (AllResetsDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (StashAlmostFull) // highest priority
+				if (StashAlmostFull) // higher priority than append
 					NS =							ST_StartRead;
-				else if (FEStash_CommandValid & 	FEStash_Command == BECMD_Append) // appends aren't much work --- do them first
+				else if (Command_InternalValid 	& 	Command_Internal == BECMD_Append) // do appends first because they are cheap
 					NS =							ST_Append;
-				else if (FEStash_CommandValid & (	FEStash_Command == BECMD_Update | 
-													FEStash_Command == BECMD_Read | 
-													FEStash_Command == BECMD_ReadRmv))
+				else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
+													(Command_Internal == BECMD_ReadRmv))
+												&	(ReturnBuf_Space >= BlkSize_FEDChunks))
 					NS =							ST_StartRead;
+				else if (Command_InternalValid 	& (	Command_Internal == BECMD_Update)
+												&	EvictBuf_Chunks >= BlkSize_BEDChunks)
+					NS = 							ST_StartRead;
 			ST_Append :
 				if (AppendComplete)
 					NS = 							ST_Idle;
@@ -325,7 +340,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Out(					AccessIsDummy));
 	
 	//------------------------------------------------------------------------------
-	//	Frontend interface
+	//	Front-end commands
 	//------------------------------------------------------------------------------	
 
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
@@ -334,13 +349,14 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				{Command,			PAddr, 			CurrentLeaf, 		RemappedLeaf}),
 							.InValid(				CommandValid),
 							.InAccept(				CommandReady),
-							.OutData(				{FEStash_Command,	FEStash_PAddr,	FEStash_CurrentLeaf,FEStash_RemappedLeaf}),
-							.OutSend(				FEStash_CommandValid),
-							.OutReady(				FEStash_CommandReady));
+							.OutData(				{Command_Internal,	PAddr_Internal,	CurrentLeaf_Internal,RemappedLeaf_Internal}),
+							.OutSend(				Command_InternalValid),
+							.OutReady(				Command_InternalReady));
 	
-	// TODO we may not need these expensive shifts if we can incrementally write 
-	// FEDWidth chunks to the stash; check: are they really that expensive?  If we 
-	// can pack them into 2 SLICEM's each, then its no problem
+	//------------------------------------------------------------------------------
+	//	Front-end stores
+	//------------------------------------------------------------------------------	
+	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				BEDWidth))
 				st_shift(	.Clock(					Clock),
@@ -348,20 +364,54 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				StoreData),
 							.InValid(				StoreValid),
 							.InAccept(				StoreReady),
-							.OutData(				FEStash_EvictData),
-							.OutValid(				FEStash_EvictDataValid),
-							.OutReady(				FEStash_EvictDataReady));
-	
+							.OutData(				Store_ShiftBufData),
+							.OutValid(				Store_ShiftBufValid),
+							.OutReady(				Store_ShiftBufReady));
+							
+	// SECURITY: Don't make a write-update unless the FE gives us a block first
+	FIFORAM		#(			.Width(					BEDWidth),
+							.Buffering(				BlkSize_BEDChunks))
+				st_buf(		.Clock(					Clock),
+							.Reset(					Reset),
+							.OutFullCount(			EvictBuf_Chunks)
+							.InData(				Store_ShiftBufData),
+							.InValid(				Store_ShiftBufValid),
+							.InAccept(				Store_ShiftBufReady),
+							.OutData(				Stash_EvictData),
+							.OutSend(				Stash_EvictDataValid),
+							.OutReady(				Stash_EvictDataReady));
+							
+	assign	EvictGate =								CSAppend | (CSORAMAccess & (Command_Internal == BECMD_Update));
+	assign	Stash_EvictDataReady = 					Stash_EvictBlockReady & EvictGate;
+	assign	Stash_EvictBlockValid = 				Stash_EvictDataValid & EvictGate;	
+
+	//------------------------------------------------------------------------------
+	//	Front-end loads
+	//------------------------------------------------------------------------------								
+							
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				FEDWidth))
 				ld_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				StashFE_ReadData),
-							.InValid(				StashFE_ReadDataValid),
-							.InAccept(				StashFE_ReadDataReady),
+							.InData(				Stash_ReturnData),
+							.InValid(				Stash_ReturnDataValid),
+							.InAccept(				Stash_ReturnDataReady),
+							.OutData(				Load_ShiftBufData),
+							.OutValid(				Load_ShiftBufValid),
+							.OutReady(				Load_ShiftBufReady));
+	
+	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
+	FIFORAM		#(			.Width(					FEDWidth),
+							.Buffering(				BlkSize_FEDChunks))
+				ld_buf(		.Clock(					Clock),
+							.Reset(					Reset),
+							.InEmptyCount(			ReturnBuf_Space)
+							.InData(				Load_ShiftBufData),
+							.InValid(				Load_ShiftBufValid),
+							.InAccept(				Load_ShiftBufReady),
 							.OutData(				LoadData),
-							.OutValid(				LoadValid),
-							.OutReady(				LoadReady));
+							.OutSend(				LoadValid),
+							.OutReady(				LoadReady));	
 	
 	//------------------------------------------------------------------------------
 	//	Random leaf generator
@@ -379,11 +429,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Count(					DummyLeaf));
 	
 	//------------------------------------------------------------------------------
-	//	Address generation & initialization
+	//	Address generation & ORAM initialization
 	//------------------------------------------------------------------------------
 
 	assign	AddrGen_Reading = 						CSStartRead;
-	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : FEStash_CurrentLeaf;
+	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : CurrentLeaf_Internal;
 	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -569,25 +619,25 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ResetDone(				Stash_ResetDone),
 							
 							.AccessLeaf(			AddrGen_Leaf),
-							.AccessPAddr(			FEStash_PAddr),
+							.AccessPAddr(			PAddr_Internal),
 							.AccessIsDummy(			AccessIsDummy),
+							.AccessCommand(			Command_Internal),
 							
 							.StartScan(				Stash_StartScanOp),  
 							.StartWriteback(		Stash_StartWritebackOp),
 							
-							.ReturnData(			StashFE_ReadData),
+							.ReturnData(			Stash_ReturnData),
 							.ReturnPAddr(			), // not connected
 							.ReturnLeaf(			), // not connected
-							.ReturnDataOutValid(	StashFE_ReadDataValid),
-							.ReturnDataOutReady(	StashFE_ReadDataReady),
+							.ReturnDataOutValid(	Stash_ReturnDataValid),
+							.ReturnDataOutReady(	Stash_ReturnDataReady),
 							.BlockReturnComplete(	), // not connected
 							
-							// TODO add flag to indicate append?
-							.EvictData(				FEStash_EvictData),
-							.EvictPAddr(			FEStash_PAddr),
-							.EvictLeaf(				FEStash_RemappedLeaf),
-							.EvictDataInValid(		FEStash_EvictBlockValid),
-							.EvictDataInReady(		FEStash_EvictBlockReady),
+							.EvictData(				Stash_EvictData),
+							.EvictPAddr(			PAddr_Internal),
+							.EvictLeaf(				RemappedLeaf_Internal),
+							.EvictDataInValid(		Stash_EvictBlockValid),
+							.EvictDataInReady(		Stash_EvictBlockReady),
 							.BlockEvictComplete(	AppendComplete),
 
 							.WriteData(				DataDownShift_OutData),
