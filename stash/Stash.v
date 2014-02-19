@@ -194,7 +194,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						OutBufferInReady, OutHBufferInReady, OutBufferInValid;
 
 	wire	[ORAML-1:0]			MappedLeaf;
-	wire						MappedLeafValid;
+	wire						CurrentLeafValid;
 		
 	wire						LookForBlock, FoundBlock;
 	wire						ReturnInProgress;
@@ -479,7 +479,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	MappedLeaf =							(LookForBlock & FoundBlock) ? RemapLeaf : ScanLeaf;
 	
 	// don't try to push back blocks that we are removing
-	assign	MappedLeafValid =						((LookForBlock & FoundBlock) ? AccessCommand != BECMD_ReadRmv : 1'b1) & ScanLeafValid;
+	assign	CurrentLeafValid =						~(LookForBlock & FoundBlock & CoreHeaderRemove) & AccessStart;
 	
 	StashScanTable #(		.StashCapacity(			StashCapacity),
 							.BEDWidth(				BEDWidth),
@@ -494,12 +494,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
-							.CurrentLeafValid(		AccessStart),
+							.CurrentLeafValid(		CurrentLeafValid),
 							
 							.InScanLeaf(			MappedLeaf),
 							.InScanPAddr(			ScanPAddr),
 							.InScanSAddr(			ScanSAddr),
-							.InScanValid(			MappedLeafValid),
+							.InScanValid(			ScanLeafValid),
 							.OutScanSAddr(			ScannedSAddr),
 							.OutScanAccepted(		ScannedLeafAccepted),
 							.OutScanValid(			ScannedLeafValid),

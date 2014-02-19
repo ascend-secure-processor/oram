@@ -105,6 +105,14 @@ module	StashTestbench;
 			#(Cycle);	
 		end
 	endtask
+	
+	task TASK_ResetDataCounter;
+		begin
+			ResetDataCounter = 1'b1;
+			#(Cycle);
+			ResetDataCounter = 1'b0;
+		end
+	endtask
 		
 	task TASK_BigTest;
 		input [31:0] num;
@@ -449,9 +457,7 @@ module	StashTestbench;
 		// Test 7:  Backpressure on ReadOutReady
 		// ---------------------------------------------------------------------
 
-		ResetDataCounter = 1'b1;
-		#(Cycle);
-		ResetDataCounter = 1'b0;
+		TASK_ResetDataCounter();
 		
 		TASK_BigTest(7);
 		TASK_StartScan(32'hffffffff, {BECMDWidth{1'bx}});
@@ -512,9 +518,7 @@ module	StashTestbench;
 		
 		TASK_BigTest(9);
 		
-		ResetDataCounter = 1'b1;
-		#(Cycle);
-		ResetDataCounter = 1'b0;
+		TASK_ResetDataCounter();
 		
 		AccessPAddr = 32'hf0000000;
 		AccessCommand = BECMD_Append;
@@ -533,6 +537,34 @@ module	StashTestbench;
 		// Test 10:  Read/remove command (2)
 		// ---------------------------------------------------------------------
 				
+		// evict some unrelated blocks; read a path in containing the block of 
+		// interest; the block of interest _should_ get written back to ORAM if 
+		// it is not removed
+		
+		TASK_BigTest(10);
+		
+		TASK_ResetDataCounter();
+		
+		AccessPAddr = 32'hba5eba11;
+		AccessCommand = BECMD_Append;
+		TASK_QueueEvict(32'hf0000000, 	32'hffffffff);
+		TASK_QueueEvict(32'hf0000001, 	32'hffffffff);
+		
+		TASK_StartScan(	32'h00000000, 	BECMD_ReadRmv);
+
+		TASK_QueueWrite(32'hf0000002, 	32'h00000000);
+		TASK_QueueWrite(AccessPAddr, 	32'hffffffff);
+		TASK_QueueWrite(32'hf0000003, 	32'h00000000);
+		
+		TASK_StartWriteback();
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);		
+
+		// ---------------------------------------------------------------------
+		// Test 1:  Read command
+		// ---------------------------------------------------------------------
+						
+		// make sure block gets written back correctly after it gets remapped
 		
 		// ---------------------------------------------------------------------
 		
@@ -636,6 +668,14 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 2,	32'hf0000002, 32'hffffffff);
 		TASK_CheckRead(NumChunks, 		32'hf0000001, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
+		
+		// big test 10
+		TASK_CheckReturn(NumChunks,		32'hba5eba11, 32'hffffffff);
+		TASK_CheckRead(NumChunks,		32'hf0000001, 32'hffffffff);
+		TASK_CheckRead(0, 				32'hf0000000, 32'hffffffff);		
+		TASK_CheckReadDummy(BlocksOnPath-2*ORAMZ);
+		TASK_CheckRead(0,				32'hf0000002, 32'h00000000);
+		TASK_CheckRead(NumChunks * 2,	32'hf0000003, 32'h00000000);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
