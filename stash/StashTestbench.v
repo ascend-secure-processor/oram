@@ -215,6 +215,41 @@ module	StashTestbench;
 		end
 	endtask	
 	
+	// Same as TASK_CheckRead task except for return interface
+	task TASK_CheckReturn;
+		input	[BEDWidth-1:0] BaseData;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		
+		reg		[BEDWidth-1:0] Data;
+		integer done;
+		begin
+			done = 0;
+			Data = BaseData;
+			while (done == 0) begin
+				if (ReturnDataOutValid /* & ReturnDataOutReady */) begin
+					if (ReturnData !== Data) begin
+						$display("FAIL: Stash return data %d, expected %d", ReturnData, Data);
+						$stop;
+					end
+					//$display("OK: Stash return data %d, expected %d", ReturnData, Data);
+					if (BlockReturnComplete) begin
+						if (ReturnPAddr !== PAddr || ReturnLeaf !== Leaf) begin
+							$display("FAIL: Stash return {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReturnPAddr, ReturnLeaf, PAddr, Leaf);
+							$stop;
+						end
+						//$display("OK: Stash return {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReturnPAddr, ReturnLeaf, PAddr, Leaf);
+						done = 1;
+					end
+					Data = Data + 1;
+				end
+				#(Cycle);
+			end
+			$display("PASS: Test %d (return @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData);
+			TestID = TestID + 1;
+		end
+	endtask	
+	
 	task TASK_CheckReadDummy;
 		input	[31:0] Count;
 
@@ -447,7 +482,7 @@ module	StashTestbench;
 		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
-		// Test 8:  Append commands (eviction interface)
+		// Test 8:  Append command (eviction interface)
 		// ---------------------------------------------------------------------
 
 		// Note: this test starts at data chunk 6 for writes
@@ -468,6 +503,36 @@ module	StashTestbench;
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);		
+		
+		// ---------------------------------------------------------------------
+		// Test 9:  Read/remove command
+		// ---------------------------------------------------------------------
+		
+		// evict block and read that block back immediately
+		
+		TASK_BigTest(9);
+		
+		ResetDataCounter = 1'b1;
+		#(Cycle);
+		ResetDataCounter = 1'b0;
+		
+		AccessPAddr = 32'hf0000000;
+		AccessCommand = BECMD_Append;
+		TASK_QueueEvict(AccessPAddr, 32'h00000000);
+		TASK_QueueEvict(32'hf0000001, 32'hffffffff);
+		TASK_QueueEvict(32'hf0000002, 32'hffffffff);
+		
+		AccessIsDummy = 1'b0;
+		TASK_StartScan(32'h00000000, BECMD_ReadRmv);
+		
+		TASK_StartWriteback();
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
+		
+		// ---------------------------------------------------------------------
+		// Test 10:  Read/remove command (2)
+		// ---------------------------------------------------------------------
+				
 		
 		// ---------------------------------------------------------------------
 		
@@ -565,6 +630,12 @@ module	StashTestbench;
 		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(0, 				32'hf00000ff, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ - 1);
+		
+		// big test 9
+		TASK_CheckReturn(0, 			32'hf0000000, 32'h00000000);
+		TASK_CheckRead(NumChunks * 2,	32'hf0000002, 32'hffffffff);
+		TASK_CheckRead(NumChunks, 		32'hf0000001, 32'hffffffff);
+		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		

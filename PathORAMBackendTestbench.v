@@ -246,8 +246,6 @@ module	PathORAMBackendTestbench;
 	//	DDR -> BRAM (to make simulation faster)
 	//--------------------------------------------------------------------------
 	
-	
-	
 	SynthesizedDRAM	#(		.UWidth(				8),
 							.AWidth(				DDRAWidth + 6),
 							.DWidth(				DDRDWidth),

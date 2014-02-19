@@ -197,6 +197,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						MappedLeafValid;
 		
 	wire						LookForBlock, FoundBlock;
+	wire						ReturnInProgress;
 	wire	[StashEAWidth-1:0]	CRUD_SAddr, CoreCommandSAddr;
 	
 	//--------------------------------------------------------------------------
@@ -252,7 +253,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end			
 			
-			if (StartWriteback & LookForBlock & ~BlockFound) begin
+			if (CSTurnaround1 & LookForBlock & ~BlockFound) begin
 				$display("[%m @ %t] ERROR: the FE block wasn't in ORAM/stash", $time);
 				$stop;
 			end
@@ -342,7 +343,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (Scan2Complete_Conservative & SentScanCommand & OutBufferHasSpace) 
 					NS = 							ST_Turnaround1;
 			ST_Turnaround1 : 
-				if (BlockReadComplete_InternalPre)
+				if (CoreCommandReady)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
 				if (CoreCommandReady)
@@ -515,7 +516,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Register	#(			.Width(					1))
 				CRUD_op(	.Clock(					Clock),
-							.Reset(					Reset | (CSIdle & ~AccessStart)),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Enable(				CSIdle & AccessStart),
 							.In(					PerformCoreHeaderUpdate),
@@ -526,16 +527,26 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Register	#(			.Width(					StashEAWidth))
 				block_addr(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Set(					FoundBlock),
-							.Enable(				1'b0),
+							.Set(					1'b0),
+							.Enable(				FoundBlock),
 							.In(					ScanSAddr),
 							.Out(					CRUD_SAddr));
+
+	// We don't want to wait until the read operation finishes to start the next 
+	// operation
+	Register	#(			.Width(					1))
+				ret_start(	.Clock(					Clock),
+							.Reset(					Reset | BlockReturnComplete),
+							.Set(					CSTurnaround1 & ~BlockReturnComplete),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ReturnInProgress));							
 
 	assign	ReturnData =							Core_OutData;
 	assign	ReturnPAddr =							Core_OutPAddr;
 	assign	ReturnLeaf =							Core_OutLeaf;
-	assign	ReturnDataOutValid =					CSTurnaround1 & ~AccessIsDummy & Core_OutValid;
-	assign	BlockReturnComplete =					CSTurnaround1 & ~AccessIsDummy & BlockReadComplete_Internal;
+	assign	ReturnDataOutValid =					ReturnInProgress & ~AccessIsDummy & Core_OutValid;
+	assign	BlockReturnComplete =					ReturnInProgress & ~AccessIsDummy & BlockReadComplete_Internal;
 	
 	//--------------------------------------------------------------------------
 	//	Scan control
