@@ -18,9 +18,6 @@
 //		the block in question.  We can then perform update/read/remove on that 
 //		block by interacting with StashCore.
 //
-//	TODO:
-//		- return interface
-//		- dummy/real accesses
 //------------------------------------------------------------------------------
 module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------

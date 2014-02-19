@@ -561,10 +561,48 @@ module	StashTestbench;
 		TASK_CheckOccupancy(0);		
 
 		// ---------------------------------------------------------------------
-		// Test 1:  Read command
+		// Test 11:  Read command
 		// ---------------------------------------------------------------------
 						
-		// make sure block gets written back correctly after it gets remapped
+		// evict block with leaf A into stash; read path from/to leaf A; remap 
+		// block to leaf B such that leaf A & B have bad intersection.
+		
+		TASK_BigTest(11);
+		
+		TASK_ResetDataCounter();
+
+		AccessPAddr = 32'hba5eba11;
+		AccessCommand = BECMD_Append;
+		// evicting this many blocks gives a good likelyhood that SOME OTHER 
+		// block will be written back to root bucket
+		TASK_QueueEvict(32'hf0000001, 	32'hffffffff);
+		TASK_QueueEvict(32'hf0000002, 	32'hffffffff);
+		TASK_QueueEvict(AccessPAddr, 	32'h00000000);
+		TASK_QueueEvict(32'hf0000003, 	32'hffffffff);		
+		TASK_QueueEvict(32'hf0000004, 	32'hffffffff);
+		TASK_QueueEvict(32'hf0000005, 	32'hffffffff);
+		
+		RemapLeaf = 32'hffffffff;
+		TASK_StartScan(	32'h00000000, 	BECMD_Read);
+		
+		TASK_QueueWrite(32'hf0000006, 	32'h00000000);
+		TASK_QueueWrite(32'hf0000007, 	32'h00000000);
+		
+		TASK_StartWriteback();
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(4);	
+		
+		// Now drain the stash
+		AccessIsDummy = 1'b1;
+		TASK_StartScan(32'hffffffff, {BECMDWidth{1'bx}});
+		TASK_StartWriteback();
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
+		
+		// ---------------------------------------------------------------------
+		// Test 12:  Read command (2)
+		// ---------------------------------------------------------------------
+		
 		
 		// ---------------------------------------------------------------------
 		
@@ -676,6 +714,21 @@ module	StashTestbench;
 		TASK_CheckReadDummy(BlocksOnPath-2*ORAMZ);
 		TASK_CheckRead(0,				32'hf0000002, 32'h00000000);
 		TASK_CheckRead(NumChunks * 2,	32'hf0000003, 32'h00000000);
+		
+		// big test 11
+		TASK_CheckReturn(NumChunks * 2,	32'hba5eba11, 32'h00000000);
+		TASK_CheckRead(NumChunks * 5,	32'hf0000005, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 4,	32'hf0000004, 32'hffffffff);	
+		TASK_CheckReadDummy(BlocksOnPath-2*ORAMZ);
+		TASK_CheckRead(0,				32'hf0000006, 32'h00000000);
+		TASK_CheckRead(NumChunks,		32'hf0000007, 32'h00000000);
+		
+		// Stash drain step:
+		TASK_CheckReadDummy(BlocksOnPath-2*ORAMZ);
+		TASK_CheckRead(NumChunks * 2,	32'hba5eba11, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 3,	32'hf0000003, 32'hffffffff);
+		TASK_CheckRead(0,				32'hf0000001, 32'hffffffff);
+		TASK_CheckRead(NumChunks,		32'hf0000002, 32'hffffffff);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
