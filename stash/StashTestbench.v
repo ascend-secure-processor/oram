@@ -115,8 +115,10 @@ module	StashTestbench;
 	
 	task TASK_StartScan;
 		input	[ORAML-1:0] Leaf;
+		input [BECMDWidth-1:0] Cmd;
 		begin
 			AccessLeaf = Leaf;
+			AccessCommand = Cmd;
 			StartScan = 1'b1;
 			#(Cycle);
 			StartScan = 1'b0;
@@ -314,7 +316,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 		
 		TASK_BigTest(1);
-		TASK_StartScan(32'h0000ffff);
+		TASK_StartScan(32'h0000ffff, {BECMDWidth{1'bx}});
 		
 		#(Cycle*10); // will be > 10, (probably) < 100 in practice
 
@@ -332,7 +334,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(2);
-		TASK_StartScan(32'h0000ffff);
+		TASK_StartScan(32'h0000ffff, {BECMDWidth{1'bx}});
 
 		// will be written back
 		TASK_QueueWrite(32'hf0000004, 32'hffff0000);
@@ -351,7 +353,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(3);
-		TASK_StartScan(32'h0000fff1);
+		TASK_StartScan(32'h0000fff1, {BECMDWidth{1'bx}});
 
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();
@@ -362,7 +364,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(4);
-		TASK_StartScan(32'h00000000);
+		TASK_StartScan(32'h00000000, {BECMDWidth{1'bx}});
 		
 		TASK_QueueWrite(32'hf000000a, 32'h00000002); // level 1
 		TASK_QueueWrite(32'hf000000b, 32'h00000002); // level 1
@@ -384,7 +386,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(5);
-		TASK_StartScan(32'h00000000);
+		TASK_StartScan(32'h00000000, {BECMDWidth{1'bx}});
 		
 		i = 0;
 		
@@ -403,7 +405,7 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 
 		TASK_BigTest(6);
-		TASK_StartScan(32'hffffffff);
+		TASK_StartScan(32'hffffffff, {BECMDWidth{1'bx}});
 		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(0);
@@ -417,7 +419,7 @@ module	StashTestbench;
 		ResetDataCounter = 1'b0;
 		
 		TASK_BigTest(7);
-		TASK_StartScan(32'hffffffff);
+		TASK_StartScan(32'hffffffff, {BECMDWidth{1'bx}});
 
 		TASK_QueueWrite(32'hf000000f, 32'hffffffff); // level 33
 		TASK_QueueWrite(32'hf0000010, 32'hffffffff); // level 33
@@ -445,18 +447,19 @@ module	StashTestbench;
 		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
-		// Test 8:  Eviction interface
+		// Test 8:  Append commands (eviction interface)
 		// ---------------------------------------------------------------------
 
 		// Note: this test starts at data chunk 6 for writes
 		
 		TASK_BigTest(8);
-
+		AccessCommand = BECMD_Append;
+		
 		TASK_QueueEvict(32'hf00000ff, 32'h00000000); // level 33
 		TASK_QueueEvict(32'hf00005ff, 32'h00000002); // level 1		
 		TASK_CheckOccupancy(2);
 		
-		TASK_StartScan(32'h00000000);
+		TASK_StartScan(32'h00000000, {BECMDWidth{1'bx}});
 		
 		TASK_QueueWrite(32'hf00002ff, 32'h80000000); // level 32, data chunk 6
 		TASK_QueueWrite(32'hf00003ff, 32'hffffffff); // level 0, data chunk 7
