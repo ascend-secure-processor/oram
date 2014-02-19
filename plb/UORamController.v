@@ -52,15 +52,15 @@ module UORamController
     
     reg Preparing, Accessing;
     reg RefillStarted;
-    reg ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
-    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgStore && !ExpectingDataBlock;
+    wire ExpectingProgramData;
+    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData;
        
     // ================================== PosMapPLB ============================
     wire PPPCmdReady, PPPCmdValid;
     wire [1:0] PPPCmd;
     wire [ORAMU-1:0] PPPAddrIn, PPPAddrOut;   
     wire PPPRefill;
-    wire [FEDWidth-1:0] PPPDIn;  
+    wire [FEDWidth-1:0] PPPRefillData;  
     wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
     wire [ORAML-1:0] PPPOldLeaf, PPPNewLeaf;  
     wire PPPEvictDataValid;
@@ -70,7 +70,7 @@ module UORamController
     PPP (Clock, Reset, 
         PPPCmdReady, 
         PPPCmdValid, PPPCmd, PPPAddrIn, 
-        PPPRefill, PPPDIn, 
+        PPPRefill, PPPRefillData, 
         PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPOldLeaf, PPPNewLeaf, PPPEvict, PPPAddrOut,
         PPPEvictDataValid, PPPEvictData);   
  
@@ -79,21 +79,20 @@ module UORamController
       
     assign PPPMiss = PPPValid && !PPPHit;
     assign PPPUnInitialized = PPPValid && PPPHit && PPPUnInit;
-    assign PPPRefill = Accessing && ExpectingPosMapBlock && (LoadDataValid || PPPInitRefill);
+    assign PPPRefill = Accessing && (PPPRefillDataValid || PPPInitRefill);
     
     assign PPPCmdValid = PPPLookup || (PPPRefill && !RefillStarted);
     assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill) : Preparing ? CacheRead : CacheWrite;
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
-    assign PPPDIn = LoadData;
-    assign PPPEvictDataReady = !ExpectingProgStore && StoreDataReady;
     
-    assign PPPOutReady = Preparing || CmdOutReady || 
-            (PPPValid && !PPPHit && !PPPEvict) || (PPPUnInitialized && QDepth > 0) ;
-        // 3 cases: read result, refill but no evict, evict or access
+    assign PPPOutReady = Preparing || (PPPValid && !PPPHit && !PPPEvict) || 
+            (PPPUnInitialized && QDepth > 0) || CmdOutReady;
+
+            // 4 cases: read result, refill but no evict, uninitialized, evict or access
     // =============================================================================
     
     // ============================== Cmd to Backend ==============================
-    wire EvictionRequest, InitRequest;
+    wire EvictionRequest, InitRequest, SwitchReq;
     assign EvictionRequest = PPPValid && PPPEvict;
     assign InitRequest = QDepth == 0 && PPPUnInitialized;
     assign CmdOutValid = Accessing && PPPValid && ((PPPHit && !PPPUnInit) || InitRequest || PPPEvict);
@@ -103,21 +102,27 @@ module UORamController
     assign AddrOut = EvictionRequest ? NumValidBlock + PPPAddrOut / LeafInBlock : AddrQ[QDepth];
     assign OldLeaf = PPPOldLeaf;
     assign NewLeaf = PPPNewLeaf;
+    
+    assign SwitchReq = (CmdOutReady && CmdOutValid && !EvictionRequest) || (QDepth > 0 && PPPUnInitialized);
+                    // transition to next access, after sending out or initializing the current one
     // =============================================================================
     
+    task UORamInit;
+        begin
+            Preparing <= 0;
+            Accessing <= 0;
+            PPPLookup <= 0;
+            PPPInitRefill <= 0;  
+        end
+    endtask
+    
     initial begin
-        Preparing <= 0;
-        Accessing <= 0;
-        PPPLookup <= 0;
-        PPPInitRefill <= 0;  
+        UORamInit;  
     end
      
     always @(posedge Clock) begin
         if (Reset) begin
-            Preparing <= 0;
-            Accessing <= 0;
-            PPPLookup <= 0;  
-            PPPInitRefill <= 0;         
+            UORamInit;       
         end
 
         else if (CmdInValid && CmdInReady) begin
@@ -150,20 +155,16 @@ module UORamController
         end
         
         else if (Accessing) begin       
-            if ((CmdOutReady && CmdOutValid && !EvictionRequest)    // transition to next access, after sending out the current one   
-                || (QDepth > 0 && PPPUnInitialized)) begin                                          // or initializing the current one
+            if (SwitchReq) begin                                          // or initializing the current one
                 
                 if (QDepth > 0 && PPPUnInitialized)
-                    $display("\t\tBlock %d initialized", AddrQ[QDepth]);
+                    $display("\t\tInitialize Block %d", AddrQ[QDepth]);
                 else
-                    $display("\t\tBlock %d requested", AddrQ[QDepth]);
+                    $display("\t\tRequest Block %d", AddrQ[QDepth]);
                 
                 QDepth <= QDepth - 1;
                 Accessing <= QDepth > 0;       
-
-                ExpectingPosMapBlock <= QDepth > 0;
-                ExpectingDataBlock <= QDepth == 0 && (CmdReg == BECMD_Read || CmdReg == BECMD_ReadRmv);  // only if it's a read
-                ExpectingProgStore <= QDepth == 0 && (CmdReg == BECMD_Append || CmdReg == BECMD_Update);  // only if it's a write                
+               
                 RefillStarted <= 0;
                 PPPLookup <= 0;
                 PPPInitRefill <= QDepth > 0 && PPPUnInitialized;             
@@ -182,56 +183,24 @@ module UORamController
     end            
 
     // =================== data interface with network and backend ====================
-
-    // storebuffer to back end
-    wire StoreBufferReady, StoreBufferValid;
-    wire [FEDWidth-1:0] StoreBufferDIn;
+    wire PPPEvictDataReady;
     
-    /*
-    FIFORAM #(.Width(FEDWidth), .Buffering(FEORAMBChunks)) 
-        StoreBuffer (.Clock(Clock), .Reset(Reset), 
-                        .InAccept(StoreBufferReady), .InValid(StoreBufferValid), .InData(StoreBufferDIn),
-                        .OutReady(StoreDataReady), .OutSend(StoreDataValid), .OutData(StoreData));  
-    */
-    
-    FIFO #(FEDWidth, FEORAMBChunks) 
-        StoreBuffer (Clock, Reset, 
-                        StoreBufferReady, StoreBufferValid, StoreBufferDIn,
-                        StoreDataReady, StoreDataValid, StoreData);     
-                         
-    // if ExpectingDataBlock, backend ==> network; otherwise backend ==> PLB  
-    assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : 1;    // PLB refill is always ready
-    assign ReturnDataValid = ExpectingDataBlock && LoadDataValid;
-    assign ReturnData = LoadData;
-    
-    // if ExpectingStoreData, network ==> backend; otherwise PLB ==> backend
-    assign DataInReady = ExpectingProgStore && StoreBufferReady;
-    assign StoreBufferValid = ExpectingProgStore ? DataInValid : PPPEvictDataValid;
-    assign StoreBufferDIn = ExpectingProgStore ? DataIn : PPPEvictData;
-    
-    reg [LogFEORAMBChunks-1:0] ProgDataCounter;
-    
-    initial begin
-        ExpectingDataBlock <= 0;
-        ExpectingPosMapBlock <= 0;
-        ExpectingProgStore <= 0;  
-        ProgDataCounter <= 0;
-    end
-    
-    always @(posedge Clock) begin
-        if (Reset) begin
-            ExpectingDataBlock <= 0;
-            ExpectingPosMapBlock <= 0;
-            ExpectingProgStore <= 0;  
-            ProgDataCounter <= 0;
-        end
-    
-        else if ((ExpectingProgStore && DataInValid && DataInReady)
-                || (ExpectingDataBlock && ReturnDataReady && ReturnDataValid)) begin
-            ProgDataCounter <= ProgDataCounter + 1;          
-            ExpectingProgStore <= !(ExpectingProgStore && ProgDataCounter == FEORAMBChunks - 1);
-            ExpectingDataBlock <= !(ExpectingDataBlock && ProgDataCounter == FEORAMBChunks - 1);
-        end
-    end
+    UORamDataPath //#()
+    DataScheduler (Clock, Reset,
+                    SwitchReq, QDepth, CmdReg,
+                    ExpectingProgramData,
+                    
+                    // IO interface with network
+                    DataInReady, DataInValid, DataIn,
+                    ReturnDataReady, ReturnDataValid, ReturnData,
+                    
+                    // IO interface with PPP
+                    PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
+                    1'b1, PPPRefillDataValid, PPPRefillData,         // PLB refill is always ready
+                    
+                    // IO interface with backend
+                    StoreDataReady, StoreDataValid, StoreData,
+                    LoadDataReady, LoadDataValid, LoadData                
+    );
     // ================================================================================    
 endmodule

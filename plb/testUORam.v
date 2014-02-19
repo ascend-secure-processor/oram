@@ -175,15 +175,19 @@ module testUORam;
     
     
     
-    wire testRAMEnable, testRAMWrite;
-    wire [5-1:0] testRAMAddr;
-    wire [12-1:0] testDRAMIn, testDRAMOut;
+    wire testInReady, testInValid, testOutReady, testOutValid;
+    wire [5-1:0] testAddr;
+    wire [12-1:0] testIn, testOut;
 
-    RAM #(12, 5) testRAM(Clock, Reset, testRAMEnable, testRAMWrite, testRAMAddr, testDRAMIn, testDRAMOut);
+        
+    FIFORAM #(.Width(12), .Buffering(8)) 
+        StoreBuffer (.Clock(Clock), .Reset(Reset), 
+                        .InAccept(testInReady), .InValid(testInValid), .InData(testIn),
+                        .OutReady(testOutReady), .OutSend(testOutValid), .OutData(testOut));  
     
-    assign testRAMEnable = 1;
-    assign testRAMWrite = CycleCount < 30 || CycleCount > 120;
-    assign testRAMAddr = CycleCount;
-    assign testDRAMIn = CycleCount + 200;
+    
+    assign testInValid = 1;
+    assign testOutReady = 1;
+    assign testIn = CycleCount + 200;
     
 endmodule
