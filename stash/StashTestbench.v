@@ -35,7 +35,8 @@ module	StashTestbench;
 								StashOutBuffering = 2;
 								
     `include "StashLocal.vh"
-    
+    `include "PathORAMBackendLocal.vh"
+	
 	localparam					Freq =				100_000_000,
 								Cycle = 			1000000000/Freq;	
 	
@@ -47,9 +48,10 @@ module	StashTestbench;
 	reg							Reset, ResetDataCounter; 
 	wire						ResetDone;
 	
-	reg		[ORAML-1:0]			AccessLeaf;
+	reg		[ORAML-1:0]			RemapLeaf, AccessLeaf;
 	reg		[ORAMU-1:0]			AccessPAddr;
 	reg							AccessIsDummy;	
+	reg		[BECMDWidth-1:0]	AccessCommand;
 	
 	reg							StartScan;
 	reg							StartWriteback;		
@@ -58,7 +60,6 @@ module	StashTestbench;
 	wire	[ORAMU-1:0]			ReturnPAddr;
 	wire	[ORAML-1:0]			ReturnLeaf;
 	wire						ReturnDataOutValid;
-	reg							ReturnDataOutReady;	
 	wire						BlockReturnComplete;
 	
 	wire	[BEDWidth-1:0]		EvictData;
@@ -294,7 +295,6 @@ module	StashTestbench;
 		WriteInValid = 1'b0;
 		EvictDataInValid = 1'b0;
 		
-		ReturnDataOutReady = 1'b1;
 		ReadOutReady = 1'b1;
 		
 		#(Cycle);
@@ -302,7 +302,9 @@ module	StashTestbench;
 		Reset = 1'b0;
 
 		AccessPAddr = 32'hdeadbeef;
-		AccessIsDummy = 1'b0;
+		RemapLeaf = {ORAML{1'bx}};
+		AccessIsDummy = 1'b1;
+		AccessCommand = {BECMDWidth{1'bx}};
 		
 		while (~ResetDone) #(Cycle);
 		#(Cycle);
@@ -392,7 +394,7 @@ module	StashTestbench;
 			i = i + 1;
 		end
 
-		TASK_StartWriteback();		
+		TASK_StartWriteback();
 		TASK_WaitForAccess();
 		TASK_CheckOccupancy(BlocksOnPath-ORAMZ); // for root bucket
 
@@ -532,10 +534,11 @@ module	StashTestbench;
 		// big test 5
 		TASK_CheckRead(NumChunks * 14, 	32'hf000000e, 32'hffffffff);
 		TASK_CheckRead(NumChunks * 15, 	32'hf000000e, 32'hffffffff);
-		TASK_CheckReadDummy(BlocksOnPath);
+		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 
 		// big test 6
-		TASK_SkipRead(64);
+		TASK_CheckReadDummy(ORAMZ);
+		TASK_SkipRead(BlocksOnPath-ORAMZ);
 		
 		// big test 7
 		TASK_CheckRead(NumChunks * 2, 	32'hf0000011, 32'h00000000);
@@ -580,18 +583,20 @@ module	StashTestbench;
 							.Reset(					Reset),
 							.ResetDone(				ResetDone),
 							
+							.RemapLeaf(				RemapLeaf),
 							.AccessLeaf(			AccessLeaf),
 							.AccessPAddr(			AccessPAddr),
 							.AccessIsDummy(			AccessIsDummy),
+							.AccessCommand(			AccessCommand),
 							
 							.StartScan(				StartScan),  
 							.StartWriteback(		StartWriteback),
-										
+							
 							.ReturnData(			ReturnData),
 							.ReturnPAddr(			ReturnPAddr),
 							.ReturnLeaf(			ReturnLeaf),
 							.ReturnDataOutValid(	ReturnDataOutValid),
-							.ReturnDataOutReady(	ReturnDataOutReady),
+							//.ReturnDataOutReady(	ReturnDataOutReady),
 							.BlockReturnComplete(	BlockReturnComplete),
 							
 							.EvictData(				EvictData),

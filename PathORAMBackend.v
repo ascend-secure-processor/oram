@@ -378,7 +378,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Buffering(				BlkSize_BEDChunks))
 				st_buf(		.Clock(					Clock),
 							.Reset(					Reset),
-							.OutFullCount(			EvictBuf_Chunks)
+							.OutFullCount(			EvictBuf_Chunks),
 							.InData(				Store_ShiftBufData),
 							.InValid(				Store_ShiftBufValid),
 							.InAccept(				Store_ShiftBufReady),
@@ -401,7 +401,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Buffering(				BlkSize_BEDChunks))
 				ld_buf(		.Clock(					Clock),
 							.Reset(					Reset),
-							.InEmptyCount(			ReturnBuf_Space)
+							.InEmptyCount(			ReturnBuf_Space),
 							.InData(				Stash_ReturnData),
 							.InValid(				Stash_ReturnDataValid),
 							.InAccept(				Stash_ReturnDataReady),
@@ -625,7 +625,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
-							.RemapLeaf(				) -- TODO --
+							.RemapLeaf(				RemappedLeaf_Internal),
 							.AccessLeaf(			AddrGen_Leaf),
 							.AccessPAddr(			PAddr_Internal),
 							.AccessIsDummy(			AccessIsDummy),

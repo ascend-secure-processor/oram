@@ -167,15 +167,15 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted =  							CurrentLeafValid & InScanValid & |HighestLevel_Onehot; // TODO InScanValid is redundant
-	assign	OutScanSAddr =								InScanSAddr;
-	assign	OutScanValid = 								InScanValid;
+	assign 	OutScanAccepted =  						CurrentLeafValid & InScanValid & |HighestLevel_Onehot; // TODO InScanValid is redundant
+	assign	OutScanSAddr =							InScanSAddr;
+	assign	OutScanValid = 							InScanValid;
 
 	//--------------------------------------------------------------------------
 	//	Usage tables
 	//--------------------------------------------------------------------------
 	
-	genvar					i;
+	genvar	i;
 	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
 		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts[BCWidth*(i+1)-1:BCWidth*i] + 
 															((HighestLevel_Onehot[i]) ? 1 : 0);
@@ -186,7 +186,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		access.  Implementing this as registers is done to (a) reduce internal 
 		fragmentation (BCLWidth bits << smallest SRAM?) and (b) to make reset a 
 		single-cycle operation.  It is also convenient that this is asynchronous 
-		read...
+		read ...
 	*/
 	Register	#(			.Width(					BCLWidth))
 				BucketCnts(	.Clock(					Clock),
