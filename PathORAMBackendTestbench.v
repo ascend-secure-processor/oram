@@ -40,6 +40,8 @@ module	PathORAMBackendTestbench;
 	localparam					Freq =				100_000_000,
 								Cycle = 			1000000000/Freq;
 	
+	localparam					UpdateINIT =		10000;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -89,6 +91,13 @@ module	PathORAMBackendTestbench;
 		input [31:0] num;
 		begin
 		$display("\n\n[%m @ %t] Starting big test %d \n\n", $time, num);
+		end
+	endtask
+	
+	task TASK_Test;
+		input [31:0] num;
+		begin
+		$display("\n[%m @ %t] Starting task %d \n", $time, num);
 		end
 	endtask
 	
@@ -178,6 +187,7 @@ module	PathORAMBackendTestbench;
 	
 	initial begin
 		TestLaunchLD = 0;
+		
 		TestsPASSED = 0;
 		CommandsPASSED = 0;
 	
@@ -200,6 +210,9 @@ module	PathORAMBackendTestbench;
 		
 		i = 0;
 		while (i < StashCapacity) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+
 			TASK_Command(BECMD_Append, i, {ORAML{1'bx}}, i);
 			TASK_Data();
 			i = i + 1;
@@ -208,28 +221,74 @@ module	PathORAMBackendTestbench;
 		// If it gets past this point, it means we didn't deadlock :-)
 		
 		//----------------------------------------------------------------------
-		//	Test 2: Read
+		//	Test 2-3: Reads
 		//----------------------------------------------------------------------
+		
+		TASK_BigTest(1);
 		
 		// Read all blocks previously appended and remap them to different leaves
 		
 		i = 0;
 		while (i < StashCapacity) begin
-			TASK_BigTest(1 + TestLaunchLD);
+			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 paddr	current leaf 	remap leaf
 			TASK_Command(BECMD_Read, i, 	i, 				StashCapacity + i);
 			i = i + 1;
 		end
 		
+		TASK_BigTest(2);
+		
+		// Do the same test again to make sure
+		// a.) the blocks got remapped correctly
+		// b.) they are still in ORAM (i.e., not ReadRmv'ed)
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 	paddr	current leaf 		remap leaf
+			TASK_Command(BECMD_Read, 	i, 		StashCapacity + i, 	2 * StashCapacity + i);
+			i = i + 1;
+		end		
+		
 		//----------------------------------------------------------------------
 		//	Test 3: Read/Remove
 		//----------------------------------------------------------------------
 
+		/*
+		// TODO add error signal indicating that missing blocks are allowed
+		
+		// Look for those same blocks again and remove them
+		// Tests that blocks were correctly remapped during last test
+		
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_BigTest(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 	paddr	current leaf 			remap leaf
+			TASK_Command(BECMD_ReadRmv, i, 		2 * StashCapacity + i, 	{ORAML{1'bx}});
+			i = i + 1;
+		end
+		*/
+		
 		//----------------------------------------------------------------------
-		//	Test 4: Update
+		//	Test 4: Combination test
 		//----------------------------------------------------------------------	
 
+		/*
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_BigTest(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			
+			TASK_Command(BECMD_Append, i, {ORAML{1'bx}}, i);
+			//						 	paddr	current leaf 		remap leaf
+			
+			TASK_Command(BECMD_ReadRmv, i, 		StashCapacity + i, 	2 * StashCapacity + i);
+			i = i + 1;
+		end
+		*/
+		
 		#(Cycle*1000);
 		$display("*** ALL COMMANDS COMPLETED ***");
 		CommandsPASSED = 1;
@@ -250,6 +309,19 @@ module	PathORAMBackendTestbench;
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
 			j = j + 1;
 		end
+		j = 0;
+		while (j < StashCapacity) begin
+			TASK_CheckLoad(j * BlkSize_FEDChunks);
+			j = j + 1;
+		end
+		
+		// big test 3
+		
+		/*j = 0;
+		while (j < StashCapacity) begin
+			TASK_CheckLoad(j * BlkSize_FEDChunks);
+			j = j + 1;
+		end*/
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");
