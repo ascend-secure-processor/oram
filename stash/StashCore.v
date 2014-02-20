@@ -283,11 +283,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
-	`ifdef SIMULATION_VERBOSE
+	`ifdef SIMULATION_VERBOSE_STASH
 				$display("\tUsedListHead = %d", MS_pt);
 	`endif
 				while (MS_pt != SNULL) begin
-	`ifdef SIMULATION_VERBOSE
+	`ifdef SIMULATION_VERBOSE_STASH
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
 					MS_pt = StashP.Mem[MS_pt];
@@ -304,11 +304,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				end
 				MS_pt = FreeListHead;
 				i = 0;
-	`ifdef SIMULATION_VERBOSE
+	`ifdef SIMULATION_VERBOSE_STASH
 				$display("\tFreeListHead = %d", MS_pt);
 	`endif
 				while (MS_pt != SNULL) begin
-	`ifdef SIMULATION_VERBOSE
+	`ifdef SIMULATION_VERBOSE_STASH
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
 					MS_pt = StashP.Mem[MS_pt];
@@ -329,7 +329,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		//if (OutValid & OutPAddr != DummyBlockAddress)
 		//	$display("[%m @ %t] Reading %x", $time, OutData);
 
-	`ifdef SIMULATION_VERBOSE	
+	`ifdef SIMULATION_VERBOSE_STASH	
 			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
 				$display("[%m @ %t] Read dummy block", $time);
 	`endif

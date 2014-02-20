@@ -245,6 +245,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 		
+		
+	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
 				if (CSStartRead)
 					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, Command_Internal, AddrGen_Leaf);
@@ -263,6 +265,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			if (DRAMReadDataValid) begin
 				$display("[%m @ %t] DRAM read %x", $time, DRAMReadData);
 			end
+	`endif
 		
 			if (StashOverflow) begin
 				// This is checked in StashCore.v ...
@@ -277,6 +280,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				$display("[%m @ %t] ERROR: we didn't have space to put return data (Read/Rm started when it shouldn't have)", $time);
 				$stop;
 			end
+			
+			// TODO test to make sure every block written to leaf has the correct common subpath
 
 		end
 	`endif
@@ -323,10 +328,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 					NS =							ST_Append;
 				else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
 													(Command_Internal == BECMD_ReadRmv))
-												&	(ReturnBuf_Space >= BlkSize_FEDChunks))
+												&	(ReturnBuf_Space >= BlkSize_BEDChunks))
 					NS =							ST_StartRead;
 				else if (Command_InternalValid 	& (	Command_Internal == BECMD_Update)
-												&	EvictBuf_Chunks >= BlkSize_BEDChunks)
+												& (	EvictBuf_Chunks >= BlkSize_BEDChunks))
 					NS = 							ST_StartRead;
 			ST_Append :
 				if (AppendComplete)
@@ -437,7 +442,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Random leaf generator
 	//------------------------------------------------------------------------------ 
 	
-	// TODO use AES for this
+	// TODO use AES/Gentry counting for this
 	
 	Counter		#(			.Width(					ORAML))
 				leaf_cnter(	.Clock(					Clock),

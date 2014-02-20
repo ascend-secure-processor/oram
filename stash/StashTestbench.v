@@ -9,13 +9,17 @@
 
 //==============================================================================
 //	Module:		StashTestbench
-//	Desc:		If the tests all pass, the following should print out:
+//	Desc:		Set SIMULATION=1 macro before running to enable assertions.
+//
+//				If the tests all pass, the following should print out:
 //
 //				*** ALL TESTS PASSED ***
 //				*** ALL COMMANDS COMPLETED ***
 //
 //				(i.e., both must be printed out!  the order that they print 
 //				isn't important)
+//
+//				If they don't, try running for longer (100 us) before debugging
 //==============================================================================
 module	StashTestbench;
 
@@ -582,7 +586,7 @@ module	StashTestbench;
 		TASK_StartScan(	32'h00000000, 	BECMD_ReadRmv);
 
 		TASK_QueueWrite(32'hf0000002, 	32'h00000000);
-		TASK_QueueWrite(AccessPAddr, 	32'hffffffff);
+		TASK_QueueWrite(AccessPAddr, 	32'h00000000);
 		TASK_QueueWrite(32'hf0000003, 	32'h00000000);
 		
 		TASK_StartWriteback();
@@ -644,7 +648,7 @@ module	StashTestbench;
 		
 		AccessIsDummy = 1'b0;
 		RemapLeaf = 32'hffffffff;
-		TASK_StartScan(32'hffffffff, BECMD_Update);
+		TASK_StartScan(32'h00000000, BECMD_Update);
 		TASK_StartWriteback();
 		TASK_QueueUpdate();
 		TASK_WaitForAccess();
@@ -676,7 +680,7 @@ module	StashTestbench;
 	end
 	
 	//--------------------------------------------------------------------------
-	//	Read stream verification
+	//	Test checks
 	//--------------------------------------------------------------------------
 
 	initial begin
@@ -754,7 +758,7 @@ module	StashTestbench;
 		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 		
 		// big test 10
-		TASK_CheckReturn(NumChunks,		32'hba5eba11, 32'hffffffff);
+		TASK_CheckReturn(NumChunks,		32'hba5eba11, 32'h00000000);
 		TASK_CheckRead(NumChunks,		32'hf0000001, 32'hffffffff);
 		TASK_CheckRead(0, 				32'hf0000000, 32'hffffffff);		
 		TASK_CheckReadDummy(BlocksOnPath-2*ORAMZ);
@@ -777,9 +781,8 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks,		32'hf0000002, 32'hffffffff);
 		
 		// big test 12
-		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 		TASK_CheckRead(UpdateINIT,	32'hba5eba11, 32'hffffffff);
-		TASK_CheckReadDummy(1);
+		TASK_CheckReadDummy(BlocksOnPath-1);
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		

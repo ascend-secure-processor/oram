@@ -204,7 +204,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[StashEAWidth-1:0]	CRUD_SAddr, CoreCommandSAddr;
 	
 	//--------------------------------------------------------------------------
-	//	Debugging interface
+	//	Debugging
 	//--------------------------------------------------------------------------
 	
 	`ifdef SIMULATION
@@ -262,8 +262,14 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			
 			if (LookForBlock & CSTurnaround1 &
+				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
+				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
+				$stop;
+			end
+			
+			if (LookForBlock & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
-				$display("[%m @ %t] ERROR: the block being accessed wasn't written to the stash", $time);
+				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
 				$stop;
 			end
 			
@@ -276,7 +282,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (CSScan1)
 					$display("[%m @ %t] Stash: start Scan1", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: start PathRead", $time);
+					$display("[%m @ %t] Stash: start PathRead (leaf = %x, dummy = %b)", $time, AccessLeaf, AccessIsDummy);
 				if (CSScan2)
 					$display("[%m @ %t] Stash: start Scan2", $time);
 				if (CSPathWriteback)
@@ -284,7 +290,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			
 			if (PerAccessReset)
-				$display("[%m @ %t] Stash *** Per-module reset *** (ORAM access should be complete)", $time);
+				$display("[%m @ %t] Stash ** Per-module reset ** (ORAM access should be complete)", $time);
 				
 			/* This is a nice sanity check, but we got rid of _actual ...
 			if (~Scan2Complete_Actual & Scan2Complete_Conservative) begin
@@ -551,7 +557,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Register	#(			.Width(					1))
 				ret_start(	.Clock(					Clock),
 							.Reset(					Reset | BlockReturnComplete),
-							.Set(					CSTurnaround1 & ~BlockReturnComplete),
+							.Set(					CSTurnaround1 & ~AccessIsDummy & ~BlockReturnComplete),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ReturnInProgress));							
@@ -559,8 +565,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ReturnData =							Core_OutData;
 	assign	ReturnPAddr =							Core_OutPAddr;
 	assign	ReturnLeaf =							Core_OutLeaf;
-	assign	ReturnDataOutValid =					ReturnInProgress & ~AccessIsDummy & Core_OutValid;
-	assign	BlockReturnComplete =					ReturnInProgress & ~AccessIsDummy & BlockReadComplete_Internal;
+	assign	ReturnDataOutValid =					ReturnInProgress & Core_OutValid;
+	assign	BlockReturnComplete =					ReturnInProgress & BlockReadComplete_Internal;
 	
 	//--------------------------------------------------------------------------
 	//	Scan control

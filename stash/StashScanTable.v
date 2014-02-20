@@ -84,15 +84,15 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
 			
-	`ifdef SIMULATION_VERBOSE	
-			if (InScanValid) begin
+	`ifdef SIMULATION_VERBOSE_STASH	
+			if (InScanValid & CurrentLeafValid) begin
 				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr, InScanPAddr, CurrentLeaf, InScanLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
 				$display("\tCommonSubpath:       %x", CommonSubpath);
 				$display("\tFull mask:           %x", FullMask);
 				$display("\tCommonSubpath_Space: %x", CommonSubpath_Space);
-				$display("\tHighest level:       %x", HighestLevel_Onehot);
+				$display("\tHighest level:       %x (one hot), %d (bin)", HighestLevel_Onehot, HighestLevel_Bin);
 				
 				if (OutScanAccepted & OutScanValid)
 					$display("\tScan accept: entry %d will be written back", OutScanSAddr);
@@ -101,8 +101,19 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 	`endif		
 
+			if (CurrentLeafValid & InScanValid & InScanLeaf &
+				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx))) begin
+				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf", $time);
+				$stop;
+			end
+	
+			if (InScanValid & (^InScanLeaf === 1'bx)) begin
+				$display("[%m @ %t] ERROR: ScanTable got XX Scanleaf", $time);
+				$stop;			
+			end
+	
 			if ( (OutScanAccepted | InScanValid) & InDMAValid ) begin
-				$display("[%m] ERROR: ScanTable is multitasking");
+				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
 				$stop;
 			end
 			
@@ -110,7 +121,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				ind = 0;
 				while (ind != BlocksOnPath) begin
 					if (ScanTable.Mem[ind] != SNULL) begin
-						$display("[%m] ERROR: Scan table address %d not initialized to SNULL (found %d)", ind, ScanTable.Mem[ind]);
+						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, ScanTable.Mem[ind]);
 						$stop;
 					end
 					//$display("OK %d", ScanTable.Mem[ind]);
@@ -208,7 +219,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Output(				BucketOccupancy));
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
-													(InScanValid) ? {HighestLevel_Bin, {BCWidth-1{1'b0}}} + BucketOccupancy : 
+													(InScanValid) ? HighestLevel_Bin * ORAMZ + BucketOccupancy : 
 																	InDMAAddr;
 	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
 

@@ -33,6 +33,7 @@ module	PathORAMBackendTestbench;
 	
 	parameter					IVEntropyWidth =	64;
 	
+	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
@@ -49,9 +50,9 @@ module	PathORAMBackendTestbench;
 	// Frontend interface
 	
 	reg		[BECMDWidth-1:0] 	Command;
-	wire	[ORAMU-1:0]			PAddr;
+	reg		[ORAMU-1:0]			PAddr;
 	reg		[ORAML-1:0]			CurrentLeaf;
-	wire	[ORAML-1:0]			RemappedLeaf;
+	reg		[ORAML-1:0]			RemappedLeaf;
 	reg							CommandValid;
 	wire						CommandReady;
 	
@@ -72,6 +73,8 @@ module	PathORAMBackendTestbench;
 	wire						DRAM_WriteDataValid, DRAM_WriteDataReady;
 	wire						DRAM_ReadDataValid;	
 	
+	integer						TestID;
+	
 	//--------------------------------------------------------------------------
 	//	Clock Source
 	//--------------------------------------------------------------------------
@@ -82,12 +85,25 @@ module	PathORAMBackendTestbench;
 	//	Tasks
 	//--------------------------------------------------------------------------	
 
+	task TASK_BigTest;
+		input [31:0] num;
+		begin
+		$display("\n\n[%m @ %t] Starting big test %d \n\n", $time, num);
+		end
+	endtask
+	
 	task TASK_Command;
 		input	[BECMDWidth-1:0] 	In_Command;
+		input	[ORAMU-1:0]			In_PAddr;
+		input	[ORAML-1:0]			In_CurrentLeaf;
+		input	[ORAML-1:0]			In_RemappedLeaf;
 		
 		begin
 			CommandValid = 1'b1;
 			Command = In_Command;
+			CurrentLeaf = In_CurrentLeaf;
+			RemappedLeaf = In_RemappedLeaf;
+			PAddr = In_PAddr;
 			
 			while (~CommandReady) #(Cycle);
 			#(Cycle);
@@ -114,24 +130,6 @@ module	PathORAMBackendTestbench;
 		end
 	endtask
 
-	Counter		#(			.Width(					ORAML))
-				LeafGen(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				CommandValid & CommandReady),
-							.In(					{ORAML{1'bx}}),
-							.Count(					RemappedLeaf));
-	
-	Counter		#(			.Width(					ORAMU))
-				PAddrGen(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				CommandValid & CommandReady),
-							.In(					{ORAMU{1'bx}}),
-							.Count(					PAddr));	
-	
 	Counter		#(			.Width(					FEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -141,11 +139,40 @@ module	PathORAMBackendTestbench;
 							.In(					{FEDWidth{1'bx}}),
 							.Count(					StoreData));
 	
+	task TASK_CheckLoad;
+		input	[BEDWidth-1:0] BaseData;
+
+		reg		[BEDWidth-1:0] Data;
+		integer Done;
+		integer Chunks;
+		begin
+			Done = 0;
+			Chunks = 0;
+			Data = BaseData;
+			while (Done == 0) begin
+				if (LoadValid & LoadReady) begin
+					if (LoadData !== Data) begin
+						$display("FAIL: Load data %d, expected %d", LoadData, Data);
+						$stop;
+					end
+					Chunks = Chunks + 1;
+					if (Chunks == BlkSize_FEDChunks) begin
+						Done = 1;
+					end
+					Data = Data + 1;
+				end
+				#(Cycle);
+			end
+			$display("PASS: Test %d (load, data start=%d)", TestID, BaseData);
+			TestID = TestID + 1;
+		end
+	endtask	
+	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
-	integer i, j;
+	integer i;
 	
 	initial begin
 		CurrentLeaf = {ORAML{1'b1}};
@@ -161,50 +188,50 @@ module	PathORAMBackendTestbench;
 		//	Test 1: Append until stash is full and force background evictions
 		//----------------------------------------------------------------------	
 
+		TASK_BigTest(0);
+		
 		i = 0;
 		while (i < StashCapacity) begin
-			TASK_Command(BECMD_Append);
+			TASK_Command(BECMD_Append, i, {ORAML{1'bx}}, i);
+			TASK_Data();
 			i = i + 1;
 		end
 		
-		//----------------------------------------------------------------------
-		//	Test 2: ReadRmv
-		//----------------------------------------------------------------------
-
-		$display("Foo");
+		// If it gets past this point, it means we didn't deadlock :-)
 		
 		//----------------------------------------------------------------------
-		//	Test : Read
+		//	Test 2: Read
+		//----------------------------------------------------------------------
+		
+		TASK_BigTest(1);
+		
+		//						 paddr	current leaf 	remap leaf
+		TASK_Command(BECMD_Read, 0, 	0, 				StashCapacity);
+		
+		//----------------------------------------------------------------------
+		//	Test 3: Read/Remove
 		//----------------------------------------------------------------------
 
 		//----------------------------------------------------------------------
-		//	Test : Update
+		//	Test 4: Update
 		//----------------------------------------------------------------------	
 
 		#(Cycle*1000);
 		$display("*** ALL COMMANDS COMPLETED ***");			
 	end
 	
+	//--------------------------------------------------------------------------
+	//	Test checks
+	//--------------------------------------------------------------------------
+	
 	initial begin
-		#(Cycle*25);
+		TestID = 0;
 	
-		j = 0;
-	
-		//----------------------------------------------------------------------
-		//	Test 1
-		//----------------------------------------------------------------------	
-
-		while (j < StashCapacity) begin
-			TASK_Data();
-			j = j + 1;
-		end	
-	
-		//----------------------------------------------------------------------
-		//	Test 2
-		//----------------------------------------------------------------------
-
+		// big test 2
+		TASK_CheckLoad(0);
+		
 		#(Cycle*1000);
-		$display("*** ALL DATA COMPLETED ***");					
+		$display("*** ALL TESTS PASSED ***");
 	end
 	
 	//--------------------------------------------------------------------------
