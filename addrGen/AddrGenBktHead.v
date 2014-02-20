@@ -1,7 +1,7 @@
 `include "Const.vh"
 
 module AddrGenBktHead 
-#(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
+#(`include "PathORAM.vh", `include "DDR3SDRAM.vh", `include "AES.vh")
 (
   input Clock, Reset, Start, Enable, 
   input [ORAML-1:0] leaf,                     // the input leaf label
@@ -16,15 +16,14 @@ module AddrGenBktHead
 
   `include "PathORAMLocal.vh"
   `include "DDR3SDRAMLocal.vh"
- 
-  // subtree related parameters
-  localparam BktSize = (ORAMZ + 1) * DDRBstLen;
+  `include "BucketDRAMLocal.vh"
   
-  localparam L_st = `log2f(DDRROWWidth / BktSize + 1);
+  // subtree related parameters
+  localparam L_st = `log2f(DDRROWWidth / BktSize_DRWords + 1);
   localparam numST = (ORAML + 1 + L_st - 1) / L_st;
   
-  localparam STSize = (1 << L_st) * BktSize;    // subtree size, it could be (1 << numST) - 1; this is optimal for Z=3 
-  localparam STSize_bot = (1 << ((ORAML+1) % L_st)) * BktSize;          // short trees' size at the bottom
+  localparam STSize = ((1 << L_st) - 1) * BktSize_DRWords; // subtree size, it could be (1 << numST) - 1; this is optimal for Z=3 
+  localparam STSize_bot = ((1 << ((ORAML+1) % L_st)) - 1) * BktSize_DRWords; // short trees' size at the bottom
   localparam numCompST = ((1 << ((numST-1)*L_st)) - 1) / ((1 << L_st) - 1); // the number of not-short subtreess 
   
   // reverse the leaf
@@ -65,6 +64,6 @@ module AddrGenBktHead
   // adjust for the (possibly) shorter subtrees at the bottom 
   wire shortTreeAtBottom;
   assign shortTreeAtBottom = (numST * L_st != ORAML) && currentLevel >= (numST-1) * L_st;
-  assign PhyAddr = STIdx * STSize + BktIdx * BktSize - shortTreeAtBottom * (STSize - STSize_bot) * (STIdx - numCompST); 
+  assign PhyAddr = STIdx * STSize + BktIdx * BktSize_DRWords - shortTreeAtBottom * (STSize - STSize_bot) * (STIdx - numCompST); 
   
 endmodule

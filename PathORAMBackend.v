@@ -11,9 +11,6 @@
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //
 //	TODO
-//		- Read command
-//		- Read/remove command
-//		- Update command
 //		- AES
 //		- REW ORAM
 //		- Integrity verification
@@ -123,7 +120,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[BEDWidth-1:0]		Load_ShiftBufData;
 	wire						Load_ShiftBufValid, Load_ShiftBufReady;
 	
-	wire						EvictGate;
+	wire						EvictGate, UpdateGate;
 	
 	// Read pipeline
 
@@ -195,14 +192,15 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire						Stash_StartScanOp, Stash_StartWritebackOp;
 	
-	wire	[BEDWidth-1:0]		Stash_EvictData;						
-	wire						Stash_EvictDataValid, Stash_EvictDataReady;
+	wire	[BEDWidth-1:0]		Stash_StoreData;						
+	wire						Stash_StoreDataValid, Stash_StoreDataReady;
 	
 	wire	[BEDWidth-1:0]		Stash_ReturnData;
 	wire						Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
 	wire						Stash_ResetDone;
 	
+	wire						Stash_UpdateBlockValid, Stash_UpdateBlockReady;
 	wire						Stash_EvictBlockValid, Stash_EvictBlockReady;
 
 	wire						Stash_BlockWriteComplete;
@@ -252,6 +250,18 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, Command_Internal, AddrGen_Leaf);
 				if (CSAppend)
 					$display("[%m @ %t] Backend: start append", $time);
+			end
+		
+			if (DRAMCommandValid & DRAMCommandReady) begin
+				$display("[%m @ %t] DRAM command write? = %b, addr = %d (hex = %x)", $time, DRAMCommand == DDR3CMD_Write, DRAMCommandAddress, DRAMCommandAddress);
+			end
+		
+			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
+				$display("[%m @ %t] DRAM write %x (mask = %x)", $time, DRAMWriteData, DRAMWriteMask);
+			end
+			
+			if (DRAMReadDataValid) begin
+				$display("[%m @ %t] DRAM read %x", $time, DRAMReadData);
 			end
 		
 			if (StashOverflow) begin
@@ -382,13 +392,16 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InData(				Store_ShiftBufData),
 							.InValid(				Store_ShiftBufValid),
 							.InAccept(				Store_ShiftBufReady),
-							.OutData(				Stash_EvictData),
-							.OutSend(				Stash_EvictDataValid),
-							.OutReady(				Stash_EvictDataReady));
+							.OutData(				Stash_StoreData),
+							.OutSend(				Stash_StoreDataValid),
+							.OutReady(				Stash_StoreDataReady));
 							
-	assign	EvictGate =								CSAppend | (CSORAMAccess & (Command_Internal == BECMD_Update));
-	assign	Stash_EvictDataReady = 					Stash_EvictBlockReady & EvictGate;
-	assign	Stash_EvictBlockValid = 				Stash_EvictDataValid & EvictGate;	
+	assign	EvictGate =								CSAppend;
+	assign	UpdateGate = 							CSORAMAccess & (Command_Internal == BECMD_Update);
+	assign	Stash_StoreDataReady = 					(Stash_EvictBlockReady & EvictGate) | 
+													(Stash_UpdateBlockReady & UpdateGate);
+	assign	Stash_EvictBlockValid = 				Stash_StoreDataValid & EvictGate;
+	assign	Stash_UpdateBlockValid =				Stash_StoreDataValid & UpdateGate;
 
 	//------------------------------------------------------------------------------
 	//	Front-end loads
@@ -427,7 +440,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// TODO use AES for this
 	
 	Counter		#(			.Width(					ORAML))
-				SyncCounter(.Clock(					Clock),
+				leaf_cnter(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
@@ -442,6 +455,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	AddrGen_Reading = 						CSStartRead;
 	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : CurrentLeaf_Internal;
 	
+	// TODO pass AES header params
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -563,6 +577,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ReadBlockIsValid & BlockPresent);
 	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
 	
+	// Use FIFOShiftRound to generate BlockPresent signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
 							.OWidth(				1))
 				in_V_shft(	.Clock(					Clock),
@@ -641,7 +656,12 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							//.ReturnDataOutReady(	Stash_ReturnDataReady),
 							.BlockReturnComplete(	), // not connected
 							
-							.EvictData(				Stash_EvictData),
+							.UpdateData(			Stash_StoreData),
+							.UpdateDataInValid(		Stash_UpdateBlockValid),
+							.UpdateDataInReady(		Stash_UpdateBlockReady),
+							.BlockUpdateComplete(	), // not connected
+							
+							.EvictData(				Stash_StoreData),
 							.EvictPAddr(			PAddr_Internal),
 							.EvictLeaf(				RemappedLeaf_Internal),
 							.EvictDataInValid(		Stash_EvictBlockValid),
@@ -742,10 +762,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'bx}},
 														HeaderUpShift_Leaves,
 														HeaderUpShift_PAddrs,
-														{IVEntropyWidth{1'bx}}, 
+														IVINITValue, 
 														{BktHWaste_ValidBits{1'b0}},
 														HeaderUpShift_ValidBits, 
-														{IVEntropyWidth{1'bx}}	};
+														IVINITValue	};
 	assign	UpShift_DRAMWriteData =					(WritebackProcessingHeader) ? UpShift_HeaderFlit : BucketBuf_OutData;
 	assign	UpShift_DRAMWriteMask =					{DDRMWidth{1'b0}}; // TODO this will change with REW ORAM
 

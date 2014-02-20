@@ -1,5 +1,5 @@
 module AddrGen
-#(`include "PathORAM.vh", `include "DDR3SDRAM.vh")
+#(`include "PathORAM.vh", `include "DDR3SDRAM.vh", `include "AES.vh")
 (
   input Clock, 
   
@@ -31,6 +31,7 @@ module AddrGen
   reg [ORAMLogL-1:0] BktCounter;
   wire [DDRAWidth-1:0] BktStartAddr;
   
+  // TODO pass params to this module (e.g., IVWidth)
   AddrGenBktHead #(.ORAML(ORAML), .DDRAWidth(DDRAWidth)) addGenBktHead
   (Clock, Reset, Start && Ready, Enable, 
     leaf, 

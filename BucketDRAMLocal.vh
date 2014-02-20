@@ -1,11 +1,17 @@
 
-	// TODO merge with Ling's parameters for calculating BktSize_DDRWords
+	// TODO merge with Ling's parameters for calculating BktSize_DDRWords (in particular, Ling's parameters should account for the case when header length > 1 DDR burst)
 
 	// Suffix meanings:
 	// 	RawBits = what it sounds like ...
 	// 	RndBits = bits rounded to some value (usually a DDR3 burst)
 	// 	DRBursts = in terms of DDR3 bursts
 	// 	BRWords = in terms of DDR3 DQ bus width (typically 64b)
+	
+	`ifdef SIMULATION
+	localparam					IVINITValue =			{{IVEntropyWidth-32{1'b0}}, 32'hdeadbeef};
+	`else
+	localparam					IVINITValue =			{IVEntropyWidth{1'bx}};
+	`endif
 	
 	localparam					BktHSize_ValidBits =	`divceil(ORAMZ,8) * 8; // = 8 bits for Z < 9
 	localparam					BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ;
