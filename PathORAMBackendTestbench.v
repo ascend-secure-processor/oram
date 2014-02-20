@@ -173,8 +173,14 @@ module	PathORAMBackendTestbench;
 	//--------------------------------------------------------------------------
 
 	integer i;
+	integer TestLaunchLD;
+	integer TestsPASSED, CommandsPASSED;
 	
 	initial begin
+		TestLaunchLD = 0;
+		TestsPASSED = 0;
+		CommandsPASSED = 0;
+	
 		CurrentLeaf = {ORAML{1'b1}};
 		CommandValid = 1'b0;
 		StoreValid = 1'b0;
@@ -185,9 +191,11 @@ module	PathORAMBackendTestbench;
 		Reset = 1'b0;
 		
 		//----------------------------------------------------------------------
-		//	Test 1: Append until stash is full and force background evictions
+		//	Test 1: Append
 		//----------------------------------------------------------------------	
 
+		// Append until stash is full and force background evictions
+		
 		TASK_BigTest(0);
 		
 		i = 0;
@@ -203,10 +211,16 @@ module	PathORAMBackendTestbench;
 		//	Test 2: Read
 		//----------------------------------------------------------------------
 		
-		TASK_BigTest(1);
+		// Read all blocks previously appended and remap them to different leaves
 		
-		//						 paddr	current leaf 	remap leaf
-		TASK_Command(BECMD_Read, 0, 	0, 				StashCapacity);
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_BigTest(1 + TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 paddr	current leaf 	remap leaf
+			TASK_Command(BECMD_Read, i, 	i, 				StashCapacity + i);
+			i = i + 1;
+		end
 		
 		//----------------------------------------------------------------------
 		//	Test 3: Read/Remove
@@ -217,21 +231,37 @@ module	PathORAMBackendTestbench;
 		//----------------------------------------------------------------------	
 
 		#(Cycle*1000);
-		$display("*** ALL COMMANDS COMPLETED ***");			
+		$display("*** ALL COMMANDS COMPLETED ***");
+		CommandsPASSED = 1;
 	end
 	
 	//--------------------------------------------------------------------------
 	//	Test checks
 	//--------------------------------------------------------------------------
 	
+	integer j;
+	
 	initial begin
 		TestID = 0;
 	
 		// big test 2
-		TASK_CheckLoad(0);
+		j = 0;
+		while (j < StashCapacity) begin
+			TASK_CheckLoad(j * BlkSize_FEDChunks);
+			j = j + 1;
+		end
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");
+		TestsPASSED = 1;
+	end
+	
+	always @(posedge Clock) begin
+		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin
+			#(Cycle*1000);
+			$display("*** TESTBENCH COMPLETED & PASSED ***");
+			$stop;
+		end
 	end
 	
 	//--------------------------------------------------------------------------

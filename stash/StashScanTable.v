@@ -81,6 +81,9 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		integer ind;
 		reg ResetDone_Delayed;
 		
+		reg	LeafSet = 0;
+		reg	[ORAML-1:0]	LeafThisAccess;
+		
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
 			
@@ -101,6 +104,19 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 	`endif		
 
+			// Make sure the leaf is steady; if not, scan results are bogus
+			if (PerAccessReset) begin
+				LeafSet <= 1'b0;
+			end
+			else if (CurrentLeafValid) begin
+				LeafSet <= 1'b1;
+				LeafThisAccess <= CurrentLeaf;
+			end
+			if (LeafSet & (LeafThisAccess !== CurrentLeaf)) begin
+				$display("[%m @ %t] ERROR: ScanTable leaf changed during an access", $time);
+				$stop;
+			end
+			
 			if (CurrentLeafValid & InScanValid & InScanLeaf &
 				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx))) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf", $time);
@@ -109,7 +125,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 			if (InScanValid & (^InScanLeaf === 1'bx)) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Scanleaf", $time);
-				$stop;			
+				$stop;
 			end
 	
 			if ( (OutScanAccepted | InScanValid) & InDMAValid ) begin

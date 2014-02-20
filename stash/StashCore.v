@@ -325,14 +325,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m @ %t] Reading dummy block", $time);
 			else
 				$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address);
-		
-		//if (OutValid & OutPAddr != DummyBlockAddress)
-		//	$display("[%m @ %t] Reading %x", $time, OutData);
-
-	`ifdef SIMULATION_VERBOSE_STASH	
-			if (OutValid & OutPAddr == DummyBlockAddress & InCommandReady)
-				$display("[%m @ %t] Read dummy block", $time);
-	`endif
 
 		end	
 	`endif

@@ -449,7 +449,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CSStartRead),
+							.Enable(				Stash_PathWritebackComplete),
 							.In(					{ORAML{1'bx}}),
 							.Count(					DummyLeaf));
 	
