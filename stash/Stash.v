@@ -13,11 +13,6 @@
 //		- Leaf orientation: least significant bit is root bucket
 // 		- Writeback occurs in root -> leaf bucket order
 //
-//	Low level notes on PathORAMBackend operations:
-//		Peak/ReadRmv/Read: As a path read occurs, the scan marks when it finds 
-//		the block in question.  We can then perform update/read/remove on that 
-//		block by interacting with StashCore.
-//
 //------------------------------------------------------------------------------
 module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
@@ -72,6 +67,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	input						EvictDataInValid,
 	output						EvictDataInReady,
 	output						BlockEvictComplete,	
+	
+	//--------------------------------------------------------------------------
+	//	Data update (dirty block update) interface (LLC -> Stash)
+	//--------------------------------------------------------------------------	
+	
+	input	[BEDWidth-1:0]		UpdateData,
+	input						UpdateDataInValid,
+	output						UpdateDataInReady,
+	output						BlockUpdateComplete,
 	
 	//--------------------------------------------------------------------------
 	//	ORAM write interface (external memory -> Decryption -> stash)
@@ -154,6 +158,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAMU-1:0]			Core_InPAddr;
 	wire	[ORAML-1:0]			Core_InLeaf;
 	wire						Core_InValid, Core_InReady;			
+	
+	wire						TurnoverUpdate;
 	
 	wire	[BEDWidth-1:0]		Core_OutData;
 	wire	[ORAMU-1:0]			Core_OutPAddr;
@@ -255,7 +261,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
-			if (LookForBlock & CSTurnaround1 & 
+			if (LookForBlock & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
 				$display("[%m @ %t] ERROR: the block being accessed wasn't written to the stash", $time);
 				$stop;
@@ -295,8 +301,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
-	assign	BlockEvictComplete =					CSEvict & CoreCommandReady;
-	assign	BlockWriteComplete =					CSPathRead & CoreCommandReady;
+	assign	BlockUpdateComplete =					TurnoverUpdate & 	CoreCommandReady;
+	assign	BlockEvictComplete =					CSEvict & 			CoreCommandReady;
+	assign	BlockWriteComplete =					CSPathRead & 		CoreCommandReady;
 	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & CoreCommandReady;
 	assign	PathReadComplete =						PerAccessReset;
 	
@@ -413,7 +420,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 														(AccessCommand == BECMD_ReadRmv));
 	assign	CoreHeaderRemove =						~AccessIsDummy & (AccessCommand == BECMD_ReadRmv);
 	
-	assign 	CoreCommandValid =						CSPathRead | CSEvict |
+	assign 	CoreCommandValid =						CSPathRead | 
+													CSEvict |
 													(CSScan1 & ~SentScanCommand) | 
 													(CSScan2 & ~SentScanCommand) | 
 													CSTurnaround1 | 
@@ -421,11 +429,20 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													CSCoreSync |
 													(CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
 	
-	assign	Core_InData = 							(CSEvict) ? EvictData 			: WriteData;
-	assign	Core_InValid =							(CSEvict) ? EvictDataInValid 	: WriteInValid;
-	assign	EvictDataInReady =						CSEvict & Core_InReady;
-	assign	WriteInReady =							~CSEvict & Core_InReady;
-													
+	assign	TurnoverUpdate =						~AccessIsDummy & CSTurnaround1 & (AccessCommand == BECMD_Update);
+	
+	// since UpdateData == EvictData most likely, this gets optimized away
+	assign	Core_InData = 							(CSEvict) ? 		EvictData : 
+													(TurnoverUpdate) ? 	UpdateData : 
+																		WriteData;
+	assign	Core_InValid =							(CSEvict) ? 		EvictDataInValid : 
+													(TurnoverUpdate) ? 	UpdateDataInValid : 
+																		WriteInValid;
+																		
+	assign	EvictDataInReady =						CSEvict & 						Core_InReady;
+	assign	UpdateDataInReady =						TurnoverUpdate & 				Core_InReady;
+	assign	WriteInReady =							~(CSEvict | TurnoverUpdate) & 	Core_InReady;
+	
 	StashCore	#(			.StashCapacity(			StashCapacity),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),

@@ -40,6 +40,8 @@ module	StashTestbench;
 	localparam					Freq =				100_000_000,
 								Cycle = 			1000000000/Freq;	
 	
+	localparam					UpdateINIT =		255;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -61,6 +63,11 @@ module	StashTestbench;
 	wire	[ORAML-1:0]			ReturnLeaf;
 	wire						ReturnDataOutValid;
 	wire						BlockReturnComplete;
+	
+	wire	[BEDWidth-1:0]		UpdateData, UpdateData_Pre;
+	reg							UpdateDataInValid;
+	wire						UpdateDataInReady;
+	wire						BlockUpdateComplete;
 	
 	wire	[BEDWidth-1:0]		EvictData;
 	reg		[ORAMU-1:0]			EvictPAddr;
@@ -149,7 +156,18 @@ module	StashTestbench;
 							.Enable(				EvictDataInValid & EvictDataInReady),
 							.In(					{BEDWidth{1'bx}}),
 							.Count(					EvictData));
-	
+
+	Counter		#(			.Width(					BEDWidth))
+				UpdateGen(	.Clock(					Clock),
+							.Reset(					Reset | ResetDataCounter),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				UpdateDataInValid & UpdateDataInReady),
+							.In(					{BEDWidth{1'bx}}),
+							.Count(					UpdateData_Pre));
+							
+	assign	UpdateData =		UpdateData_Pre + UpdateINIT;						
+							
 	Counter		#(			.Width(					BEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
@@ -186,6 +204,17 @@ module	StashTestbench;
 			#(Cycle);
 
 			EvictDataInValid = 1'b0;
+		end
+	endtask
+	
+	task TASK_QueueUpdate;
+		begin
+			UpdateDataInValid = 1'b1;
+		
+			while (~BlockUpdateComplete) #(Cycle);
+			#(Cycle);
+
+			UpdateDataInValid = 1'b0;
 		end
 	endtask
 
@@ -600,9 +629,26 @@ module	StashTestbench;
 		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
-		// Test 12:  Read command (2)
+		// Test 12:  Write command
 		// ---------------------------------------------------------------------
 		
+		// Test basic overwriting
+		
+		TASK_BigTest(12);
+		
+		TASK_ResetDataCounter();
+
+		AccessPAddr = 32'hba5eba11;
+		AccessCommand = BECMD_Append;
+		TASK_QueueEvict(AccessPAddr, 	32'h00000000);
+		
+		AccessIsDummy = 1'b0;
+		RemapLeaf = 32'hffffffff;
+		TASK_StartScan(32'hffffffff, BECMD_Update);
+		TASK_StartWriteback();
+		TASK_QueueUpdate();
+		TASK_WaitForAccess();
+		TASK_CheckOccupancy(0);
 		
 		// ---------------------------------------------------------------------
 		
@@ -730,6 +776,11 @@ module	StashTestbench;
 		TASK_CheckRead(0,				32'hf0000001, 32'hffffffff);
 		TASK_CheckRead(NumChunks,		32'hf0000002, 32'hffffffff);
 		
+		// big test 12
+		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
+		TASK_CheckRead(UpdateINIT,	32'hba5eba11, 32'hffffffff);
+		TASK_CheckReadDummy(1);
+		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");		
 	end	
@@ -765,6 +816,11 @@ module	StashTestbench;
 							.ReturnDataOutValid(	ReturnDataOutValid),
 							//.ReturnDataOutReady(	ReturnDataOutReady),
 							.BlockReturnComplete(	BlockReturnComplete),
+							
+							.UpdateData(			UpdateData),
+							.UpdateDataInValid(		UpdateDataInValid),
+							.UpdateDataInReady(		UpdateDataInReady),
+							.BlockUpdateComplete(	BlockUpdateComplete),
 							
 							.EvictData(				EvictData),
 							.EvictPAddr(			EvictPAddr),

@@ -13,7 +13,8 @@
 //		Push - 	add element to stash.  This is only used on a path read --- NOT 
 //				when a dirty LLC block gets evicted.
 //		Peak - 	read (do not remove) element from stash
-//		Overwrite - update the data for a block currently in the stash
+//		Overwrite - update the data for a block currently in the stash; DO NOT 
+//				update the header
 //		Dump - 	scan all elements in stash and fill table that indicates the 
 //				highest position in the ORAM tree, where each block can be 
 //				written back to.  This operation destroys the stash pointer 
@@ -173,6 +174,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire	[StashEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
 	wire						StashP_WE;
+	
+	wire						StashH_WE;
 	
 	wire	[StashEAWidth-1:0]	StashC_Address;
 	wire	[ENWidth-1:0] 		StashC_DataIn, StashC_DataOut;
@@ -500,6 +503,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign LastChunk_Pre = 							CurrentChunk == NumChunks - 2;
 	assign LastChunk =								CurrentChunk == NumChunks - 1;
 
+	assign	StashH_WE =								(CSHUpdate & InHeaderUpdate) | // TODO latch this in on last chunk?
+													(WriteTransfer & FirstChunk & ~CNSOverwriting);
+	
 	/*
 		For each data block, store its program address / leaf label.
 	*/
@@ -508,7 +514,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
-							.Write(					(CSHUpdate & InHeaderUpdate) | (WriteTransfer & FirstChunk)), // TODO latch this in on last chunk?
+							.Write(					StashH_WE),
 							.Address(				StashE_Address),
 							.DIn(					{InPAddr, 		InLeaf}),
 							.DOut(					{OutPAddr_Pre, 	OutLeaf}));
