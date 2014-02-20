@@ -39,7 +39,6 @@ module AddrGen
     STIdx, BktIdx // tmp output for debugging
   );  
   
-  localparam BktSize = (ORAMZ + 1) * DDRBstLen;
   assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
   assign Enable = !Ready && CmdReady && SwitchLevel;
   

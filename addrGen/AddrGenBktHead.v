@@ -22,6 +22,10 @@ module AddrGenBktHead
   localparam L_st = `log2f(DDRROWWidth / BktSize_DRWords + 1);
   localparam numST = (ORAML + 1 + L_st - 1) / L_st;
   
+  // TODO (C F): I switched ST_size to (1 << L) - 1 to make the notation consistant across modules.
+  // If this causes synthesis problems for PhyAddr, we should think about changing it to Ling's original
+  // (1 << L) scheme.
+  
   localparam STSize = ((1 << L_st) - 1) * BktSize_DRWords; // subtree size, it could be (1 << numST) - 1; this is optimal for Z=3 
   localparam STSize_bot = ((1 << ((ORAML+1) % L_st)) - 1) * BktSize_DRWords; // short trees' size at the bottom
   localparam numCompST = ((1 << ((numST-1)*L_st)) - 1) / ((1 << L_st) - 1); // the number of not-short subtreess 
