@@ -49,6 +49,8 @@ module	PathORAMBackendTestbench;
 	wire 						Clock;
 	reg							Reset; 
 
+	reg							AllowBlockNotFound;
+	
 	// Frontend interface
 	
 	reg		[BECMDWidth-1:0] 	Command;
@@ -98,6 +100,14 @@ module	PathORAMBackendTestbench;
 		input [31:0] num;
 		begin
 		$display("\n[%m @ %t] Starting task %d \n", $time, num);
+		end
+	endtask
+	
+	task TASK_WaitForRealAccess;
+		input [31:0] num;
+		begin
+			while (RealAccessCount < num) #(Cycle);
+			#(Cycle);	
 		end
 	endtask
 	
@@ -184,6 +194,7 @@ module	PathORAMBackendTestbench;
 	integer i;
 	integer TestLaunchLD;
 	integer TestsPASSED, CommandsPASSED;
+	integer	RealAccessCount;
 	
 	initial begin
 		TestLaunchLD = 0;
@@ -196,6 +207,8 @@ module	PathORAMBackendTestbench;
 		StoreValid = 1'b0;
 		LoadReady = 1'b1;
 		
+		AllowBlockNotFound = 0;
+		
 		Reset = 1'b1;
 		#(Cycle);
 		Reset = 1'b0;
@@ -206,7 +219,7 @@ module	PathORAMBackendTestbench;
 
 		// Append until stash is full and force background evictions
 		
-		TASK_BigTest(0);
+		TASK_BigTest(0); // tasks 0-99
 		
 		i = 0;
 		while (i < StashCapacity) begin
@@ -224,7 +237,7 @@ module	PathORAMBackendTestbench;
 		//	Test 2-3: Reads
 		//----------------------------------------------------------------------
 		
-		TASK_BigTest(1);
+		TASK_BigTest(1); // tasks 100-199
 		
 		// Read all blocks previously appended and remap them to different leaves
 		
@@ -237,7 +250,7 @@ module	PathORAMBackendTestbench;
 			i = i + 1;
 		end
 		
-		TASK_BigTest(2);
+		TASK_BigTest(2); // tasks 200-299
 		
 		// Do the same test again to make sure
 		// a.) the blocks got remapped correctly
@@ -255,21 +268,38 @@ module	PathORAMBackendTestbench;
 		//	Test 3: Read/Remove
 		//----------------------------------------------------------------------
 
-		/*
-		// TODO add error signal indicating that missing blocks are allowed
-		
 		// Look for those same blocks again and remove them
 		// Tests that blocks were correctly remapped during last test
 		
+		TASK_BigTest(3); // tasks 300-399
+		
 		i = 0;
 		while (i < StashCapacity) begin
-			TASK_BigTest(TestLaunchLD);
+			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 			remap leaf
-			TASK_Command(BECMD_ReadRmv, i, 		2 * StashCapacity + i, 	{ORAML{1'bx}});
+			// NOTE: remap leaf is really XX here, but we want to test a common bug 
+			// in the next wave of read/rm
+			TASK_Command(BECMD_ReadRmv, i, 		2 * StashCapacity + i, 	3 * StashCapacity + i);
 			i = i + 1;
 		end
-		*/
+		
+		TASK_WaitForRealAccess(3 * StashCapacity);
+		AllowBlockNotFound = 1;
+	
+		TASK_BigTest(4); // tasks 400-499
+			
+		i = 0;
+		while (i < StashCapacity) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 	paddr	current leaf 			remap leaf
+			TASK_Command(BECMD_ReadRmv, i, 		3 * StashCapacity + i, 	{ORAML{1'bx}});
+			i = i + 1;
+		end
+		
+		TASK_WaitForRealAccess(4 * StashCapacity);
+		AllowBlockNotFound = 0;
 		
 		//----------------------------------------------------------------------
 		//	Test 4: Combination test
@@ -288,6 +318,10 @@ module	PathORAMBackendTestbench;
 			i = i + 1;
 		end
 		*/
+
+		//----------------------------------------------------------------------
+		//	Test X: background eviction on normal access
+		//----------------------------------------------------------------------	
 		
 		#(Cycle*1000);
 		$display("*** ALL COMMANDS COMPLETED ***");
@@ -316,12 +350,11 @@ module	PathORAMBackendTestbench;
 		end
 		
 		// big test 3
-		
-		/*j = 0;
+		j = 0;
 		while (j < StashCapacity) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
 			j = j + 1;
-		end*/
+		end
 		
 		#(Cycle*1000);
 		$display("*** ALL TESTS PASSED ***");
@@ -329,6 +362,22 @@ module	PathORAMBackendTestbench;
 	end
 	
 	always @(posedge Clock) begin
+		if (Reset)
+			RealAccessCount <= 0;
+		else if (CUT.Stash_PathWritebackComplete & ~CUT.AccessIsDummy)
+			RealAccessCount <= RealAccessCount + 1;
+			
+		if ((AllowBlockNotFound == 1) & 
+			~CUT.stash.BlockNotFound & CUT.stash.BlockNotFoundValid) begin
+			$display("[%m @ %t] ERROR: we found a block (in the stash) when we shouldn't have", $time);
+			$stop;
+		end
+		if ((AllowBlockNotFound != 1) & 
+			CUT.stash.BlockNotFound & CUT.stash.BlockNotFoundValid) begin
+			$display("[%m @ %t] ERROR: we didn't find the block (in the stash) that we were looking for", $time);
+			$stop;
+		end
+
 		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin
 			#(Cycle*1000);
 			$display("*** TESTBENCH COMPLETED & PASSED ***");
@@ -340,7 +389,8 @@ module	PathORAMBackendTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 	
-	PathORAMBackend #(		.StashCapacity(			StashCapacity),					
+	PathORAMBackend #(		.StashCapacity(			StashCapacity),
+							.StopOnBlockNotFound(	0),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),

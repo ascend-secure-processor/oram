@@ -109,7 +109,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	output 						StashAlmostFull,
 	output						StashOverflow,
-	output	[StashEAWidth-1:0] 	StashOccupancy
+	output	[StashEAWidth-1:0] 	StashOccupancy,
+	
+	// Indicates that on a read/rm/update, the requested block wasn't found
+	// THIS IS AN ERROR
+	output						BlockNotFound,
+	output						BlockNotFoundValid
 	);
 
 	//--------------------------------------------------------------------------
@@ -146,7 +151,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan1, 
 								CSScan2, CSEvict, CSTurnaround1, CSTurnaround2,
 								CSCoreSync;
-		
+	reg							CSTurnaround1_Delayed;
+	wire						CSTurnaround1_FirstCycle;
+	
 	wire						StartScan_pass, StartScan_set, StartScan_primed;
 				
 	wire						CoreResetDone;
@@ -199,7 +206,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAML-1:0]			MappedLeaf;
 	wire						CurrentLeafValid;
 		
-	wire						LookForBlock, FoundBlock;
+	wire						LookForBlock, FoundBlock, BlockFound;
+	wire						FoundRemoveBlock;
 	wire						ReturnInProgress;
 	wire	[StashEAWidth-1:0]	CRUD_SAddr, CoreCommandSAddr;
 	
@@ -207,9 +215,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
+	assign	BlockNotFound = 						LookForBlock & ~BlockFound;
+	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
+	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
-		wire BlockFound;
 		
 		initial begin
 			if (StashOutBuffering < 1) begin
@@ -217,14 +227,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 		end
-	
-		Register	#(	.Width(					1))
-			found_block(.Clock(					Clock),
-						.Reset(					Reset | CSIdle),
-						.Set(					FoundBlock),
-						.Enable(				1'b0),
-						.In(					1'bx),
-						.Out(					BlockFound));
 		
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
@@ -256,18 +258,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end			
 			
-			if (CSTurnaround1 & LookForBlock & ~BlockFound) begin
+			if (BlockNotFound & BlockNotFoundValid) begin
 				$display("[%m @ %t] ERROR: the FE block wasn't in ORAM/stash", $time);
-				$stop;
+				if (StopOnBlockNotFound) $stop;
 			end
 			
-			if (LookForBlock & CSTurnaround1 &
+			if (LookForBlock & BlockFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
 				$stop;
 			end
 			
-			if (LookForBlock & CSTurnaround1 &
+			if (LookForBlock & BlockFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
 				$stop;
@@ -324,10 +326,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSScan2 = 								CS == ST_Scan2;
 	assign	CSEvict =								CS == ST_Evict;
 	
+	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
 		
+		CSTurnaround1_Delayed <=					CSTurnaround1;
 		BlockReadComplete_Internal <=				BlockReadComplete_InternalPre;
 	end
 	
@@ -424,7 +429,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													(	(AccessCommand == BECMD_Update) | 
 														(AccessCommand == BECMD_Read) |
 														(AccessCommand == BECMD_ReadRmv));
-	assign	CoreHeaderRemove =						~AccessIsDummy & (AccessCommand == BECMD_ReadRmv);
+														
+	// Having BlockFound prevents us from removing blocks that aren't there.  
+	// Handling this case is only important for debugging													
+	assign	CoreHeaderRemove =						~AccessIsDummy & BlockFound & 
+													(AccessCommand == BECMD_ReadRmv);
 	
 	assign 	CoreCommandValid =						CSPathRead | 
 													CSEvict |
@@ -499,7 +508,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	MappedLeaf =							(LookForBlock & FoundBlock) ? RemapLeaf : ScanLeaf;
 	
 	// don't try to push back blocks that we are removing
-	assign	CurrentLeafValid =						~(LookForBlock & FoundBlock & CoreHeaderRemove) & AccessStart;
+	assign	FoundRemoveBlock =						LookForBlock & FoundBlock & (AccessCommand == BECMD_ReadRmv);
+	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
 	
 	StashScanTable #(		.StashCapacity(			StashCapacity),
 							.BEDWidth(				BEDWidth),
@@ -543,6 +553,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Out(					LookForBlock));
 
 	assign	FoundBlock =							ScanLeafValid & (ScanPAddr == AccessPAddr);
+	
+	// only needed for debugging
+	Register	#(			.Width(					1))
+				found_block(.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					FoundBlock),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					BlockFound));
 	
 	Register	#(			.Width(					StashEAWidth))
 				block_addr(	.Clock(					Clock),

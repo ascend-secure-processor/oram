@@ -635,6 +635,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	Stash	#(				.StashCapacity(			StashCapacity),
 							.StashOutBuffering(		2), // this should be good enough ...
+							.StopOnBlockNotFound(	StopOnBlockNotFound),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -690,8 +691,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		)); // debugging	
-	
+							.StashOccupancy(		), // not connected
+							.BlockNotFound(			), // not connected
+							.BlockNotFoundValid(	)); // not connected
+		
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters
 	//------------------------------------------------------------------------------

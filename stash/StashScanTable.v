@@ -123,11 +123,13 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 	
+			/* This isn't valid for read/rm commands
 			if (InScanValid & (^InScanLeaf === 1'bx)) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Scanleaf", $time);
 				$stop;
 			end
-	
+			*/
+			
 			if ( (OutScanAccepted | InScanValid) & InDMAValid ) begin
 				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
 				$stop;
