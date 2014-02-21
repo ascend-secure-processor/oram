@@ -113,7 +113,7 @@ module	StashTestbench;
 	task TASK_WaitForAccess;
 		begin
 			while (~PathReadComplete) #(Cycle);
-			#(Cycle);	
+			#(Cycle);
 		end
 	endtask
 	

@@ -206,7 +206,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAML-1:0]			MappedLeaf;
 	wire						CurrentLeafValid;
 		
-	wire						LookForBlock, FoundBlock, BlockFound;
+	wire						LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
 	wire						FoundRemoveBlock;
 	wire						ReturnInProgress;
 	wire	[StashEAWidth-1:0]	CRUD_SAddr, CoreCommandSAddr;
@@ -215,7 +215,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
-	assign	BlockNotFound = 						LookForBlock & ~BlockFound;
+	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
 	
 	`ifdef SIMULATION
@@ -263,13 +263,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (StopOnBlockNotFound) $stop;
 			end
 			
-			if (LookForBlock & BlockFound & CSTurnaround1 &
+			if (LookForBlock & BlockWasFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
 				$stop;
 			end
 			
-			if (LookForBlock & BlockFound & CSTurnaround1 &
+			if (LookForBlock & BlockWasFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
 				$stop;
@@ -430,9 +430,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 														(AccessCommand == BECMD_Read) |
 														(AccessCommand == BECMD_ReadRmv));
 														
-	// Having BlockFound prevents us from removing blocks that aren't there.  
+	// Having BlockWasFound prevents us from removing blocks that aren't there.  
 	// Handling this case is only important for debugging													
-	assign	CoreHeaderRemove =						~AccessIsDummy & BlockFound & 
+	assign	CoreHeaderRemove =						~AccessIsDummy & BlockWasFound & 
 													(AccessCommand == BECMD_ReadRmv);
 	
 	assign 	CoreCommandValid =						CSPathRead | 
@@ -505,10 +505,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.SyncComplete(			Core_AccessComplete));
 
 	// leaf remapping step
-	assign	MappedLeaf =							(LookForBlock & FoundBlock) ? RemapLeaf : ScanLeaf;
+	assign	MappedLeaf =							(LookForBlock & FoundBlock_ThisCycle) ? RemapLeaf : ScanLeaf;
 	
 	// don't try to push back blocks that we are removing
-	assign	FoundRemoveBlock =						LookForBlock & FoundBlock & (AccessCommand == BECMD_ReadRmv);
+	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
 	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
 	
 	StashScanTable #(		.StashCapacity(			StashCapacity),
@@ -552,31 +552,31 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					PerformCoreHeaderUpdate),
 							.Out(					LookForBlock));
 
-	assign	FoundBlock =							ScanLeafValid & (ScanPAddr == AccessPAddr);
-	
-	// only needed for debugging
-	Register	#(			.Width(					1))
-				found_block(.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					FoundBlock),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					BlockFound));
+	assign	FoundBlock_ThisCycle =					ScanLeafValid & (ScanPAddr == AccessPAddr);
 	
 	Register	#(			.Width(					StashEAWidth))
 				block_addr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				FoundBlock),
+							.Enable(				FoundBlock_ThisCycle),
 							.In(					ScanSAddr),
 							.Out(					CRUD_SAddr));
 
+	// only needed for debugging
+	Register	#(			.Width(					1))
+				found_block(.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					FoundBlock_ThisCycle),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					BlockWasFound));
+	
 	// We don't want to wait until the read operation finishes to start the next 
 	// operation
 	Register	#(			.Width(					1))
 				ret_start(	.Clock(					Clock),
 							.Reset(					Reset | BlockReturnComplete),
-							.Set(					CSTurnaround1 & ~AccessIsDummy & ~BlockReturnComplete),
+							.Set(					CSTurnaround1 & PerformCoreHeaderUpdate & BlockWasFound & ~BlockReturnComplete),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ReturnInProgress));							

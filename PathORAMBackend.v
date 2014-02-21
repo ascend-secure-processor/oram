@@ -111,8 +111,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAML-1:0]			CurrentLeaf_Internal, RemappedLeaf_Internal;
 	wire						Command_InternalValid, Command_InternalReady;
 
-	wire	[BlkBEDWidth-1:0]	EvictBuf_Chunks;
-	wire	[BlkFEDWidth-1:0]	ReturnBuf_Space;
+	wire	[BlkBEDWidth:0]		EvictBuf_Chunks;
+	wire	[BlkBEDWidth:0]		ReturnBuf_Space;
 		
 	wire	[BEDWidth-1:0]		Store_ShiftBufData;	
 	wire						Store_ShiftBufValid, Store_ShiftBufReady;

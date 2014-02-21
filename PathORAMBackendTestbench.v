@@ -9,6 +9,13 @@
 
 //==============================================================================
 //	Module:		PathORAMBackendTestbench
+//	Desc:		Set SIMULATION=1 macro before running to enable assertions.
+//
+//				If the tests all pass, the following should print out:
+//
+//				*** TESTBENCH COMPLETED & PASSED ***
+//
+//				If they don't, try running for longer (4000 us) before debugging
 //==============================================================================
 module	PathORAMBackendTestbench;
 
@@ -49,7 +56,9 @@ module	PathORAMBackendTestbench;
 	wire 						Clock;
 	reg							Reset; 
 
+	reg							ResetDataCounter;
 	reg							AllowBlockNotFound;
+	reg							BoostStoreData;
 	
 	// Frontend interface
 	
@@ -63,7 +72,7 @@ module	PathORAMBackendTestbench;
 	wire	[FEDWidth-1:0]		LoadData;
 	wire						LoadValid;
 	reg							LoadReady;
-	wire	[FEDWidth-1:0]		StoreData;
+	wire	[FEDWidth-1:0]		StoreData_Pre, StoreData;
 	reg 						StoreValid;
 	wire						StoreReady;
 	
@@ -111,6 +120,14 @@ module	PathORAMBackendTestbench;
 		end
 	endtask
 	
+	task TASK_ResetDataCounter;
+		begin
+			ResetDataCounter = 1'b1;
+			#(Cycle);
+			ResetDataCounter = 1'b0;
+		end
+	endtask
+	
 	task TASK_Command;
 		input	[BECMDWidth-1:0] 	In_Command;
 		input	[ORAMU-1:0]			In_PAddr;
@@ -151,12 +168,14 @@ module	PathORAMBackendTestbench;
 
 	Counter		#(			.Width(					FEDWidth))
 				DataGen(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				StoreValid & StoreReady),
 							.In(					{FEDWidth{1'bx}}),
-							.Count(					StoreData));
+							.Count(					StoreData_Pre));
+	
+	assign	StoreData =								((BoostStoreData) ? UpdateINIT : 0) + StoreData_Pre;
 	
 	task TASK_CheckLoad;
 		input	[BEDWidth-1:0] BaseData;
@@ -206,7 +225,9 @@ module	PathORAMBackendTestbench;
 		CommandValid = 1'b0;
 		StoreValid = 1'b0;
 		LoadReady = 1'b1;
+		ResetDataCounter = 1'b0;
 		
+		BoostStoreData = 0;
 		AllowBlockNotFound = 0;
 		
 		Reset = 1'b1;
@@ -265,7 +286,7 @@ module	PathORAMBackendTestbench;
 		end		
 		
 		//----------------------------------------------------------------------
-		//	Test 3: Read/Remove
+		//	Test 4-5: Read/Remove
 		//----------------------------------------------------------------------
 
 		// Look for those same blocks again and remove them
@@ -287,6 +308,9 @@ module	PathORAMBackendTestbench;
 		TASK_WaitForRealAccess(3 * StashCapacity);
 		AllowBlockNotFound = 1;
 	
+		// Try removing the blocks again (we should get errors saying the blocks 
+		// aren't there)
+	
 		TASK_BigTest(4); // tasks 400-499
 			
 		i = 0;
@@ -302,23 +326,51 @@ module	PathORAMBackendTestbench;
 		AllowBlockNotFound = 0;
 		
 		//----------------------------------------------------------------------
+		//	Test 6: Update test
+		//----------------------------------------------------------------------	
+
+		TASK_BigTest(5);
+		TASK_ResetDataCounter();
+		
+		i = 0;
+		while (i < 10) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+
+			TASK_Command(BECMD_Append, i, {ORAML{1'bx}}, i);
+			TASK_Data();
+			i = i + 1;
+		end
+		
+		TASK_ResetDataCounter();
+		BoostStoreData = 1;
+		
+		i = 0;
+		while (i < 10) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 	paddr	current leaf 	remap leaf
+			TASK_Command(BECMD_Update, 	i, 		i, 				StashCapacity + i);
+			#(Cycle * (1 << i)); // wait a while to present the data --- we should stall
+			TASK_Data();
+			i = i + 1;
+		end
+		
+		i = 0;
+		while (i < 10) begin
+			TASK_Test(TestLaunchLD);
+			TestLaunchLD = TestLaunchLD + 1;
+			//						 	paddr	current leaf 		remap leaf
+			TASK_Command(BECMD_Read, 	i, 		StashCapacity + i, 	2 * StashCapacity + i);
+			i = i + 1;
+		end
+		
+		//----------------------------------------------------------------------
 		//	Test 4: Combination test
 		//----------------------------------------------------------------------	
 
-		/*
-		i = 0;
-		while (i < StashCapacity) begin
-			TASK_BigTest(TestLaunchLD);
-			TestLaunchLD = TestLaunchLD + 1;
-			
-			TASK_Command(BECMD_Append, i, {ORAML{1'bx}}, i);
-			//						 	paddr	current leaf 		remap leaf
-			
-			TASK_Command(BECMD_ReadRmv, i, 		StashCapacity + i, 	2 * StashCapacity + i);
-			i = i + 1;
-		end
-		*/
-
+		// do different types of accesses to random leaves/etc
+		
 		//----------------------------------------------------------------------
 		//	Test X: background eviction on normal access
 		//----------------------------------------------------------------------	
@@ -337,7 +389,7 @@ module	PathORAMBackendTestbench;
 	initial begin
 		TestID = 0;
 	
-		// big test 2
+		// big test 2-3
 		j = 0;
 		while (j < StashCapacity) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
@@ -349,10 +401,17 @@ module	PathORAMBackendTestbench;
 			j = j + 1;
 		end
 		
-		// big test 3
+		// big test 4-5
 		j = 0;
 		while (j < StashCapacity) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
+			j = j + 1;
+		end
+		
+		// big test 6
+		j = 0;
+		while (j < 10) begin
+			TASK_CheckLoad(UpdateINIT + j * BlkSize_FEDChunks);
 			j = j + 1;
 		end
 		
