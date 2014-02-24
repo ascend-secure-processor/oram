@@ -1,11 +1,9 @@
 
-	// TODO merge with Ling's parameters for calculating BktSize_DDRWords (in particular, Ling's parameters should account for the case when header length > 1 DDR burst)
-
 	// Suffix meanings:
 	// 	RawBits = what it sounds like ...
 	// 	RndBits = bits rounded to some value (usually a DDR3 burst)
 	// 	DRBursts = in terms of DDR3 bursts
-	// 	BRWords = in terms of DDR3 DQ bus width (typically 64b)
+	// 	DRWords = in terms of DDR3 DQ bus width (typically 64b)
 	
 	`ifdef SIMULATION
 	localparam					IVINITValue =			{{IVEntropyWidth-32{1'b0}}, 32'hdeadbeef};
