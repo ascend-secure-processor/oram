@@ -118,6 +118,8 @@ module UORamController
         end
     endtask
 
+    integer i;
+    
     always @(posedge Clock) begin
         if (Reset) begin
             UORamInit;       
@@ -132,7 +134,7 @@ module UORamController
             Accessing <= 0;
                         
             AddrQ[0] = ProgAddrIn;
-            for (integer i = 1; i < Recursion; i = i+1) begin
+            for (i = 1; i < Recursion; i = i+1) begin
                 AddrQ[i] = NumValidBlock + AddrQ[i-1] / LeafInBlock;
             end       
         end
