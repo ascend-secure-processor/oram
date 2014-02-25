@@ -40,20 +40,38 @@ module PosMapPLB
     wire PosMapEnable, PosMapWrite;
     wire [LogFinalPosMapEntry-1:0] PosMapAddr;
     wire [ORAML:0] PosMapIn, PosMapOut;
-    RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry),
-        .EnableInitial(1), .Initial(  {(1 << LogFinalPosMapEntry) * (ORAML+1)  {1'b0} }  )) 
-        PosMap (Clock, Reset, PosMapEnable, PosMapWrite, PosMapAddr, PosMapIn, PosMapOut);
+    RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry)) 
+        PosMap (    .Clock(Clock), .Reset(Reset), 
+                    .Enable(PosMapEnable), .Write(PosMapWrite), .Address(PosMapAddr), 
+                    .DIn(PosMapIn), .DOut(PosMapOut)
+                );
     
     // PosMap control and input
-    reg  PosMapBusy, PosMapValid; 
-    assign PosMapEnable = (InOnChipPosMap && CmdReady && CmdValid) || PosMapBusy;
-    assign PosMapWrite = PosMapBusy;        
-    assign PosMapAddr = AddrIn - FinalPosMapStart;
-    assign PosMapIn = {1'b1, NewLeafIn};
+    reg  PosMapBusy, PosMapValid, PosMapInit;
+    assign PosMapEnable = PosMapInit || (InOnChipPosMap && CmdReady && CmdValid) || PosMapBusy;
+    assign PosMapWrite = PosMapInit || PosMapBusy;        
+    assign PosMapAddr = PosMapInit ? InitAddr : AddrIn - FinalPosMapStart;
+    assign PosMapIn = {!PosMapInit, NewLeafIn};     // if init, invalidate; otherwise, validate
+    
+    wire InitEnd;
+    wire [LogFinalPosMapEntry-1:0] InitAddr;
+    Counter #(.Width(LogFinalPosMapEntry))
+        PosMapInitCounter (Clock, Reset, 1'b0, 1'b0, PosMapInit, {LogFinalPosMapEntry{1'bx}}, InitAddr); // load = set = 0, in= x
+        
+    CountCompare #(.Width(LogFinalPosMapEntry), .Compare(FinalPosMapEntry - 1))
+        PosMapInitCountCmp(InitAddr, InitEnd);
            
     always @(posedge Clock) begin
-        PosMapValid <= CmdReady && CmdValid && InOnChipPosMap;
-        PosMapBusy <= InOnChipPosMap && CmdReady && CmdValid && Cmd == CacheWrite;      // write PosMap has a latency of 1 cycle
+        if (Reset) begin
+            PosMapInit <= 1;
+        end
+        else if (PosMapInit) begin
+            PosMapInit <= !InitEnd;
+        end 
+        else begin
+            PosMapValid <= CmdReady && CmdValid && InOnChipPosMap;
+            PosMapBusy <= InOnChipPosMap && CmdReady && CmdValid && Cmd == CacheWrite;      // write PosMap has a latency of 1 cycle
+        end
     end
     // ===============================================================================
 
@@ -64,9 +82,14 @@ module PosMapPLB
     wire [LeafWidth-1:0] PLBDIn, PLBDOut;
     wire [ORAML-1:0] PLBLeafIn, PLBLeafOut;
 
-    DM_Cache #(LeafWidth, LogLeafInBlock, PLBCapacity, ORAMU, ORAML) 
-        PLB (Clock, Reset, PLBReady, PLBEnable, PLBCmd, PLBAddrIn, PLBDIn, PLBLeafIn, 
-                PLBValid, PLBHit, PLBDOut, PLBEvict, PLBAddrOut, PLBLeafOut);
+    DM_Cache #( .DataWidth(LeafWidth), .LogLineSize(LogLeafInBlock), 
+                .Capacity(PLBCapacity), .AddrWidth(ORAMU), .ExtraTagWidth(ORAML)) 
+        PLB (   .Clock(Clock), .Reset(Reset), 
+                .Ready(PLBReady), .Enable(PLBEnable), 
+                .Cmd(PLBCmd), .AddrIn(PLBAddrIn), .DIn(PLBDIn), .ExtraTagIn(PLBLeafIn), 
+                .OutValid(PLBValid), .Hit(PLBHit), .DOut(PLBDOut), 
+                .Evicting(PLBEvict), .AddrOut(PLBAddrOut), .ExtraTagOut(PLBLeafOut)
+            );
     
     assign EvictDataOutValid = PLBEvict;
     assign EvictDataOut = PLBDOut;
@@ -85,25 +108,24 @@ module PosMapPLB
     // =============================================================================  
     
     reg Busy;
-    assign CmdReady = !Busy && !PosMapBusy && PLBReady;
+    assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady ;
    
-    initial begin
-        Busy <= 0;
-        CmdReg <= 0;
-        PosMapValid <= 0;
-        PosMapBusy <= 0;
-        Valid <= 0;
-            
-        NewLeafIn <= $random;    
-    end
-    
     always @(posedge Clock) begin
-        if (CmdReady && CmdValid) begin
+        if (Reset) begin
+            Busy <= 0;
+            CmdReg <= 0;
+            PosMapValid <= 0;
+            PosMapBusy <= 0;
+            Valid <= 0;              
+            NewLeafIn <= $random;    
+        end
+    
+        else if (CmdReady && CmdValid) begin
             CmdReg <= Cmd;
             Busy <= 1; 
         end
         
-        if (Valid && OutReady) begin
+        else if (Valid && OutReady) begin
             Valid <= 0;
             Busy <= 0;
         end

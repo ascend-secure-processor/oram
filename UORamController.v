@@ -51,7 +51,7 @@ module UORamController
     reg Preparing, Accessing;
     reg RefillStarted;
     wire ExpectingProgramData;
-    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData;
+    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
        
     // ================================== PosMapPLB ============================
     wire PPPCmdReady, PPPCmdValid;
@@ -64,17 +64,31 @@ module UORamController
     wire PPPEvictDataValid;
     wire [LeafWidth-1:0] PPPEvictData;
        
-    PosMapPLB #(.ORAMU(ORAMU), .ORAML(ORAML), .ORAMB(ORAMB), 
-                .NumValidBlock(NumValidBlock), .Recursion(Recursion), 
-                .LeafWidth(LeafWidth), .PLBCapacity(PLBCapacity)
-                
-                ) 
-    PPP (Clock, Reset, 
-        PPPCmdReady, 
-        PPPCmdValid, PPPCmd, PPPAddrIn, 
-        PPPRefill, PPPRefillData, 
-        PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPOldLeaf, PPPNewLeaf, PPPEvict, PPPAddrOut,
-        PPPEvictDataValid, PPPEvictData);   
+    PosMapPLB #(.ORAMU(             ORAMU), 
+                .ORAML(             ORAML), 
+                .ORAMB(             ORAMB), 
+                .NumValidBlock(     NumValidBlock), 
+                .Recursion(         Recursion), 
+                .LeafWidth(         LeafWidth), 
+                .PLBCapacity(       PLBCapacity)) 
+        PPP (   .Clock(             Clock), 
+                .Reset(             Reset), 
+                .CmdReady(          PPPCmdReady), 
+                .CmdValid(          PPPCmdValid), 
+                .Cmd(               PPPCmd), 
+                .AddrIn(            PPPAddrIn), 
+                .DInValid(          PPPRefill), 
+                .DIn(               PPPRefillData), 
+                .OutReady(          PPPOutReady), 
+                .Valid(             PPPValid), 
+                .Hit(               PPPHit), 
+                .UnInit(            PPPUnInit), 
+                .OldLeafOut(        PPPOldLeaf), 
+                .NewLeafOut(        PPPNewLeaf), 
+                .Evict(             PPPEvict), 
+                .AddrOut(           PPPAddrOut),
+                .EvictDataOutValid( PPPEvictDataValid), 
+                .EvictDataOut(      PPPEvictData));   
  
     wire PPPMiss, PPPUnInitialized;
     reg  PPPLookup, PPPInitRefill;
@@ -147,6 +161,7 @@ module UORamController
                 Preparing <= 0;
                 Accessing <= 1;
                 PPPLookup <= 1;
+                RefillStarted <= 0;
                 
                 $display("\t\tPosMap Hit  in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
             end

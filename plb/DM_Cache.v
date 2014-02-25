@@ -32,27 +32,34 @@ module DM_Cache
     assign RefillFinish = (Cmd_reg == CacheRefill) && (RefillCounter == RefillLatency - 1);
     assign Refilling = RefillStart || (Cmd_reg == CacheRefill && RefillCounter != 0);
     
-    assign Ready = RefillCounter == 0 && !WriteReg;
+    reg  TagInit;
+    assign Ready = RefillCounter == 0 && !WriteReg && !TagInit;
     
     // control signals for data and tag arrays
     wire DataEnable, TagEnable, DataWrite, TagWrite;
     
     assign DataEnable = Enable || (WriteReg && Hit);
     assign DataWrite = DataEnable && (WriteReg || Refilling);
-    assign TagEnable = Enable && (Ready || RefillFinish);
-    assign TagWrite = TagEnable && RefillFinish;
+    assign TagEnable = TagInit || (Enable && (Ready || RefillFinish));
+    assign TagWrite = TagInit || (TagEnable && RefillFinish);
     
     // addresses for data and tag arrays
-    reg [AddrWidth-1:0] Addr_reg;
+    reg  [AddrWidth-1:0] Addr_reg;
     wire [AddrWidth-1:0] Addr;
-    wire [TArrayAddrWidth-1:0] TArrayAddr;   
+    wire [TArrayAddrWidth-1:0] TArrayAddr, InitTArrayAddr; 
     wire [DArrayAddrWidth-1:0] DArrayAddr;
     wire [LogLineSize-1:0] Offset;
     
     assign Addr = Ready ? AddrIn : Addr_reg;
-    assign TArrayAddr = (Addr >> LogLineSize) % NumLines;
+    assign TArrayAddr = TagInit ? InitTArrayAddr : ((Addr >> LogLineSize) % NumLines);
     assign Offset = Addr[LogLineSize-1:0] + RefillCounter;
     assign DArrayAddr = (TArrayAddr << LogLineSize) + Offset;  
+    
+    wire InitEnd;
+    Counter #(.Width(TArrayAddrWidth))
+        TagInitCounter (Clock, Reset, 1'b0, 1'b0, TagInit, {TArrayAddrWidth{1'bx}}, InitTArrayAddr); // load = set = 0, in= x      
+    CountCompare #(.Width(TArrayAddrWidth), .Compare((1 << TArrayAddrWidth) - 1))
+        PosMapInitCountCmp(InitTArrayAddr, InitEnd);
     
     // IO for data and tag arrays
     reg [DataWidth-1:0] DIn_reg;
@@ -60,66 +67,60 @@ module DM_Cache
     wire [DataWidth-1:0] DataIn;
     wire [TagWidth+ExtraTagWidth:0] TagIn, TagOut;
     
-    assign TagIn = {1'b1, ExtraTagReg, Addr[AddrWidth-1:LogLineSize]};
+    assign TagIn = TagInit ? {1'b0, {TagWidth+ExtraTagWidth{1'bx}}} : {1'b1, ExtraTagReg, Addr[AddrWidth-1:LogLineSize]};
     assign DataIn = WriteReg ? DIn_reg : DIn;
 
     // data and tag array
     RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)) 
         DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
-    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth),
-        .EnableInitial(1), .Initial(  {(1 << TArrayAddrWidth) * ((TagWidth+ExtraTagWidth)+1) {1'b0} } )) 
+
+    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth)) 
         TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
-    
-   // {(1 << TArrayAddrWidth){0, {(TagWidth+ExtraTagWidth){1'bx}}}}
-    
+ 
     // output for cache outcome
     wire LineValid;
     reg  RefillReg;
     assign LineValid = TagOut[TagWidth+ExtraTagWidth];
 
-    //assign #10 OutValid = Enable && Ready;
     assign Hit = (Cmd_reg == CacheWrite || Cmd_reg == CacheRead) 
                     && Addr_reg[AddrWidth-1:LogLineSize] == TagOut[TagWidth-1:0] && LineValid;  // valid && tag match
     assign Evicting = RefillReg && LineValid; // a valid line is there. danger: on refillFinish, cannot use new tag!
     assign AddrOut = TagOut[TagWidth-1:0] << LogLineSize;
     assign ExtraTagOut = TagOut[TagWidth+ExtraTagWidth-1:TagWidth];
-    
-    task CacheStateInit;
-        begin
-            RefillCounter <= 0;
-            Cmd_reg <= CacheRead;
-            WriteReg <= 0;
-            OutValid <= 0;  
-        end
-    endtask
-    
-    initial begin
-        CacheStateInit;
-    end
         
     always@(posedge Clock) begin
         if (Reset) begin
-            CacheStateInit;
+            RefillCounter <= 0;
+            Cmd_reg <= CacheRead;
+            WriteReg <= 0;
+            OutValid <= 0;
+            TagInit <= 1;  
         end
-        else if (Ready && Enable) begin
-            Cmd_reg <= Cmd;
-            Addr_reg = AddrIn;
-            DIn_reg <= DIn;
-            ExtraTagReg <= ExtraTagIn;
+        else if (TagInit) begin
+            TagInit <= !InitEnd;
+        end
+        
+        else begin 
+            if (Ready && Enable) begin
+                Cmd_reg <= Cmd;
+                Addr_reg = AddrIn;
+                DIn_reg <= DIn;
+                ExtraTagReg <= ExtraTagIn;
+                
+                if (Cmd == CacheRefill && Offset != 0) begin
+                    $display("Must provide an aligned address for refilling.");                       
+                    $finish;
+                end       
+            end
             
-            if (Cmd == CacheRefill && Offset != 0) begin
-                $display("Must provide an aligned address for refilling.");                       
-                $finish;
-            end       
+            if (Refilling & Enable) begin
+                RefillCounter <= RefillCounter + 1;
+            end
+            
+            WriteReg <= Enable && Ready && (Cmd == CacheWrite);
+            RefillReg <= Enable && Refilling;
+            OutValid <= Enable && Ready;
         end
-        
-        if (Refilling & Enable) begin
-            RefillCounter <= RefillCounter + 1;
-        end
-        
-        WriteReg <= Enable && Ready && (Cmd == CacheWrite);
-        RefillReg <= Enable && Refilling;
-        OutValid <= Enable && Ready;
     end
 
 endmodule

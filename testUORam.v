@@ -34,15 +34,39 @@ module testUORam;
     wire StoreDataValid, LoadDataReady, StoreDataReady, LoadDataValid;
     wire [FEDWidth-1:0] StoreData, LoadData;
 
-    UORamController FrontEnd(Clock, Reset, 
-                            CmdInReady, CmdInValid, CmdIn, AddrIn,                     
-                            DataInReady, DataInValid, DataIn, 
-                            ReturnDataReady, ReturnDataValid, ReturnData,
+    UORamController #(  .ORAMU(         ORAMU), 
+                        .ORAML(         ORAML), 
+                        .ORAMB(         ORAMB), 
+                        .NumValidBlock( NumValidBlock), 
+                        .Recursion(     Recursion), 
+                        .LeafWidth(     LeafWidth), 
+                        .PLBCapacity(   PLBCapacity)) 
+    FrontEnd    (   .Clock(             Clock), 
+                    .Reset(             Reset), 
+                    .CmdInReady(        CmdInReady), 
+                    .CmdInValid(        CmdInValid), 
+                    .CmdIn(             CmdIn), 
+                    .ProgAddrIn(        AddrIn),
+                    .DataInReady(       DataInReady), 
+                    .DataInValid(       DataInValid), 
+                    .DataIn(            DataIn),                                    
+                    .ReturnDataReady(   ReturnDataReady), 
+                    .ReturnDataValid(   ReturnDataValid), 
+                    .ReturnData(        ReturnData),
                             
-                            CmdOutReady, CmdOutValid, CmdOut, AddrOut, OldLeaf, NewLeaf, 
-                            StoreDataReady, StoreDataValid, StoreData,
-                            LoadDataReady, LoadDataValid, LoadData
-                            );
+                    .CmdOutReady(       CmdOutReady), 
+                    .CmdOutValid(       CmdOutValid), 
+                    .CmdOut(            CmdOut), 
+                    .AddrOut(           AddrOut), 
+                    .OldLeaf(           OldLeaf), 
+                    .NewLeaf(           NewLeaf), 
+                    .StoreDataReady(    StoreDataReady), 
+                    .StoreDataValid(    StoreDataValid), 
+                    .StoreData(         StoreData),
+                    .LoadDataReady(     LoadDataReady), 
+                    .LoadDataValid(     LoadDataValid), 
+                    .LoadData(          LoadData)
+                );
 
     // DRAM interface
 	wire	[DDRCWidth-1:0]		DRAM_Command;
@@ -137,7 +161,7 @@ module testUORam;
         CycleCount = CycleCount + 1;
     end
 
-    assign Reset = CycleCount == 2;
+    assign Reset = CycleCount < 30;
     assign DataIn = 1;
   
     localparam   Freq =	100_000_000;
@@ -224,7 +248,7 @@ module testUORam;
     assign WriteCmd = CmdOut == BECMD_Append || CmdOut == BECMD_Update;
     
     always @(posedge Clock) begin
-        if (CmdInReady && CycleCount > 1000) begin
+        if (CmdInReady) begin
             if (TestCount < 200) begin
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);       
@@ -249,21 +273,5 @@ module testUORam;
             Check_Leaf;
         end
     end
-
-    
-    wire testInReady, testInValid, testOutReady, testOutValid;
-    wire [5-1:0] testAddr;
-    wire [12-1:0] testIn, testOut;
-
-        
-    FIFORAM #(.Width(12), .Buffering(8)) 
-        StoreBuffer (.Clock(Clock), .Reset(Reset), 
-                        .InAccept(testInReady), .InValid(testInValid), .InData(testIn),
-                        .OutReady(testOutReady), .OutSend(testOutValid), .OutData(testOut));  
-    
-    
-    assign testInValid = 1;
-    assign testOutReady = 1;
-    assign testIn = CycleCount + 200;
     
 endmodule
