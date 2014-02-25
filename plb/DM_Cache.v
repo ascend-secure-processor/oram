@@ -60,7 +60,7 @@ module DM_Cache
     wire [DataWidth-1:0] DataIn;
     wire [TagWidth+ExtraTagWidth:0] TagIn, TagOut;
     
-    assign TagIn = {1, ExtraTagReg, Addr[AddrWidth-1:LogLineSize]};
+    assign TagIn = {1'b1, ExtraTagReg, Addr[AddrWidth-1:LogLineSize]};
     assign DataIn = WriteReg ? DIn_reg : DIn;
 
     // data and tag array

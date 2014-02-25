@@ -1,3 +1,5 @@
+`include "Const.vh"
+
 module AddrGen
 #(`include "PathORAM.vh", `include "DDR3SDRAM.vh", `include "AES.vh")
 (
@@ -13,7 +15,7 @@ module AddrGen
   // interface with DRAM controller
   input CmdReady,
   output CmdValid,
-  output [DDRCWidth-1:0] Cmd,
+  output [DDRCWidth:0] Cmd,
   output [DDRAWidth-1:0] Addr,
   
   // tmp output for debugging
@@ -21,8 +23,10 @@ module AddrGen
   output [ORAML-1:0] STIdx, BktIdx
 );
   
-  `include "PathORAMLocal.vh"
+  localparam ORAMLogL = `log2(ORAML);
+  
   `include "DDR3SDRAMLocal.vh"
+  `include "BucketDRAMLocal.vh"
   
   // controller for AddrGenBktHead
   wire Enable, SwitchLevel;
@@ -31,15 +35,19 @@ module AddrGen
   reg [ORAMLogL-1:0] BktCounter;
   wire [DDRAWidth-1:0] BktStartAddr;
   
-  // TODO pass params to this module (e.g., IVWidth)
-  AddrGenBktHead #(.ORAML(ORAML), .DDRAWidth(DDRAWidth)) addGenBktHead
-  (Clock, Reset, Start && Ready, Enable, 
-    leaf, 
-    currentLevel, BktStartAddr,
-    STIdx, BktIdx // tmp output for debugging
-  );  
-  
-  assign SwitchLevel = BktCounter >= (BH ? 0 : ORAMZ + 1 - 1);
+  AddrGenBktHead #( .ORAML(ORAML), 
+                    .ORAMLogL(ORAMLogL),
+                    .DDRAWidth(DDRAWidth),
+                    .DDRROWWidth(DDRROWWidth),
+                    .BktSize_DRWords(BktSize_DRWords)
+                    ) 
+  addGenBktHead (   Clock, Reset, Start && Ready, Enable, 
+                    leaf, 
+                    currentLevel, BktStartAddr,
+                    STIdx, BktIdx // tmp output for debugging
+                  );  
+              
+  assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 1;
   assign Enable = !Ready && CmdReady && SwitchLevel;
   
   // output 

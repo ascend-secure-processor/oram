@@ -145,6 +145,7 @@ module testUORam;
     ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
+    reg  [31:0] TestCount;
     
     task Task_StartORAMAccess;
         input [1:0] cmd;
@@ -198,33 +199,8 @@ module testUORam;
         end
     endtask
     
-    reg [ORAMU-1:0] AddrOutReg;
-    reg [LogFEORAMBChunks-1:0] PLBEvictCounter;
-    reg Evicting;
     
     
-    task Handle_PLBEvictStart;
-        begin
-            AddrOutReg = AddrOut;
-            Evicting = 1;
-            PLBEvictCounter = 0;
-        end   
-    endtask
-    
-    task Handle_PLBEvicting;
-        begin            
-            GlobalPosMap[(AddrOutReg - NumValidBlock) * LeafInBlock + PLBEvictCounter] <= 
-                   {GlobalPosMap[(AddrOutReg - NumValidBlock) * LeafInBlock + PLBEvictCounter][ORAML+1], StoreData[ORAML:0]};
-            
-            PLBEvictCounter <= PLBEvictCounter + 1;
-            
-            if (PLBEvictCounter == FEORAMBChunks - 1) begin
-                Evicting <= 0;
-            end
-        end   
-    endtask
-    
-    reg  [31:0] TestCount;
     reg  [ORAMU-1:0] AddrRand;
     wire [1:0] Op;
     wire  Exist;
@@ -238,10 +214,9 @@ module testUORam;
         DataInValid <= 0;
         ReturnDataReady <= 1;   
         AddrRand <= 0;
-        Evicting <= 0;
           
         for (integer i = 0; i < TotalNumBlock; i=i+1) begin
-            GlobalPosMap[i][ORAML+1:ORAML] <= 0;
+            GlobalPosMap[i][ORAML] <= 0;
         end         
     end
     
@@ -250,14 +225,14 @@ module testUORam;
     
     always @(posedge Clock) begin
         if (CmdInReady && CycleCount > 1000) begin
-            if (TestCount < 2000) begin
+            if (TestCount < 200) begin
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);       
                 AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;
                 TestCount <= TestCount + 1;
             end
             else begin
-                $display("ALL TESTS PASSED!");
+                $display("ALL UORAM TESTS PASSED!");
                 $finish;  
             end
         end
@@ -274,18 +249,7 @@ module testUORam;
             Check_Leaf;
         end
     end
-    
-    /*
-    always @(posedge Clock) begin     
-        if (CmdOutValid && WriteCmd && AddrOut >= NumValidBlock && !Evicting) begin
-            Handle_PLBEvictStart;
-        end
-        
-        if (StoreDataValid && StoreDataReady && Evicting) begin
-            Handle_PLBEvicting;
-        end
-    end
-    */
+
     
     wire testInReady, testInValid, testOutReady, testOutValid;
     wire [5-1:0] testAddr;

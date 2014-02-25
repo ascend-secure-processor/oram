@@ -468,7 +468,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
 							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth))
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
 			addr_gen(		.Clock(					Clock),
 							.Reset(					Reset | CSInitialize),
 							.Start(					AddrGen_InValid), 

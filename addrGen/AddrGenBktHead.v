@@ -1,7 +1,7 @@
 `include "Const.vh"
 
 module AddrGenBktHead 
-#(`include "PathORAM.vh", `include "DDR3SDRAM.vh", `include "AES.vh")
+#(parameter ORAML = 0, ORAMLogL = 0, DDRAWidth = 10, DDRROWWidth = 0, BktSize_DRWords = 0)
 (
   input Clock, Reset, Start, Enable, 
   input [ORAML-1:0] leaf,                     // the input leaf label
@@ -10,31 +10,17 @@ module AddrGenBktHead
   output [ORAML-1:0] STIdx, BktIdx  // tmp output for debugging
 );
 
-  initial begin
-    currentLevel = -1;
-  end
+  `include "SubTreeLocal.vh"
 
-  `include "PathORAMLocal.vh"
-  `include "DDR3SDRAMLocal.vh"
-  `include "BucketDRAMLocal.vh"
-  
-  // subtree related parameters
-  localparam L_st = `log2f(DDRROWWidth / BktSize_DRWords + 1);
-  localparam numST = (ORAML + 1 + L_st - 1) / L_st;
-  
-  // TODO (C F): I switched ST_size to (1 << L) - 1 to make the notation consistant across modules.
-  // If this causes synthesis problems for PhyAddr, we should think about changing it to Ling's original
-  // (1 << L) scheme.
-  
-  localparam STSize = ((1 << L_st) - 1) * BktSize_DRWords; // subtree size, it could be (1 << numST) - 1; this is optimal for Z=3 
-  localparam STSize_bot = ((1 << ((ORAML+1) % L_st)) - 1) * BktSize_DRWords; // short trees' size at the bottom
-  localparam numCompST = ((1 << ((numST-1)*L_st)) - 1) / ((1 << L_st) - 1); // the number of not-short subtreess 
-  
+  /*
   // reverse the leaf
+  // Note: not used
   wire [ORAML-1:0] leaf_reverse;
   generate for(genvar i = 0; i < ORAML; i = i + 1) begin:REVERSE
     assign leaf_reverse[i] = leaf[ORAML-1-i];
   end endgenerate
+  */
+  
   reg [ORAML-1:0] leaf_shift;
   
   // One PathGen module walks the subtrees and the other inside a subtree
@@ -68,6 +54,6 @@ module AddrGenBktHead
   // adjust for the (possibly) shorter subtrees at the bottom 
   wire shortTreeAtBottom;
   assign shortTreeAtBottom = (numST * L_st != ORAML) && currentLevel >= (numST-1) * L_st;
-  assign PhyAddr = STIdx * STSize + BktIdx * BktSize_DRWords - shortTreeAtBottom * (STSize - STSize_bot) * (STIdx - numCompST); 
+  assign PhyAddr = BktSize_DRWords * (STIdx * STSize + BktIdx - shortTreeAtBottom * (STSize-STSize_bot) * (STIdx-numTallST)); 
   
 endmodule

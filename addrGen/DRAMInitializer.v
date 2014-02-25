@@ -47,16 +47,18 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Constants
 	//-------------------------------------------------------------------------- 
 	
-	`include "PathORAMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
+	`include "SubTreeLocal.vh"
+	
 	
 	localparam					SpaceRemaining = 	BktHSize_RndBits - 2 * IVEntropyWidth - BktHSize_ValidBits;
-	// localparam					EndOfTreeAddr =		BktSize_DRWords * ORAMN; // this is the first non-existent bucket
-	localparam					EndOfTreeAddr =		BktSize_DRWords * ORAMN * 2;
-	                                       //TODO: No. We waste some space due to subtree layout. 
-	                                       // Let's be conservative and intialize much more. I'll calculate the exact end later. 
-	localparam					BAWidth =			`log2(ORAMN) + 1;
+	
+    localparam					EndOfTree =  (1 << (ORAML + 1)) + numTotalST; 
+                                    // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
+    localparam					EndOfTreeAddr =  EndOfTree * BktSize_DRWords;                                    
+		                                       
+	localparam					BAWidth =			`log2(EndOfTree);
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -88,7 +90,7 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Count(					DRAMWriteCount));							
 	
 	assign	DRAMCommandValid =						DRAMCommandAddress != EndOfTreeAddr;
-	assign	DRAMWriteDataValid =					DRAMWriteCount != ORAMN * 2;
+	assign	DRAMWriteDataValid =					DRAMWriteCount != EndOfTree;
 	assign	Done =									~DRAMCommandValid & ~DRAMWriteDataValid;
 	
 	assign	DRAMCommand =							DDR3CMD_Write;

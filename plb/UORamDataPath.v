@@ -7,7 +7,7 @@ module UORamDataPath
     
     // input control state, output data state
     input SwitchReq,
-    input [3:0] QDepth,
+    input DataBlockReq,
     input [1:0] Cmd,
     
     output ExpectingProgramData, 
@@ -47,42 +47,63 @@ module UORamDataPath
     `include "CacheCmdLocal.vh";
     `include "PLBLocal.vh";  
     
-    // storebuffer to back end
-    wire StoreBufferReady, StoreBufferValid;
-    wire [FEDWidth-1:0] StoreBufferDIn;
+    // PPPEvictBuffer
+    wire EvictBufferOutReady, EvictBufferOutValid;
+    wire [LeafWidth-1:0] EvictBufferDOut;
+      
+    FIFORAM #(.Width(LeafWidth), .Buffering(LeafInBlock)) 
+        EvictBuffer (   .Clock(Clock), 
+                        .Reset(Reset), 
+                        .InAccept(PPPEvictDataReady), 
+                        .InValid(PPPEvictDataValid), 
+                        .InData(PPPEvictData),                      
+                        .OutReady(EvictBufferOutReady), 
+                        .OutSend(EvictBufferOutValid), 
+                        .OutData(EvictBufferDOut)
+                    ); 
     
-    /*
-    FIFORAM #(.Width(FEDWidth), .Buffering(FEORAMBChunks)) 
-        StoreBuffer (.Clock(Clock), .Reset(Reset), 
-                        .InAccept(StoreBufferReady), .InValid(StoreBufferValid), .InData(StoreBufferDIn),
-                        .OutReady(StoreDataReady), .OutSend(StoreDataValid), .OutData(StoreData));  
-    */
+    // Funnel for PPPEvictBuffer --> BackEnd
+    wire EvictFunnelOutValid;
+    wire [FEDWidth-1:0] EvictFunnelDOut;
     
-    // TODO: Funnel both ways
+    FIFOShiftRound #(.IWidth(LeafWidth), .OWidth(FEDWidth))
+        EvictFunnel (   .Clock(Clock), 
+                        .Reset(Reset),  
+                        .InAccept(EvictBufferOutReady), 
+                        .InValid(EvictBufferOutValid), 
+                        .InData(EvictBufferDOut),
+                        .OutReady(StoreDataReady), 
+                        .OutValid(EvictFunnelOutValid), 
+                        .OutData(EvictFunnelDOut)
+                    );
     
-    FIFO #(FEDWidth, FEORAMBChunks) 
-        StoreBuffer (Clock, Reset, 
-                        StoreBufferReady, StoreBufferValid, StoreBufferDIn,
-                        StoreDataReady, StoreDataValid, StoreData);     
+    // Funnel for LoadData --> PPPRefillData
+    wire RefillFunnelReady, RefillFunnelValid;
     
+    FIFOShiftRound #(.IWidth(FEDWidth), .OWidth(LeafWidth))
+        RefillFunnel (  .Clock(Clock), 
+                        .Reset(Reset), 
+                        .InAccept(RefillFunnelReady), 
+                        .InValid(RefillFunnelValid), 
+                        .InData(LoadData),
+                        .OutReady(PPPRefillDataReady), 
+                        .OutValid(PPPRefillDataValid), 
+                        .OutData(PPPRefillData)
+                    );
+
     reg ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
     assign ExpectingProgramData =  ExpectingDataBlock || ExpectingProgStore;
     
-    // if ExpectingStoreData, network ==> backend; otherwise PLB ==> backend
-    assign DataInReady = ExpectingProgStore && StoreBufferReady;
-    assign PPPEvictDataReady = !ExpectingProgStore && StoreBufferReady;
-    
-    assign StoreBufferValid = ExpectingProgStore ? DataInValid : PPPEvictDataValid; // TODO: store Funnel
-    assign StoreBufferDIn = ExpectingProgStore ? DataIn : PPPEvictData;
-                        
+    // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
+    assign StoreDataValid = ExpectingProgStore ? DataInValid : EvictFunnelOutValid;
+    assign StoreData = ExpectingProgStore ? DataIn : EvictFunnelDOut;
+    assign DataInReady = ExpectingProgStore && StoreDataReady;
+  
     // if ExpectingDataBlock, backend ==> network; if ExpectingPosMapBlock, backend ==> PLB  
-    assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : PPPRefillDataReady;    // PLB refill is always ready
-
+    assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
+    assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = ExpectingDataBlock && LoadDataValid;
     assign ReturnData = LoadData;
-    
-    assign PPPRefillDataValid = ExpectingPosMapBlock && LoadDataValid;
-    assign PPPRefillData = LoadData;    // TODO: load Funnel
     
     reg [LogFEORAMBChunks-1:0] ProgDataCounter;
     
@@ -94,20 +115,16 @@ module UORamDataPath
             ProgDataCounter <= 0;
         end
     endtask 
-    
-    initial begin
-        UORamDataPathInit;
-    end
-    
+   
     always @(posedge Clock) begin
         if (Reset) begin
             UORamDataPathInit;
         end
         
         else if (SwitchReq) begin
-            ExpectingPosMapBlock <= QDepth > 0;
-            ExpectingDataBlock <= QDepth == 0 && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv);  // only if it's a read
-            ExpectingProgStore <= QDepth == 0 && (Cmd == BECMD_Append || Cmd == BECMD_Update);  // only if it's a write    
+            ExpectingPosMapBlock <= !DataBlockReq;
+            ExpectingDataBlock <= DataBlockReq && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv);  // only if it's a read
+            ExpectingProgStore <= DataBlockReq && (Cmd == BECMD_Append || Cmd == BECMD_Update);  // only if it's a write    
         end
     
         if (ExpectingProgStore && DataInValid && DataInReady) begin

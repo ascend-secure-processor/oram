@@ -44,8 +44,6 @@ module UORamController
     `include "PLBLocal.vh";  
 
     // FrontEnd state machines
-    localparam MaxLogRecursion = 4;
-
     reg [1:0] CmdReg;
     reg [MaxLogRecursion-1:0] QDepth;   // TODO: maximum recursion
     reg [ORAMU-1:0] AddrQ [Recursion-1:0];
@@ -60,13 +58,17 @@ module UORamController
     wire [1:0] PPPCmd;
     wire [ORAMU-1:0] PPPAddrIn, PPPAddrOut;   
     wire PPPRefill;
-    wire [FEDWidth-1:0] PPPRefillData;  
+    wire [LeafWidth-1:0] PPPRefillData;  
     wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
     wire [ORAML-1:0] PPPOldLeaf, PPPNewLeaf;  
     wire PPPEvictDataValid;
-    wire [FEDWidth-1:0] PPPEvictData;
+    wire [LeafWidth-1:0] PPPEvictData;
        
-    PosMapPLB //#() 
+    PosMapPLB #(.ORAMU(ORAMU), .ORAML(ORAML), .ORAMB(ORAMB), 
+                .NumValidBlock(NumValidBlock), .Recursion(Recursion), 
+                .LeafWidth(LeafWidth), .PLBCapacity(PLBCapacity)
+                
+                ) 
     PPP (Clock, Reset, 
         PPPCmdReady, 
         PPPCmdValid, PPPCmd, PPPAddrIn, 
@@ -79,8 +81,8 @@ module UORamController
       
     assign PPPMiss = PPPValid && !PPPHit;
     assign PPPUnInitialized = PPPValid && PPPHit && PPPUnInit;
-    assign PPPRefill = Accessing && (PPPRefillDataValid || PPPInitRefill);
     
+    assign PPPRefill = Accessing && (PPPRefillDataValid || PPPInitRefill);    
     assign PPPCmdValid = PPPLookup || (PPPRefill && !RefillStarted);
     assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill) : Preparing ? CacheRead : CacheWrite;
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
@@ -115,11 +117,7 @@ module UORamController
             PPPInitRefill <= 0;  
         end
     endtask
-    
-    initial begin
-        UORamInit;  
-    end
-     
+
     always @(posedge Clock) begin
         if (Reset) begin
             UORamInit;       
@@ -170,8 +168,9 @@ module UORamController
                 PPPInitRefill <= QDepth > 0 && PPPUnInitialized;             
             end
             
-            else if (CmdOutReady && CmdOutValid && EvictionRequest)
+            else if (CmdOutReady && CmdOutValid && EvictionRequest) begin
                 $display("\t\tEvict Block %d to leaf %d", AddrOut, NewLeaf);
+            end
             
             else begin
                 RefillStarted <= RefillStarted || (PPPRefill && PPPCmdReady);  
@@ -185,9 +184,9 @@ module UORamController
     // =================== data interface with network and backend ====================
     wire PPPEvictDataReady;
     
-    UORamDataPath //#()
+    UORamDataPath #(.FEDWidth(FEDWidth), .LeafWidth(LeafWidth), .ORAMB(ORAMB))
     DataScheduler (Clock, Reset,
-                    SwitchReq, QDepth, CmdReg,
+                    SwitchReq, (QDepth == 0), CmdReg,
                     ExpectingProgramData,
                     
                     // IO interface with network
@@ -200,7 +199,7 @@ module UORamController
                     
                     // IO interface with backend
                     StoreDataReady, StoreDataValid, StoreData,
-                    LoadDataReady, LoadDataValid, LoadData                
+                    LoadDataReady, LoadDataValid, LoadData          
     );
     // ================================================================================    
 endmodule

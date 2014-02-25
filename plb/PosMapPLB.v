@@ -6,7 +6,7 @@ module PosMapPLB
     input Clock, Reset, 
     output CmdReady,
     input  CmdValid,
-    input  [1:0] Cmd,        // 00 for update, 01 for read, 10 for refill
+    input  [1:0] Cmd,        // 00 for update, 01 for read, 10 for refill, 11 for init_refill
     input  [ORAMU-1:0] AddrIn,
     
     input  DInValid,
@@ -33,6 +33,7 @@ module PosMapPLB
     wire InOnChipPosMap;
     assign InOnChipPosMap = AddrIn >= FinalPosMapStart; 
  
+    reg [1:0] CmdReg; 
     reg [ORAML-1:0] NewLeafIn;      // TODO: should be the output of some RNG
 
     // ============================== onchip PosMap ====================================
@@ -48,7 +49,7 @@ module PosMapPLB
     assign PosMapEnable = (InOnChipPosMap && CmdReady && CmdValid) || PosMapBusy;
     assign PosMapWrite = PosMapBusy;        
     assign PosMapAddr = AddrIn - FinalPosMapStart;
-    assign PosMapIn = {1, NewLeafIn};
+    assign PosMapIn = {1'b1, NewLeafIn};
            
     always @(posedge Clock) begin
         PosMapValid <= CmdReady && CmdValid && InOnChipPosMap;
@@ -78,7 +79,7 @@ module PosMapPLB
     assign PLBEnable = (CmdReady && CmdValid && !InOnChipPosMap) || (PLBRefill && DInValid) || PLBInitRefill;  
     assign PLBCmd = Cmd == CacheInitRefill ? CacheRefill : Cmd; 
     assign PLBAddrIn = (PLBRefill || PLBInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;
-    assign PLBDIn = PLBRefill ? DIn : PLBInitRefill ? 0 : {1, NewLeafIn};
+    assign PLBDIn = PLBRefill ? DIn : PLBInitRefill ? {LeafWidth{1'b0}} : {1'b1, NewLeafIn};
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
     // =============================================================================  
@@ -96,7 +97,6 @@ module PosMapPLB
         NewLeafIn <= $random;    
     end
     
-    reg [1:0] CmdReg; 
     always @(posedge Clock) begin
         if (CmdReady && CmdValid) begin
             CmdReg <= Cmd;
