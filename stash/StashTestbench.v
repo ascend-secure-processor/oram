@@ -9,19 +9,20 @@
 
 //==============================================================================
 //	Module:		StashTestbench
-//	Desc:		Set SIMULATION=1 macro before running to enable assertions.
+//	Desc:		If the tests all pass, the following should print out:
 //
-//				If the tests all pass, the following should print out:
-//
-//				*** ALL TESTS PASSED ***
-//				*** ALL COMMANDS COMPLETED ***
-//
-//				(i.e., both must be printed out!  the order that they print 
-//				isn't important)
+//				*** TESTBENCH COMPLETED & PASSED ***
 //
 //				If they don't, try running for longer (100 us) before debugging
 //==============================================================================
 module	StashTestbench;
+
+	`ifndef SIMULATION
+	initial begin
+		$display("[%m @ %t] ERROR: set SIMULATION macro", $time);
+		$stop;
+	end
+	`endif
 
 	//--------------------------------------------------------------------------
 	//	Constants & overrides
@@ -358,12 +359,23 @@ module	StashTestbench;
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
-
+	
 	integer i, j;
-	integer ActivateBurstReady = 0;
+	integer TestsPASSED, CommandsPASSED;
+	integer ActivateBurstReady = 0;	
+	
+	always @(posedge Clock) begin
+		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin
+			#(Cycle*1000);
+			$display("*** TESTBENCH COMPLETED & PASSED ***");
+			$stop;
+		end
+	end
 	
 	initial begin
-		
+		TestsPASSED = 0;
+		CommandsPASSED = 0;
+	
 		Reset = 1'b1;
 		ResetDataCounter = 1'b0;
 		
@@ -657,7 +669,8 @@ module	StashTestbench;
 		// ---------------------------------------------------------------------
 		
 		#(Cycle*1000);
-		$display("*** ALL COMMANDS COMPLETED ***");	
+		$display("** All commands completed **");
+		CommandsPASSED = 1;
 	end
 
 	//--------------------------------------------------------------------------
@@ -785,7 +798,8 @@ module	StashTestbench;
 		TASK_CheckReadDummy(BlocksOnPath-1);
 		
 		#(Cycle*1000);
-		$display("*** ALL TESTS PASSED ***");		
+		$display("** All tests passed **");
+		TestsPASSED = 1;
 	end	
 	
 	//--------------------------------------------------------------------------

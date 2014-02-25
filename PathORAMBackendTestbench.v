@@ -9,15 +9,20 @@
 
 //==============================================================================
 //	Module:		PathORAMBackendTestbench
-//	Desc:		Set SIMULATION=1 macro before running to enable assertions.
-//
-//				If the tests all pass, the following should print out:
+//	Desc:		If the tests all pass, the following should print out:
 //
 //				*** TESTBENCH COMPLETED & PASSED ***
 //
 //				If they don't, try running for longer (4000 us) before debugging
 //==============================================================================
 module	PathORAMBackendTestbench;
+
+	`ifndef SIMULATION
+	initial begin
+		$display("[%m @ %t] ERROR: set SIMULATION macro", $time);
+		$stop;
+	end
+	`endif
 
 	//--------------------------------------------------------------------------
 	//	Constants & overrides
@@ -376,7 +381,7 @@ module	PathORAMBackendTestbench;
 		//----------------------------------------------------------------------	
 		
 		#(Cycle*1000);
-		$display("*** ALL COMMANDS COMPLETED ***");
+		$display("** All commands completed **");
 		CommandsPASSED = 1;
 	end
 	
@@ -416,7 +421,7 @@ module	PathORAMBackendTestbench;
 		end
 		
 		#(Cycle*1000);
-		$display("*** ALL TESTS PASSED ***");
+		$display("** All tests passed **");
 		TestsPASSED = 1;
 	end
 	
