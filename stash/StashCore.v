@@ -111,6 +111,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Stash internal signals
 	//--------------------------------------------------------------------------
 	
+	/*	We will issue one more push request than we want during path reads (this 
+		helps maintain 100% throughput).  So, we need to kill the last request. */
 	input						CancelPushRequest,
 	output						PrepNextPeak,
 	output						SyncComplete

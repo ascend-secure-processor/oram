@@ -44,7 +44,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	input						InDMAValid, InDMAReset,
 	
 	output	[StashEAWidth-1:0]	OutDMAAddr,
-	output reg					OutDMAValid
+	output 						OutDMAValid
 	);
 	
 	//--------------------------------------------------------------------------
@@ -72,6 +72,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[BCLWidth-1:0]		BCounts, BCounts_New;
 
 	wire	[ScanTableAWidth-1:0]ResetCount;
+	
+	wire	[ORAMLP1-1:0]		HighestLevel_Onehot_Retime;
+	wire						OutScanAccepted_Retime;
+	wire	[StashEAWidth-1:0]	OutScanSAddr_Retime;
+	wire						OutScanValid_Retime;	
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -148,20 +153,6 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 		end
 	`endif
-	
-	//--------------------------------------------------------------------------
-	//	Reset
-	//--------------------------------------------------------------------------
-	
-	Counter		#(			.Width(					ScanTableAWidth))
-				InitCounter(.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				~ResetDone),
-							.In(					{ScanTableAWidth{1'bx}}),
-							.Count(					ResetCount));
-	assign	ResetDone =								ResetCount == BlocksOnPath;	
 
 	//--------------------------------------------------------------------------
 	//	Stash matching logic
@@ -186,23 +177,48 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Reverse		#(			.Width(					ORAMLP1))
 				Rev3(		.In(					CommonSubpath_Space_rev & -CommonSubpath_Space_rev), 
-							.Out(					HighestLevel_Onehot));
-
-	OneHot2Bin	#(			.Width(					ORAMLP1))
-				OH2B(		.OneHot(				HighestLevel_Onehot), 
-							.Bin(					HighestLevel_Bin));
+							.Out(					HighestLevel_Onehot_Retime));
 
 	//--------------------------------------------------------------------------
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted =  						CurrentLeafValid & InScanValid & |HighestLevel_Onehot; // TODO InScanValid is redundant
-	assign	OutScanSAddr =							InScanSAddr;
-	assign	OutScanValid = 							InScanValid;
+	assign 	OutScanAccepted_Retime = 				CurrentLeafValid & InScanValid & |HighestLevel_Onehot_Retime; // TODO InScanValid is redundant?
+	assign	OutScanSAddr_Retime =					InScanSAddr;
+	assign	OutScanValid_Retime = 					InScanValid;
+	
+	//--------------------------------------------------------------------------
+	//	Feed-forward retiming
+	//--------------------------------------------------------------------------
 
+	Pipeline	#(			.Width(					1 + StashEAWidth + 1 + ORAMLP1 + 1),
+							.Stages(				0))
+				retimer(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				{OutScanAccepted_Retime, 	OutScanSAddr_Retime,OutScanValid_Retime,HighestLevel_Onehot_Retime,	InDMAValid}), 
+							.OutData(				{OutScanAccepted,			OutScanSAddr,		OutScanValid,		HighestLevel_Onehot,		OutDMAValid}));
+	
+	//--------------------------------------------------------------------------
+	//	Reset
+	//--------------------------------------------------------------------------
+	
+	Counter		#(			.Width(					ScanTableAWidth))
+				InitCounter(.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				~ResetDone),
+							.In(					{ScanTableAWidth{1'bx}}),
+							.Count(					ResetCount));
+	assign	ResetDone =								ResetCount == BlocksOnPath;		
+	
 	//--------------------------------------------------------------------------
 	//	Usage tables
 	//--------------------------------------------------------------------------
+	
+	OneHot2Bin	#(			.Width(					ORAMLP1))
+				OH2B(		.OneHot(				HighestLevel_Onehot), 
+							.Bin(					HighestLevel_Bin));	
 	
 	genvar	i;
 	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
@@ -237,11 +253,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Output(				BucketOccupancy));
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
-													(InScanValid) ? HighestLevel_Bin * ORAMZ + BucketOccupancy : 
-																	InDMAAddr;
+													(OutScanValid) ? 	HighestLevel_Bin * ORAMZ + BucketOccupancy : 
+																		InDMAAddr;
 	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
 
-	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset) ? SNULL : InScanSAddr;
+	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset) ? SNULL : OutScanSAddr;
 	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
@@ -259,11 +275,6 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Address(				ScanTable_Address),
 							.DIn(					ScanTable_DataIn),
 							.DOut(					OutDMAAddr));
-
-	// Synchronize with ScanTable latency
-	always @(posedge Clock) begin
-		OutDMAValid <=								InDMAValid;
-	end
 							
 	//--------------------------------------------------------------------------
 endmodule
