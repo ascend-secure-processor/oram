@@ -384,6 +384,7 @@ module	StashTestbench;
 
 		WriteInValid = 1'b0;
 		EvictDataInValid = 1'b0;
+		UpdateDataInValid = 1'b0;
 		
 		ReadOutReady = 1'b1;
 		
@@ -464,6 +465,8 @@ module	StashTestbench;
 		
 		TASK_QueueWrite(32'hf0000008, 32'h00000001); // level 0
 		TASK_QueueWrite(32'hf0000009, 32'h00000001); // level 0
+		
+		#(Cycle*20); // some random delay
 		
 		TASK_StartWriteback();		
 		TASK_WaitForAccess();

@@ -322,9 +322,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				if (AllResetsDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (StashAlmostFull) // higher priority than append
+				// stash capacity check gets highest priority
+				if (StashAlmostFull)
 					NS =							ST_StartRead;
-				else if (Command_InternalValid 	& 	Command_Internal == BECMD_Append) // do appends first because they are cheap
+				// do appends first ("greedily") because they are cheap
+				else if (Command_InternalValid 	& 	Command_Internal == BECMD_Append)
 					NS =							ST_Append;
 				else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
 													(Command_Internal == BECMD_ReadRmv))
@@ -767,6 +769,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	assign	WritebackProcessingHeader =				BucketWritebackCtr < BktHSize_DRBursts;
 	
+	// TODO remove second IV
 	// TODO add real initialization vector when we add AES
 	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'bx}},
 														HeaderUpShift_Leaves,

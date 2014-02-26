@@ -67,6 +67,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	input						InHeaderRemove,
 	input						InCommandValid,
 	output 						InCommandReady,
+	output						InCommandComplete,
 
 	//--------------------------------------------------------------------------
 	//	Input interface
@@ -107,9 +108,10 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[StashEAWidth-1:0] 	StashOccupancy,
 
 	//--------------------------------------------------------------------------
-	//	Hacks that help get the job done ...
+	//	Stash internal signals
 	//--------------------------------------------------------------------------
 	
+	input						CancelPushRequest,
 	output						PrepNextPeak,
 	output						SyncComplete
 	);
@@ -148,7 +150,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSReset, CSIdle, CSPeaking, CSPushing, 
 								CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
-	wire 						CNSPushing, CNSPeaking, CNSOverwriting;
 
 	wire						PerAccessReset;
 	
@@ -200,14 +201,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	// Derived signals
 
 	reg		[StashEAWidth-1:0] 	StashWalk_Delayed;
-	reg							CNSPeaking_Delayed, CSDumping_Delayed,
+	reg							CSPeaking_Delayed, CSDumping_Delayed,
 								CSSyncing_Delayed,
 								InScanValid_Delayed;
 	wire						CSDumping_FirstCycle, CSSyncing_FirstCycle;
 
 	initial begin
 		CS = ST_Reset;
-		CNSPeaking_Delayed = 1'b0;
+		CSPeaking_Delayed = 1'b0;
 		CSDumping_Delayed = 1'b0;
 	end
 
@@ -333,6 +334,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
+	wire StreamingCRUDop; // TODO
+	
 	/* 	
 		Pulsed during the last cycle of an operation.  InCommandReady will be 
 		high during the last write cycle and _second to last_ read cycle because 
@@ -342,17 +345,19 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		NOTE: 	This interface isn't RV... we assume CommandValid is high when 
 				CommandReady is high
 	*/
-	assign	InCommandReady =						(CNSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
-													(CSDumping) ? CSDumping_FirstCycle : // this is so we will see push commands in the queue
-													(CSHUpdate | CSStartSync);
+	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? FirstChunk & StreamingCRUDop : CSIdle;
 
+	// Note: Stash.v doesn't expect CommandComplete for Dumps
+	assign	InCommandComplete =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator :
+													(CSHUpdate | CSStartSync);
+													
 	assign	OutData =								StashD_DataOut;
 			
-	assign	InReady =								CNSPushing | CNSOverwriting;
-	assign 	OutValid = 								CNSPeaking_Delayed;
+	assign	InReady =								CSPushing | CSOverwriting;
+	assign 	OutValid = 								CSPeaking_Delayed;
 
 	assign 	WriteTransfer = 						InReady & InValid;
-	assign 	ReadTransfer = 							CNSPeaking; // will we have valid data out in the next cycle?
+	assign 	ReadTransfer = 							CSPeaking; // will we have valid data out in the next cycle?
 	assign 	DataTransfer = 							WriteTransfer | ReadTransfer;
 
 	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
@@ -373,16 +378,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSHUpdate =								CS == ST_UpdatingHeader;
 	assign	CSStartSync =							CS == ST_StartSync;
 	
-	/* 	
-		Mealy machine to decrease rd->wr/etc op turnover time.  This design 
-		allows us to move to read/write/etc immediately, which is arguably 
-		better than waiting 1 cycle initially (Moore machine) and then 
-		avoiding turnover to the Idle stage for a cycle after each read/write. 
-	*/
-	assign	CNSPushing = 							CSPushing | (NS == ST_Pushing); 
-	assign	CNSPeaking =							CSPeaking | (NS == ST_Peaking);
-	assign 	CNSOverwriting =						CSOverwriting | (NS == ST_Overwriting);
-	
 	assign	CSDumping_FirstCycle = 					CSDumping & ~CSDumping_Delayed;
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 	
@@ -390,7 +385,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
 
-		CNSPeaking_Delayed <=						CNSPeaking;
+		CSPeaking_Delayed <=						CSPeaking;
 		CSDumping_Delayed <=						CSDumping;
 		CSSyncing_Delayed <=						CSSyncing;
 		StashWalk_Delayed <=						StashWalk;
@@ -406,9 +401,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =						 	ST_Idle;
 			ST_Idle :
 				if (InCommandValid) begin
-					if (InCommand == SCMD_Push & InValid)
+					if (InCommand == SCMD_Push)
 						NS =						ST_Pushing;
-					if (InCommand == SCMD_Overwrite & InValid)
+					if (InCommand == SCMD_Overwrite)
 						NS =						ST_Overwriting;
 					if (InCommand == SCMD_Peak)
 						NS =						ST_Peaking;
@@ -420,13 +415,19 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 						NS =						ST_StartSync;
 				end
 			ST_Pushing :
-				if (Transfer_Terminator)
+				if (InCommandValid & InCommand == SCMD_Push & Transfer_Terminator)
+					NS =							ST_Pushing;
+				else if (Transfer_Terminator | CancelPushRequest)
 					NS =							ST_Idle;
 			ST_Overwriting :
-				if (Transfer_Terminator)
+				if (InCommandValid & InCommand == SCMD_Overwrite & Transfer_Terminator)
+					NS =							ST_Overwriting;
+				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if (Transfer_Terminator)
+				if (InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator)
+					NS =							ST_Peaking;
+				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Dumping : 
 				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
@@ -440,6 +441,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =							ST_Idle;
 		endcase
 	end
+	
+	Register	#(			.Width(					1))
+				stream_reg(	.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					(CSPeaking | CSPushing | CSOverwriting) & FirstChunk & DataTransfer),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					StreamingCRUDop));	
 	
 	//--------------------------------------------------------------------------
 	//	Reset logic
@@ -459,8 +468,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Core memories
 	//--------------------------------------------------------------------------
 
-	assign	StashE_Address = 						(CNSPeaking | CNSOverwriting | CSHUpdate) ? InSAddr : 
-													(CNSPushing) ? 								FreeListHead : 
+	assign	StashE_Address = 						(CSPeaking | CSOverwriting | CSHUpdate) ? 	InSAddr : 
+													(CSPushing) ? 								FreeListHead : 
 																								StashWalk;
 	assign	StashD_Address =						{StashE_Address, {ChunkAWidth{1'b0}}} + CurrentChunk;
 
@@ -487,7 +496,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | Transfer_Terminator),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~LastChunk & (DataTransfer | CNSPeaking)),
+							.Enable(				~LastChunk & (DataTransfer | CSPeaking)),
 							.In(					{ChunkAWidth{1'bx}}),
 							.Count(					CurrentChunk));
 
@@ -495,8 +504,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign LastChunk_Pre = 							CurrentChunk == NumChunks - 2;
 	assign LastChunk =								CurrentChunk == NumChunks - 1;
 
-	assign	StashH_WE =								(CSHUpdate & InHeaderUpdate) | // TODO latch this in on last chunk?
-													(WriteTransfer & FirstChunk & ~CNSOverwriting);
+	assign	StashH_WE =								(CSHUpdate & InHeaderUpdate) |
+													(WriteTransfer & FirstChunk & ~CSOverwriting);
 	
 	/*
 		For each data block, store its program address / leaf label.
@@ -516,11 +525,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Management
 	//--------------------------------------------------------------------------
 
-	assign FreeListHead_New =						(CNSPushing) ? 	StashP_DataOut : 
+	assign FreeListHead_New =						(CSPushing) ? 	StashP_DataOut : 
 													(CSSyncing) ? 	SyncCount : 
 													(CSSyncing_FirstCycle & Sync_SettingULH) ? SNULL :	
 													SyncCount;
-	assign UsedListHead_New = 						(CNSPushing) ? 	FreeListHead : 
+	assign UsedListHead_New = 						(CSPushing) ? 	FreeListHead : 
 													(CSSyncing_FirstCycle & Sync_SettingFLH) ? SNULL :	
 													SyncCount;
 
@@ -548,12 +557,12 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	*/
 	
 	assign	StashP_Address = 						(CSReset) ? 	ResetCount : 
-													(CNSPushing) ? 	FreeListHead : // read at end of second to last write cycle
+													(CSPushing) ? 	FreeListHead : // read at end of second to last write cycle
 													(CSDumping) ? 	StashWalk : 
 													(CSSyncing) ? 	Sync_StashPUpdateSrc : 
 																	{StashEAWidth{1'bx}};
 	assign	StashP_DataIn = 						(CSReset) ? 	ResetCount + 1 :
-													(CNSPushing) ? 	UsedListHead : 
+													(CSPushing) ? 	UsedListHead : 
 													(CSSyncing) ? 	SyncCount : 
 																	{StashEAWidth{1'bx}};
 	assign	StashP_WE =								CSReset | 

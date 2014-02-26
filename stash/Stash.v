@@ -145,8 +145,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire						PerAccessReset;
 
-	wire 						StateTransition;
-
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan1, 
 								CSScan2, CSEvict, CSTurnaround1, CSTurnaround2,
@@ -159,7 +157,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						CoreResetDone;
 	wire	[SCMDWidth-1:0]		CoreCommand;
 	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
-	wire						CoreCommandValid, CoreCommandReady;				
+	wire						CoreCommandValid, CoreCommandReady, CoreCommandComplete;				
 				
 	wire	[BEDWidth-1:0]		Core_InData;
 	wire	[ORAMU-1:0]			Core_InPAddr;
@@ -189,7 +187,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ScanTableAWidth-1:0] BlocksRead;
 		
 	wire	[SCWidth-1:0]		ScanCount;
-	wire						SentScanCommand, Scan2Complete_Conservative;
+	wire						SentCoreCommand, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
 	
 	wire						PrepNextPeak, Core_AccessComplete, Top_AccessComplete;
@@ -237,14 +235,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
 				$stop;
 			end
-			
-			if (	(~Core_InReady & CoreCommandValid & CoreCommandReady & (	(CoreCommand == SCMD_Push) | 
-																				(CoreCommand == SCMD_Overwrite))) | 
-					(~Core_OutValid & CoreCommandValid & CoreCommandReady & (	(CoreCommand == SCMD_Peak)))) begin
-				$display("[%m @ %t] ERROR: Illegal command/data transaction (data will be lost)", $time);
-				$stop;
-			end
-			
+
 			if (	(WriteInValid & WriteInReady & BlockWriteComplete) &
 					((^WriteLeaf === 1'bx) | (^WritePAddr === 1'bx))) begin
 				$display("[%m @ %t] ERROR: writing block with X paddr/leaf", $time);
@@ -293,12 +284,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			
 			if (PerAccessReset)
 				$display("[%m @ %t] Stash ** Per-module reset ** (ORAM access should be complete)", $time);
-				
-			/* This is a nice sanity check, but we got rid of _actual ...
-			if (~Scan2Complete_Actual & Scan2Complete_Conservative) begin
-				$display("[%m @ %t] ERROR: scan took longer than worst-case time...", $time);
-				$stop;
-			end*/
 		end
 	`endif
 	
@@ -309,13 +294,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
-	assign	BlockUpdateComplete =					TurnoverUpdate & 	CoreCommandReady;
-	assign	BlockEvictComplete =					CSEvict & 			CoreCommandReady;
-	assign	BlockWriteComplete =					CSPathRead & 		CoreCommandReady;
-	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & CoreCommandReady;
+	assign	BlockUpdateComplete =					TurnoverUpdate & 	CoreCommandComplete;
+	assign	BlockEvictComplete =					CSEvict & 			CoreCommandComplete;
+	assign	BlockWriteComplete =					CSPathRead & 		CoreCommandComplete;
+	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & CoreCommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
 	
-	assign 	StateTransition =						NS != CS;
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSPathRead = 							CS == ST_PathRead;
 	assign	CSTurnaround1 =							CS == ST_Turnaround1;
@@ -347,30 +331,30 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (EvictDataInValid & AccessCommand == BECMD_Append)
 					NS =							ST_Evict;
 			ST_Scan1 :
-				if (WriteInValid & SentScanCommand) 
+				if (WriteInValid & SentCoreCommand)
 					NS =			 				ST_PathRead;
-				else if (StartWriteback) 
+				else if (StartWriteback) // if whole path was dummy blocks
 					NS = 							ST_Scan2;
 			ST_PathRead :
 				if (StartWriteback) 
 					NS =							ST_Scan2;
 			ST_Scan2 : 
-				if (Scan2Complete_Conservative & SentScanCommand & OutBufferHasSpace) 
+				if (Scan2Complete_Conservative & OutBufferHasSpace) 
 					NS = 							ST_Turnaround1;
 			ST_Turnaround1 : 
-				if (CoreCommandReady)
+				if (CoreCommandComplete)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
-				if (CoreCommandReady)
+				if (CoreCommandComplete)
 					NS =							ST_CoreSync;
 			ST_CoreSync :
-				if (CoreCommandReady)
+				if (CoreCommandComplete)
 					NS =							ST_PathWriteback;
 			ST_PathWriteback :
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
-				if (CoreCommandReady)
+				if (CoreCommandComplete)
 					NS =							ST_Idle;
 		endcase
 	end
@@ -431,18 +415,23 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 														(AccessCommand == BECMD_ReadRmv));
 														
 	// Having BlockWasFound prevents us from removing blocks that aren't there.  
-	// Handling this case is only important for debugging													
+	// Handling this case is only important for debugging											
 	assign	CoreHeaderRemove =						~AccessIsDummy & BlockWasFound & 
 													(AccessCommand == BECMD_ReadRmv);
 	
-	assign 	CoreCommandValid =						CSPathRead | 
-													CSEvict |
-													(CSScan1 & ~SentScanCommand) | 
-													(CSScan2 & ~SentScanCommand) | 
-													CSTurnaround1 | 
-													CSTurnaround2 |
-													CSCoreSync |
-													(CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
+	Register	#(			.Width(					1))
+				sent_cmd(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset | CoreCommandComplete | 
+															StartWriteback | Scan2Complete_Conservative),
+							.Set(					CoreCommandValid & CoreCommandReady),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					SentCoreCommand));	
+	
+	assign 	CoreCommandValid =						((	CSEvict | CSScan1 | CSScan2 | 
+														CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
+														CSPathRead | // increases path write performance
+													 (	CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
 	
 	assign	TurnoverUpdate =						~AccessIsDummy & CSTurnaround1 & (AccessCommand == BECMD_Update);
 	
@@ -487,7 +476,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InCommand(				CoreCommand),
 							.InCommandValid(		CoreCommandValid),
 							.InCommandReady(		CoreCommandReady),
-											
+							.InCommandComplete(		CoreCommandComplete),
+							
 							.OutScanPAddr(			ScanPAddr),
 							.OutScanLeaf(			ScanLeaf),
 							.OutScanSAddr(			ScanSAddr),
@@ -501,6 +491,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.StashOverflow(			StashOverflow),
 							.StashOccupancy(		StashOccupancy),
 							
+							.CancelPushRequest(		StartWriteback),
 							.PrepNextPeak(			PrepNextPeak),
 							.SyncComplete(			Core_AccessComplete));
 
@@ -602,14 +593,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				CSScan1 | CSScan2),
 							.In(					{SCWidth{1'bx}}),
 							.Count(					ScanCount));
-	
-	Register	#(			.Width(					1))
-				sent_cmd(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset | StateTransition),
-							.Set(					CoreCommandValid & CoreCommandReady & (CSScan1 | CSScan2)),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					SentScanCommand));
 	
 	assign	Scan2Complete_Conservative =			CSScan2 & ScanCount == ScanDelay;
 	
