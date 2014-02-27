@@ -462,6 +462,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	AddrGen_Reading = 						CSStartRead;
 	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : CurrentLeaf_Internal;
 	
+	// TODO
+	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress_Internal;
+	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand_Internal;
+	wire						AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;								
+	
 	// TODO pass AES header params
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -479,10 +484,21 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.RWIn(					AddrGen_Reading),
 							.BHIn(					1'b0), // TODO change when we do REW ORAM
 							.leaf(					AddrGen_Leaf),
-							.CmdReady(				AddrGen_DRAMCommandReady),
-							.CmdValid(				AddrGen_DRAMCommandValid),
-							.Cmd(					AddrGen_DRAMCommand),
-							.Addr(					AddrGen_DRAMCommandAddress));
+							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
+							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
+							.Cmd(					AddrGen_DRAMCommand_Internal),
+							.Addr(					AddrGen_DRAMCommandAddress_Internal));
+							
+	// TODO						
+	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth))
+				addr_dly(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{AddrGen_DRAMCommand_Internal,	AddrGen_DRAMCommandAddress_Internal}),
+							.InValid(				AddrGen_DRAMCommandValid_Internal),
+							.InAccept(				AddrGen_DRAMCommandReady_Internal),
+							.OutData(				{AddrGen_DRAMCommand,			AddrGen_DRAMCommandAddress}),
+							.OutSend(				AddrGen_DRAMCommandValid),
+							.OutReady(				AddrGen_DRAMCommandReady));						
 							
 	DRAMInitializer #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -511,7 +527,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 	// Buffers the whole incoming path (... this is a lazy design?)
 	// NOTE: This buffer requires ~1% of the LUT RAM on the chip
-	FIFORAM		#(			.Width(					DDRDWidth),
+	/*FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				PathSize_DRBursts))
 				in_path_buf(.Clock(					Clock),
 							.Reset(					Reset),
@@ -521,6 +537,20 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(				PathBuffer_OutData),
 							.OutSend(				PathBuffer_OutValid),
 							.OutReady(				PathBuffer_OutReady));
+	*/
+	
+	// TODO
+	wire	PathBuffer_Full, PathBuffer_Empty;
+	assign	PathBuffer_InReady =	~PathBuffer_Full;
+	assign	PathBuffer_OutValid =	~PathBuffer_Empty;
+	PathBuffer	in_path_buf(.clk(					Clock),
+							.srst(					Reset), 
+							.din(					DRAMReadData), 
+							.wr_en(					DRAMReadDataValid), 
+							.rd_en(					PathBuffer_OutReady), 
+							.dout(					PathBuffer_OutData), 
+							.full(					PathBuffer_Full), 
+							.empty(					PathBuffer_Empty));
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
 	Counter		#(			.Width(					BktBSTWidth))
