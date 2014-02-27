@@ -39,62 +39,62 @@ module  AESDWTestbench;
     //      Wires & Regs
     //--------------------------------------------------------------------------
 
-    wire                                            Clock;
-    reg                                             Reset;
+    wire                                           Clock;
+    reg                                            Reset;
 
-    wire [IVEntropyWidth-1:0]                       AESDataIn;
-    wire                                            AESDataInValid;
-    wire                                            AESDataInReady;
+    reg [IVEntropyWidth-1:0]                       AESDataIn;
+    reg                                            AESDataInValid;
+    wire                                           AESDataInReady;
 
-    wire [AESWidth-1:0]                             AESKey;
-    wire                                            AESKeyValid;
-    wire                                            AESKeyReady;
+    reg [AESWidth-1:0]                             AESKey;
+    reg                                            AESKeyValid;
+    wire                                           AESKeyReady;
 
-    wire [W*AESWidth-1:0]                           AESDataOut;
-    wire                                            AESDataOutValid;
+    wire [W*AESWidth-1:0]                          AESDataOut;
+    wire                                           AESDataOutValid;
 
-    //fifo wires
-    wire [W*AESWidth-1:0]                           OrigDataIn;
-    wire                                            OrigDataInValid;
-    wire                                            OrigDataInAccept;
-    wire [W*AESWidth-1:0]                           OrigDataOut;
-    wire                                            OrigDataOutValid;
-    wire                                            OrigDataOutReady;
+    //fifo i/o
+    reg [W*AESWidth-1:0]                           OrigDataIn;
+    reg                                            OrigDataInValid;
+    wire                                           OrigDataInAccept;
+    wire [W*AESWidth-1:0]                          OrigDataOut;
+    wire                                           OrigDataOutValid;
+    reg                                            OrigDataOutReady;
 
-    wire [W*AESWidth-1:0]                           DataIn;
-    wire                                            DataInValid;
-    wire                                            DataInAccept;
-    wire [W*AESWidth-1:0]                           DataOut;
-    wire                                            DataOutValid;
-    wire                                            DataOutReady;
+    reg [W*AESWidth-1:0]                           DataIn;
+    reg                                            DataInValid;
+    wire                                           DataInAccept;
+    wire [W*AESWidth-1:0]                          DataOut;
+    wire                                           DataOutValid;
+    reg                                            DataOutReady;
 
-    wire [W*AESWidth-1:0]                           EncDataIn;
-    wire                                            EncDataInValid;
-    wire                                            EncDataInAccept;
-    wire [W*AESWidth-1:0]                           EncDataOut;
-    wire                                            EncDataOutValid;
-    wire                                            EncDataOutReady;
+    reg [W*AESWidth-1:0]                           EncDataIn;
+    reg                                            EncDataInValid;
+    wire                                           EncDataInAccept;
+    wire [W*AESWidth-1:0]                          EncDataOut;
+    wire                                           EncDataOutValid;
+    reg                                            EncDataOutReady;
 
-    wire [W*AESWidth-1:0]                           DecDataIn;
-    wire                                            DecDataInValid;
-    wire                                            DecDataInAccept;
-    wire [W*AESWidth-1:0]                           DecDataOut;
-    wire                                            DecDataOutValid;
-    wire                                            DecDataOutReady;
+    reg [W*AESWidth-1:0]                           DecDataIn;
+    reg                                            DecDataInValid;
+    wire                                           DecDataInAccept;
+    wire [W*AESWidth-1:0]                          DecDataOut;
+    wire                                           DecDataOutValid;
+    reg                                            DecDataOutReady;
 
-    wire [IVEntropyWidth-1:0]                       IVEncDataIn;
-    wire                                            IVEncDataInValid;
-    wire                                            IVEncDataInAccept;
-    wire [IVEntropyWidth-1:0]                       IVEncDataOut;
-    wire                                            IVEncDataOutValid;
-    wire                                            IVEncDataOutReady;
+    reg [IVEntropyWidth-1:0]                       IVEncDataIn;
+    reg                                            IVEncDataInValid;
+    wire                                           IVEncDataInAccept;
+    wire [IVEntropyWidth-1:0]                      IVEncDataOut;
+    wire                                           IVEncDataOutValid;
+    reg                                            IVEncDataOutReady;
 
-    wire [IVEntropyWidth-1:0]                       IVDecDataIn;
-    wire                                            IVDecDataInValid;
-    wire                                            IVDecDataInAccept;
-    wire [IVEntropyWidth-1:0]                       IVDecDataOut;
-    wire                                            IVDecDataOutValid;
-    wire                                            IVDecDataOutReady;
+    reg [IVEntropyWidth-1:0]                       IVDecDataIn;
+    reg                                            IVDecDataInValid;
+    wire                                           IVDecDataInAccept;
+    wire [IVEntropyWidth-1:0]                      IVDecDataOut;
+    wire                                           IVDecDataOutValid;
+    reg                                            IVDecDataOutReady;
 
 
 
@@ -111,74 +111,74 @@ module  AESDWTestbench;
     FIFOLinear#(.Width(W*AESWidth),
                 .Depth(DataFIFODepth))
     origdata_fifo (.Clock(Clock),
-		   .Reset(Reset),
-		   .InData(OrigDataIn),
-		   .InValid(OrigDataInValid),
+                   .Reset(Reset),
+                   .InData(OrigDataIn),
+                   .InValid(OrigDataInValid),
                    .InAccept(OrigDataInAccept),
-		   .OutData(OrigDataOut),
+                   .OutData(OrigDataOut),
                    .OutValid(OrigDataOutValid),
-		   .OutReady(OrigDataOutReady)
+                   .OutReady(OrigDataOutReady)
                    );
 
     FIFOLinear#(.Width(W*AESWidth),
                 .Depth(DataFIFODepth))
     datain_fifo (.Clock(Clock),
-		 .Reset(Reset),
-		 .InData(DataIn),
-		 .InValid(DataInValid),
+                 .Reset(Reset),
+                 .InData(DataIn),
+                 .InValid(DataInValid),
                  .InAccept(DataInAccept),
-		 .OutData(DataOut),
+                 .OutData(DataOut),
                  .OutValid(DataOutValid),
-		 .OutReady(DataOutReady)
+                 .OutReady(DataOutReady)
                  );
 
     FIFOLinear#(.Width(W*AESWidth),
                 .Depth(DataFIFODepth))
     dataenc_fifo (.Clock(Clock),
-		  .Reset(Reset),
-		  .InEncData(EncDataIn),
-		  .InValid(EncDataInValid),
+                  .Reset(Reset),
+                  .InData(EncDataIn),
+                  .InValid(EncDataInValid),
                   .InAccept(EncDataInAccept),
-		  .OutEncData(EncDataOut),
+                  .OutData(EncDataOut),
                   .OutValid(EncDataOutValid),
-		  .OutReady(EncDataOutReady)
+                  .OutReady(EncDataOutReady)
                   );
 
     FIFOLinear#(.Width(W*AESWidth),
                 .Depth(DataFIFODepth))
     datadec_fifo (.Clock(Clock),
-		  .Reset(Reset),
-		  .InDecData(DecDataIn),
-		  .InValid(DecDataInValid),
+                  .Reset(Reset),
+                  .InData(DecDataIn),
+                  .InValid(DecDataInValid),
                   .InAccept(DecDataInAccept),
-		  .OutDecData(DecDataOut),
+                  .OutData(DecDataOut),
                   .OutValid(DecDataOutValid),
-		  .OutReady(DecDataOutReady)
+                  .OutReady(DecDataOutReady)
                   );
 
 
     FIFOLinear#(.Width(IVEntropyWidth),
                 .Depth(DataFIFODepth))
     ivenc_fifo (.Clock(Clock),
-	        .Reset(Reset),
-	        .InData(IVEncDataIn),
-	        .InValid(IVEncDataInValid),
+                .Reset(Reset),
+                .InData(IVEncDataIn),
+                .InValid(IVEncDataInValid),
                 .InAccept(IVEncDataInAccept),
-	        .OutData(IVEncDataOut),
+                .OutData(IVEncDataOut),
                 .OutValid(IVEncDataOutValid),
-	        .OutReady(IVEncDataOutReady)
+                .OutReady(IVEncDataOutReady)
                 );
 
     FIFOLinear#(.Width(IVEntropyWidth),
                 .Depth(DataFIFODepth))
     ivdec_fifo (.Clock(Clock),
-	        .Reset(Reset),
-	        .InData(IVDecDataIn),
-	        .InValid(IVDecDataInValid),
+                .Reset(Reset),
+                .InData(IVDecDataIn),
+                .InValid(IVDecDataInValid),
                 .InAccept(IVDecDataInAccept),
-	        .OutData(IVDecDataOut),
+                .OutData(IVDecDataOut),
                 .OutValid(IVDecDataOutValid),
-	        .OutReady(IVDecDataOutReady)
+                .OutReady(IVDecDataOutReady)
                 );
 
 
@@ -186,24 +186,26 @@ module  AESDWTestbench;
         input [W*AESWidth-1:0]  Data;
         input [IVEntropyWidth-1:0] IV;
 
-        OrigDataIn = Data;
-        DataIn = Data;
-        IVEncDataIn = IV;
-        IVDecDataIn = IV;
+        begin
+            OrigDataIn = Data;
+            DataIn = Data;
+            IVEncDataIn = IV;
+            IVDecDataIn = IV;
 
-        OrigDataInValid = 1'b1;
-        DataInValid = 1'b1;
-        IVEncDataInValid = 1'b1;
-        IVDecDataInValid = 1'b1;
+            OrigDataInValid = 1'b1;
+            DataInValid = 1'b1;
+            IVEncDataInValid = 1'b1;
+            IVDecDataInValid = 1'b1;
 
-        while (~OrigDataInAccept  || ~DataInAccept ||
-               ~IVEncDataInAccept || ~IVDecDataInAccept) #(Cycle);
-        #(Cycle);
+            while (~OrigDataInAccept  || ~DataInAccept ||
+                   ~IVEncDataInAccept || ~IVDecDataInAccept) #(Cycle);
+            #(Cycle);
 
-        OrigDataInValid = 1'b0;
-        DataInValid = 1'b0;
-        IVEncDataInValid = 1'b0;
-        IVDecDataInValid = 1'b0;
+            OrigDataInValid = 1'b0;
+            DataInValid = 1'b0;
+            IVEncDataInValid = 1'b0;
+            IVDecDataInValid = 1'b0;
+        end
     endtask // TASK_EnqData
 
     task TASK_QueueAES;
@@ -211,37 +213,41 @@ module  AESDWTestbench;
         input                  DataValid;
         input                  Enc;
 
-        AESDataIn = Data;
-        AESDataInValid = DataValid;
-        if (Enc)
-            IVEncOutReady = AESDataInReady;
-        else
-            IVDecOutReady = AESDataInReady;
+        begin
+            AESDataIn = Data;
+            AESDataInValid = DataValid;
+            if (Enc)
+              IVEncDataOutReady = AESDataInReady;
+            else
+              IVDecDataOutReady = AESDataInReady;
 
-        if (Enc)
-            while (~IVEncDataOutValid || ~AESDataInReady) #(Cycle);
-        else
-            while (~IVDecDataOutValid || ~AESDataInReady) #(Cycle);
+            if (Enc)
+              while (~IVEncDataOutValid || ~AESDataInReady) #(Cycle);
+            else
+              while (~IVDecDataOutValid || ~AESDataInReady) #(Cycle);
+        end
     endtask // TASK_QueueAES
 
     task TASK_AES;
         input Enc;
-        if (Enc)
-            while (~AESDataOutValid || ~DataOutReady) #(Cycle);
-        else
-            while (~AESDataOutValid || ~EncDataOutReady) #(Cycle);
+        begin
+            if (Enc)
+              while (~AESDataOutValid || ~DataOutReady) #(Cycle);
+            else
+              while (~AESDataOutValid || ~EncDataOutReady) #(Cycle);
 
-        if (Enc) begin
-            EncDataIn = AESDataOut ^ DataOut;
-            EndDataInValid = 1'b1;
+            if (Enc) begin
+                EncDataIn = AESDataOut ^ DataOut;
+                EncDataInValid = 1'b1;
 
-            while (~EncDataInAccept) #(Cycle);
-            EncDataInValid = 1'b0;
-        end else begin
-            DecDataIn = AESDataOut ^ EncDataOut;
-            DecDataInValid = 1'b1;
-            while (~DecDataInAccept) #(Cycle);
-            DecDataInValid = 1'b0;
+                while (~EncDataInAccept) #(Cycle);
+                EncDataInValid = 1'b0;
+            end else begin
+                DecDataIn = AESDataOut ^ EncDataOut;
+                DecDataInValid = 1'b1;
+                while (~DecDataInAccept) #(Cycle);
+                DecDataInValid = 1'b0;
+            end // else: !if(Enc)
         end
     endtask // TASK_AESEnc
 
@@ -260,18 +266,22 @@ module  AESDWTestbench;
         //      Test 1: Filled fifo
         //--------------------------------------------------------------------------
 
+        Reset = 1'b1;
+        #(Cycle);
+        Reset = 1'b0;
+
         i = 0;
         // enq data till filled
         while (i < DataFIFODepth) begin
             TASK_EnqData($random(0), $random(1));
         end
 
-        TASK_QueueAES(IVEncData, IVEncDataOutValid, 1'b1);
+        TASK_QueueAES(IVEncDataOut, IVEncDataOutValid, 1'b1);
         TASK_AES(1);
 
         #(Cycle * 100);
 
-        TASK_QueueAES(IVDecData, IVDecDataOutValid, 1'b0);
+        TASK_QueueAES(IVDecDataOut, IVDecDataOutValid, 1'b0);
         TASK_AES(0);  //done encrypting and decrypting
     end
 
