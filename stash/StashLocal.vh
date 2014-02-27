@@ -17,7 +17,7 @@
 	localparam					BCWidth =			`log2(ORAMZ) + 1; // need +1 to account for full buckets
 	localparam					BCLWidth =	 		ORAMLP1 * BCWidth; // bitvector of bucket counts
 			
-	localparam					ScanTableLatency =	0; // UPDATE if this changes
+	localparam					ScanTableLatency =	0;
 	localparam					ScanDelay =			StashCapacity + ScanTableLatency;
 	localparam					SCWidth =			`log2(ScanDelay);
 

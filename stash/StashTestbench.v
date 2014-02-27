@@ -545,7 +545,7 @@ module	StashTestbench;
 		AccessCommand = BECMD_Append;
 		
 		TASK_QueueEvict(32'hf00000ff, 32'h00000000); // level 33
-		TASK_QueueEvict(32'hf00005ff, 32'h00000002); // level 1		
+		TASK_QueueEvict(32'hf00005ff, 32'h00000002); // level 1	
 		TASK_CheckOccupancy(2);
 		
 		TASK_StartScan(32'h00000000, {BECMDWidth{1'bx}});

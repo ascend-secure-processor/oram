@@ -53,6 +53,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`include "StashLocal.vh"	
 	
+	localparam					Pipelined = 		1;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -73,10 +75,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	wire	[ScanTableAWidth-1:0]ResetCount;
 	
-	wire	[ORAMLP1-1:0]		HighestLevel_Onehot_Retime;
-	wire						OutScanAccepted_Retime;
-	wire	[StashEAWidth-1:0]	OutScanSAddr_Retime;
-	wire						OutScanValid_Retime;	
+	// Pipelining
+	
+	wire	[ORAMLP1-1:0]		CommonSubpath_Dly;
+	wire	[StashEAWidth-1:0]	InScanSAddr_Dly;
+	wire						CurrentLeafValid_Dly, InScanValid_Dly;	
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -169,7 +172,15 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Intersection =							InLeafP1 ^ CurrentLeafP1;
 							
 	assign	CommonSubpath = 						(Intersection & -Intersection) - 1;
-	assign	CommonSubpath_Space =					CommonSubpath & ~FullMask;
+	
+	Pipeline	#(			.Width(					2 + StashEAWidth + ORAMLP1),
+							.Stages(				Pipelined))
+			retimer_1(		.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 	CommonSubpath}), 
+							.OutData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly,CommonSubpath_Dly}));
+							
+	assign	CommonSubpath_Space =					CommonSubpath_Dly & ~FullMask;
 
 	Reverse		#(			.Width(					ORAMLP1))
 				Rev2(		.In(					CommonSubpath_Space),
@@ -177,26 +188,30 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Reverse		#(			.Width(					ORAMLP1))
 				Rev3(		.In(					CommonSubpath_Space_rev & -CommonSubpath_Space_rev), 
-							.Out(					HighestLevel_Onehot_Retime));
+							.Out(					HighestLevel_Onehot));
 
+	OneHot2Bin	#(			.Width(					ORAMLP1))
+				OH2B(		.OneHot(				HighestLevel_Onehot), 
+							.Bin(					HighestLevel_Bin));								
+							
 	//--------------------------------------------------------------------------
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted_Retime = 				CurrentLeafValid & InScanValid & |HighestLevel_Onehot_Retime; // TODO InScanValid is redundant?
-	assign	OutScanSAddr_Retime =					InScanSAddr;
-	assign	OutScanValid_Retime = 					InScanValid;
+	assign 	OutScanAccepted = 						CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot; // TODO InScanValid is redundant?
+	assign	OutScanSAddr =							InScanSAddr_Dly;
+	assign	OutScanValid = 							InScanValid_Dly;
 	
 	//--------------------------------------------------------------------------
 	//	Feed-forward retiming
 	//--------------------------------------------------------------------------
 
-	Pipeline	#(			.Width(					1 + StashEAWidth + 1 + ORAMLP1 + 1),
-							.Stages(				0))
-				retimer(	.Clock(					Clock),
+	Pipeline	#(			.Width(					1),
+							.Stages(				1))
+			dma_dly(		.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{OutScanAccepted_Retime, 	OutScanSAddr_Retime,OutScanValid_Retime,HighestLevel_Onehot_Retime,	InDMAValid}), 
-							.OutData(				{OutScanAccepted,			OutScanSAddr,		OutScanValid,		HighestLevel_Onehot,		OutDMAValid}));
+							.InData(				InDMAValid), 
+							.OutData(				OutDMAValid));
 	
 	//--------------------------------------------------------------------------
 	//	Reset
@@ -216,14 +231,10 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Usage tables
 	//--------------------------------------------------------------------------
 	
-	OneHot2Bin	#(			.Width(					ORAMLP1))
-				OH2B(		.OneHot(				HighestLevel_Onehot), 
-							.Bin(					HighestLevel_Bin));	
-	
 	genvar	i;
 	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
 		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts[BCWidth*(i+1)-1:BCWidth*i] + 
-															((HighestLevel_Onehot[i]) ? 1 : 0);
+															((HighestLevel_Bin == i) ? 1 : 0);
 	end endgenerate
 
 	/*
@@ -247,12 +258,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Mux			#(			.Width(					BCWidth),
 							.NPorts(				ORAMLP1),
-							.SelectCode(			1))
-				BCMux(		.Select(				HighestLevel_Onehot), 
+							.SelectCode(			0))
+				BCMux(		.Select(				HighestLevel_Bin), 
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
 							
-	assign 	ScanTable_Address = 					(~ResetDone) ? 	ResetCount :  
+	assign 	ScanTable_Address = 					(~ResetDone) ? 		ResetCount :  
 													(OutScanValid) ? 	HighestLevel_Bin * ORAMZ + BucketOccupancy : 
 																		InDMAAddr;
 	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
