@@ -26,29 +26,31 @@ module AES_DW #(parameter W = 4, parameter D = 12,
      //	Interface 1
      //--------------------------------------------------------------------------
 
-     input   [127:0]             DataIn,
+     input   [IVEntropyWidth-1:0] DataIn,
      input                       DataInValid,
      output                      DataInReady,
 
-     input   [127:0]             Key,
+     input   [AESWidth-1:0]             Key,
      input                       KeyValid,
      output                      KeyReady,
 
-     output  [W*127:0]           DataOut,
+     output  [W*AESWidth-1:0]    DataOut,
      output                      DataOutValid
      );
 
 
-    reg      [`log2(D)-1:0]      Count;
-    reg      [`log2(D)-1:0]      InTurn;
-    reg      [`log2(D)-1:0]      OutTurn;
+    localparam LOGD = `log2(D);
+
+    reg      [LOGD-1:0]      Count;
+    reg      [LOGD-1:0]      InTurn;
+    reg      [LOGD-1:0]      OutTurn;
     wire                         DInReady;
     wire                         DOutValid;
-    wire     [W*127:0]           DOut;
+    wire     [W*AESWidth-1:0]    DOut;
 
     // used for passthrough
     reg      [3:0]               AESCycleCount[D-1:0];
-    reg      [W*127:0]           AESData[D-1:0];
+    reg      [W*AESWidth-1:0]    AESData[D-1:0];
     reg      [D-1:0]             AESDataValid;
     reg      [D-1:0]             AESDone;
 
