@@ -8,7 +8,7 @@ module UORamDataPath
     // input control state, output data state
     input SwitchReq,
     input DataBlockReq,
-    input [1:0] Cmd,
+    input [BECMDWidth-1:0] Cmd,
     
     output ExpectingProgramData, 
     
@@ -91,9 +91,43 @@ module UORamDataPath
                         .OutData(PPPRefillData)
                     );
 
-    reg ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
-    assign ExpectingProgramData =  ExpectingDataBlock || ExpectingProgStore;
+    // control signal
+    wire ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
+    wire [LogFEORAMBChunks-1:0] ProgDataCounter;
+    wire DataReturnTransfer, DataInTransfer, ProgCounterInc, DataTransferEnd;
     
+    assign ExpectingProgramData =  ExpectingDataBlock || ExpectingProgStore;
+    assign DataReturnTransfer = ReturnDataReady && ReturnDataValid;
+    assign DataInTransfer = DataInValid && DataInReady;
+    assign ProgCounterInc = DataReturnTransfer || DataInTransfer;
+
+    Register #(.Width(1)) 
+        ExpectingPosMapBlockReg (   .Clock(     Clock), 
+                                    .Reset(     Reset), 
+                                    .Set(       1'b0), 
+                                    .Enable(    SwitchReq), 
+                                    .In(        !DataBlockReq),
+                                    .Out(       ExpectingPosMapBlock));          
+    Register #(.Width(1)) 
+        ExpectingDataBlockReg (     .Clock(     Clock), 
+                                    .Reset(     Reset || (DataReturnTransfer && DataTransferEnd)), 
+                                    .Set(       1'b0), 
+                                    .Enable(    SwitchReq), 
+                                    .In(        DataBlockReq && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
+                                    .Out(       ExpectingDataBlock));  
+    Register #(.Width(1)) 
+        ExpectingProgStoreReg (     .Clock(     Clock), 
+                                    .Reset(     Reset || (DataInTransfer && DataTransferEnd)), 
+                                    .Set(       1'b0), 
+                                    .Enable(    SwitchReq), 
+                                    .In(        DataBlockReq && (Cmd == BECMD_Append || Cmd == BECMD_Update)),
+                                    .Out(       ExpectingProgStore));                                           
+    
+    Counter #(.Width(LogFEORAMBChunks))
+        ProgCounter (Clock, Reset, 1'b0, 1'b0, ProgCounterInc, {LogFEORAMBChunks{1'bx}}, ProgDataCounter); // load = set = 0, in= x      
+    CountCompare #(.Width(LogFEORAMBChunks), .Compare(FEORAMBChunks - 1))
+        ProgCounterCmp(ProgDataCounter, DataTransferEnd);
+        
     // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = ExpectingProgStore ? DataInValid : EvictFunnelOutValid;
     assign StoreData = ExpectingProgStore ? DataIn : EvictFunnelDOut;
@@ -105,35 +139,14 @@ module UORamDataPath
     assign ReturnDataValid = ExpectingDataBlock && LoadDataValid;
     assign ReturnData = LoadData;
     
-    reg [LogFEORAMBChunks-1:0] ProgDataCounter;
-    
-    task UORamDataPathInit;
-        begin
-            ExpectingDataBlock <= 0;
-            ExpectingPosMapBlock <= 0;
-            ExpectingProgStore <= 0;  
-            ProgDataCounter <= 0;
-        end
-    endtask 
-   
     always @(posedge Clock) begin
-        if (Reset) begin
-            UORamDataPathInit;
+        if (!ExpectingDataBlock && !ExpectingPosMapBlock && LoadDataValid) begin
+            $display("Error: unexpected backend response");
+            $finish;
         end
-        
-        else if (SwitchReq) begin
-            ExpectingPosMapBlock <= !DataBlockReq;
-            ExpectingDataBlock <= DataBlockReq && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv);  // only if it's a read
-            ExpectingProgStore <= DataBlockReq && (Cmd == BECMD_Append || Cmd == BECMD_Update);  // only if it's a write    
-        end
-    
-        if (ExpectingProgStore && DataInValid && DataInReady) begin
-            ProgDataCounter <= ProgDataCounter + 1;
-            ExpectingProgStore <= ProgDataCounter != FEORAMBChunks - 1;  
-        end
-        else if (ExpectingDataBlock && ReturnDataReady && ReturnDataValid) begin
-            ProgDataCounter <= ProgDataCounter + 1; 
-            ExpectingDataBlock <= ProgDataCounter != FEORAMBChunks - 1;     
+        if (SwitchReq && ProgDataCounter > 0) begin
+            $display("Error: last packet transfer not finished");
+            $finish;
         end
     end
      
