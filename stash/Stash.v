@@ -158,7 +158,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[SCMDWidth-1:0]		CoreCommand;
 	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
 	wire						CoreCommandValid, CoreCommandReady, CoreCommandComplete;				
-				
+	wire						EvictCommandComplete;
+	
 	wire	[BEDWidth-1:0]		Core_InData;
 	wire	[ORAMU-1:0]			Core_InPAddr;
 	wire	[ORAML-1:0]			Core_InLeaf;
@@ -174,10 +175,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAMU-1:0]			ScanPAddr;
 	wire	[ORAML-1:0]			ScanLeaf;
 	wire	[StashEAWidth-1:0]	ScanSAddr;
-	wire						ScanLeafValid;
+	wire						ScanAdd, ScanLeafValid;
 
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
-	wire						ScannedLeafAccepted, ScannedLeafValid;
+	wire						ScannedAdd, ScannedLeafAccepted, ScannedLeafValid;
 	
 	wire						StopReading, StopReading_Hold;
 	wire						BlockReadComplete_InternalPre;
@@ -295,7 +296,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
 	assign	BlockUpdateComplete =					TurnoverUpdate & 	CoreCommandComplete;
-	assign	BlockEvictComplete =					CSEvict & 			CoreCommandComplete;
+	assign	BlockEvictComplete =					CSEvict & 			EvictCommandComplete;
 	assign	BlockWriteComplete =					CSPathRead & 		CoreCommandComplete;
 	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & CoreCommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
@@ -354,7 +355,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
-				if (CoreCommandComplete)
+				if (EvictCommandComplete)
 					NS =							ST_Idle;
 		endcase
 	end
@@ -421,8 +422,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	Register	#(			.Width(					1))
 				sent_cmd(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset | CoreCommandComplete | 
-															StartWriteback | Scan2Complete_Conservative),
+							.Reset(					Reset | 
+													Scan2Complete_Conservative | 
+													StartWriteback | 
+													PerAccessReset | 
+													(~CSEvict & CoreCommandComplete) |
+													(CSEvict & EvictCommandComplete)),
 							.Set(					CoreCommandValid & CoreCommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -481,10 +486,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutScanPAddr(			ScanPAddr),
 							.OutScanLeaf(			ScanLeaf),
 							.OutScanSAddr(			ScanSAddr),
+							.OutScanAdd(			ScanAdd),
 							.OutScanValid(			ScanLeafValid),
 
 							.InScanSAddr(			ScannedSAddr),
 							.InScanAccepted(		ScannedLeafAccepted),
+							.InScanAdd(				ScannedAdd),
 							.InScanValid(			ScannedLeafValid),
 							
 							.StashAlmostFull(		StashAlmostFull),
@@ -503,6 +510,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
 	
 	StashScanTable #(		.StashCapacity(			StashCapacity),
+							.Pipelined(				Pipelined),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -520,9 +528,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InScanLeaf(			MappedLeaf),
 							.InScanPAddr(			ScanPAddr),
 							.InScanSAddr(			ScanSAddr),
+							.InScanAdd(				ScanAdd),
 							.InScanValid(			ScanLeafValid),
 							.OutScanSAddr(			ScannedSAddr),
 							.OutScanAccepted(		ScannedLeafAccepted),
+							.OutScanAdd(			ScannedAdd),
 							.OutScanValid(			ScannedLeafValid),
 						
 							.InDMAAddr(				BlocksReading),
@@ -579,10 +589,24 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	BlockReturnComplete =					ReturnInProgress & BlockReadComplete_Internal;
 	
 	//--------------------------------------------------------------------------
-	//	Scan control
+	//	Intra-access waiting
 	//--------------------------------------------------------------------------
 
-	// count the worst-case scan latency (for security)
+	// FUNCTIONALITY: scan table latency will delay updating StashOccupancy
+	generate if (Pipelined) begin:DELAY_EVICT
+		ShiftRegister #(	.PWidth(				ScanTableLatency),
+							.SWidth(				1))
+				evict_cmpl(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				1'b1), 
+							.SIn(					CoreCommandComplete), 
+							.POut(					EvictCommandComplete));
+	end else begin:PASS_EVICT
+		assign	EvictCommandComplete =				CoreCommandComplete;
+	end endgenerate
+	
+	// SECURITY: count the worst-case scan latency
 	Counter		#(			.Width(					SCWidth),
 							.Limited(				1),
 							.Limit(					ScanDelay))

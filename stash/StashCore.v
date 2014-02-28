@@ -93,10 +93,12 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[ORAMU-1:0]			OutScanPAddr,
 	output	[ORAML-1:0]			OutScanLeaf,
 	output	[StashEAWidth-1:0]	OutScanSAddr,
+	output						OutScanAdd,
 	output						OutScanValid,
 
 	input	[StashEAWidth-1:0]	InScanSAddr,
 	input						InScanAccepted,
+	input						InScanAdd,
 	input						InScanValid,
 
 	//--------------------------------------------------------------------------
@@ -534,7 +536,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign UsedListHead_New = 						(CSPushing) ? 	FreeListHead : 
 													(CSSyncing_FirstCycle & Sync_SettingFLH) ? SNULL :	
 													SyncCount;
-
+  
 	/*
 		The head of the used/free lists.
 	*/
@@ -632,8 +634,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Element counting
 	//--------------------------------------------------------------------------
 	
-	assign	AddBlock =								CSPushing & InScanValid & ~InScanAccepted;
-	assign	RemoveBlock =							(CSDumping & InScanValid & InScanAccepted) |
+	assign	AddBlock =								  InScanAdd & InScanValid & ~InScanAccepted;
+	assign	RemoveBlock =							(~InScanAdd & InScanValid & InScanAccepted) |
 													(CSHUpdate & InHeaderRemove);
 	
 	UDCounter	#(			.Width(					StashEAWidth))
@@ -670,6 +672,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	OutScanSAddr =							(CSPushing) ? FreeListHead : StashWalk_Delayed;
 	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
 	assign	OutScanLeaf =							(CSPushing) ? InLeaf : OutLeaf;
+	
+	assign	OutScanAdd =							CSPushing;
 	
 	assign	OutScanValidPush =						CSPushing & Add_Terminator;
 	assign	OutScanValidDump =						CSDumping_Delayed & // wait a cycle for StashP's latency

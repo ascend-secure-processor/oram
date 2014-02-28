@@ -17,7 +17,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	output						ResetDone,
 	
 	//--------------------------------------------------------------------------
-	//	Input interface
+	//	Scan interface
 	//--------------------------------------------------------------------------
 		
 	input	[ORAML-1:0]			CurrentLeaf,
@@ -26,18 +26,16 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[ORAML-1:0]			InScanLeaf,
 	input	[ORAMU-1:0]			InScanPAddr, // debugging
 	input	[StashEAWidth-1:0]	InScanSAddr,
+	input						InScanAdd,
 	input						InScanValid,
 
-	//--------------------------------------------------------------------------
-	//	Accept/reject interface
-	//--------------------------------------------------------------------------
-	
 	output	[StashEAWidth-1:0]	OutScanSAddr,
 	output						OutScanAccepted,
+	output						OutScanAdd,
 	output						OutScanValid,
 
 	//--------------------------------------------------------------------------
-	//	Scan interface
+	//	DMA (Path writeback) interface
 	//--------------------------------------------------------------------------
 		
 	input	[ScanTableAWidth-1:0] InDMAAddr,
@@ -51,9 +49,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Constants
 	//--------------------------------------------------------------------------
 	
-	`include "StashLocal.vh"	
-	
-	localparam					Pipelined = 		1;
+	`include "StashLocal.vh"
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -206,12 +202,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Feed-forward retiming
 	//--------------------------------------------------------------------------
 
-	Pipeline	#(			.Width(					1),
-							.Stages(				1))
+	Pipeline	#(			.Width(					2),
+							.Stages(				ScanTableLatency))
 			dma_dly(		.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				InDMAValid), 
-							.OutData(				OutDMAValid));
+							.InData(				{InDMAValid,	InScanAdd}), 
+							.OutData(				{OutDMAValid,	OutScanAdd}));
 	
 	//--------------------------------------------------------------------------
 	//	Reset

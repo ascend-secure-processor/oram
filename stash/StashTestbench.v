@@ -37,7 +37,8 @@ module	StashTestbench;
 								BEDWidth =			128;
 		
 	parameter					StashCapacity =		100, // isn't restricted to be > path length
-								StashOutBuffering = 2;
+								StashOutBuffering = 2,
+								Pipelined =			1;
 								
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -811,6 +812,7 @@ module	StashTestbench;
 
 	Stash	#(				.StashCapacity(			StashCapacity),
 							.StashOutBuffering(		StashOutBuffering),
+							.Pipelined(				Pipelined),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
