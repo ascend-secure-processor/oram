@@ -76,6 +76,13 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAMLP1-1:0]		CommonSubpath_Dly;
 	wire	[StashEAWidth-1:0]	InScanSAddr_Dly;
 	wire						CurrentLeafValid_Dly, InScanValid_Dly;	
+
+	wire	[BucketAWidth-1:0]	HighestLevel_Bin_Pre;
+	wire	[BCLWidth-1:0]		BCounts_Pre;
+	wire						OutScanValid_Pre, OutScanAccepted_Pre;
+	wire	[StashEAWidth-1:0]	OutScanSAddr_Pre;
+	wire	[ScanTableAWidth-1:0] InDMAAddr_Dly;
+	wire						InDMAReset_Dly;
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -99,12 +106,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				$display("\tCommonSubpath:       %x", CommonSubpath);
 				$display("\tFull mask:           %x", FullMask);
 				$display("\tCommonSubpath_Space: %x", CommonSubpath_Space);
-				$display("\tHighest level:       %x (one hot), %d (bin)", HighestLevel_Onehot, HighestLevel_Bin);
+				$display("\tHighest level:       %x (one hot), %d (bin)", HighestLevel_Onehot, HighestLevel_Bin_Pre);
 				
-				if (OutScanAccepted & OutScanValid)
-					$display("\tScan accept: entry %d will be written back", OutScanSAddr);
-				if (~OutScanAccepted & OutScanValid)
-					$display("\tScan reject: entry %d will NOT be written back", OutScanSAddr);
+				if (OutScanAccepted_Pre & OutScanValid_Pre)
+					$display("\tScan accept: entry %d will be written back", OutScanSAddr_Pre);
+				if (~OutScanAccepted_Pre & OutScanValid_Pre)
+					$display("\tScan reject: entry %d will NOT be written back", OutScanSAddr_Pre);
 			end
 	`endif		
 
@@ -134,7 +141,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			*/
 			
-			if ( (OutScanAccepted | InScanValid) & InDMAValid ) begin
+			if ( (OutScanAccepted_Pre | InScanValid) & InDMAValid ) begin
 				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
 				$stop;
 			end
@@ -171,7 +178,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	Pipeline	#(			.Width(					2 + StashEAWidth + ORAMLP1),
 							.Stages(				Pipelined))
-			retimer_1(		.Clock(					Clock),
+			mpipe_1(		.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 	CommonSubpath}), 
 							.OutData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly,CommonSubpath_Dly}));
@@ -188,27 +195,75 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	OneHot2Bin	#(			.Width(					ORAMLP1))
 				OH2B(		.OneHot(				HighestLevel_Onehot), 
-							.Bin(					HighestLevel_Bin));								
+							.Bin(					HighestLevel_Bin_Pre));								
 							
 	//--------------------------------------------------------------------------
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted = 						CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot; // TODO InScanValid is redundant?
-	assign	OutScanSAddr =							InScanSAddr_Dly;
-	assign	OutScanValid = 							InScanValid_Dly;
+	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot; // TODO InScanValid is redundant?
+	assign	OutScanSAddr_Pre =						InScanSAddr_Dly;
+	assign	OutScanValid_Pre = 						InScanValid_Dly;
 	
 	//--------------------------------------------------------------------------
 	//	Feed-forward retiming
 	//--------------------------------------------------------------------------
 
-	Pipeline	#(			.Width(					2),
+	Pipeline	#(			.Width(					1),
 							.Stages(				ScanTableLatency))
+			full_dly(		.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				InScanAdd), 
+							.OutData(				OutScanAdd));						
+		
+	//--------------------------------------------------------------------------
+	//	Update bucket occupancy (feedback path)
+	//--------------------------------------------------------------------------
+	
+	genvar	i;
+	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
+		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts_Pre[BCWidth*(i+1)-1:BCWidth*i] + 
+															((HighestLevel_Bin_Pre == i) ? 1 : 0);
+	end endgenerate
+
+	/*
+		The number of real blocks mapped to this bucket so far during this 
+		access.  Implementing this as registers is done to (a) reduce internal 
+		fragmentation (BCLWidth bits << smallest SRAM?) and (b) to make reset a 
+		single-cycle operation.  It is also convenient that this is asynchronous 
+		read ...
+	*/
+	Register	#(			.Width(					BCLWidth))
+				BucketCnts(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					1'b0),
+							.Enable(				OutScanAccepted_Pre),
+							.In(					BCounts_New),
+							.Out(					BCounts_Pre));
+
+	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FULLMASK
+		assign 	FullMask[i] = 						BCounts_Pre[BCWidth*(i+1)-1:BCWidth*i] == ORAMZ;
+	end endgenerate
+
+	Pipeline	#(			.Width(					BucketAWidth + BCLWidth + 2 + StashEAWidth),
+							.Stages(				Pipelined))
+			mpipe_2(		.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				{HighestLevel_Bin_Pre,	BCounts_Pre,	OutScanValid_Pre,	OutScanAccepted_Pre,	OutScanSAddr_Pre}), 
+							.OutData(				{HighestLevel_Bin, 		BCounts, 		OutScanValid, 		OutScanAccepted, 		OutScanSAddr}));			
+	Pipeline	#(			.Width(					ScanTableAWidth + 1),
+							.Stages(				Pipelined))
 			dma_dly(		.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InDMAValid,	InScanAdd}), 
-							.OutData(				{OutDMAValid,	OutScanAdd}));
-	
+							.InData(				{InDMAAddr,		InDMAReset}), 
+							.OutData(				{InDMAAddr_Dly,	InDMAReset_Dly}));
+	Pipeline	#(			.Width(					1),
+							.Stages(				Pipelined + 1)) // + 1 = 1 cycle ScanTable has 1 cycle read latency
+			dma_vld_dly(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				InDMAValid), 
+							.OutData(				OutDMAValid));	
+							
 	//--------------------------------------------------------------------------
 	//	Reset
 	//--------------------------------------------------------------------------
@@ -227,31 +282,6 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Usage tables
 	//--------------------------------------------------------------------------
 	
-	genvar	i;
-	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
-		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts[BCWidth*(i+1)-1:BCWidth*i] + 
-															((HighestLevel_Bin == i) ? 1 : 0);
-	end endgenerate
-
-	/*
-		The number of real blocks mapped to this bucket so far during this 
-		access.  Implementing this as registers is done to (a) reduce internal 
-		fragmentation (BCLWidth bits << smallest SRAM?) and (b) to make reset a 
-		single-cycle operation.  It is also convenient that this is asynchronous 
-		read ...
-	*/
-	Register	#(			.Width(					BCLWidth))
-				BucketCnts(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					1'b0),
-							.Enable(				OutScanAccepted),
-							.In(					BCounts_New),
-							.Out(					BCounts));
-
-	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FULLMASK
-		assign 	FullMask[i] = 						BCounts[BCWidth*(i+1)-1:BCWidth*i] == ORAMZ;
-	end endgenerate
-
 	Mux			#(			.Width(					BCWidth),
 							.NPorts(				ORAMLP1),
 							.SelectCode(			0))
@@ -261,10 +291,10 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 	assign 	ScanTable_Address = 					(~ResetDone) ? 		ResetCount :  
 													(OutScanValid) ? 	HighestLevel_Bin * ORAMZ + BucketOccupancy : 
-																		InDMAAddr;
-	assign	ScanTable_WE =							OutScanAccepted | InDMAReset | ~ResetDone;
+																		InDMAAddr_Dly;
+	assign	ScanTable_WE =							OutScanAccepted | InDMAReset_Dly | ~ResetDone;
 
-	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset) ? SNULL : OutScanSAddr;
+	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset_Dly) ? SNULL : OutScanSAddr;
 	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
