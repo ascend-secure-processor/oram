@@ -95,12 +95,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	output	[StashEAWidth-1:0]	OutScanSAddr,
 	output						OutScanAdd,
 	output						OutScanValid,
+	output						OutScanStreaming,
 
 	input	[StashEAWidth-1:0]	InScanSAddr,
 	input						InScanAccepted,
 	input						InScanAdd,
 	input						InScanValid,
-
+	input						InScanStreaming,
+	
 	//--------------------------------------------------------------------------
 	//	Status interface
 	//--------------------------------------------------------------------------
@@ -323,13 +325,26 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					end
 				end	
 			end
-	
-		if (CSPeaking & InCommandReady)
-			if (OutPAddr == DummyBlockAddress)
-				$display("[%m @ %t] Reading dummy block", $time);
-			else
-				$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address);
-
+			
+			// Are the stash data structure / occupancy counts in Sync?
+			if (PerAccessReset) begin
+				MS_pt = UsedListHead;
+				i = 0;
+				while (MS_pt != SNULL) begin
+					MS_pt = StashP.Mem[MS_pt];
+					i = i + 1;
+				end
+				if (i != StashOccupancy) begin
+					$display("FAIL: Stash occupancy %d != direct inspection Occupancy %d", StashOccupancy, i);
+					$stop;
+				end	
+			end
+			
+			if (CSPeaking & InCommandReady)
+				if (OutPAddr == DummyBlockAddress)
+					$display("[%m @ %t] Reading dummy block", $time);
+				else
+					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address);
 		end	
 	`endif
 	
@@ -596,17 +611,16 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		simple to code).
 	*/
 
-	assign	StashC_Address = 						(CSPushing | CSDumping) ? 
-																	InScanSAddr : 
-													(CSHUpdate) ? 	InSAddr:
-													(CSReset) ? 	ResetCount : 
-													(CSSyncing) ?	SyncCount : 
-																	{StashEAWidth{1'bx}};
+	assign	StashC_Address = 						(InScanStreaming) ? 	InScanSAddr : 
+													(CSHUpdate) ? 			InSAddr:
+													(CSReset) ? 			ResetCount : 
+													(CSSyncing) ?			SyncCount : 
+																			{StashEAWidth{1'bx}};
 
-	assign	StashC_DataIn = 						(CSPushing | CSDumping) ? 	((InScanAccepted) ? EN_Free : EN_Used) :
-													(CSHUpdate) ?				EN_Free : 
-													(CSReset) ? 				EN_Free : 
-																				{ENWidth{1'bx}};
+	assign	StashC_DataIn = 						(InScanStreaming) ? 	((InScanAccepted) ? EN_Free : EN_Used) :
+													(CSHUpdate) ?			EN_Free : 
+													(CSReset) ? 			EN_Free : 
+																			{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
@@ -651,11 +665,25 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & StashWalk == SNULL;
 	assign 	StashWalk_Terminator =					SWTerminator_Finished | SWTerminator_Empty;
 
+	/* TODO
+	StashWalk_Terminate, StashWalk_Terminated
+	
+	Register	#(			.Width(					1))
+				sw_term(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					StashWalk_Terminator),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					StashWalk_Terminated));		
+	assign	StashWalk_Terminate =					StashWalk_Terminated | StashWalk_Terminator;
+	*/
+	
 	assign	OutScanSAddr =							(CSPushing) ? FreeListHead : StashWalk_Delayed;
 	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
 	assign	OutScanLeaf =							(CSPushing) ? InLeaf : OutLeaf;
 	
 	assign	OutScanAdd =							CSPushing;
+	assign	OutScanStreaming =						CSPushing | CSDumping;
 	
 	assign	OutScanValidPush =						CSPushing & Add_Terminator;
 	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot

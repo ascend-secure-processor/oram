@@ -36,9 +36,9 @@ module	StashTestbench;
 	parameter					FEDWidth =			64,
 								BEDWidth =			128;
 		
-	parameter					StashCapacity =		100, // isn't restricted to be > path length
+	parameter					StashCapacity =		100,
 								StashOutBuffering = 2,
-								Pipelined =			0;
+								Pipelined =			1;
 								
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -344,6 +344,7 @@ module	StashTestbench;
 	
 	task TASK_CheckOccupancy;
 		input	[StashEAWidth-1:0] Occupancy;
+		
 		begin
 			if (Occupancy != StashOccupancy) begin
 				$display("FAIL: Stash occupancy %d, expected %d", StashOccupancy, Occupancy);

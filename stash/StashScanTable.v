@@ -29,12 +29,14 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	input	[StashEAWidth-1:0]	InScanSAddr,
 	input						InScanAdd,
 	input						InScanValid,
-
+	input						InScanStreaming,
+	
 	output	[StashEAWidth-1:0]	OutScanSAddr,
 	output						OutScanAccepted,
 	output						OutScanAdd,
 	output						OutScanValid,
-
+	output						OutScanStreaming,
+	
 	//--------------------------------------------------------------------------
 	//	DMA (Path writeback) interface
 	//--------------------------------------------------------------------------
@@ -105,13 +107,21 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		
 		reg	LeafSet = 0;
 		reg	[ORAML-1:0]	LeafThisAccess;
+		wire [ORAMU-1:0] InScanPAddr_Dly;
+		
+		Pipeline	#(	.Width(					ORAMU),
+						.Stages(				Pipelined))
+			sim_pipe(	.Clock(					Clock),
+						.Reset(					Reset), 
+						.InData(				InScanPAddr), 
+						.OutData(				InScanPAddr_Dly));
 		
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
 			
 	`ifdef SIMULATION_VERBOSE_STASH	
 			if (InScanValid & CurrentLeafValid) begin
-				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr, InScanPAddr, CurrentLeaf, InScanLeaf);
+				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr_Dly, InScanPAddr, CurrentLeaf, InScanLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
 				$display("\tCommonSubpath:       %x", CommonSubpath);
@@ -223,12 +233,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Feed-forward retiming
 	//--------------------------------------------------------------------------
 
-	Pipeline	#(			.Width(					1),
+	Pipeline	#(			.Width(					2),
 							.Stages(				ScanTableLatency))
 			full_dly(		.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				InScanAdd), 
-							.OutData(				OutScanAdd));						
+							.InData(				{InScanAdd,	InScanStreaming}), 
+							.OutData(				{OutScanAdd,OutScanStreaming}));						
 		
 	//--------------------------------------------------------------------------
 	//	Update bucket occupancy (feedback path)

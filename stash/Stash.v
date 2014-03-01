@@ -181,6 +181,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAML-1:0]			ScanLeaf;
 	wire	[StashEAWidth-1:0]	ScanSAddr;
 	wire						ScanAdd, ScanLeafValid;
+	wire						ScanStreaming, ScannedStreaming;
 
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
 	wire						ScannedAdd, ScannedLeafAccepted, ScannedLeafValid;
@@ -279,9 +280,16 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
+			/* The StashTestbench abuses this by illegally filling the stash.  Re-enable for BackendTestbench
+			if (ScanComplete_Conservative & (ScannedLeafValid | ScanLeafValid)) begin
+				$display("[%m] ERROR: the scan took longer than our _conservative_ estimate");
+				$stop;
+			end
+			*/
+			
 			if (CS_Delayed != CS) begin
 				if (CSScan)
-					$display("[%m @ %t] Stash: start Scan1", $time);
+					$display("[%m @ %t] Stash: start Scan", $time);
 				if (CSPathRead)
 					$display("[%m @ %t] Stash: start PathRead (leaf = %x, dummy = %b)", $time, AccessLeaf, AccessIsDummy);
 				if (CSPathWriteback)
@@ -331,7 +339,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		NS = 										CS;
 		case (CS)
 			ST_Reset : 
-				if (Core_ResetDone) NS =				ST_Idle;
+				if (Core_ResetDone) NS =			ST_Idle;
 			ST_Idle :
 				if (AccessStart) 
 					NS =							ST_Scan;
@@ -341,7 +349,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (ScanComplete_Conservative)
 					NS =			 				ST_PathRead;
 			ST_PathRead :
-				if (StartWriteback_Pass) 
+				if (StartWriteback_Pass & ~ScannedStreaming) 
 					NS =							ST_Turnaround1;
 			ST_Turnaround1 : 
 				if (Core_CommandComplete)
@@ -495,11 +503,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutScanSAddr(			ScanSAddr),
 							.OutScanAdd(			ScanAdd),
 							.OutScanValid(			ScanLeafValid),
-
+							.OutScanStreaming(		ScanStreaming),
+							
 							.InScanSAddr(			ScannedSAddr),
 							.InScanAccepted(		ScannedLeafAccepted),
 							.InScanAdd(				ScannedAdd),
 							.InScanValid(			ScannedLeafValid),
+							.InScanStreaming(		ScannedStreaming),
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
@@ -538,11 +548,14 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InScanSAddr(			ScanSAddr),
 							.InScanAdd(				ScanAdd),
 							.InScanValid(			ScanLeafValid),
+							.InScanStreaming(		ScanStreaming),
+							
 							.OutScanSAddr(			ScannedSAddr),
 							.OutScanAccepted(		ScannedLeafAccepted),
 							.OutScanAdd(			ScannedAdd),
 							.OutScanValid(			ScannedLeafValid),
-						
+							.OutScanStreaming(		ScannedStreaming),
+							
 							.InDMAAddr(				BlocksReading),
 							.InDMAValid(			InDMAValid),
 							
@@ -611,7 +624,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Load(					1'b0), 
 							.Enable(				1'b1), 
 							.SIn(					Core_CommandComplete), 
-							.POut(					EvictCommandComplete));
+							.SOut(					EvictCommandComplete));
 	end else begin:PASS_EVICT
 		assign	EvictCommandComplete =				Core_CommandComplete;
 	end endgenerate
