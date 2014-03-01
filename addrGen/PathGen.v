@@ -22,8 +22,8 @@ module PathGen
       Child <= 0;
     end
     else if (Switch && Enable) begin    // entering a new level in the tree, update NodeIdx
-      NodeIdx = (Accum << 1) + (Child << 1) + BinChild + 1;
-      Accum <= NodeIdx;
+      NodeIdx <= (Accum << 1) + (Child << 1) + BinChild + 1;
+      Accum <= (Accum << 1) + (Child << 1) + BinChild + 1;
       Child <= 0;
     end
     else if (Enable) begin              // otherwise, just prepare for the next update for a 2^k-ary tree

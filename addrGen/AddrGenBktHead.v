@@ -1,13 +1,13 @@
 `include "Const.vh"
 
 module AddrGenBktHead 
-#(parameter ORAML = 0, ORAMLogL = 0, DDRAWidth = 10, DDRROWWidth = 0, BktSize_DRWords = 0)
+#(parameter ORAML = 0, ORAMLogL = 0, DDRROWWidth = 0, BktSize_DRWords = 0)
 (
   input Clock, Reset, Start, Enable, 
   input [ORAML-1:0] leaf,                     // the input leaf label
   output reg [ORAMLogL-1:0]  currentLevel, 
-  output [DDRAWidth-1:0] PhyAddr,
-  output [ORAML-1:0] STIdx, BktIdx  // tmp output for debugging
+  output [ORAML-1:0] BktIdx,
+  output [ORAML-1:0] STIdx, BktIdxInST  // tmp output for debugging
 );
 
   `include "SubTreeLocal.vh"
@@ -24,12 +24,12 @@ module AddrGenBktHead
   reg [ORAML-1:0] leaf_shift;
   
   // One PathGen module walks the subtrees and the other inside a subtree
-  // wire [ORAML-1:0] STIdx, BktIdx;
+  // wire [ORAML-1:0] STIdx, BktIdxInST;
   wire switchST;
   PathGen #(ORAML) STGen(Clock, Start, Enable, switchST, leaf_shift[0], STIdx); 
-  PathGen #(ORAML) BktGen(Clock, Start || (Enable && switchST), Enable, Enable, leaf_shift[0], BktIdx);
+  PathGen #(ORAML) BktGen(Clock, Start || (Enable && switchST), Enable, Enable, leaf_shift[0], BktIdxInST);
     // or equivalently
-    // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdx);
+    // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdxInST);
   
   // control logic for STGen and BktGen
   reg [ORAMLogL-1:0] currentLvlinST;
@@ -54,6 +54,12 @@ module AddrGenBktHead
   // adjust for the (possibly) shorter subtrees at the bottom 
   wire shortTreeAtBottom;
   assign shortTreeAtBottom = (numST * L_st != ORAML) && currentLevel >= (numST-1) * L_st;
-  assign PhyAddr = BktSize_DRWords * (STIdx * STSize + BktIdx - shortTreeAtBottom * (STSize-STSize_bot) * (STIdx-numTallST)); 
+  //assign BktIdx = STIdx * STSize + BktIdxInST - shortTreeAtBottom * (STSize-STSize_bot) * (STIdx-numTallST); 
+  assign BktIdx = BktIdxInST + 
+                (
+                    shortTreeAtBottom ? 
+                    (numTallST << LogSTSize) + ((STIdx-numTallST) << LogSTSizeBottom) :
+                    (STIdx << LogSTSize)
+                );
   
 endmodule

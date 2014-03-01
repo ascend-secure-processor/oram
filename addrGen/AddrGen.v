@@ -33,11 +33,10 @@ module AddrGen
   reg RW, BH;
   //reg [ORAML-1:0] Leaf;
   reg [ORAMLogL-1:0] BktCounter;
-  wire [DDRAWidth-1:0] BktStartAddr;
+  wire [ORAML-1:0] BktStartAddr;
   
   AddrGenBktHead #( .ORAML(ORAML), 
                     .ORAMLogL(ORAMLogL),
-                    .DDRAWidth(DDRAWidth),
                     .DDRROWWidth(DDRROWWidth),
                     .BktSize_DRWords(BktSize_DRWords)
                     ) 
@@ -53,8 +52,8 @@ module AddrGen
   // output 
   assign Ready = currentLevel > ORAML;
   assign CmdValid = currentLevel <= ORAML;
-  assign Cmd = RW ? DDR3CMD_Read : DDR3CMD_Write;          // 000 for write, 001 for read
-  assign Addr = BktStartAddr + BktCounter * DDRBstLen;
+  assign Cmd = RW ? DDR3CMD_Read : DDR3CMD_Write;
+  assign Addr = (BktStartAddr * BktSize_DRBursts + BktCounter) * DDRBstLen;
   
   always@(posedge Clock) begin
     // accept inputs
@@ -65,7 +64,7 @@ module AddrGen
     end
     
     if (!Ready && CmdReady) begin
-      BktCounter = SwitchLevel ? 0 : BktCounter + 1;
+      BktCounter <= SwitchLevel ? 0 : BktCounter + 1;
     end      
   end
     
