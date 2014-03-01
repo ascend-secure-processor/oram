@@ -489,7 +489,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Cmd(					AddrGen_DRAMCommand_Internal),
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));
 							
-	// TODO						
+	// TODO: parameterize this with a top level "HighFrequency" parameter?			
 	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth))
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),

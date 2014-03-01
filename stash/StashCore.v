@@ -115,8 +115,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	/*	We will issue one more push request than we want during path reads (this 
 		helps maintain 100% throughput).  So, we need to kill the last request. */
-	input						CancelPushRequest,
-	output						PrepNextPeak,
+	input						CancelPushCommand,
+	input						CancelPeakCommand,
 	output						SyncComplete
 	);
 	
@@ -368,10 +368,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
 	assign	Transfer_Terminator_Pre =				LastChunk_Pre & DataTransfer;
 	assign	Dump_Preempt =							CSDumping & InCommand == SCMD_Push & InValid & InCommandValid;
-	
-	// We need this cycle early because the stash scan table is a synchronous memory
-	assign	PrepNextPeak =							Transfer_Terminator_Pre;
-	
+
 	assign	CSReset =								CS == ST_Reset;
 	
 	assign	CSIdle =								CS == ST_Idle;
@@ -421,7 +418,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Pushing :
 				if (InCommandValid & InCommand == SCMD_Push & Transfer_Terminator)
 					NS =							ST_Pushing;
-				else if (Transfer_Terminator | CancelPushRequest)
+				else if (Transfer_Terminator | CancelPushCommand)
 					NS =							ST_Idle;
 			ST_Overwriting :
 				if (InCommandValid & InCommand == SCMD_Overwrite & Transfer_Terminator)
@@ -429,7 +426,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if (InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator)
+				if ((InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator) & ~CancelPeakCommand)
 					NS =							ST_Peaking;
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;

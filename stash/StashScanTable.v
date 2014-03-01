@@ -13,7 +13,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, PerAccessReset, 	
+  	input 						Clock, Reset, PerAccessReset, 
+	input						AccessComplete, // debugging
 	output						ResetDone,
 	
 	//--------------------------------------------------------------------------
@@ -39,10 +40,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 		
 	input	[ScanTableAWidth-1:0] InDMAAddr,
-	input						InDMAValid, InDMAReset,
+	input						InDMAValid,
 	
 	output	[StashEAWidth-1:0]	OutDMAAddr,
-	output 						OutDMAValid
+	output 						OutDMAValid,
+	output						OutDMAReady,
+	output						OutDMALast
 	);
 	
 	//--------------------------------------------------------------------------
@@ -81,8 +84,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[BCLWidth-1:0]		BCounts_Pre;
 	wire						OutScanValid_Pre, OutScanAccepted_Pre;
 	wire	[StashEAWidth-1:0]	OutScanSAddr_Pre;
-	wire	[ScanTableAWidth-1:0] InDMAAddr_Dly;
-	wire						InDMAReset_Dly;
+
+	// DMA Fifo
+	
+	wire	[StashEAWidth-1:0]	DMAAddr_Internal;
+	wire						DMAValid_Internal, DMAReady_Internal;						
+	wire	[ScanTableAWidth:0]	STFIFOCount;
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -116,7 +123,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	`endif		
 
 			// Make sure the leaf is steady; if not, scan results are bogus
-			if (PerAccessReset) begin
+			if (AccessComplete) begin
 				LeafSet <= 1'b0;
 			end
 			else if (CurrentLeafValid) begin
@@ -128,29 +135,27 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
+			if (~DMAReady_Internal & DMAValid_Internal) begin
+				$display("[%m @ %t] ERROR: ScanTable FIFO overflow", $time);
+				$stop;			
+			end
+			
 			if (CurrentLeafValid & InScanValid & InScanLeaf &
 				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx))) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf", $time);
 				$stop;
 			end
-	
-			/* This isn't valid for read/rm commands
-			if (InScanValid & (^InScanLeaf === 1'bx)) begin
-				$display("[%m @ %t] ERROR: ScanTable got XX Scanleaf", $time);
-				$stop;
-			end
-			*/
 			
 			if ( (OutScanAccepted_Pre | InScanValid) & InDMAValid ) begin
 				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
 				$stop;
 			end
 			
-			if (PerAccessReset | (~ResetDone_Delayed & ResetDone)) begin
+			if (~ResetDone_Delayed & ResetDone) begin
 				ind = 0;
 				while (ind != BlocksOnPath) begin
-					if (ScanTable.Mem[ind] != SNULL) begin
-						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, ScanTable.Mem[ind]);
+					if (st_ram.Mem[ind] != SNULL) begin
+						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, st_ram.Mem[ind]);
 						$stop;
 					end
 					//$display("OK %d", ScanTable.Mem[ind]);
@@ -251,26 +256,14 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset), 
 							.InData(				{HighestLevel_Bin_Pre,	BCounts_Pre,	OutScanValid_Pre,	OutScanAccepted_Pre,	OutScanSAddr_Pre}), 
 							.OutData(				{HighestLevel_Bin, 		BCounts, 		OutScanValid, 		OutScanAccepted, 		OutScanSAddr}));			
-	Pipeline	#(			.Width(					ScanTableAWidth + 1),
-							.Stages(				Pipelined))
-			dma_dly(		.Clock(					Clock),
-							.Reset(					Reset), 
-							.InData(				{InDMAAddr,		InDMAReset}), 
-							.OutData(				{InDMAAddr_Dly,	InDMAReset_Dly}));
-	Pipeline	#(			.Width(					1),
-							.Stages(				Pipelined + 1)) // + 1 = 1 cycle ScanTable has 1 cycle read latency
-			dma_vld_dly(	.Clock(					Clock),
-							.Reset(					Reset), 
-							.InData(				InDMAValid), 
-							.OutData(				OutDMAValid));	
 							
 	//--------------------------------------------------------------------------
 	//	Reset
 	//--------------------------------------------------------------------------
 	
 	Counter		#(			.Width(					ScanTableAWidth))
-				InitCounter(.Clock(					Clock),
-							.Reset(					Reset),
+				rst_cnt(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				~ResetDone),
@@ -289,12 +282,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
 							
-	assign 	ScanTable_Address = 					(~ResetDone) ? 		ResetCount :  
-													(OutScanValid) ? 	HighestLevel_Bin * ORAMZ + BucketOccupancy : 
-																		InDMAAddr_Dly;
-	assign	ScanTable_WE =							OutScanAccepted | InDMAReset_Dly | ~ResetDone;
+	assign 	ScanTable_Address = 					(~ResetDone) ? ResetCount : HighestLevel_Bin * ORAMZ + BucketOccupancy;
+	assign	ScanTable_WE =							OutScanAccepted | ~ResetDone;
 
-	assign	ScanTable_DataIn =						(~ResetDone | InDMAReset_Dly) ? SNULL : OutScanSAddr;
+	assign	ScanTable_DataIn =						(~ResetDone) ? SNULL : OutScanSAddr;
+	
+	wire	[StashEAWidth-1:0]		Dummy; // TODO
 	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
@@ -304,14 +297,36 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		order.
 	*/
 	RAM			#(			.DWidth(				StashEAWidth),
-							.AWidth(				ScanTableAWidth))
-				ScanTable(	.Clock(					Clock),
+							.AWidth(				ScanTableAWidth),
+							.NPorts(				2))
+				st_ram(		.Clock(					{2{Clock}}),
 							.Reset(					/* not connected */),
-							.Enable(				1'b1),
-							.Write(					ScanTable_WE),
-							.Address(				ScanTable_Address),
-							.DIn(					ScanTable_DataIn),
-							.DOut(					OutDMAAddr));
+							.Enable(				2'b11),
+							.Write(					{1'b0, 					ScanTable_WE}),
+							.Address(				{InDMAAddr, 			ScanTable_Address}),
+							.DIn(					{{StashEAWidth{1'bx}}, 	ScanTable_DataIn}),
+							.DOut(					{DMAAddr_Internal, 		Dummy}));
+
+	Pipeline	#(			.Width(					1),
+							.Stages(				Pipelined))
+			dma_vld_dly(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				InDMAValid), 
+							.OutData(				DMAValid_Internal));								
+	
+	FIFORAM		#(			.Width(					StashEAWidth),
+							.Buffering(				BlocksOnPath))
+				st_fifo(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DMAAddr_Internal),
+							.InValid(				DMAValid_Internal),
+							.InAccept(				DMAReady_Internal),
+							.OutFullCount(			STFIFOCount),
+							.OutData(				OutDMAAddr),
+							.OutSend(				OutDMAValid),
+							.OutReady(				OutDMAReady));
+							
+	assign	OutDMALast =							STFIFOCount == 1;
 							
 	//--------------------------------------------------------------------------
 endmodule

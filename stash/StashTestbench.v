@@ -38,7 +38,7 @@ module	StashTestbench;
 		
 	parameter					StashCapacity =		100, // isn't restricted to be > path length
 								StashOutBuffering = 2,
-								Pipelined =			1;
+								Pipelined =			0;
 								
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"

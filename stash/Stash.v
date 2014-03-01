@@ -154,10 +154,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire						StartScan_pass, StartScan_set, StartScan_primed;
 				
-	wire						CoreResetDone;
-	wire	[SCMDWidth-1:0]		CoreCommand;
+	wire						Core_ResetDone;
+	wire	[SCMDWidth-1:0]		Core_Command;
 	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
-	wire						CoreCommandValid, CoreCommandReady, CoreCommandComplete;				
+	wire						Core_CommandValid, Core_CommandReady, Core_CommandComplete;				
 	wire						EvictCommandComplete;
 	
 	wire	[BEDWidth-1:0]		Core_InData;
@@ -180,7 +180,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[StashEAWidth-1:0]	ScannedSAddr;
 	wire						ScannedAdd, ScannedLeafAccepted, ScannedLeafValid;
 	
-	wire						StopReading, StopReading_Hold;
 	wire						BlockReadComplete_InternalPre;
 	reg							BlockReadComplete_Internal;
 	
@@ -191,12 +190,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						SentCoreCommand, Scan2Complete_Conservative;
 	wire 						ScanTableResetDone;
 	
-	wire						PrepNextPeak, Core_AccessComplete, Top_AccessComplete;
+	wire						Core_AccessComplete, Top_AccessComplete;
 	
 	wire	[ScanTableAWidth-1:0]BlocksReading;
 	wire	[StashEAWidth-1:0]	OutDMAAddr;	
-	wire						InDMAValid, OutDMAValid;
-	wire						PathWriteback_Tick;
+	wire						InDMAValid, OutDMAValid, OutDMAReady;
+	wire						OutDMALast;
 	
 	wire	[OBWidth-1:0]		OutBufferEmptyCount, OutBufferCount;	
 	wire						OutBufferHasSpace, TickOutHeader, OutHeaderValid;
@@ -208,7 +207,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
 	wire						FoundRemoveBlock;
 	wire						ReturnInProgress;
-	wire	[StashEAWidth-1:0]	CRUD_SAddr, CoreCommandSAddr;
+	wire	[StashEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
+	
+	wire						WritebackGate;
+	wire						ScanTableReset;	
 	
 	//--------------------------------------------------------------------------
 	//	Debugging
@@ -292,14 +294,16 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
-	assign	ResetDone =								CoreResetDone & ScanTableResetDone;
+	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
-	assign	BlockUpdateComplete =					TurnoverUpdate & 	CoreCommandComplete;
+	assign	BlockUpdateComplete =					TurnoverUpdate & 	Core_CommandComplete;
 	assign	BlockEvictComplete =					CSEvict & 			EvictCommandComplete;
-	assign	BlockWriteComplete =					CSPathRead & 		CoreCommandComplete;
-	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & CoreCommandComplete;
+	assign	BlockWriteComplete =					CSPathRead & 		Core_CommandComplete;
+	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & Core_CommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
+	
+	assign	TurnoverUpdate =						~AccessIsDummy & CSTurnaround1 & (AccessCommand == BECMD_Update);
 	
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSPathRead = 							CS == ST_PathRead;
@@ -325,7 +329,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		NS = 										CS;
 		case (CS)
 			ST_Reset : 
-				if (CoreResetDone) NS =				ST_Idle;
+				if (Core_ResetDone) NS =				ST_Idle;
 			ST_Idle :
 				if (AccessStart) 
 					NS =							ST_Scan1;
@@ -343,13 +347,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (Scan2Complete_Conservative & OutBufferHasSpace) 
 					NS = 							ST_Turnaround1;
 			ST_Turnaround1 : 
-				if (CoreCommandComplete)
+				if (Core_CommandComplete)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
-				if (CoreCommandComplete)
+				if (Core_CommandComplete)
 					NS =							ST_CoreSync;
 			ST_CoreSync :
-				if (CoreCommandComplete)
+				if (Core_CommandComplete)
 					NS =							ST_PathWriteback;
 			ST_PathWriteback :
 				if (PerAccessReset) 
@@ -389,7 +393,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
-	assign	CoreCommand =							(CSScan1 | CSScan2) ? 									SCMD_Dump :
+	assign	Core_Command =							(CSScan1 | CSScan2) ? 									SCMD_Dump :
 													(CSPathRead | CSEvict) ? 								SCMD_Push :
 													(CSTurnaround1 & AccessIsDummy) ? 						SCMD_Peak : // read something random
 													(CSTurnaround1 & (AccessCommand == BECMD_Update)) ? 	SCMD_Overwrite :
@@ -400,7 +404,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSPathWriteback) ? 									SCMD_Peak : 
 																											{SCMDWidth{1'bx}};
 							
-	assign	CoreCommandSAddr =						(CSTurnaround1 | CSTurnaround2) ? CRUD_SAddr : OutDMAAddr;
+	assign	Core_CommandSAddr =						(CSTurnaround1 | CSTurnaround2) ? CRUD_SAddr : OutDMAAddr;
 	
 	assign	Core_InPAddr = 							(CSEvict) ? 		EvictPAddr : 
 													(CSTurnaround2) ? 	AccessPAddr : // this should match the old contents 
@@ -426,19 +430,17 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													Scan2Complete_Conservative | 
 													StartWriteback | 
 													PerAccessReset | 
-													(~CSEvict & CoreCommandComplete) |
+													(~CSEvict & Core_CommandComplete) |
 													(CSEvict & EvictCommandComplete)),
-							.Set(					CoreCommandValid & CoreCommandReady),
+							.Set(					Core_CommandValid & Core_CommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					SentCoreCommand));	
 	
-	assign 	CoreCommandValid =						((	CSEvict | CSScan1 | CSScan2 | 
-														CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
-														CSPathRead | // increases path write performance
-													 (	CSPathWriteback & OutDMAValid & ~PathWriteback_Waiting);
-	
-	assign	TurnoverUpdate =						~AccessIsDummy & CSTurnaround1 & (AccessCommand == BECMD_Update);
+	assign 	Core_CommandValid =						((CSEvict | CSScan1 | CSScan2 | 
+													  CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
+													  CSPathRead | // increases path write performance
+													 (WritebackGate & OutDMAValid);
 	
 	// since UpdateData == EvictData most likely, this gets optimized away
 	assign	Core_InData = 							(CSEvict) ? 		EvictData : 
@@ -462,7 +464,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				core(		.Clock(					Clock), 
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
-							.ResetDone(				CoreResetDone),
+							.ResetDone(				Core_ResetDone),
 						
 							.InData(				Core_InData),
 							.InValid(				Core_InValid),
@@ -473,15 +475,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutLeaf(				Core_OutLeaf),
 							.OutValid(				Core_OutValid),
 
-							.InSAddr(				CoreCommandSAddr),
+							.InSAddr(				Core_CommandSAddr),
 							.InPAddr(				Core_InPAddr),
 							.InLeaf(				Core_InLeaf),
 							.InHeaderUpdate(		PerformCoreHeaderUpdate),
 							.InHeaderRemove(		CoreHeaderRemove),
-							.InCommand(				CoreCommand),
-							.InCommandValid(		CoreCommandValid),
-							.InCommandReady(		CoreCommandReady),
-							.InCommandComplete(		CoreCommandComplete),
+							.InCommand(				Core_Command),
+							.InCommandValid(		Core_CommandValid),
+							.InCommandReady(		Core_CommandReady),
+							.InCommandComplete(		Core_CommandComplete),
 							
 							.OutScanPAddr(			ScanPAddr),
 							.OutScanLeaf(			ScanLeaf),
@@ -498,8 +500,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.StashOverflow(			StashOverflow),
 							.StashOccupancy(		StashOccupancy),
 							
-							.CancelPushRequest(		StartWriteback),
-							.PrepNextPeak(			PrepNextPeak),
+							.CancelPushCommand(		StartWriteback),
+							.CancelPeakCommand(		OutDMALast),
 							.SyncComplete(			Core_AccessComplete));
 
 	// leaf remapping step
@@ -519,7 +521,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 				scan_table(	.Clock(					Clock),
 							.Reset(					Reset),
-							.PerAccessReset(		PerAccessReset),
+							.PerAccessReset(		ScanTableReset),
+							.AccessComplete(		PerAccessReset),
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
@@ -537,9 +540,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 						
 							.InDMAAddr(				BlocksReading),
 							.InDMAValid(			InDMAValid),
-							.InDMAReset(			PathWriteback_Tick),
+							
 							.OutDMAAddr(			OutDMAAddr),
-							.OutDMAValid(			OutDMAValid));	
+							.OutDMAValid(			OutDMAValid),
+							.OutDMAReady(			OutDMAReady),
+							.OutDMALast(			OutDMALast));
 
 	//--------------------------------------------------------------------------
 	// Front-end command handling
@@ -600,10 +605,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset), 
 							.Load(					1'b0), 
 							.Enable(				1'b1), 
-							.SIn(					CoreCommandComplete), 
+							.SIn(					Core_CommandComplete), 
 							.POut(					EvictCommandComplete));
 	end else begin:PASS_EVICT
-		assign	EvictCommandComplete =				CoreCommandComplete;
+		assign	EvictCommandComplete =				Core_CommandComplete;
 	end endgenerate
 	
 	// SECURITY: count the worst-case scan latency
@@ -624,57 +629,50 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Read control
 	//--------------------------------------------------------------------------
 	
-	assign	PathWriteback_Tick =					CSPathWriteback & PrepNextPeak;
-	assign	StopReading =							CSPathWriteback & ReadingLastBlock & PrepNextPeak;
+	assign	ScanTableReset =						WritebackGate & BlocksReading == 0;
 	
-	// ticks at start of block read
-	Counter		#(			.Width(					ScanTableAWidth),
-							.Limited(				1),
-							.Limit(					BlocksOnPath - 1))
-				rd_st_count(.Clock(					Clock),
+	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
+	assign	OutDMAReady =							WritebackGate & Core_CommandComplete;
+	
+	// which block are we currently writing back?
+	Counter		#(			.Width(					ScanTableAWidth))
+				rd_st_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathWriteback_Tick),
+							.Enable(				CSPathWriteback & ~ReadingLastBlock),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksReading));
 	CountCompare #(			.Width(					ScanTableAWidth),
-							.Compare(				BlocksOnPath - 1))
+							.Compare(				BlocksOnPath))
 				rd_st_cmp(	.Count(					BlocksReading), 
-							.TerminalCount(			ReadingLastBlock));							
-
-	Register	#(			.Width(					1))
-				stop_rd(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					StopReading),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					StopReading_Hold));	
-					
-	assign	InDMAValid =							CSPathWriteback & ~StopReading & ~StopReading_Hold;
+							.TerminalCount(			ReadingLastBlock));
 					
 	// ticks at end of block read
 	Counter		#(			.Width(					ScanTableAWidth))
-				rd_ret_count(.Clock(				Clock),
+				rd_ret_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSPathWriteback & BlockReadComplete_Internal),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					BlocksRead));
-	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
-							
+	CountCompare #(			.Width(					ScanTableAWidth),
+							.Compare(				BlocksOnPath))
+				rd_ret_cmp(	.Count(					BlocksRead), 
+							.TerminalCount(			Top_AccessComplete));
+
 	// Block-level backpressure for reads (due to random DRAM delays)
 	Register	#(			.Width(					1))
 				read_wait(	.Clock(					Clock),
 							.Reset(					Reset | OutBufferHasSpace),
-							.Set(					PathWriteback_Tick & ~OutBufferHasSpace),
+							.Set(					BlockReadComplete_Internal & ~OutBufferHasSpace),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
 							
-	assign	Top_AccessComplete =					BlocksRead == BlocksOnPath;
-
+	assign	WritebackGate = 						CSPathWriteback & ~PathWriteback_Waiting;	
+							
 	//--------------------------------------------------------------------------
 	// Read interface buffering
 	//--------------------------------------------------------------------------
