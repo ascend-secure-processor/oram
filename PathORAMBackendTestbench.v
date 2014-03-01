@@ -377,7 +377,8 @@ module	PathORAMBackendTestbench;
 		// do different types of accesses to random leaves/etc
 		
 		//----------------------------------------------------------------------
-		//	Test X: background eviction on normal access
+		//	Test: background eviction on normal access
+		//	Test: make sure that writing the same data twice doesn't cause us to read stale data
 		//----------------------------------------------------------------------	
 		
 		#(Cycle*1000);

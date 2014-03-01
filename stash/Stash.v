@@ -9,7 +9,12 @@
 //	Module:		Stash
 //	Desc:		The Path ORAM stash
 //
-//	General notes:
+//	NOTE #1:	This stash does not pre-empt its internal scan when the path 
+//				read data arrives.  This is fine (= no performance penalty & no 
+//				possibility to lose data even with pathological DRAM behavior) 
+//				as long as we buffer the whole path OUTSIDE of the stash.
+//
+//	NOTE #2:
 //		- Leaf orientation: least significant bit is root bucket
 // 		- Writeback occurs in root -> leaf bucket order
 //
@@ -130,14 +135,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	localparam					STWidth =				4,
 								ST_Reset =				4'd0,
 								ST_Idle = 				4'd1,
-								ST_Scan1 =				4'd2,
+								ST_Scan =				4'd2,
 								ST_PathRead =			4'd3,
-								ST_Scan2 =				4'd4,
-								ST_PathWriteback = 		4'd5,
-								ST_Evict =				4'd6,
-								ST_Turnaround1 =		4'd7,
-								ST_Turnaround2 =		4'd8,
-								ST_CoreSync =			4'd9;
+								ST_PathWriteback = 		4'd4,
+								ST_Evict =				4'd5,
+								ST_Turnaround1 =		4'd6,
+								ST_Turnaround2 =		4'd7,
+								ST_CoreSync =			4'd8;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -146,13 +150,14 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						PerAccessReset;
 
 	reg		[STWidth-1:0]		CS, NS;
-	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan1, 
-								CSScan2, CSEvict, CSTurnaround1, CSTurnaround2,
+	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan, 
+								CSEvict, CSTurnaround1, CSTurnaround2,
 								CSCoreSync;
 	reg							CSTurnaround1_Delayed;
 	wire						CSTurnaround1_FirstCycle;
 	
-	wire						StartScan_pass, StartScan_set, StartScan_primed;
+	wire						StartScan_Pass, StartScan_set, StartScan_Primed;
+	wire						StartWriteback_Pass, StartWriteback_Primed;
 				
 	wire						Core_ResetDone;
 	wire	[SCMDWidth-1:0]		Core_Command;
@@ -187,7 +192,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ScanTableAWidth-1:0] BlocksRead;
 		
 	wire	[SCWidth-1:0]		ScanCount;
-	wire						SentCoreCommand, Scan2Complete_Conservative;
+	wire						SentCoreCommand, ScanComplete_Conservative;
 	wire 						ScanTableResetDone;
 	
 	wire						Core_AccessComplete, Top_AccessComplete;
@@ -275,12 +280,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			
 			if (CS_Delayed != CS) begin
-				if (CSScan1)
+				if (CSScan)
 					$display("[%m @ %t] Stash: start Scan1", $time);
 				if (CSPathRead)
 					$display("[%m @ %t] Stash: start PathRead (leaf = %x, dummy = %b)", $time, AccessLeaf, AccessIsDummy);
-				if (CSScan2)
-					$display("[%m @ %t] Stash: start Scan2", $time);
 				if (CSPathWriteback)
 					$display("[%m @ %t] Stash: start PathWriteback", $time);
 			end
@@ -311,8 +314,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSTurnaround2 =							CS == ST_Turnaround2;
 	assign	CSCoreSync =							CS == ST_CoreSync;
 	assign	CSPathWriteback = 						CS == ST_PathWriteback;
-	assign	CSScan1 = 								CS == ST_Scan1; 
-	assign	CSScan2 = 								CS == ST_Scan2;
+	assign	CSScan = 								CS == ST_Scan;
 	assign	CSEvict =								CS == ST_Evict;
 	
 	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
@@ -332,20 +334,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (Core_ResetDone) NS =				ST_Idle;
 			ST_Idle :
 				if (AccessStart) 
-					NS =							ST_Scan1;
+					NS =							ST_Scan;
 				else if (EvictDataInValid & AccessCommand == BECMD_Append)
 					NS =							ST_Evict;
-			ST_Scan1 :
-				if (WriteInValid & SentCoreCommand)
+			ST_Scan :
+				if (ScanComplete_Conservative)
 					NS =			 				ST_PathRead;
-				else if (StartWriteback) // if whole path was dummy blocks
-					NS = 							ST_Scan2;
 			ST_PathRead :
-				if (StartWriteback) 
-					NS =							ST_Scan2;
-			ST_Scan2 : 
-				if (Scan2Complete_Conservative & OutBufferHasSpace) 
-					NS = 							ST_Turnaround1;
+				if (StartWriteback_Pass) 
+					NS =							ST_Turnaround1;
 			ST_Turnaround1 : 
 				if (Core_CommandComplete)
 					NS =							ST_Turnaround2;
@@ -376,24 +373,33 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								.Set(				StartScan),
 								.Enable(			1'b0),
 								.In(				1'bx),
-								.Out(				StartScan_primed));
-	assign	StartScan_pass = 						CSIdle & (StartScan | StartScan_primed);
+								.Out(				StartScan_Primed));
+	assign	StartScan_Pass = 						CSIdle & (StartScan | StartScan_Primed);
 
 	// Generate valid signals for this access
 	Register	#(				.Width(				1))
 				access_start(	.Clock(				Clock),
 								.Reset(				Reset | PerAccessReset),
-								.Set(				StartScan_pass),
+								.Set(				StartScan_Pass),
 								.Enable(			1'b0),
 								.In(				1'bx),
 								.Out(				StartScan_set));
-	assign	AccessStart =							StartScan_set | StartScan_pass;
+	assign	AccessStart =							StartScan_set | StartScan_Pass;
+	
+	Register	#(				.Width(				1))
+				wb_hold(		.Clock(				Clock),
+								.Reset(				Reset | PerAccessReset),
+								.Set(				StartWriteback),
+								.Enable(			1'b0),
+								.In(				1'bx),
+								.Out(				StartWriteback_Primed));	
+	assign	StartWriteback_Pass = 					CSPathRead & (StartWriteback | StartWriteback_Primed);
 	
 	//--------------------------------------------------------------------------
 	//	Inner modules
 	//--------------------------------------------------------------------------
 	
-	assign	Core_Command =							(CSScan1 | CSScan2) ? 									SCMD_Dump :
+	assign	Core_Command =							(CSScan) ? 												SCMD_Dump :
 													(CSPathRead | CSEvict) ? 								SCMD_Push :
 													(CSTurnaround1 & AccessIsDummy) ? 						SCMD_Peak : // read something random
 													(CSTurnaround1 & (AccessCommand == BECMD_Update)) ? 	SCMD_Overwrite :
@@ -427,8 +433,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Register	#(			.Width(					1))
 				sent_cmd(	.Clock(					Clock),
 							.Reset(					Reset | 
-													Scan2Complete_Conservative | 
-													StartWriteback | 
+													ScanComplete_Conservative | 
+													StartWriteback_Pass | 
 													PerAccessReset | 
 													(~CSEvict & Core_CommandComplete) |
 													(CSEvict & EvictCommandComplete)),
@@ -437,8 +443,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					1'bx),
 							.Out(					SentCoreCommand));	
 	
-	assign 	Core_CommandValid =						((CSEvict | CSScan1 | CSScan2 | 
-													  CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
+	assign 	Core_CommandValid =						((CSEvict | CSScan | CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
 													  CSPathRead | // increases path write performance
 													 (WritebackGate & OutDMAValid);
 	
@@ -500,7 +505,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.StashOverflow(			StashOverflow),
 							.StashOccupancy(		StashOccupancy),
 							
-							.CancelPushCommand(		StartWriteback),
+							.CancelPushCommand(		StartWriteback_Pass),
 							.CancelPeakCommand(		OutDMALast),
 							.SyncComplete(			Core_AccessComplete));
 
@@ -619,17 +624,17 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CSScan1 | CSScan2),
+							.Enable(				CSScan),
 							.In(					{SCWidth{1'bx}}),
 							.Count(					ScanCount));
 	
-	assign	Scan2Complete_Conservative =			CSScan2 & ScanCount == ScanDelay;
+	assign	ScanComplete_Conservative =				CSScan & ScanCount == ScanDelay;
 	
 	//--------------------------------------------------------------------------
 	//	Read control
 	//--------------------------------------------------------------------------
 	
-	assign	ScanTableReset =						WritebackGate & BlocksReading == 0;
+	assign	ScanTableReset =						CSPathWriteback & BlocksReading == 0;
 	
 	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
 	

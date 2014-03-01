@@ -18,7 +18,7 @@
 	localparam					BCLWidth =	 		ORAMLP1 * BCWidth; // bitvector of bucket counts
 			
 	localparam					ScanTableLatency =	(Pipelined) ? 2 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
-	localparam					ScanDelay =			StashCapacity + ScanTableLatency;
+	localparam					ScanDelay =			(StashCapacity - BlocksOnPath) + ScanTableLatency;
 	localparam					SCWidth =			`log2(ScanDelay);
 
 	// Commands understood by StashCore, called by Stash

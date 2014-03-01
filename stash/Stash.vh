@@ -1,4 +1,5 @@
 			
+			// TODO change StashCapacity to be independent of path length
 		parameter				StashCapacity =		100, // isn't restricted to be > path length
 	
 								// improves throughput for path writeback operations

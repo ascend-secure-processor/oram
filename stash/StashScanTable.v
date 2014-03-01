@@ -155,6 +155,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 				$stop;
 			end
 			
+			if (AccessComplete & |BCounts_Pre) begin
+				$display("[%m @ %t] ERROR: ScanTable BCounts not reset", $time);
+				$stop;				
+			end
+			
 			if (~ResetDone_Delayed & ResetDone) begin
 				ind = 0;
 				while (ind != BlocksOnPath) begin

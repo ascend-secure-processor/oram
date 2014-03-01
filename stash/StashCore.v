@@ -190,9 +190,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire						OutScanValidPush, OutScanValidDump;
 	
-	wire						Dump_Preempt, Dump_Phase2;
-	wire	[StashEAWidth-1:0]	LastDumpAddress;
-
 	reg 	[SyncSTWidth-1:0] 	NS_Sync, CS_Sync;
 	wire 						CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
 	
@@ -367,7 +364,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer;
 	assign	Transfer_Terminator_Pre =				LastChunk_Pre & DataTransfer;
-	assign	Dump_Preempt =							CSDumping & InCommand == SCMD_Push & InValid & InCommandValid;
 
 	assign	CSReset =								CS == ST_Reset;
 	
@@ -402,11 +398,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 					NS =						 	ST_Idle;
 			ST_Idle :
 				if (InCommandValid) begin
-					if (InCommand == SCMD_Push)
+					if (InCommand == SCMD_Push & ~CancelPushCommand)
 						NS =						ST_Pushing;
 					if (InCommand == SCMD_Overwrite)
 						NS =						ST_Overwriting;
-					if (InCommand == SCMD_Peak)
+					if (InCommand == SCMD_Peak & ~CancelPeakCommand)
 						NS =						ST_Peaking;
 					if (InCommand == SCMD_Dump)
 						NS =						ST_Dumping;
@@ -431,10 +427,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Dumping : 
-				// TODO need to put data being processed by ScanTable somewhere if ScanTableLatency > 0
-				if (Dump_Preempt)
-					NS = 							ST_Pushing;
-				else if (StashWalk_Terminator)
+				if (StashWalk_Terminator)
 					NS =							ST_Idle;
 			ST_UpdatingHeader :
 					NS =							ST_Idle;
@@ -651,16 +644,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	Dumping the UsedList
 	//--------------------------------------------------------------------------
-
-	/*
-		Connect the UsedList scanning logic to the ScanTable logic.  The 
-		termination condition is based on the ScanInValid logic (NOT 
-		ScanOutValid) so that we can add pipelining to StashScanTable as needed.
-	*/
-
-	assign	StashWalk = 							(CSDumping_FirstCycle & Dump_Phase2) ? 	LastDumpAddress : 
-													(CSDumping_FirstCycle & ~Dump_Phase2) ? UsedListHead : 
-																							StashP_DataOut;
+	
+	assign	StashWalk = 							(CSDumping_FirstCycle) ? UsedListHead : StashP_DataOut;
 																							
 	assign	SWTerminator_Finished =					CSDumping & ~InScanValid & InScanValid_Delayed;
 	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & StashWalk == SNULL;
@@ -673,34 +658,10 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	OutScanAdd =							CSPushing;
 	
 	assign	OutScanValidPush =						CSPushing & Add_Terminator;
-	assign	OutScanValidDump =						CSDumping_Delayed & // wait a cycle for StashP's latency
-													OutScanSAddr != SNULL & // don't send end-of-list marker
-													CSDumping; // don't overshoot
+	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot
+													OutScanSAddr != SNULL; // don't send end-of-list marker
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
-	
-	/*
-		We need to be able to stall the dump in the middle when data comes back 
-		from DRAM.  The dump can be restarted in the middle using another Dump 
-		command.
-	*/
 
-	Register	#(			.Width(					1))
-				dump_stage(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					Dump_Preempt | StashWalk_Terminator),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					Dump_Phase2));
-							
-	// if we get interrupted, save where we were in the used list
-	Register	#(			.Width(					StashEAWidth))
-				saved_dump(	.Clock(					Clock),
-							.Reset(					Reset | PerAccessReset),
-							.Set(					1'b0),
-							.Enable(				CSDumping & (Dump_Preempt | StashWalk_Terminator)),
-							.In(					(StashWalk_Terminator) ? SNULL : StashWalk),
-							.Out(					LastDumpAddress));
-							
 	//--------------------------------------------------------------------------
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------
