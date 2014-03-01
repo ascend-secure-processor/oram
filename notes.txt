@@ -11,7 +11,7 @@
 
 		- Reserved address vs. dummy bit. There will be other status bits, like child flag bits. 
 
-		
+		- By buffering the entire path (only possible for small block sizes), we can make the stash logic simpler bc it doesn't need scan pre-emption.
 		
 	Known performance bugs:
 		- MIG is introducing 14 cycles of latency between CommandValid -> RAS and 5 cycles between DQ valid and ReadOutValid
