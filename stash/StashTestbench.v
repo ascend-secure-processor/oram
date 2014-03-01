@@ -238,6 +238,7 @@ module	StashTestbench;
 				if (ReadOutValid & ReadOutReady) begin
 					if (ReadData !== Data) begin
 						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
+						#(Cycle*4); // helps us see where the problem actually occurs ...
 						$stop;
 					end
 					//$display("OK: Stash read data %d, expected %d", ReadData, Data);

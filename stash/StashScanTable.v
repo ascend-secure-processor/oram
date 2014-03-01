@@ -58,6 +58,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
+	wire						ResetDone_Internal;
+	
 	wire	[ORAMLP1-1:0]		CurrentLeafP1, InLeafP1;
 	
 	wire	[ORAMLP1-1:0]		FullMask, Intersection, CommonSubpath,
@@ -89,7 +91,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire	[StashEAWidth-1:0]	DMAAddr_Internal;
 	wire						DMAValid_Internal, DMAReady_Internal;						
-	wire	[ScanTableAWidth:0]	STFIFOCount;
+	wire	[`log2(BlocksOnPath+1)-1:0]	STFIFOCount;
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -174,9 +176,9 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	InLeafP1 = 								{InScanLeaf, 1'b0};
 	
 	// Depending on leaf orientation ...
-	//Reverse		#(			.Width(					ORAMLP1))
-	//				Rev1(		.In(					InLeafP1 ^ CurrentLeafP1), 
-	//							.Out(					Intersection));
+	//Reverse		#(			.Width(				ORAMLP1))
+	//				Rev1(		.In(				InLeafP1 ^ CurrentLeafP1), 
+	//							.Out(				Intersection));
 	assign	Intersection =							InLeafP1 ^ CurrentLeafP1;
 							
 	assign	CommonSubpath = 						(Intersection & -Intersection) - 1;
@@ -206,7 +208,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot; // TODO InScanValid is redundant?
+	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot;
 	assign	OutScanSAddr_Pre =						InScanSAddr_Dly;
 	assign	OutScanValid_Pre = 						InScanValid_Dly;
 	
@@ -266,10 +268,19 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~ResetDone),
+							.Enable(				~ResetDone_Internal),
 							.In(					{ScanTableAWidth{1'bx}}),
 							.Count(					ResetCount));
-	assign	ResetDone =								ResetCount == BlocksOnPath;		
+							
+	assign	ResetDone_Internal =					ResetCount == BlocksOnPath;
+	
+	Register	#(			.Width(					1))
+				rst_hold(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					ResetDone_Internal),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ResetDone));
 	
 	//--------------------------------------------------------------------------
 	//	Usage tables
@@ -282,10 +293,10 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
 							
-	assign 	ScanTable_Address = 					(~ResetDone) ? ResetCount : HighestLevel_Bin * ORAMZ + BucketOccupancy;
-	assign	ScanTable_WE =							OutScanAccepted | ~ResetDone;
+	assign 	ScanTable_Address = 					(~ResetDone_Internal) ? ResetCount : HighestLevel_Bin * ORAMZ + BucketOccupancy;
+	assign	ScanTable_WE =							OutScanAccepted | ~ResetDone_Internal;
 
-	assign	ScanTable_DataIn =						(~ResetDone) ? SNULL : OutScanSAddr;
+	assign	ScanTable_DataIn =						(~ResetDone_Internal) ? SNULL : OutScanSAddr;
 	
 	wire	[StashEAWidth-1:0]		Dummy; // TODO
 	
@@ -308,7 +319,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.DOut(					{DMAAddr_Internal, 		Dummy}));
 
 	Pipeline	#(			.Width(					1),
-							.Stages(				Pipelined))
+							.Stages(				1))
 			dma_vld_dly(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				InDMAValid), 
@@ -325,8 +336,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutData(				OutDMAAddr),
 							.OutSend(				OutDMAValid),
 							.OutReady(				OutDMAReady));
-							
-	assign	OutDMALast =							STFIFOCount == 1;
+
+	assign	OutDMALast =							~DMAValid_Internal & STFIFOCount == 1;
 							
 	//--------------------------------------------------------------------------
 endmodule
