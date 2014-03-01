@@ -632,7 +632,10 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	ScanTableReset =						WritebackGate & BlocksReading == 0;
 	
 	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
-	assign	OutDMAReady =							WritebackGate & Core_CommandComplete;
+	
+	// NOTE: don't apply WritebackGate to this signal (we need to tick down the 
+	// scan table FIFO properly ...)
+	assign	OutDMAReady =							Core_CommandComplete;
 	
 	// which block are we currently writing back?
 	Counter		#(			.Width(					ScanTableAWidth))
@@ -666,7 +669,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	Register	#(			.Width(					1))
 				read_wait(	.Clock(					Clock),
 							.Reset(					Reset | OutBufferHasSpace),
-							.Set(					BlockReadComplete_Internal & ~OutBufferHasSpace),
+							.Set(					~OutBufferHasSpace),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					PathWriteback_Waiting));
