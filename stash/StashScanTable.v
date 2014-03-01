@@ -93,6 +93,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						DMAValid_Internal, DMAReady_Internal;						
 	wire	[`log2(BlocksOnPath+1)-1:0]	STFIFOCount;
 	
+	wire	[StashEAWidth-1:0]	DummyWire;
+	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
 	//--------------------------------------------------------------------------
@@ -298,8 +300,6 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	assign	ScanTable_DataIn =						(~ResetDone_Internal) ? SNULL : OutScanSAddr;
 	
-	wire	[StashEAWidth-1:0]		Dummy; // TODO
-	
 	/*
 		Points directly to locations in StashD, where blocks live that are to be 
 		written back during this ORAM access.
@@ -316,7 +316,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Write(					{1'b0, 					ScanTable_WE}),
 							.Address(				{InDMAAddr, 			ScanTable_Address}),
 							.DIn(					{{StashEAWidth{1'bx}}, 	ScanTable_DataIn}),
-							.DOut(					{DMAAddr_Internal, 		Dummy}));
+							.DOut(					{DMAAddr_Internal, 		DummyWire}));
 
 	Pipeline	#(			.Width(					1),
 							.Stages(				1))
@@ -325,6 +325,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InData(				InDMAValid), 
 							.OutData(				DMAValid_Internal));								
 	
+	// decouple the ScanTableLatency from path writeback control logic
 	FIFORAM		#(			.Width(					StashEAWidth),
 							.Buffering(				BlocksOnPath))
 				st_fifo(	.Clock(					Clock),

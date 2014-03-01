@@ -202,6 +202,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire						Sync_FoundUsedElement, Sync_FoundFreeElement;
 	wire						Sync_Terminator;
 	
+	wire 						StreamingCRUDop;	
+	
 	// Derived signals
 
 	reg		[StashEAWidth-1:0] 	StashWalk_Delayed;
@@ -338,8 +340,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
-	wire StreamingCRUDop; // TODO
-	
 	/* 	
 		Pulsed during the last cycle of an operation.  InCommandReady will be 
 		high during the last write cycle and _second to last_ read cycle because 
