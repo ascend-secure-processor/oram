@@ -149,6 +149,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire						PerAccessReset;
 
+	// Control
+	
 	reg		[STWidth-1:0]		CS, NS;
 	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan, 
 								CSEvict, CSTurnaround1, CSTurnaround2,
@@ -156,14 +158,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	reg							CSTurnaround1_Delayed;
 	wire						CSTurnaround1_FirstCycle;
 	
+	// Input timing
+	
 	wire						StartScan_Pass, StartScan_set, StartScan_Primed;
 	wire						StartWriteback_Pass, StartWriteback_Primed;
 				
+	// Core interface
+				
 	wire						Core_ResetDone;
 	wire	[SCMDWidth-1:0]		Core_Command;
-	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
 	wire						Core_CommandValid, Core_CommandReady, Core_CommandComplete;				
-	wire						EvictCommandComplete;
+	wire						Evict_CommandComplete;
+	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
 	
 	wire	[BEDWidth-1:0]		Core_InData;
 	wire	[ORAMU-1:0]			Core_InPAddr;
@@ -177,46 +183,59 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[ORAML-1:0]			Core_OutLeaf;
 	wire						Core_OutValid;
 	
-	wire	[ORAMU-1:0]			ScanPAddr;
-	wire	[ORAML-1:0]			ScanLeaf;
-	wire	[StashEAWidth-1:0]	ScanSAddr;
-	wire						ScanAdd, ScanLeafValid;
-	wire						ScanStreaming, ScannedStreaming;
+	// ScanTable interface
+	
+	wire	[ORAMU-1:0]			Scan_PAddr;
+	wire	[ORAML-1:0]			Scan_Leaf;
+	wire	[StashEAWidth-1:0]	Scan_SAddr;
+	wire						Scan_Add, Scan_LeafValid;
+	wire						Scan_Streaming;
 
-	wire	[StashEAWidth-1:0]	ScannedSAddr;
-	wire						ScannedAdd, ScannedLeafAccepted, ScannedLeafValid;
+	wire	[StashEAWidth-1:0]	Scanned_SAddr;
+	wire						Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid;
+	wire						Scanned_Streaming;
+	
+	wire	[StashEAWidth-1:0]	OutDMAAddr;
+	wire						InDMAValid;
+	wire						OutDMAValid, OutDMAReady;
+	wire						OutDMALast;	
+	
+	// Scan control
+	
+	wire	[SCWidth-1:0]		ScanCount;
+	wire						SentCoreCommand, ScanComplete_Conservative;
+	wire 						ScanTableResetDone;	
+	
+	// Writeback control
 	
 	wire						BlockReadComplete_InternalPre;
 	reg							BlockReadComplete_Internal;
+
+	wire	[ScanTableAWidth-1:0]BlocksReading;
 	
 	wire						PathWriteback_Waiting;
 	wire	[ScanTableAWidth-1:0] BlocksRead;
-		
-	wire	[SCWidth-1:0]		ScanCount;
-	wire						SentCoreCommand, ScanComplete_Conservative;
-	wire 						ScanTableResetDone;
 	
 	wire						Core_AccessComplete, Top_AccessComplete;
 	
-	wire	[ScanTableAWidth-1:0]BlocksReading;
-	wire	[StashEAWidth-1:0]	OutDMAAddr;	
-	wire						InDMAValid, OutDMAValid, OutDMAReady;
-	wire						OutDMALast;
+	wire						WritebackGate;
+	wire						ScanTableReset;		
+	
+	// Read control
 	
 	wire	[OBWidth-1:0]		OutBufferEmptyCount, OutBufferCount;	
 	wire						OutBufferHasSpace, TickOutHeader, OutHeaderValid;
 	wire						OutBufferInReady, OutHBufferInReady, OutBufferInValid;
 
+	// Frontend control
+	
 	wire	[ORAML-1:0]			MappedLeaf;
 	wire						CurrentLeafValid;
-		
+	
 	wire						LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
 	wire						FoundRemoveBlock;
 	wire						ReturnInProgress;
 	wire	[StashEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
-	
-	wire						WritebackGate;
-	wire						ScanTableReset;	
 	
 	//--------------------------------------------------------------------------
 	//	Debugging
@@ -281,7 +300,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			
 			/* The StashTestbench abuses this by illegally filling the stash.  Re-enable for BackendTestbench
-			if (ScanComplete_Conservative & (ScannedLeafValid | ScanLeafValid)) begin
+			if (ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid)) begin
 				$display("[%m] ERROR: the scan took longer than our _conservative_ estimate");
 				$stop;
 			end
@@ -309,7 +328,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
 	
 	assign	BlockUpdateComplete =					TurnoverUpdate & 	Core_CommandComplete;
-	assign	BlockEvictComplete =					CSEvict & 			EvictCommandComplete;
+	assign	BlockEvictComplete =					CSEvict & 			Evict_CommandComplete;
 	assign	BlockWriteComplete =					CSPathRead & 		Core_CommandComplete;
 	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & Core_CommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
@@ -349,7 +368,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (ScanComplete_Conservative)
 					NS =			 				ST_PathRead;
 			ST_PathRead :
-				if (StartWriteback_Pass & ~ScannedStreaming) 
+				if (StartWriteback_Pass & ~Scanned_Streaming) 
 					NS =							ST_Turnaround1;
 			ST_Turnaround1 : 
 				if (Core_CommandComplete)
@@ -364,7 +383,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
-				if (EvictCommandComplete)
+				if (Evict_CommandComplete)
 					NS =							ST_Idle;
 		endcase
 	end
@@ -445,7 +464,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													StartWriteback_Pass | 
 													PerAccessReset | 
 													(~CSEvict & Core_CommandComplete) |
-													(CSEvict & EvictCommandComplete)),
+													(CSEvict & Evict_CommandComplete)),
 							.Set(					Core_CommandValid & Core_CommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -498,18 +517,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InCommandReady(		Core_CommandReady),
 							.InCommandComplete(		Core_CommandComplete),
 							
-							.OutScanPAddr(			ScanPAddr),
-							.OutScanLeaf(			ScanLeaf),
-							.OutScanSAddr(			ScanSAddr),
-							.OutScanAdd(			ScanAdd),
-							.OutScanValid(			ScanLeafValid),
-							.OutScanStreaming(		ScanStreaming),
+							.OutScanPAddr(			Scan_PAddr),
+							.OutScanLeaf(			Scan_Leaf),
+							.OutScanSAddr(			Scan_SAddr),
+							.OutScanAdd(			Scan_Add),
+							.OutScanValid(			Scan_LeafValid),
+							.OutScanStreaming(		Scan_Streaming),
 							
-							.InScanSAddr(			ScannedSAddr),
-							.InScanAccepted(		ScannedLeafAccepted),
-							.InScanAdd(				ScannedAdd),
-							.InScanValid(			ScannedLeafValid),
-							.InScanStreaming(		ScannedStreaming),
+							.InScanSAddr(			Scanned_SAddr),
+							.InScanAccepted(		Scanned_LeafAccepted),
+							.InScanAdd(				Scanned_Add),
+							.InScanValid(			Scanned_LeafValid),
+							.InScanStreaming(		Scanned_Streaming),
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
@@ -520,7 +539,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.SyncComplete(			Core_AccessComplete));
 
 	// leaf remapping step
-	assign	MappedLeaf =							(LookForBlock & FoundBlock_ThisCycle) ? RemapLeaf : ScanLeaf;
+	assign	MappedLeaf =							(LookForBlock & FoundBlock_ThisCycle) ? RemapLeaf : Scan_Leaf;
 	
 	// don't try to push back blocks that we are removing
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
@@ -544,17 +563,17 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.CurrentLeafValid(		CurrentLeafValid),
 							
 							.InScanLeaf(			MappedLeaf),
-							.InScanPAddr(			ScanPAddr),
-							.InScanSAddr(			ScanSAddr),
-							.InScanAdd(				ScanAdd),
-							.InScanValid(			ScanLeafValid),
-							.InScanStreaming(		ScanStreaming),
+							.InScanPAddr(			Scan_PAddr),
+							.InScanSAddr(			Scan_SAddr),
+							.InScanAdd(				Scan_Add),
+							.InScanValid(			Scan_LeafValid),
+							.InScanStreaming(		Scan_Streaming),
 							
-							.OutScanSAddr(			ScannedSAddr),
-							.OutScanAccepted(		ScannedLeafAccepted),
-							.OutScanAdd(			ScannedAdd),
-							.OutScanValid(			ScannedLeafValid),
-							.OutScanStreaming(		ScannedStreaming),
+							.OutScanSAddr(			Scanned_SAddr),
+							.OutScanAccepted(		Scanned_LeafAccepted),
+							.OutScanAdd(			Scanned_Add),
+							.OutScanValid(			Scanned_LeafValid),
+							.OutScanStreaming(		Scanned_Streaming),
 							
 							.InDMAAddr(				BlocksReading),
 							.InDMAValid(			InDMAValid),
@@ -576,14 +595,14 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					PerformCoreHeaderUpdate),
 							.Out(					LookForBlock));
 
-	assign	FoundBlock_ThisCycle =					ScanLeafValid & (ScanPAddr == AccessPAddr);
+	assign	FoundBlock_ThisCycle =					Scan_LeafValid & (Scan_PAddr == AccessPAddr);
 	
 	Register	#(			.Width(					StashEAWidth))
 				block_addr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Enable(				FoundBlock_ThisCycle),
-							.In(					ScanSAddr),
+							.In(					Scan_SAddr),
 							.Out(					CRUD_SAddr));
 
 	// only needed for debugging
@@ -624,9 +643,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Load(					1'b0), 
 							.Enable(				1'b1), 
 							.SIn(					Core_CommandComplete), 
-							.SOut(					EvictCommandComplete));
+							.SOut(					Evict_CommandComplete));
 	end else begin:PASS_EVICT
-		assign	EvictCommandComplete =				Core_CommandComplete;
+		assign	Evict_CommandComplete =				Core_CommandComplete;
 	end endgenerate
 	
 	// SECURITY: count the worst-case scan latency
