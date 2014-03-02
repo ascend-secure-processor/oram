@@ -22,45 +22,45 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset,
+  	input 					Clock, Reset,
 	
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
-	input	[BECMDWidth-1:0] 	Command,
-	input	[ORAMU-1:0]			PAddr,
-	input	[ORAML-1:0]			CurrentLeaf, // If Command == Append, this is XX 
-	input	[ORAML-1:0]			RemappedLeaf,
-	input						CommandValid,
-	output 						CommandReady,
+	input	[BECMDWidth-1:0] Command,
+	input	[ORAMU-1:0]		PAddr,
+	input	[ORAML-1:0]		CurrentLeaf, // If Command == Append, this is XX 
+	input	[ORAML-1:0]		RemappedLeaf,
+	input					CommandValid,
+	output 					CommandReady,
 
 	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
 	
-	output	[FEDWidth-1:0]		LoadData,
-	output						LoadValid,
-	input 						LoadReady,
+	output	[FEDWidth-1:0]	LoadData,
+	output					LoadValid,
+	input 					LoadReady,
 
-	input	[FEDWidth-1:0]		StoreData,
-	input 						StoreValid,
-	output 						StoreReady,
+	input	[FEDWidth-1:0]	StoreData,
+	input 					StoreValid,
+	output 					StoreReady,
 	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
 	//--------------------------------------------------------------------------
 
-	output	[DDRAWidth-1:0]		DRAMCommandAddress,
-	output	[DDRCWidth-1:0]		DRAMCommand,
-	output						DRAMCommandValid,
-	input						DRAMCommandReady,
+	output	[DDRAWidth-1:0]	DRAMCommandAddress,
+	output	[DDRCWidth-1:0]	DRAMCommand,
+	output					DRAMCommandValid,
+	input					DRAMCommandReady,
 	
-	input	[DDRDWidth-1:0]		DRAMReadData,
-	input						DRAMReadDataValid,
+	input	[DDRDWidth-1:0]	DRAMReadData,
+	input					DRAMReadDataValid,
 	
-	output	[DDRDWidth-1:0]		DRAMWriteData,
-	output	[DDRMWidth-1:0]		DRAMWriteMask,
-	output						DRAMWriteDataValid,
-	input						DRAMWriteDataReady
+	output	[DDRDWidth-1:0]	DRAMWriteData,
+	output	[DDRMWidth-1:0]	DRAMWriteMask,
+	output					DRAMWriteDataValid,
+	input					DRAMWriteDataReady
 	);
 		
 	//------------------------------------------------------------------------------
@@ -73,19 +73,19 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam					BigUWidth =			ORAMU * ORAMZ,
-								BigLWidth =			ORAML * ORAMZ;
+	localparam				BigUWidth =				ORAMU * ORAMZ,
+							BigLWidth =				ORAML * ORAMZ;
 								
-	localparam					SpaceRemaining =	BktHSize_RndBits - BktHSize_RawBits;
+	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
 	
-	localparam					STWidth =			3,
-								ST_Initialize =		3'd0,
-								ST_Idle =			3'd1,
-								ST_Append =			3'd2,
-								ST_StartRead =		3'd3,
-								ST_PathRead =		3'd4,
-								ST_StartWriteback =	3'd5,
-								ST_PathWriteback =	3'd6;
+	localparam				STWidth =			3,
+							ST_Initialize =		3'd0,
+							ST_Idle =			3'd1,
+							ST_Append =			3'd2,
+							ST_StartRead =		3'd3,
+							ST_PathRead =		3'd4,
+							ST_StartWriteback =	3'd5,
+							ST_PathWriteback =	3'd6;
 								
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
@@ -93,144 +93,144 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	// Control logic
 	
-	wire						AllResetsDone;
-	reg		[STWidth-1:0]		CS, NS;
-	wire						CSInitialize, CSIdle, CSAppend, CSStartRead, 
-								CSStartWriteback, CSPathRead, CSPathWriteback;
-	wire						CSORAMAccess;
-	wire						AccessIsDummy;
+	wire					AllResetsDone;
+	reg		[STWidth-1:0]	CS, NS;
+	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, 
+							CSStartWriteback, CSPathRead, CSPathWriteback;
+	wire					CSORAMAccess;
+	wire					AccessIsDummy;
 	
-	wire						AppendComplete, PathReadComplete, Stash_PathWritebackComplete;
+	wire					AppendComplete, PathReadComplete, Stash_PathWritebackComplete;
 	
-	wire	[ORAML-1:0]			DummyLeaf;
+	wire	[ORAML-1:0]		DummyLeaf;
 	
 	// Front-end interfaces
 	
-	wire	[BECMDWidth-1:0] 	Command_Internal;
-	wire	[ORAMU-1:0]			PAddr_Internal;
-	wire	[ORAML-1:0]			CurrentLeaf_Internal, RemappedLeaf_Internal;
-	wire						Command_InternalValid, Command_InternalReady;
+	wire	[BECMDWidth-1:0] Command_Internal;
+	wire	[ORAMU-1:0]		PAddr_Internal;
+	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
+	wire					Command_InternalValid, Command_InternalReady;
 
-	wire	[BlkBEDWidth:0]		EvictBuf_Chunks;
-	wire	[BlkBEDWidth:0]		ReturnBuf_Space;
+	wire	[BlkBEDWidth:0]	EvictBuf_Chunks;
+	wire	[BlkBEDWidth:0]	ReturnBuf_Space;
 		
-	wire	[BEDWidth-1:0]		Store_ShiftBufData;	
-	wire						Store_ShiftBufValid, Store_ShiftBufReady;
+	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
+	wire					Store_ShiftBufValid, Store_ShiftBufReady;
 	
-	wire	[BEDWidth-1:0]		Load_ShiftBufData;
-	wire						Load_ShiftBufValid, Load_ShiftBufReady;
+	wire	[BEDWidth-1:0]	Load_ShiftBufData;
+	wire					Load_ShiftBufValid, Load_ShiftBufReady;
 	
-	wire						EvictGate, UpdateGate;
+	wire					EvictGate, UpdateGate;
 	
 	// Read pipeline
 
-	wire						PathBuffer_InReady;
+	wire					PathBuffer_InReady;
 
-	wire						PathBuffer_OutValid, PathBuffer_OutReady;
-	wire	[DDRDWidth-1:0]		PathBuffer_OutData;
+	wire					PathBuffer_OutValid, PathBuffer_OutReady;
+	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
 		
-	wire						HeaderDownShift_InValid, HeaderDownShift_InReady;
-	wire						DataDownShift_InValid, DataDownShift_InReady;
+	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
+	wire					DataDownShift_InValid, DataDownShift_InReady;
 		
-	wire	[BktBSTWidth-1:0]	BucketReadCtr;
-	wire						ReadProcessingHeader;	
-	wire						BucketReadCtr_Reset, ReadBucketTransition;	
+	wire	[BktBSTWidth-1:0] BucketReadCtr;
+	wire					ReadProcessingHeader;	
+	wire					BucketReadCtr_Reset, ReadBucketTransition;	
 	
-	wire	[ORAMZ-1:0] 		HeaderDownShift_ValidBits;
-	wire	[BigUWidth-1:0]		HeaderDownShift_PAddrs;
-	wire	[BigLWidth-1:0]		HeaderDownShift_Leaves;
+	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
-	wire						ReadBlockIsValid, BlockPresent;
+	wire					ReadBlockIsValid, BlockPresent;
 	
-	wire	[BEDWidth-1:0]		DataDownShift_OutData;
-	wire						DataDownShift_OutValid, DataDownShift_OutReady;
-	wire						BlockReadValid, BlockReadReady;
+	wire	[BEDWidth-1:0]	DataDownShift_OutData;
+	wire					DataDownShift_OutValid, DataDownShift_OutReady;
+	wire					BlockReadValid, BlockReadReady;
 	
-	wire	[ORAMU-1:0]			HeaderDownShift_OutPAddr; 
-	wire	[ORAML-1:0]			HeaderDownShift_OutLeaf;
-	wire						HeaderDownShift_OutValid;		
+	wire	[ORAMU-1:0]		HeaderDownShift_OutPAddr; 
+	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
+	wire					HeaderDownShift_OutValid;		
 	
-	wire	[PBEDWidth-1:0]		PathReadCtr;
-	wire						IncrementReadCtr;
+	wire	[PBEDWidth-1:0]	PathReadCtr;
+	wire					IncrementReadCtr;
 	
-	wire						BlockReadCtr_Reset;
-	wire	[BlkBEDWidth-1:0] 	BlockReadCtr; 	
-	wire 						InPath_BlockReadComplete;	
+	wire					BlockReadCtr_Reset;
+	wire	[BlkBEDWidth-1:0] BlockReadCtr; 	
+	wire 					InPath_BlockReadComplete;	
 	
 	// Writeback pipeline
 
-	wire						Stash_BlockReadComplete;
+	wire					Stash_BlockReadComplete;
 	
-	wire	[ORAMU-1:0]			HeaderUpShift_InPAddr; 
-	wire	[ORAML-1:0]			HeaderUpShift_InLeaf;
-	wire						HeaderUpShift_OutValid, HeaderUpShift_OutReady;
-	wire						HeaderUpShift_InReady;
+	wire	[ORAMU-1:0]		HeaderUpShift_InPAddr; 
+	wire	[ORAML-1:0]		HeaderUpShift_InLeaf;
+	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
+	wire					HeaderUpShift_InReady;
 	
-	wire	[BEDWidth-1:0]		DataUpShift_InData;
-	wire						DataUpShift_InValid, DataUpShift_InReady;
-	wire	[DDRDWidth-1:0]		DataUpShift_OutData;
-	wire						DataUpShift_OutValid, DataUpShift_OutReady;
+	wire	[BEDWidth-1:0]	DataUpShift_InData;
+	wire					DataUpShift_InValid, DataUpShift_InReady;
+	wire	[DDRDWidth-1:0]	DataUpShift_OutData;
+	wire					DataUpShift_OutValid, DataUpShift_OutReady;
 	
-	wire	[ORAMZ-1:0] 		HeaderUpShift_ValidBits;
-	wire	[BigUWidth-1:0]		HeaderUpShift_PAddrs;
-	wire	[BigLWidth-1:0]		HeaderUpShift_Leaves;	
+	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
 	
-	wire						WritebackBlockIsValid;
+	wire					WritebackBlockIsValid;
 	
-	wire 						WritebackProcessingHeader;		
-	wire	[DDRDWidth-1:0]		UpShift_HeaderFlit, BucketBuf_OutData;
-	wire						BucketBuf_OutValid, BucketBuf_OutReady;
+	wire 					WritebackProcessingHeader;		
+	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
+	wire					BucketBuf_OutValid, BucketBuf_OutReady;
 							
-	wire						BucketWritebackValid;
-	wire	[BktBSTWidth-1:0]	BucketWritebackCtr;
-	wire						BucketWritebackCtr_Reset, WritebackBucketTransition;
+	wire					BucketWritebackValid;
+	wire	[BktBSTWidth-1:0] BucketWritebackCtr;
+	wire					BucketWritebackCtr_Reset, WritebackBucketTransition;
 							
-	wire	[DDRDWidth-1:0]		UpShift_DRAMWriteData;
-	wire	[DDRMWidth-1:0]		UpShift_DRAMWriteMask;
+	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
+	wire	[DDRMWidth-1:0]	UpShift_DRAMWriteMask;
 	
 	// Stash
 	
-	wire						Stash_StartScanOp, Stash_StartWritebackOp;
+	wire					Stash_StartScanOp, Stash_StartWritebackOp;
 	
-	wire	[BEDWidth-1:0]		Stash_StoreData;						
-	wire						Stash_StoreDataValid, Stash_StoreDataReady;
+	wire	[BEDWidth-1:0]	Stash_StoreData;						
+	wire					Stash_StoreDataValid, Stash_StoreDataReady;
 	
-	wire	[BEDWidth-1:0]		Stash_ReturnData;
-	wire						Stash_ReturnDataValid, Stash_ReturnDataReady;
+	wire	[BEDWidth-1:0]	Stash_ReturnData;
+	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
-	wire						Stash_ResetDone;
+	wire					Stash_ResetDone;
 	
-	wire						Stash_UpdateBlockValid, Stash_UpdateBlockReady;
-	wire						Stash_EvictBlockValid, Stash_EvictBlockReady;
+	wire					Stash_UpdateBlockValid, Stash_UpdateBlockReady;
+	wire					Stash_EvictBlockValid, Stash_EvictBlockReady;
 
-	wire						Stash_BlockWriteComplete;
+	wire					Stash_BlockWriteComplete;
 	
 	// ORAM initialization
 	
-	wire	[DDRAWidth-1:0]		DRAMInit_DRAMCommandAddress;
-	wire	[DDRCWidth-1:0]		DRAMInit_DRAMCommand;
-	wire						DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
+	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
+	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
+	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
-	wire	[DDRDWidth-1:0]		DRAMInit_DRAMWriteData;
-	wire	[DDRMWidth-1:0]		DRAMInit_DRAMWriteMask;
-	wire						DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
+	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
+	wire	[DDRMWidth-1:0]	DRAMInit_DRAMWriteMask;
+	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 	
-	wire						DRAMInit_Done;
+	wire					DRAMInit_Done;
 	
 	// Address generator
 	
-	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress;
-	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand;
-	wire						AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
+	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
+	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
+	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 	
-	wire						AddrGen_Reading;
+	wire					AddrGen_Reading;
 	
-	wire	[ORAML-1:0]			AddrGen_Leaf;
-	wire						AddrGen_InReady, AddrGen_InValid;
+	wire	[ORAML-1:0]		AddrGen_Leaf;
+	wire					AddrGen_InReady, AddrGen_InValid;
 	
-	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress_Internal;
-	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand_Internal;
-	wire						AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;									
+	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress_Internal;
+	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
+	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;									
 
 	//------------------------------------------------------------------------------
 	//	Simulation checks
