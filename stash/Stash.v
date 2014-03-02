@@ -24,102 +24,102 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset,
-	output						ResetDone,
+  	input 					Clock, Reset,
+	output					ResetDone,
 
 	//--------------------------------------------------------------------------
 	//	Commands
 	//--------------------------------------------------------------------------
 	
-	input	[ORAML-1:0]			RemapLeaf,
-	input	[ORAML-1:0]			AccessLeaf,
-	input	[ORAMU-1:0]			AccessPAddr,
+	input	[ORAML-1:0]		RemapLeaf,
+	input	[ORAML-1:0]		AccessLeaf,
+	input	[ORAMU-1:0]		AccessPAddr,
 	
 	/*	Controls the Return/Eviction interfaces 
 		Command code:
 			IsDummy ==	1		Command ==	X
 			IsDummy ==	0		Perform command */
-	input						AccessIsDummy,
-	input	[BECMDWidth-1:0]	AccessCommand,
+	input					AccessIsDummy,
+	input	[BECMDWidth-1:0]AccessCommand,
 	
 	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
 		time. */
-	input						StartScan,
+	input					StartScan,
 	
 	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
 		pulsed as soon as the last dummy block is decrypted */
-	input						StartWriteback,		
+	input					StartWriteback,		
 		
 	//--------------------------------------------------------------------------
 	//	Data return interface (Stash -> LLC)
 	//--------------------------------------------------------------------------
 	
-	output	[BEDWidth-1:0]		ReturnData,
-	output	[ORAMU-1:0]			ReturnPAddr,
-	output	[ORAML-1:0]			ReturnLeaf,
-	output						ReturnDataOutValid,
-	//input						ReturnDataOutReady,	// reads are block DMAs
-	output						BlockReturnComplete,
+	output	[BEDWidth-1:0]	ReturnData,
+	output	[ORAMU-1:0]		ReturnPAddr,
+	output	[ORAML-1:0]		ReturnLeaf,
+	output					ReturnDataOutValid,
+	//input					ReturnDataOutReady,	// reads are block DMAs
+	output					BlockReturnComplete,
 	
 	//--------------------------------------------------------------------------
 	//	Data eviction interface (LLC -> Stash)
 	//--------------------------------------------------------------------------	
 	
-	input	[BEDWidth-1:0]		EvictData,
-	input	[ORAMU-1:0]			EvictPAddr,
-	input	[ORAML-1:0]			EvictLeaf,
-	input						EvictDataInValid,
-	output						EvictDataInReady,
-	output						BlockEvictComplete,	
+	input	[BEDWidth-1:0]	EvictData,
+	input	[ORAMU-1:0]		EvictPAddr,
+	input	[ORAML-1:0]		EvictLeaf,
+	input					EvictDataInValid,
+	output					EvictDataInReady,
+	output					BlockEvictComplete,	
 	
 	//--------------------------------------------------------------------------
 	//	Data update (dirty block update) interface (LLC -> Stash)
 	//--------------------------------------------------------------------------	
 	
-	input	[BEDWidth-1:0]		UpdateData,
-	input						UpdateDataInValid,
-	output						UpdateDataInReady,
-	output						BlockUpdateComplete,
+	input	[BEDWidth-1:0]	UpdateData,
+	input					UpdateDataInValid,
+	output					UpdateDataInReady,
+	output					BlockUpdateComplete,
 	
 	//--------------------------------------------------------------------------
 	//	ORAM write interface (external memory -> Decryption -> stash)
 	//--------------------------------------------------------------------------
 
-	input	[BEDWidth-1:0]		WriteData,
-	input	[ORAMU-1:0]			WritePAddr,
-	input	[ORAML-1:0]			WriteLeaf,
-	input						WriteInValid,
-	output						WriteInReady,	
+	input	[BEDWidth-1:0]	WriteData,
+	input	[ORAMU-1:0]		WritePAddr,
+	input	[ORAML-1:0]		WriteLeaf,
+	input					WriteInValid,
+	output					WriteInReady,	
 	/* Pulsed during the last cycle that a block is being written */
-	output						BlockWriteComplete,
+	output					BlockWriteComplete,
 	
 	//--------------------------------------------------------------------------
 	//	ORAM read interface (stash -> encryption -> external memory)
 	//--------------------------------------------------------------------------
 
-	output	[BEDWidth-1:0]		ReadData,
+	output	[BEDWidth-1:0]	ReadData,
 	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
-	output	[ORAMU-1:0]			ReadPAddr,
-	output	[ORAML-1:0]			ReadLeaf,
-	output						ReadOutValid,
-	input						ReadOutReady,
+	output	[ORAMU-1:0]		ReadPAddr,
+	output	[ORAML-1:0]		ReadLeaf,
+	output					ReadOutValid,
+	input					ReadOutReady,
 	/* Pulsed during last cycle that a block is being read */
-	output	 					BlockReadComplete,
-	output						PathReadComplete,
+	output	 				BlockReadComplete,
+	output					PathReadComplete,
 	
 	//--------------------------------------------------------------------------
 	//	Status/Debugging interface
 	//--------------------------------------------------------------------------
 
-	output 						StashAlmostFull,
-	output						StashOverflow,
-	output	[StashEAWidth-1:0] 	StashOccupancy,
+	output 					StashAlmostFull,
+	output					StashOverflow,
+	output	[SEAWidth-1:0] 	StashOccupancy,
 	
 	// Indicates that on a read/rm/update, the requested block wasn't found
 	// THIS IS AN ERROR
-	output						BlockNotFound,
-	output						BlockNotFoundValid
+	output					BlockNotFound,
+	output					BlockNotFoundValid
 	);
 
 	//--------------------------------------------------------------------------
@@ -130,112 +130,112 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	`include "BucketLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam					OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering) + 1;
+	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering) + 1;
 	
-	localparam					STWidth =				4,
-								ST_Reset =				4'd0,
-								ST_Idle = 				4'd1,
-								ST_Scan =				4'd2,
-								ST_PathRead =			4'd3,
-								ST_PathWriteback = 		4'd4,
-								ST_Evict =				4'd5,
-								ST_Turnaround1 =		4'd6,
-								ST_Turnaround2 =		4'd7,
-								ST_CoreSync =			4'd8;
+	localparam				STWidth =				4,
+							ST_Reset =				4'd0,
+							ST_Idle = 				4'd1,
+							ST_Scan =				4'd2,
+							ST_PathRead =			4'd3,
+							ST_PathWriteback = 		4'd4,
+							ST_Evict =				4'd5,
+							ST_Turnaround1 =		4'd6,
+							ST_Turnaround2 =		4'd7,
+							ST_CoreSync =			4'd8;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 	
-	wire						PerAccessReset;
+	wire					PerAccessReset;
 
 	// Control
 	
-	reg		[STWidth-1:0]		CS, NS;
-	wire						CSIdle, CSPathRead, CSPathWriteback, CSScan, 
-								CSEvict, CSTurnaround1, CSTurnaround2,
-								CSCoreSync;
-	reg							CSTurnaround1_Delayed;
-	wire						CSTurnaround1_FirstCycle;
+	reg		[STWidth-1:0]	CS, NS;
+	wire					CSIdle, CSPathRead, CSPathWriteback, CSScan, 
+							CSEvict, CSTurnaround1, CSTurnaround2,
+							CSCoreSync;
+	reg						CSTurnaround1_Delayed;
+	wire					CSTurnaround1_FirstCycle;
 	
 	// Input timing
 	
-	wire						StartScan_Pass, StartScan_set, StartScan_Primed;
-	wire						StartWriteback_Pass, StartWriteback_Primed;
+	wire					StartScan_Pass, StartScan_set, StartScan_Primed;
+	wire					StartWriteback_Pass, StartWriteback_Primed;
 				
 	// Core interface
 				
-	wire						Core_ResetDone;
-	wire	[SCMDWidth-1:0]		Core_Command;
-	wire						Core_CommandValid, Core_CommandReady, Core_CommandComplete;				
-	wire						Evict_CommandComplete;
-	wire						PerformCoreHeaderUpdate, CoreHeaderRemove;
+	wire					Core_ResetDone;
+	wire	[SCMDWidth-1:0]	Core_Command;
+	wire					Core_CommandValid, Core_CommandReady, Core_CommandComplete;				
+	wire					Evict_CommandComplete;
+	wire					PerformCoreHeaderUpdate, CoreHeaderRemove;
 	
-	wire	[BEDWidth-1:0]		Core_InData;
-	wire	[ORAMU-1:0]			Core_InPAddr;
-	wire	[ORAML-1:0]			Core_InLeaf;
-	wire						Core_InValid, Core_InReady;			
+	wire	[BEDWidth-1:0]	Core_InData;
+	wire	[ORAMU-1:0]		Core_InPAddr;
+	wire	[ORAML-1:0]		Core_InLeaf;
+	wire					Core_InValid, Core_InReady;			
 	
-	wire						TurnoverUpdate;
+	wire					TurnoverUpdate;
 	
-	wire	[BEDWidth-1:0]		Core_OutData;
-	wire	[ORAMU-1:0]			Core_OutPAddr;
-	wire	[ORAML-1:0]			Core_OutLeaf;
-	wire						Core_OutValid;
+	wire	[BEDWidth-1:0]	Core_OutData;
+	wire	[ORAMU-1:0]		Core_OutPAddr;
+	wire	[ORAML-1:0]		Core_OutLeaf;
+	wire					Core_OutValid;
 	
 	// ScanTable interface
 	
-	wire	[ORAMU-1:0]			Scan_PAddr;
-	wire	[ORAML-1:0]			Scan_Leaf;
-	wire	[StashEAWidth-1:0]	Scan_SAddr;
-	wire						Scan_Add, Scan_LeafValid;
-	wire						Scan_Streaming;
+	wire	[ORAMU-1:0]		Scan_PAddr;
+	wire	[ORAML-1:0]		Scan_Leaf;
+	wire	[SEAWidth-1:0]	Scan_SAddr;
+	wire					Scan_Add, Scan_LeafValid;
+	wire					Scan_Streaming;
 
-	wire	[StashEAWidth-1:0]	Scanned_SAddr;
-	wire						Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid;
-	wire						Scanned_Streaming;
+	wire	[SEAWidth-1:0]	Scanned_SAddr;
+	wire					Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid;
+	wire					Scanned_Streaming;
 	
-	wire	[StashEAWidth-1:0]	OutDMAAddr;
-	wire						InDMAValid;
-	wire						OutDMAValid, OutDMAReady;
-	wire						OutDMALast;	
+	wire	[SEAWidth-1:0]	OutDMAAddr;
+	wire					InDMAValid;
+	wire					OutDMAValid, OutDMAReady;
+	wire					OutDMALast;	
 	
 	// Scan control
 	
-	wire	[SCWidth-1:0]		ScanCount;
-	wire						SentCoreCommand, ScanComplete_Conservative;
-	wire 						ScanTableResetDone;	
+	wire	[SCWidth-1:0]	ScanCount;
+	wire					SentCoreCommand, ScanComplete_Conservative;
+	wire 					ScanTableResetDone;	
 	
 	// Writeback control
 	
-	wire						BlockReadComplete_InternalPre;
-	reg							BlockReadComplete_Internal;
+	wire					BlockReadComplete_InternalPre;
+	reg						BlockReadComplete_Internal;
 
-	wire	[ScanTableAWidth-1:0]BlocksReading;
+	wire	[STAWidth-1:0]	BlocksReading;
 	
-	wire						PathWriteback_Waiting;
-	wire	[ScanTableAWidth-1:0] BlocksRead;
+	wire					PathWriteback_Waiting;
+	wire	[STAWidth-1:0] 	BlocksRead;
 	
-	wire						Core_AccessComplete, Top_AccessComplete;
+	wire					Core_AccessComplete, Top_AccessComplete;
 	
-	wire						WritebackGate;
-	wire						ScanTableReset;		
+	wire					WritebackGate;
+	wire					ScanTableReset;		
 	
 	// Read control
 	
-	wire	[OBWidth-1:0]		OutBufferEmptyCount, OutBufferCount;	
-	wire						OutBufferHasSpace, TickOutHeader, OutHeaderValid;
-	wire						OutBufferInReady, OutHBufferInReady, OutBufferInValid;
+	wire	[OBWidth-1:0]	OutBufferEmptyCount, OutBufferCount;	
+	wire					OutBufferHasSpace, TickOutHeader, OutHeaderValid;
+	wire					OutBufferInReady, OutHBufferInReady, OutBufferInValid;
 
 	// Frontend control
 	
-	wire	[ORAML-1:0]			MappedLeaf;
-	wire						CurrentLeafValid;
+	wire	[ORAML-1:0]		MappedLeaf;
+	wire					CurrentLeafValid;
 	
-	wire						LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
-	wire						FoundRemoveBlock;
-	wire						ReturnInProgress;
-	wire	[StashEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
+	wire					LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
+	wire					FoundRemoveBlock;
+	wire					ReturnInProgress;
+	wire	[SEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
 	
 	//--------------------------------------------------------------------------
 	//	Debugging
@@ -597,7 +597,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	assign	FoundBlock_ThisCycle =					Scan_LeafValid & (Scan_PAddr == AccessPAddr);
 	
-	Register	#(			.Width(					StashEAWidth))
+	Register	#(			.Width(					SEAWidth))
 				block_addr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
@@ -675,29 +675,29 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	OutDMAReady =							Core_CommandComplete;
 	
 	// which block are we currently writing back?
-	Counter		#(			.Width(					ScanTableAWidth))
+	Counter		#(			.Width(					STAWidth))
 				rd_st_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSPathWriteback & ~ReadingLastBlock),
-							.In(					{ScanTableAWidth{1'bx}}),
+							.In(					{STAWidth{1'bx}}),
 							.Count(					BlocksReading));
-	CountCompare #(			.Width(					ScanTableAWidth),
+	CountCompare #(			.Width(					STAWidth),
 							.Compare(				BlocksOnPath))
 				rd_st_cmp(	.Count(					BlocksReading), 
 							.TerminalCount(			ReadingLastBlock));
 					
 	// ticks at end of block read
-	Counter		#(			.Width(					ScanTableAWidth))
+	Counter		#(			.Width(					STAWidth))
 				rd_ret_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSPathWriteback & BlockReadComplete_Internal),
-							.In(					{ScanTableAWidth{1'bx}}),
+							.In(					{STAWidth{1'bx}}),
 							.Count(					BlocksRead));
-	CountCompare #(			.Width(					ScanTableAWidth),
+	CountCompare #(			.Width(					STAWidth),
 							.Compare(				BlocksOnPath))
 				rd_ret_cmp(	.Count(					BlocksRead), 
 							.TerminalCount(			Top_AccessComplete));

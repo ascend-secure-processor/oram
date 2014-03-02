@@ -28,79 +28,79 @@ module	StashTestbench;
 	//	Constants & overrides
 	//--------------------------------------------------------------------------
 
-	parameter					ORAMB =				512,
-								ORAMU =				32,
-								ORAML =				32,
-								ORAMZ =				2;
+	parameter				ORAMB =					512,
+							ORAMU =					32,
+							ORAML =					32,
+							ORAMZ =					2;
 
-	parameter					FEDWidth =			64,
-								BEDWidth =			128;
+	parameter				FEDWidth =				64,
+							BEDWidth =				128;
 		
-	parameter					StashCapacity =		100,
-								StashOutBuffering = 2,
-								Pipelined =			1;
+	parameter				StashCapacity =			100,
+							StashOutBuffering = 	2,
+							Pipelined =				1;
 								
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
 	
-	localparam					Freq =				100_000_000,
-								Cycle = 			1000000000/Freq;	
+	localparam				Freq =					100_000_000,
+							Cycle = 				1000000000/Freq;	
 	
-	localparam					UpdateINIT =		255;
+	localparam				UpdateINIT =			255;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 	
-	wire 						Clock;
-	reg							Reset, ResetDataCounter; 
-	wire						ResetDone;
+	wire 					Clock;
+	reg						Reset, ResetDataCounter; 
+	wire					ResetDone;
 	
-	reg		[ORAML-1:0]			RemapLeaf, AccessLeaf;
-	reg		[ORAMU-1:0]			AccessPAddr;
-	reg							AccessIsDummy;	
-	reg		[BECMDWidth-1:0]	AccessCommand;
+	reg		[ORAML-1:0]		RemapLeaf, AccessLeaf;
+	reg		[ORAMU-1:0]		AccessPAddr;
+	reg						AccessIsDummy;	
+	reg		[BECMDWidth-1:0]AccessCommand;
 	
-	reg							StartScan;
-	reg							StartWriteback;		
+	reg						StartScan;
+	reg						StartWriteback;		
 
-	wire	[BEDWidth-1:0]		ReturnData;
-	wire	[ORAMU-1:0]			ReturnPAddr;
-	wire	[ORAML-1:0]			ReturnLeaf;
-	wire						ReturnDataOutValid;
-	wire						BlockReturnComplete;
+	wire	[BEDWidth-1:0]	ReturnData;
+	wire	[ORAMU-1:0]		ReturnPAddr;
+	wire	[ORAML-1:0]		ReturnLeaf;
+	wire					ReturnDataOutValid;
+	wire					BlockReturnComplete;
 	
-	wire	[BEDWidth-1:0]		UpdateData, UpdateData_Pre;
-	reg							UpdateDataInValid;
-	wire						UpdateDataInReady;
-	wire						BlockUpdateComplete;
+	wire	[BEDWidth-1:0]	UpdateData, UpdateData_Pre;
+	reg						UpdateDataInValid;
+	wire					UpdateDataInReady;
+	wire					BlockUpdateComplete;
 	
-	wire	[BEDWidth-1:0]		EvictData;
-	reg		[ORAMU-1:0]			EvictPAddr;
-	reg		[ORAML-1:0]			EvictLeaf;
-	reg							EvictDataInValid;
-	wire						EvictDataInReady;
-	wire						BlockEvictComplete;	
+	wire	[BEDWidth-1:0]	EvictData;
+	reg		[ORAMU-1:0]		EvictPAddr;
+	reg		[ORAML-1:0]		EvictLeaf;
+	reg						EvictDataInValid;
+	wire					EvictDataInReady;
+	wire					BlockEvictComplete;	
 	
-	wire 	[BEDWidth-1:0]		WriteData;
-	reg		[ORAMU-1:0]			WritePAddr;
-	reg		[ORAML-1:0]			WriteLeaf;
-	reg							WriteInValid;
-	wire						WriteInReady;	
-	wire						BlockWriteComplete;
+	wire 	[BEDWidth-1:0]	WriteData;
+	reg		[ORAMU-1:0]		WritePAddr;
+	reg		[ORAML-1:0]		WriteLeaf;
+	reg						WriteInValid;
+	wire					WriteInReady;	
+	wire					BlockWriteComplete;
 	
-	wire	[BEDWidth-1:0]		ReadData;
-	wire	[ORAMU-1:0]			ReadPAddr;
-	wire	[ORAML-1:0]			ReadLeaf;
-	wire						ReadOutValid;
-	reg							ReadOutReady;	
-	wire						BlockReadComplete, PathReadComplete;
+	wire	[BEDWidth-1:0]	ReadData;
+	wire	[ORAMU-1:0]		ReadPAddr;
+	wire	[ORAML-1:0]		ReadLeaf;
+	wire					ReadOutValid;
+	reg						ReadOutReady;	
+	wire					BlockReadComplete, PathReadComplete;
 	
-	wire 						StashAlmostFull;
-	wire						StashOverflow;
-	wire	[StashEAWidth-1:0]	StashOccupancy;
+	wire 					StashAlmostFull;
+	wire					StashOverflow;
+	wire	[SEAWidth-1:0]	StashOccupancy;
 	
-	integer						TestID;
+	integer					TestID;
 	
 	//--------------------------------------------------------------------------
 	//	Clock Source
@@ -343,7 +343,7 @@ module	StashTestbench;
 	endtask
 	
 	task TASK_CheckOccupancy;
-		input	[StashEAWidth-1:0] Occupancy;
+		input	[SEAWidth-1:0] Occupancy;
 		
 		begin
 			if (Occupancy != StashOccupancy) begin

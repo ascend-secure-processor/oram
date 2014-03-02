@@ -13,41 +13,41 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, PerAccessReset, 
-	input						AccessComplete, // debugging
-	output						ResetDone,
+  	input 					Clock, Reset, PerAccessReset, 
+	input					AccessComplete, // debugging
+	output					ResetDone,
 	
 	//--------------------------------------------------------------------------
 	//	Scan interface
 	//--------------------------------------------------------------------------
 		
-	input	[ORAML-1:0]			CurrentLeaf,
-	input						CurrentLeafValid,
+	input	[ORAML-1:0]		CurrentLeaf,
+	input					CurrentLeafValid,
 	
-	input	[ORAML-1:0]			InScanLeaf,
-	input	[ORAMU-1:0]			InScanPAddr, // debugging
-	input	[StashEAWidth-1:0]	InScanSAddr,
-	input						InScanAdd,
-	input						InScanValid,
-	input						InScanStreaming,
+	input	[ORAML-1:0]		InScanLeaf,
+	input	[ORAMU-1:0]		InScanPAddr, // debugging
+	input	[SEAWidth-1:0]	InScanSAddr,
+	input					InScanAdd,
+	input					InScanValid,
+	input					InScanStreaming,
 	
-	output	[StashEAWidth-1:0]	OutScanSAddr,
-	output						OutScanAccepted,
-	output						OutScanAdd,
-	output						OutScanValid,
-	output						OutScanStreaming,
+	output	[SEAWidth-1:0]	OutScanSAddr,
+	output					OutScanAccepted,
+	output					OutScanAdd,
+	output					OutScanValid,
+	output					OutScanStreaming,
 	
 	//--------------------------------------------------------------------------
 	//	DMA (Path writeback) interface
 	//--------------------------------------------------------------------------
 		
-	input	[ScanTableAWidth-1:0] InDMAAddr,
-	input						InDMAValid,
+	input	[STAWidth-1:0] 	InDMAAddr,
+	input					InDMAValid,
 	
-	output	[StashEAWidth-1:0]	OutDMAAddr,
-	output 						OutDMAValid,
-	output						OutDMAReady,
-	output						OutDMALast
+	output	[SEAWidth-1:0]	OutDMAAddr,
+	output 					OutDMAValid,
+	output					OutDMAReady,
+	output					OutDMALast
 	);
 	
 	//--------------------------------------------------------------------------
@@ -56,46 +56,48 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`include "StashLocal.vh"
 	
+	localparam				FIFOWidth =				`log2(BlocksOnPath+1);
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
-	wire						ResetDone_Internal;
+	wire					ResetDone_Internal;
 	
-	wire	[ORAMLP1-1:0]		CurrentLeafP1, InLeafP1;
+	wire	[ORAMLP1-1:0]	CurrentLeafP1, InLeafP1;
 	
-	wire	[ORAMLP1-1:0]		FullMask, Intersection, CommonSubpath,
-								CommonSubpath_Space, CommonSubpath_Space_rev,
-								HighestLevel_Onehot;
-	wire	[BucketAWidth-1:0]	HighestLevel_Bin;
+	wire	[ORAMLP1-1:0]	FullMask, Intersection, CommonSubpath,
+							CommonSubpath_Space, CommonSubpath_Space_rev,
+							HighestLevel_Onehot;
+	wire	[BktAWidth-1:0]	HighestLevel_Bin;
 
-	wire	[BCWidth-1:0]		BucketOccupancy;
-	wire	[ScanTableAWidth-1:0]ScanTable_Address;
-	wire	[StashEAWidth-1:0]	ScanTable_DataIn;
-	wire						ScanTable_WE;
+	wire	[BCWidth-1:0]	BucketOccupancy;
+	wire	[STAWidth-1:0]	ScanTable_Address;
+	wire	[SEAWidth-1:0]	ScanTable_DataIn;
+	wire					ScanTable_WE;
 
-	wire	[BCLWidth-1:0]		BCounts, BCounts_New;
+	wire	[BCLWidth-1:0]	BCounts, BCounts_New;
 
-	wire	[ScanTableAWidth-1:0]ResetCount;
+	wire	[STAWidth-1:0]	ResetCount;
 	
 	// Pipelining
 	
-	wire	[ORAMLP1-1:0]		CommonSubpath_Dly;
-	wire	[StashEAWidth-1:0]	InScanSAddr_Dly;
-	wire						CurrentLeafValid_Dly, InScanValid_Dly;	
+	wire	[ORAMLP1-1:0]	CommonSubpath_Dly;
+	wire	[SEAWidth-1:0]	InScanSAddr_Dly;
+	wire					CurrentLeafValid_Dly, InScanValid_Dly;	
 
-	wire	[BucketAWidth-1:0]	HighestLevel_Bin_Pre;
-	wire	[BCLWidth-1:0]		BCounts_Pre;
-	wire						OutScanValid_Pre, OutScanAccepted_Pre;
-	wire	[StashEAWidth-1:0]	OutScanSAddr_Pre;
+	wire	[BktAWidth-1:0]	HighestLevel_Bin_Pre;
+	wire	[BCLWidth-1:0]	BCounts_Pre;
+	wire					OutScanValid_Pre, OutScanAccepted_Pre;
+	wire	[SEAWidth-1:0]	OutScanSAddr_Pre;
 
 	// DMA Fifo
 	
-	wire	[StashEAWidth-1:0]	DMAAddr_Internal;
-	wire						DMAValid_Internal, DMAReady_Internal;						
-	wire	[`log2(BlocksOnPath+1)-1:0]	STFIFOCount;
+	wire	[SEAWidth-1:0]	DMAAddr_Internal;
+	wire					DMAValid_Internal, DMAReady_Internal;						
+	wire	[FIFOWidth-1:0]	STFIFOCount;
 	
-	wire	[StashEAWidth-1:0]	DummyWire;
+	wire	[SEAWidth-1:0]	DummyWire;
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
@@ -200,7 +202,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 	assign	CommonSubpath = 						(Intersection & -Intersection) - 1;
 	
-	Pipeline	#(			.Width(					2 + StashEAWidth + ORAMLP1),
+	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
 							.Stages(				Pipelined))
 			mpipe_1(		.Clock(					Clock),
 							.Reset(					Reset), 
@@ -269,7 +271,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		assign 	FullMask[i] = 						BCounts_Pre[BCWidth*(i+1)-1:BCWidth*i] == ORAMZ;
 	end endgenerate
 
-	Pipeline	#(			.Width(					BucketAWidth + BCLWidth + 2 + StashEAWidth),
+	Pipeline	#(			.Width(					BktAWidth + BCLWidth + 2 + SEAWidth),
 							.Stages(				Pipelined))
 			mpipe_2(		.Clock(					Clock),
 							.Reset(					Reset), 
@@ -280,13 +282,13 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Reset
 	//--------------------------------------------------------------------------
 	
-	Counter		#(			.Width(					ScanTableAWidth))
+	Counter		#(			.Width(					STAWidth))
 				rst_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				~ResetDone_Internal),
-							.In(					{ScanTableAWidth{1'bx}}),
+							.In(					{STAWidth{1'bx}}),
 							.Count(					ResetCount));
 							
 	assign	ResetDone_Internal =					ResetCount == BlocksOnPath;
@@ -319,18 +321,18 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		Points directly to locations in StashD, where blocks live that are to be 
 		written back during this ORAM access.
 
-		NOTE: This table is scanned from address 0 ... 2^StashEAWidth-1 in that 
+		NOTE: This table is scanned from address 0 ... 2^SEAWidth-1 in that 
 		order.
 	*/
-	RAM			#(			.DWidth(				StashEAWidth),
-							.AWidth(				ScanTableAWidth),
+	RAM			#(			.DWidth(				SEAWidth),
+							.AWidth(				STAWidth),
 							.NPorts(				2))
 				st_ram(		.Clock(					{2{Clock}}),
 							.Reset(					/* not connected */),
 							.Enable(				2'b11),
 							.Write(					{1'b0, 					ScanTable_WE}),
 							.Address(				{InDMAAddr, 			ScanTable_Address}),
-							.DIn(					{{StashEAWidth{1'bx}}, 	ScanTable_DataIn}),
+							.DIn(					{{SEAWidth{1'bx}}, 	ScanTable_DataIn}),
 							.DOut(					{DMAAddr_Internal, 		DummyWire}));
 
 	Pipeline	#(			.Width(					1),
@@ -341,7 +343,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutData(				DMAValid_Internal));								
 	
 	// decouple the ScanTableLatency from path writeback control logic
-	FIFORAM		#(			.Width(					StashEAWidth),
+	FIFORAM		#(			.Width(					SEAWidth),
 							.Buffering(				BlocksOnPath))
 				st_fifo(	.Clock(					Clock),
 							.Reset(					Reset),

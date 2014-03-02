@@ -48,68 +48,68 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 						Clock, Reset, PerAccessReset,
-	output						ResetDone,
+  	input 					Clock, Reset, PerAccessReset,
+	output					ResetDone,
 
 	//--------------------------------------------------------------------------
 	//	Command interface
 	//--------------------------------------------------------------------------
 		
-	input	[SCMDWidth-1:0] 	InCommand,
-	input	[StashEAWidth-1:0]	InSAddr,
-	input	[ORAMU-1:0]			InPAddr,
-	input	[ORAML-1:0]			InLeaf,
+	input	[SCMDWidth-1:0] InCommand,
+	input	[SEAWidth-1:0]	InSAddr,
+	input	[ORAMU-1:0]		InPAddr,
+	input	[ORAML-1:0]		InLeaf,
 	/* 	Only used for header update command
 		SECURITY: InHeaderUpdate is redundant, but we will always do real/dummy 
 		header update to prevent timing variations (we could also just use a 
 		counter but this is simpler to implement) */
-	input						InHeaderUpdate,
-	input						InHeaderRemove,
-	input						InCommandValid,
-	output 						InCommandReady,
-	output						InCommandComplete,
+	input					InHeaderUpdate,
+	input					InHeaderRemove,
+	input					InCommandValid,
+	output 					InCommandReady,
+	output					InCommandComplete,
 
 	//--------------------------------------------------------------------------
 	//	Input interface
 	//--------------------------------------------------------------------------
 	
-	input	[BEDWidth-1:0]		InData,
-	input						InValid,
-	output 						InReady,
+	input	[BEDWidth-1:0]	InData,
+	input					InValid,
+	output 					InReady,
 
 	//--------------------------------------------------------------------------
 	//	Output interface
 	//--------------------------------------------------------------------------
 	
-	output	[BEDWidth-1:0]		OutData,
-	output	[ORAMU-1:0]			OutPAddr,
-	output	[ORAML-1:0]			OutLeaf,
-	output 						OutValid,
+	output	[BEDWidth-1:0]	OutData,
+	output	[ORAMU-1:0]		OutPAddr,
+	output	[ORAML-1:0]		OutLeaf,
+	output 					OutValid,
 
 	//--------------------------------------------------------------------------
 	//	Scan interface
 	//--------------------------------------------------------------------------
 	
-	output	[ORAMU-1:0]			OutScanPAddr,
-	output	[ORAML-1:0]			OutScanLeaf,
-	output	[StashEAWidth-1:0]	OutScanSAddr,
-	output						OutScanAdd,
-	output						OutScanValid,
-	output						OutScanStreaming,
+	output	[ORAMU-1:0]		OutScanPAddr,
+	output	[ORAML-1:0]		OutScanLeaf,
+	output	[SEAWidth-1:0]	OutScanSAddr,
+	output					OutScanAdd,
+	output					OutScanValid,
+	output					OutScanStreaming,
 
-	input	[StashEAWidth-1:0]	InScanSAddr,
-	input						InScanAccepted,
-	input						InScanAdd,
-	input						InScanValid,
-	input						InScanStreaming,
+	input	[SEAWidth-1:0]	InScanSAddr,
+	input					InScanAccepted,
+	input					InScanAdd,
+	input					InScanValid,
+	input					InScanStreaming,
 	
 	//--------------------------------------------------------------------------
 	//	Status interface
 	//--------------------------------------------------------------------------
 
-	output 						StashAlmostFull,
-	output						StashOverflow,	
-	output	[StashEAWidth-1:0] 	StashOccupancy,
+	output 					StashAlmostFull,
+	output					StashOverflow,	
+	output	[SEAWidth-1:0] 	StashOccupancy,
 
 	//--------------------------------------------------------------------------
 	//	Stash internal signals
@@ -117,9 +117,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	/*	We will issue one more push request than we want during path reads (this 
 		helps maintain 100% throughput).  So, we need to kill the last request. */
-	input						CancelPushCommand,
-	input						CancelPeakCommand,
-	output						SyncComplete
+	input					CancelPushCommand,
+	input					CancelPeakCommand,
+	output					SyncComplete
 	);
 	
 	//--------------------------------------------------------------------------
@@ -128,88 +128,88 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	`include "StashLocal.vh"
 
-	localparam					STWidth =			3,
-								ST_Reset =			3'd0,
-								ST_Idle = 			3'd1,
-								ST_Pushing = 		3'd2, // write, add
-								ST_Overwriting = 	3'd3, // overwrite current entry
-								ST_Peaking =		3'd4, // read, do not remove
-								ST_Dumping =		3'd5,
-								ST_UpdatingHeader =	3'd6,
-								ST_StartSync =		3'd7;
+	localparam				STWidth =				3,
+							ST_Reset =				3'd0,
+							ST_Idle = 				3'd1,
+							ST_Pushing = 			3'd2, // write, add
+							ST_Overwriting = 		3'd3, // overwrite current entry
+							ST_Peaking =			3'd4, // read, do not remove
+							ST_Dumping =			3'd5,
+							ST_UpdatingHeader =		3'd6,
+							ST_StartSync =			3'd7;
 
-	localparam					SyncSTWidth =		3,
-								ST_Sync_Idle =		3'd0,
-								ST_Sync_Main =		3'd1,
-								ST_Sync_CapUL = 	3'd2,
-								ST_Sync_CapFL = 	3'd3,
-								ST_Sync_Done =		3'd4;
+	localparam				SyncSTWidth =			3,
+							ST_Sync_Idle =			3'd0,
+							ST_Sync_Main =			3'd1,
+							ST_Sync_CapUL = 		3'd2,
+							ST_Sync_CapFL = 		3'd3,
+							ST_Sync_Done =			3'd4;
 							
-	localparam					ENWidth =			1,
-								EN_Free =			1'b0,
-								EN_Used =			1'b1;	
+	localparam				ENWidth =				1,
+							EN_Free =				1'b0,
+							EN_Used =				1'b1;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
-	reg		[STWidth-1:0]		CS, NS;
-	wire						CSReset, CSIdle, CSPeaking, CSPushing, 
-								CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
+	reg		[STWidth-1:0]	CS, NS;
+	wire					CSReset, CSIdle, CSPeaking, CSPushing, 
+							CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
 
-	wire						PerAccessReset;
+	wire					PerAccessReset;
 	
-	wire	[StashEAWidth-1:0]	ResetCount;
+	wire	[SEAWidth-1:0]	ResetCount;
 
-	wire	[ORAMU-1:0]			OutPAddr_Pre;
+	wire	[ORAMU-1:0]		OutPAddr_Pre;
 	
-	wire	[BEDWidth-1:0]		StashD_DataOut;
-	wire						WriteTransfer, DataTransfer, Add_Terminator;
-	wire						Transfer_Terminator, Transfer_Terminator_Pre;
+	wire	[BEDWidth-1:0]	StashD_DataOut;
+	wire					WriteTransfer, DataTransfer, Add_Terminator;
+	wire					Transfer_Terminator, Transfer_Terminator_Pre;
 
-	wire	[StashDAWidth-1:0]	StashD_Address;
-	wire	[StashEAWidth-1:0]	StashE_Address;
-	reg		[StashEAWidth-1:0]	StashE_Address_Delayed;
-	wire						FirstChunk, LastChunk_Pre, LastChunk;
+	wire	[SDAWidth-1:0]	StashD_Address;
+	wire	[SEAWidth-1:0]	StashE_Address;
+	reg		[SEAWidth-1:0]	StashE_Address_Delayed;
+	wire					FirstChunk, LastChunk_Pre, LastChunk;
 
-	wire 	[ChunkAWidth-1:0]	CurrentChunk;
+	wire 	[ChnkAWidth-1:0]CurrentChunk;
 
-	wire 	[StashEAWidth-1:0]	UsedListHead, FreeListHead;
-	wire 	[StashEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
+	wire 	[SEAWidth-1:0]	UsedListHead, FreeListHead;
+	wire 	[SEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
 
-	wire 						AddBlock, RemoveBlock;
+	wire 					AddBlock, RemoveBlock;
 	
-	wire	[StashEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
-	wire						StashP_WE;
+	wire	[SEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
+	wire					StashP_WE;
 	
-	wire						StashH_WE;
+	wire					StashH_WE;
 	
-	wire	[StashEAWidth-1:0]	StashC_Address;
-	wire	[ENWidth-1:0] 		StashC_DataIn, StashC_DataOut;
-	wire						StashC_WE;
+	wire	[SEAWidth-1:0]	StashC_Address;
+	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;
+	wire					StashC_WE;
 	
-	wire	[StashEAWidth-1:0]	StashWalk;
-	wire						SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
-	wire						OutScanValidPush, OutScanValidDump;
+	wire	[SEAWidth-1:0]	StashWalk;
+	wire					SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
+	wire					OutScanValidPush, OutScanValidDump;
 	
-	reg 	[SyncSTWidth-1:0] 	NS_Sync, CS_Sync;
-	wire 						CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
+	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync;
+	wire 					CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
 	
-	wire	[StashEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
-	wire						ULHSet, FLHSet;
-	wire						Sync_SettingULH, Sync_SettingFLH;
-	wire						Sync_FoundUsedElement, Sync_FoundFreeElement;
-	wire						Sync_Terminator;
+	wire	[SEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
+	wire					ULHSet, FLHSet;
+	wire					Sync_SettingULH, Sync_SettingFLH;
+	wire					Sync_FoundUsedElement, Sync_FoundFreeElement;
+	wire					Sync_Terminator;
 	
-	wire 						StreamingCRUDop;	
+	wire 					StreamingCRUDop;	
 	
 	// Derived signals
 
-	reg		[StashEAWidth-1:0] 	StashWalk_Delayed;
-	reg							CSPeaking_Delayed, CSDumping_Delayed,
-								CSSyncing_Delayed,
-								InScanValid_Delayed;
-	wire						CSDumping_FirstCycle, CSSyncing_FirstCycle;
+	reg		[SEAWidth-1:0] 	StashWalk_Delayed;
+	reg						CSPeaking_Delayed, CSDumping_Delayed,
+							CSSyncing_Delayed,
+							InScanValid_Delayed;
+	wire					CSDumping_FirstCycle, CSSyncing_FirstCycle;
 
 	initial begin
 		CS = ST_Reset;
@@ -229,7 +229,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	*/
 
 	`ifdef SIMULATION
-		reg [StashEAWidth-1:0] 	MS_pt;
+		reg [SEAWidth-1:0] 	MS_pt;
 		integer 				i;
 		// align the printouts in time
 		reg						MS_FinishedWrite, MS_StartingWrite, SyncComplete_Delayed;
@@ -463,13 +463,13 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Reset logic
 	//--------------------------------------------------------------------------
 
-	Counter			#(			.Width(				StashEAWidth))
+	Counter			#(			.Width(				SEAWidth))
 					InitCounter(.Clock(				Clock),
 								.Reset(				Reset),
 								.Set(				1'b0),
 								.Load(				1'b0),
 								.Enable(			~ResetDone),
-								.In(				{StashEAWidth{1'bx}}),
+								.In(				{SEAWidth{1'bx}}),
 								.Count(				ResetCount));
 	assign	ResetDone =								ResetCount == (StashCapacity - 1);
 
@@ -480,14 +480,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	StashE_Address = 						(CSPeaking | CSOverwriting | CSHUpdate) ? 	InSAddr : 
 													(CSPushing) ? 								FreeListHead : 
 																								StashWalk;
-	assign	StashD_Address =						{StashE_Address, {ChunkAWidth{1'b0}}} + CurrentChunk;
+	assign	StashD_Address =						{StashE_Address, {ChnkAWidth{1'b0}}} + CurrentChunk;
 
 	/* 
 		Stores data blocks.  This memory is indexed using 
 		{EntryID, EntryOffset}. 
 	*/
 	RAM			#(			.DWidth(				BEDWidth),
-							.AWidth(				StashDAWidth))
+							.AWidth(				SDAWidth))
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -500,16 +500,16 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		Since we always read/write blocks atomically, the offset is a simple 
 		counter.
 	*/
-	Counter		#(			.Width(					ChunkAWidth))
+	Counter		#(			.Width(					ChnkAWidth))
 				ChunkCount(	.Clock(					Clock),
 							.Reset(					Reset | Transfer_Terminator),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				~LastChunk & (DataTransfer | CSPeaking)),
-							.In(					{ChunkAWidth{1'bx}}),
+							.In(					{ChnkAWidth{1'bx}}),
 							.Count(					CurrentChunk));
 
-	assign FirstChunk =								CurrentChunk == {ChunkAWidth{1'b0}};
+	assign FirstChunk =								CurrentChunk == {ChnkAWidth{1'b0}};
 	assign LastChunk_Pre = 							CurrentChunk == NumChunks - 2;
 	assign LastChunk =								CurrentChunk == NumChunks - 1;
 
@@ -519,8 +519,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	/*
 		For each data block, store its program address / leaf label.
 	*/
-	RAM			#(			.DWidth(				StashHDWidth),
-							.AWidth(				StashEAWidth))
+	RAM			#(			.DWidth(				SHDWidth),
+							.AWidth(				SEAWidth))
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -545,7 +545,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	/*
 		The head of the used/free lists.
 	*/
-	Register	#(			.Width(					StashEAWidth),
+	Register	#(			.Width(					SEAWidth),
 							.ResetValue(			SNULL))
 				UsedListH(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -553,7 +553,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				Add_Terminator | Sync_SettingULH | CSSyncing_FirstCycle),
 							.In(					UsedListHead_New),
 							.Out(					UsedListHead));
-	Register	#(			.Width(					StashEAWidth))
+	Register	#(			.Width(					SEAWidth))
 				FreeListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
@@ -569,19 +569,19 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSPushing) ? 	FreeListHead : // read at end of second to last write cycle
 													(CSDumping) ? 	StashWalk : 
 													(CSSyncing) ? 	Sync_StashPUpdateSrc : 
-																	{StashEAWidth{1'bx}};
+																	{SEAWidth{1'bx}};
 	assign	StashP_DataIn = 						(CSReset) ? 	ResetCount + 1 :
 													(CSPushing) ? 	UsedListHead : 
 													(CSSyncing) ? 	SyncCount : 
-																	{StashEAWidth{1'bx}};
+																	{SEAWidth{1'bx}};
 	assign	StashP_WE =								CSReset | 
 													Add_Terminator | 
 													(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |
 													(CSSyncing_CapUL & ULHSet) | 
 													(CSSyncing_CapFL & FLHSet);
 		
-	RAM			#(			.DWidth(				StashEAWidth),
-							.AWidth(				StashEAWidth))
+	RAM			#(			.DWidth(				SEAWidth),
+							.AWidth(				SEAWidth))
 				StashP(		.Clock(					Clock),
 							.Reset(					/* not connected */),
 							.Enable(				1'b1),
@@ -615,7 +615,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSHUpdate) ? 			InSAddr:
 													(CSReset) ? 			ResetCount : 
 													(CSSyncing) ?			SyncCount : 
-																			{StashEAWidth{1'bx}};
+																			{SEAWidth{1'bx}};
 
 	assign	StashC_DataIn = 						(InScanStreaming) ? 	((InScanAccepted) ? EN_Free : EN_Used) :
 													(CSHUpdate) ?			EN_Free : 
@@ -624,7 +624,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
-							.AWidth(				StashEAWidth),
+							.AWidth(				SEAWidth),
 							.RLatency(				0)) // THIS might be a problem
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -642,14 +642,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	RemoveBlock =							(~InScanAdd & InScanValid & InScanAccepted) |
 													(CSHUpdate & InHeaderRemove);
 	
-	UDCounter	#(			.Width(					StashEAWidth))
+	UDCounter	#(			.Width(					SEAWidth))
 				ElementCount(.Clock(				Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Up(					AddBlock),
 							.Down(					RemoveBlock),
-							.In(					{StashEAWidth{1'bx}}),
+							.In(					{SEAWidth{1'bx}}),
 							.Count(					StashOccupancy));
 
 	assign	StashAlmostFull =						(StashOccupancy + BlocksOnPath) >= StashCapacity - 1; // - 1 because we reserve last spot for SNULL
@@ -740,7 +740,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			else: ... same logic for free list	
 	*/
 	
-	Counter		#(			.Width(					StashEAWidth),
+	Counter		#(			.Width(					SEAWidth),
 							.Limited(				1),
 							.Limit(					StashCapacity))
 				SyncCounter(.Clock(					Clock),
@@ -748,7 +748,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSSyncing),
-							.In(					{StashEAWidth{1'bx}}),
+							.In(					{SEAWidth{1'bx}}),
 							.Count(					SyncCount));
 
 	assign	Sync_Terminator = 						SyncCount == (StashCapacity - 1);
@@ -768,7 +768,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ULHSet));
-	Register	#(			.Width(					StashEAWidth))
+	Register	#(			.Width(					SEAWidth))
 				LastULEReg(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
@@ -783,7 +783,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					FLHSet));
-	Register	#(			.Width(					StashEAWidth))
+	Register	#(			.Width(					SEAWidth))
 				LastFLEReg(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
