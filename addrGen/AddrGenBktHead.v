@@ -6,7 +6,8 @@ module AddrGenBktHead
   input Clock, Reset, Start, Enable, 
   input [ORAML-1:0] leaf,                     // the input leaf label
   output reg [ORAMLogL-1:0]  currentLevel, 
-  output [ORAML+1:0] BktIdx,
+  output [ORAML+1:0] BktIdx,            // A tree of depth L needs L+1 bits to denote the node. 
+                                        // And we waste several spots due to subtree, requiring L+2 bits
   output [ORAML-1:0] STIdx, BktIdxInST  // tmp output for debugging
 );
 

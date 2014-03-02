@@ -20,7 +20,7 @@ module AddrGen
   
   // tmp output for debugging
   output [ORAMLogL-1:0]  currentLevel, 
-  output [ORAML-1:0] STIdx, BktIdx
+  output [ORAML-1:0] STIdx, BktIdxInST
 );
   
   localparam ORAMLogL = `log2(ORAML);
@@ -33,7 +33,7 @@ module AddrGen
   reg RW, BH;
   //reg [ORAML-1:0] Leaf;
   reg [ORAMLogL-1:0] BktCounter;
-  wire [ORAML+1:0] BktStartAddr;
+  wire [ORAML+1:0] BktIdx;          
   
   AddrGenBktHead #( .ORAML(ORAML), 
                     .ORAMLogL(ORAMLogL),
@@ -42,8 +42,8 @@ module AddrGen
                     ) 
   addGenBktHead (   Clock, Reset, Start && Ready, Enable, 
                     leaf, 
-                    currentLevel, BktStartAddr,
-                    STIdx, BktIdx // tmp output for debugging
+                    currentLevel, BktIdx,
+                    STIdx, BktIdxInST // tmp output for debugging
                   );  
               
   assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 1;
@@ -53,7 +53,7 @@ module AddrGen
   assign Ready = currentLevel > ORAML;
   assign CmdValid = currentLevel <= ORAML;
   assign Cmd = RW ? DDR3CMD_Read : DDR3CMD_Write;
-  assign Addr = (BktStartAddr * BktSize_DRBursts + BktCounter) * DDRBstLen;
+  assign Addr = (BktIdx * BktSize_DRBursts + BktCounter) * DDRBstLen;
   
   always@(posedge Clock) begin
     // accept inputs
