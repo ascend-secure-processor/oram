@@ -666,14 +666,15 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Stash
 	//------------------------------------------------------------------------------
 	
-	Stash	#(				.StashCapacity(			StashCapacity),
+	Stash	#(				.Pipelined(				Pipelined),
 							.StashOutBuffering(		2), // this should be good enough ...
 							.StopOnBlockNotFound(	StopOnBlockNotFound),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC))
 							
 			stash(			.Clock(					Clock),
 							.Reset(					Reset),

@@ -12,6 +12,7 @@
 	localparam					ORAMLP1 =			ORAML + 1; // the actual number of levels
 	localparam					BktAWidth =			`log2(ORAMLP1); // bucket lookup
 	localparam					BlocksOnPath =		ORAMLP1 * ORAMZ;
+	localparam					StashCapacity =		BlocksOnPath + ORAMC; // including the path ...
 	localparam					STAWidth =			`log2(BlocksOnPath); // ScanTable Address Width
 
 	localparam					BCWidth =			`log2(ORAMZ) + 1; // need +1 to account for full buckets

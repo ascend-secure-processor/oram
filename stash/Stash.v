@@ -310,7 +310,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (CSScan)
 					$display("[%m @ %t] Stash: start Scan", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: start PathRead (leaf = %x, dummy = %b)", $time, AccessLeaf, AccessIsDummy);
+					$display("[%m @ %t] Stash: start PathRead (leaf = %x, paddr = %x, dummy = %b)", $time, AccessLeaf, AccessPAddr, AccessIsDummy);
+				if (CSTurnaround1)
+					$display("[%m @ %t] Stash: start frontend operation", $time);
 				if (CSPathWriteback)
 					$display("[%m @ %t] Stash: start PathWriteback", $time);
 			end
@@ -486,12 +488,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	UpdateDataInReady =						TurnoverUpdate & 				Core_InReady;
 	assign	WriteInReady =							~(CSEvict | TurnoverUpdate) & 	Core_InReady;
 	
-	StashCore	#(			.StashCapacity(			StashCapacity),
-							.BEDWidth(				BEDWidth),
+	StashCore	#(			.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC))
 							
 				core(		.Clock(					Clock), 
 							.Reset(					Reset),
@@ -545,13 +547,13 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
 	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
 	
-	StashScanTable #(		.StashCapacity(			StashCapacity),
-							.Pipelined(				Pipelined),
+	StashScanTable #(		.Pipelined(				Pipelined),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ)) 
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC)) 
 							
 				scan_table(	.Clock(					Clock),
 							.Reset(					Reset),

@@ -31,13 +31,13 @@ module	StashTestbench;
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					32,
-							ORAMZ =					2;
-
+							ORAMZ =					2,
+							ORAMC =					10;
+							
 	parameter				FEDWidth =				64,
 							BEDWidth =				128;
 		
-	parameter				StashCapacity =			100,
-							StashOutBuffering = 	2,
+	parameter				StashOutBuffering = 	2,
 							Pipelined =				1;
 								
     `include "StashLocal.vh"
@@ -486,7 +486,7 @@ module	StashTestbench;
 		
 		while (i < BlocksOnPath) begin
 			// This is technically illegal (no path intersection) --- whatever
-			TASK_QueueWrite(32'hf000000e, 32'hffffffff);
+			TASK_QueueWrite(32'hf000000e + i, 32'hffffffff);
 			i = i + 1;
 		end
 
@@ -740,7 +740,7 @@ module	StashTestbench;
 		
 		// big test 5
 		TASK_CheckRead(NumChunks * 14, 	32'hf000000e, 32'hffffffff);
-		TASK_CheckRead(NumChunks * 15, 	32'hf000000e, 32'hffffffff);
+		TASK_CheckRead(NumChunks * 15, 	32'hf000000f, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 
 		// big test 6
@@ -812,14 +812,14 @@ module	StashTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	Stash	#(				.StashCapacity(			StashCapacity),
-							.StashOutBuffering(		StashOutBuffering),
+	Stash	#(				.StashOutBuffering(		StashOutBuffering),
 							.Pipelined(				Pipelined),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC))
 							
 			CUT(			.Clock(					Clock),
 							.Reset(					Reset),

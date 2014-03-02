@@ -31,20 +31,22 @@ module	PathORAMBackendTestbench;
 	parameter					ORAMB =				512,
 								ORAMU =				32,
 								ORAML =				10,
-								ORAMZ =				5;
+								ORAMZ =				5,
+								ORAMC =				10;
 
 	parameter					FEDWidth =			64,
 								BEDWidth =			128;										
+								
+	parameter					Pipelined =			1;
 								
 	parameter 					DDR_nCK_PER_CLK = 	4,
 								DDRDQWidth =		64,
 								DDRCWidth =			3,
 								DDRAWidth =			`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
-								
-	parameter					StashCapacity =		100;
-	
+
 	parameter					IVEntropyWidth =	64;
 	
+	`include "StashLocal.vh"
 	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
@@ -454,12 +456,12 @@ module	PathORAMBackendTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 	
-	PathORAMBackend #(		.StashCapacity(			StashCapacity),
-							.StopOnBlockNotFound(	0),
+	PathORAMBackend #(		.StopOnBlockNotFound(	0),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),

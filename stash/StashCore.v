@@ -161,6 +161,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	wire 					StreamingCRUDop;
 							
+	wire					ContinuePeak, ContinuePush;
+							
 	wire					WriteTransfer, DataTransfer;
 	wire					Add_Terminator;
 	wire					Transfer_Terminator, Transfer_Terminator_Pre;
@@ -243,14 +245,15 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	`ifdef SIMULATION
 		reg [SEAWidth-1:0] 	MS_pt;
-		integer 				i;
+		reg	[ORAMU-1:0]		PAddrTemp;
+		integer 			i;
 		// align the printouts in time
-		reg						MS_FinishedWrite, MS_StartingWrite, SyncComplete_Delayed;
-		reg [STWidth-1:0]		CS_Delayed, LS;
-		wire					MS_FinishedSync;
+		reg					MS_FinishedWrite, MS_StartingWrite, SyncComplete_Delayed;
+		reg [STWidth-1:0]	CS_Delayed, LS;
+		wire				MS_FinishedSync;
 		
 		initial begin
-			LS = 				ST_Reset;
+			LS = 			ST_Reset;
 			
 			if (StashCapacity < BlocksOnPath) begin
 				$display("[%m] ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
@@ -353,11 +356,24 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				end	
 			end
 			
-			if (CSPeaking & InCommandReady)
+			// No duplicate blocks allowed
+			if (CSPushing & StashH_WE) begin
+				MS_pt = UsedListHead;
+				while (MS_pt != SNULL) begin
+					PAddrTemp = StashH.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
+					if (PAddrTemp == InPAddr) begin
+						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
+						$stop;
+					end
+					MS_pt = StashP.Mem[MS_pt];
+				end
+			end
+			
+			if (CSPeaking & Transfer_Terminator)
 				if (OutPAddr == DummyBlockAddress)
 					$display("[%m @ %t] Reading dummy block", $time);
 				else
-					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address);
+					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed);
 		end	
 	`endif
 	
@@ -406,6 +422,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSDumping_FirstCycle = 					CSDumping & ~CSDumping_Delayed;
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 	
+	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Push & Transfer_Terminator;
+	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator) & ~CancelPeakCommand;
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
@@ -417,7 +436,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		InScanValid_Delayed <=						InScanValid;
 		StashE_Address_Delayed <=					StashE_Address;
 	end
-	
+
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
@@ -440,7 +459,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 						NS =						ST_StartSync;
 				end
 			ST_Pushing :
-				if (InCommandValid & InCommand == SCMD_Push & Transfer_Terminator)
+				if (ContinuePush)
 					NS =							ST_Pushing;
 				else if (Transfer_Terminator | CancelPushCommand)
 					NS =							ST_Idle;
@@ -450,7 +469,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if ((InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator) & ~CancelPeakCommand)
+				if (ContinuePeak)
 					NS =							ST_Peaking;
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;
