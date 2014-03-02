@@ -48,11 +48,12 @@ module AES_DW #(parameter W = 4, parameter D = 12,
     wire                         DOutValid;
     wire     [W*AESWidth-1:0]    DOut;
 
-    // used for passthrough
-    reg      [3:0]               AESCycleCount[D-1:0];
-    reg      [W*AESWidth-1:0]    AESData[D-1:0];
-    reg      [D-1:0]             AESDataValid;
-    reg      [D-1:0]             AESDone;
+    wire     [W*AESWidth-1:0]    AESRes[D-1:0];
+    wire     [W-1:0]             AESResValid[D-1:0];
+
+    assign DInReady = Count < D;
+    assign DOut = AESRes[OutTurn];
+    assign DOutValid = |(AESResValid[OutTurn]);
 
     always @( posedge Clock ) begin
         if (Reset)
@@ -63,16 +64,10 @@ module AES_DW #(parameter W = 4, parameter D = 12,
             Count <= Count - 1;
     end
 
-    // for passthrough
     always @( posedge Clock ) begin
-        if (Reset) begin
+        if (Reset)
             InTurn <= 0;
-            for (integer i = 0; i < D; i = i + 1) begin
-                AESDone[i] <= 0;
-                AESData[i] <= {(W*AESWidth){1'b1}};
-            end
-        end
-        else if (DataInValid) begin
+        else if (DataInValid && DInReady) begin
             if (InTurn >= D-1)
                 InTurn <= 0;
             else
@@ -82,36 +77,8 @@ module AES_DW #(parameter W = 4, parameter D = 12,
 
     always @( posedge Clock ) begin
         if (Reset)
-            AESDataValid <= 0;
-        else if (DataInValid) begin
-            AESData[InTurn] <= {(W*(AESWidth/IVEntropyWidth)){DataIn}}; //random val for
-            if (InTurn != OutTurn || ~DOutValid) //hack for now
-                AESDataValid[InTurn] <= 1;
-        end
-    end
-
-    always @( posedge Clock ) begin
-        if (Reset) begin
-            for (integer i = 0; i < D; i = i + 1) begin: CycleReset
-                AESCycleCount[i] <= 0;
-            end
-        end else begin
-            for (integer i = 0; i < D; i = i + 1) begin: CycleInc
-                if (AESDataValid[i] && (AESCycleCount[i] == 12)) begin
-                    AESDone[i] <= 1;
-                    AESCycleCount[OutTurn] <= 0;
-                end else if (AESDataValid[i])
-                    AESCycleCount[i] <= AESCycleCount[i] + 1;
-            end
-        end
-    end
-
-    always @( posedge Clock) begin
-        if (Reset)
             OutTurn <= 0;
-        else if (AESDone[OutTurn]) begin
-            AESDataValid[OutTurn] <= 0;
-            AESDone[OutTurn] <= 0;
+        else if (DOutValid) begin
             if (OutTurn >= D-1)
                 OutTurn <= 0;
             else
@@ -119,9 +86,21 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         end
     end
 
-    assign DInReady = Count < D;
-    assign DOut = AESData[OutTurn];
-    assign DOutValid = AESDone[OutTurn];
+
+    genvar i, j;
+    generate
+        for (i = 0; i < D; i = i + 1) begin: OuterAES
+            for (j = 0; j < W; j = j + 1) begin: InnerAES
+                aes_cipher_top aes(.clk(Clock),
+                                   .rst(~Reset),
+                                   .ld(DataInValid && KeyValid && (InTurn == i)),
+                                   .done(AESResValid[i][j]),
+                                   .key(Key),
+                                   .text_in({{(AESWidth-IVEntropyWidth){1'b0}}, DataIn + j}),
+                                   .text_out(AESRes[i][(j+1)*AESWidth - 1:j*AESWidth]));
+            end
+        end
+    endgenerate
 
     //IO assignment
     assign DataInReady = DInReady;

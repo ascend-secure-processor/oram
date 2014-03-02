@@ -29,7 +29,7 @@ module  AESDWTestbench;
 
     parameter W = 4;
     parameter D = 12;
-    parameter DataFIFODepth = 8;
+    parameter DataFIFODepth = 16;
 
     localparam                                      Freq = 100_000_000,
                                                     Cycle = 1000000000/Freq;
@@ -118,6 +118,10 @@ module  AESDWTestbench;
     reg                                            Test1Ready;
 
     assign Clock = ~Clock_N;
+
+    //TODO: replace with random key
+    assign AESKey = {(AESWidth){1'b1}};
+    assign AESKeyValid = 1;
 
     //original inputs
     assign OrigDataIn = CurData;
@@ -265,7 +269,7 @@ module  AESDWTestbench;
 
 
     FIFOLinear#(.Width(W*AESWidth),
-                .Depth(DataFIFODepth*10))
+                .Depth(DataFIFODepth*2))
     aesres_fifo (.Clock(Clock),
                  .Reset(Reset),
                  .InData(AESResDataIn),
@@ -287,7 +291,7 @@ module  AESDWTestbench;
 
 
         Reset = 1'b1;
-        #(Cycle);
+        #(Cycle * 2); //must assert for more than 1 due to AES
         Reset = 1'b0;
 
         Enc = 1;
@@ -320,7 +324,7 @@ module  AESDWTestbench;
 
 
     //--------------------------------------------------------------------------
-    //      CUT
+    //      Module
     //--------------------------------------------------------------------------
 
 
