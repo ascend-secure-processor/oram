@@ -227,6 +227,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire	[ORAML-1:0]			AddrGen_Leaf;
 	wire						AddrGen_InReady, AddrGen_InValid;
+	
+	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress_Internal;
+	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand_Internal;
+	wire						AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;									
 
 	//------------------------------------------------------------------------------
 	//	Simulation checks
@@ -462,11 +466,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	AddrGen_Reading = 						CSStartRead;
 	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : CurrentLeaf_Internal;
 	
-	// TODO
-	wire	[DDRAWidth-1:0]		AddrGen_DRAMCommandAddress_Internal;
-	wire	[DDRCWidth-1:0]		AddrGen_DRAMCommand_Internal;
-	wire						AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;								
-	
 	// TODO pass AES header params
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -487,10 +486,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal),
-							.Addr(					AddrGen_DRAMCommandAddress_Internal));
-							
-	// TODO: parameterize this with a top level "HighFrequency" parameter?			
-	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth))
+							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
+	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
+							.FWLatency(				Overclock))
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				{AddrGen_DRAMCommand_Internal,	AddrGen_DRAMCommandAddress_Internal}),
@@ -527,23 +525,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 	// Buffers the whole incoming path (... this is a lazy design?)
 	// NOTE: This buffer requires ~1% of the LUT RAM on the chip
-	/*FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				PathSize_DRBursts))
-				in_path_buf(.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady), // debugging
-							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid),
-							.OutReady(				PathBuffer_OutReady));
-	*/
-	
-	// TODO
-	wire	PathBuffer_Full, PathBuffer_Empty;
-	assign	PathBuffer_InReady =	~PathBuffer_Full;
-	assign	PathBuffer_OutValid =	~PathBuffer_Empty;
-	PathBuffer	in_path_buf(.clk(					Clock),
+	generate if (Overclock) begin:INBUF_BRAM
+		wire				PathBuffer_Full, PathBuffer_Empty;
+
+		PathBuffer in_P_buf(.clk(					Clock),
 							.srst(					Reset), 
 							.din(					DRAMReadData), 
 							.wr_en(					DRAMReadDataValid), 
@@ -551,6 +536,21 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.dout(					PathBuffer_OutData), 
 							.full(					PathBuffer_Full), 
 							.empty(					PathBuffer_Empty));
+							
+		assign	PathBuffer_InReady =				~PathBuffer_Full;
+		assign	PathBuffer_OutValid =				~PathBuffer_Empty;							
+	end else begin:INBUF_LUTRAM
+		FIFORAM	#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady), // debugging
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady));
+	end endgenerate
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
 	Counter		#(			.Width(					BktBSTWidth))
@@ -666,16 +666,16 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Stash
 	//------------------------------------------------------------------------------
 	
-	Stash	#(				.Pipelined(				Pipelined),
-							.StashOutBuffering(		2), // this should be good enough ...
+	Stash	#(				.StashOutBuffering(		2), // this should be good enough ...
 							.StopOnBlockNotFound(	StopOnBlockNotFound),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC))
-							
+							.ORAMC(					ORAMC),
+							.Overclock(				Overclock))
+
 			stash(			.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),

@@ -35,9 +35,9 @@ module	PathORAMBackendTestbench;
 								ORAMC =				10;
 
 	parameter					FEDWidth =			64,
-								BEDWidth =			128;										
-								
-	parameter					Pipelined =			1;
+								BEDWidth =			128;
+
+	parameter					Overclock =			1;
 								
 	parameter 					DDR_nCK_PER_CLK = 	4,
 								DDRDQWidth =		64,
@@ -462,6 +462,7 @@ module	PathORAMBackendTestbench;
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
+							.Overclock(				Overclock),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),

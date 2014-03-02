@@ -547,7 +547,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
 	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
 	
-	StashScanTable #(		.Pipelined(				Pipelined),
+	StashScanTable #(		.Overclock(				Overclock),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -637,7 +637,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 
 	// FUNCTIONALITY: scan table latency will delay updating StashOccupancy
-	generate if (Pipelined) begin:DELAY_EVICT
+	generate if (Overclock) begin:DELAY_EVICT
 		ShiftRegister #(	.PWidth(				ScanTableLatency),
 							.SWidth(				1))
 				evict_cmpl(	.Clock(					Clock), 

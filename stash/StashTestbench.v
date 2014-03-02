@@ -33,12 +33,13 @@ module	StashTestbench;
 							ORAML =					32,
 							ORAMZ =					2,
 							ORAMC =					10;
-							
+
 	parameter				FEDWidth =				64,
 							BEDWidth =				128;
 		
-	parameter				StashOutBuffering = 	2,
-							Pipelined =				1;
+	parameter				Overclock =				0;
+							
+	parameter				StashOutBuffering = 	2;
 								
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -813,7 +814,7 @@ module	StashTestbench;
 	//--------------------------------------------------------------------------
 
 	Stash	#(				.StashOutBuffering(		StashOutBuffering),
-							.Pipelined(				Pipelined),
+							.Overclock(				Overclock),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

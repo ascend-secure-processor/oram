@@ -7,5 +7,6 @@
 								ORAMC =				10, // Number of slots in the stash, _in addition_ to the length of one path
 								
 	           					FEDWidth =			64, // data width of frontend busses (reading/writing from/to stash, LLC network interface width)
-								BEDWidth =			128 // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
+								BEDWidth =			128, // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
 	
+								Overclock = 		1 // Pipeline various operations inside the stash (needed for 200 Mhz operation)

@@ -112,7 +112,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 		wire [ORAMU-1:0] InScanPAddr_Dly;
 		
 		Pipeline	#(	.Width(					ORAMU),
-						.Stages(				Pipelined))
+						.Stages(				Overclock))
 			sim_pipe(	.Clock(					Clock),
 						.Reset(					Reset), 
 						.InData(				InScanPAddr), 
@@ -203,7 +203,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CommonSubpath = 						(Intersection & -Intersection) - 1;
 	
 	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
-							.Stages(				Pipelined))
+							.Stages(				Overclock))
 			mpipe_1(		.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 	CommonSubpath}), 
@@ -272,7 +272,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	end endgenerate
 
 	Pipeline	#(			.Width(					BktAWidth + BCLWidth + 2 + SEAWidth),
-							.Stages(				Pipelined))
+							.Stages(				Overclock))
 			mpipe_2(		.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{HighestLevel_Bin_Pre,	BCounts_Pre,	OutScanValid_Pre,	OutScanAccepted_Pre,	OutScanSAddr_Pre}), 
