@@ -153,44 +153,59 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
+	// Control
+	
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSReset, CSIdle, CSPeaking, CSPushing, 
 							CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
 
-	wire					PerAccessReset;
+	wire 					StreamingCRUDop;
+							
+	wire					WriteTransfer, DataTransfer;
+	wire					Add_Terminator;
+	wire					Transfer_Terminator, Transfer_Terminator_Pre;
+	wire 					AddBlock, RemoveBlock;
+
+	// Reset
 	
 	wire	[SEAWidth-1:0]	ResetCount;
-
+	
+	// Stash memories
+	
 	wire	[ORAMU-1:0]		OutPAddr_Pre;
 	
 	wire	[BEDWidth-1:0]	StashD_DataOut;
-	wire					WriteTransfer, DataTransfer, Add_Terminator;
-	wire					Transfer_Terminator, Transfer_Terminator_Pre;
 
 	wire	[SDAWidth-1:0]	StashD_Address;
 	wire	[SEAWidth-1:0]	StashE_Address;
 	reg		[SEAWidth-1:0]	StashE_Address_Delayed;
-	wire					FirstChunk, LastChunk_Pre, LastChunk;
 
-	wire 	[ChnkAWidth-1:0]CurrentChunk;
-
-	wire 	[SEAWidth-1:0]	UsedListHead, FreeListHead;
-	wire 	[SEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
-
-	wire 					AddBlock, RemoveBlock;
-	
+	wire					StashH_WE;	
+		
 	wire	[SEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
 	wire					StashP_WE;
-	
-	wire					StashH_WE;
 	
 	wire	[SEAWidth-1:0]	StashC_Address;
 	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;
 	wire					StashC_WE;
 	
+	// Chunk counting
+	
+	wire					FirstChunk, LastChunk_Pre, LastChunk;
+	wire 	[ChnkAWidth-1:0]CurrentChunk;
+
+	// Free/used lists
+	
+	wire 	[SEAWidth-1:0]	UsedListHead, FreeListHead;
+	wire 	[SEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
+	
+	// Scan/Dump
+	
 	wire	[SEAWidth-1:0]	StashWalk;
 	wire					SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire					OutScanValidPush, OutScanValidDump;
+	
+	// Syncing
 	
 	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync;
 	wire 					CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
@@ -200,8 +215,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					Sync_SettingULH, Sync_SettingFLH;
 	wire					Sync_FoundUsedElement, Sync_FoundFreeElement;
 	wire					Sync_Terminator;
-	
-	wire 					StreamingCRUDop;	
 	
 	// Derived signals
 
