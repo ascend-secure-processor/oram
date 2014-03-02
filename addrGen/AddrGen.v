@@ -33,7 +33,7 @@ module AddrGen
   reg RW, BH;
   //reg [ORAML-1:0] Leaf;
   reg [ORAMLogL-1:0] BktCounter;
-  wire [ORAML-1:0] BktStartAddr;
+  wire [ORAML+1:0] BktStartAddr;
   
   AddrGenBktHead #( .ORAML(ORAML), 
                     .ORAMLogL(ORAMLogL),
