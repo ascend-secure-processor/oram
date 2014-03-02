@@ -26,11 +26,11 @@ module AES_DW #(parameter W = 4, parameter D = 12,
      //	Interface 1
      //--------------------------------------------------------------------------
 
-     input   [IVEntropyWidth-1:0] DataIn,
+     input  [IVEntropyWidth-1:0] DataIn,
      input                       DataInValid,
      output                      DataInReady,
 
-     input   [AESWidth-1:0]             Key,
+     input   [AESWidth-1:0]      Key,
      input                       KeyValid,
      output                      KeyReady,
 
@@ -65,8 +65,13 @@ module AES_DW #(parameter W = 4, parameter D = 12,
 
     // for passthrough
     always @( posedge Clock ) begin
-        if (Reset)
+        if (Reset) begin
             InTurn <= 0;
+            for (integer i = 0; i < D; i = i + 1) begin
+                AESDone[i] <= 0;
+                AESData[i] <= {(W*AESWidth){1'b1}};
+            end
+        end
         else if (DataInValid) begin
             if (InTurn >= D-1)
                 InTurn <= 0;
@@ -79,8 +84,8 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         if (Reset)
             AESDataValid <= 0;
         else if (DataInValid) begin
-            AESData[InTurn] <= 0; //output 0 for passthrough
-            if (InTurn != OutTurn) //hack for now
+            AESData[InTurn] <= {(W*(AESWidth/IVEntropyWidth)){DataIn}}; //random val for
+            if (InTurn != OutTurn || ~DOutValid) //hack for now
                 AESDataValid[InTurn] <= 1;
         end
     end
@@ -114,12 +119,13 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         end
     end
 
+    assign DInReady = Count < D;
     assign DOut = AESData[OutTurn];
     assign DOutValid = AESDone[OutTurn];
 
     //IO assignment
-    assign DataInReady = Count < D;
-    assign KeyReady = Count < D;
+    assign DataInReady = DInReady;
+    assign KeyReady = DInReady;
     assign DataOut = DOut;
     assign DataOutValid = DOutValid;
 

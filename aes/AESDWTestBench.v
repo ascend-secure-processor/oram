@@ -29,7 +29,7 @@ module  AESDWTestbench;
 
     parameter W = 4;
     parameter D = 12;
-    parameter DataFIFODepth = 1024;
+    parameter DataFIFODepth = 8;
 
     localparam                                      Freq = 100_000_000,
                                                     Cycle = 1000000000/Freq;
@@ -40,69 +40,151 @@ module  AESDWTestbench;
     //--------------------------------------------------------------------------
 
     wire                                           Clock;
+    wire                                           Clock_N;
     reg                                            Reset;
 
-    reg [IVEntropyWidth-1:0]                       AESDataIn;
-    reg                                            AESDataInValid;
+    reg [63:0]                                     CycleCount;
+
+    reg                                            Enc;
+
+    wire [IVEntropyWidth-1:0]                      AESDataIn;
+    wire                                           AESDataInValid;
     wire                                           AESDataInReady;
 
-    reg [AESWidth-1:0]                             AESKey;
-    reg                                            AESKeyValid;
+    wire [AESWidth-1:0]                            AESKey;
+    wire                                           AESKeyValid;
     wire                                           AESKeyReady;
 
     wire [W*AESWidth-1:0]                          AESDataOut;
     wire                                           AESDataOutValid;
 
     //fifo i/o
-    reg [W*AESWidth-1:0]                           OrigDataIn;
-    reg                                            OrigDataInValid;
+    wire [W*AESWidth-1:0]                          OrigDataIn;
+    wire                                           OrigDataInValid;
     wire                                           OrigDataInAccept;
     wire [W*AESWidth-1:0]                          OrigDataOut;
     wire                                           OrigDataOutValid;
-    reg                                            OrigDataOutReady;
+    wire                                           OrigDataOutReady;
 
-    reg [W*AESWidth-1:0]                           DataIn;
-    reg                                            DataInValid;
+    wire [W*AESWidth-1:0]                          DataIn;
+    wire                                           DataInValid;
     wire                                           DataInAccept;
     wire [W*AESWidth-1:0]                          DataOut;
     wire                                           DataOutValid;
-    reg                                            DataOutReady;
+    wire                                           DataOutReady;
 
-    reg [W*AESWidth-1:0]                           EncDataIn;
-    reg                                            EncDataInValid;
+    wire [W*AESWidth-1:0]                          EncDataIn;
+    wire                                           EncDataInValid;
     wire                                           EncDataInAccept;
     wire [W*AESWidth-1:0]                          EncDataOut;
     wire                                           EncDataOutValid;
-    reg                                            EncDataOutReady;
+    wire                                           EncDataOutReady;
 
-    reg [W*AESWidth-1:0]                           DecDataIn;
-    reg                                            DecDataInValid;
+    wire [W*AESWidth-1:0]                          DecDataIn;
+    wire                                           DecDataInValid;
     wire                                           DecDataInAccept;
     wire [W*AESWidth-1:0]                          DecDataOut;
     wire                                           DecDataOutValid;
-    reg                                            DecDataOutReady;
+    wire                                           DecDataOutReady;
 
-    reg [IVEntropyWidth-1:0]                       IVEncDataIn;
-    reg                                            IVEncDataInValid;
+    wire [IVEntropyWidth-1:0]                      IVEncDataIn;
+    wire                                           IVEncDataInValid;
     wire                                           IVEncDataInAccept;
     wire [IVEntropyWidth-1:0]                      IVEncDataOut;
     wire                                           IVEncDataOutValid;
-    reg                                            IVEncDataOutReady;
+    wire                                           IVEncDataOutReady;
 
-    reg [IVEntropyWidth-1:0]                       IVDecDataIn;
-    reg                                            IVDecDataInValid;
+    wire [IVEntropyWidth-1:0]                      IVDecDataIn;
+    wire                                           IVDecDataInValid;
     wire                                           IVDecDataInAccept;
     wire [IVEntropyWidth-1:0]                      IVDecDataOut;
     wire                                           IVDecDataOutValid;
-    reg                                            IVDecDataOutReady;
+    wire                                           IVDecDataOutReady;
+
+    wire [W*AESWidth-1:0]                          AESResDataIn;
+    wire                                           AESResDataInValid;
+    wire                                           AESResDataInAccept;
+    wire [W*AESWidth-1:0]                          AESResDataOut;
+    wire                                           AESResDataOutValid;
+    wire                                           AESResDataOutReady;
 
 
+    reg [W*AESWidth-1:0]                           CurData;
+    reg [IVEntropyWidth-1:0]                       CurIV;
+    reg                                            Loading;
+
+    reg [1:0]                                      Stage;
+
+    reg                                            Test1Ready;
+
+    assign Clock = ~Clock_N;
+
+    //original inputs
+    assign OrigDataIn = CurData;
+    assign OrigDataInValid = Loading;
+    assign DataIn = CurData;
+    assign DataInValid = Loading;
+    assign IVEncDataIn = CurIV;
+    assign IVEncDataInValid = Loading;
+    assign IVDecDataIn = CurIV;
+    assign IVDecDataInValid = Loading;
+
+    assign OrigDataOutReady = Test1Ready;
+    assign DecDataOutReady = Test1Ready;
+
+    //IVenc -> AES or IVdec -> AES
+    assign AESDataIn = Enc ? IVEncDataOut: IVDecDataOut;
+    assign AESDataInValid = (Enc & IVEncDataOutValid) ||
+                            (~Enc & IVDecDataOutValid);
+    assign IVEncDataOutReady = Enc & AESDataInReady;
+    assign IVDecDataOutReady = ~Enc & AESDataInReady;
+
+    //AES -> AES FIFO
+    assign AESResDataIn = AESDataOut;
+    assign AESResDataInValid = AESDataOutValid;
+    //ignoring input ready signal right now
+
+    //AES FIFO ^ Data FIFO -> Enc FIFO
+    assign EncDataIn = DataOut ^ AESResDataOut;
+    assign EncDataInValid = Enc & DataOutValid & AESResDataOutValid;
+    assign DataOutReady = Enc & EncDataInAccept & AESResDataOutValid;
+
+    //special, since shared between enc and dec
+    assign AESResDataOutReady = (Enc & EncDataInAccept & DataOutValid) ||
+                                (~Enc & DecDataInAccept & EncDataOutValid);
+
+    //AES FIFO ^ Enc FIFO -> Dec FIFO
+    assign DecDataIn = EncDataOut ^ AESResDataOut;
+    assign DecDataInValid = ~Enc & EncDataOutValid & AESResDataOutValid;
+    assign EncDataOutReady = ~Enc & DecDataInAccept & AESResDataOutValid;
+
+
+    always @( posedge Clock) begin
+        if (Reset) begin
+            CycleCount <= 0;
+            Stage <= 0;
+            Enc <= 1;
+            Test1Ready <= 0;
+            Loading <= 0;
+        end else
+            CycleCount <= CycleCount + 1;
+    end
+
+    always @( posedge Clock) begin
+        if (Reset) begin
+            CurData <= 0;
+            CurIV <= 0;
+        end else begin
+            CurData <= {(W*AESWidth/32){$random}};
+            CurIV <= {(IVEntropyWidth/32){$random}};
+        end
+    end
 
     //--------------------------------------------------------------------------
     //      Clock Source
     //--------------------------------------------------------------------------
 
-    ClockSource #(Freq) ClockF200Gen(.Enable(1'b1), .Clock(Clock));
+    ClockSource #(Freq) ClockF200Gen(.Enable(1'b1), .Clock(Clock_N));
 
     //--------------------------------------------------------------------------
     //      Tasks
@@ -182,113 +264,59 @@ module  AESDWTestbench;
                 );
 
 
-    task TASK_EnqData;
-        input [W*AESWidth-1:0]  Data;
-        input [IVEntropyWidth-1:0] IV;
-
-        begin
-            OrigDataIn = Data;
-            DataIn = Data;
-            IVEncDataIn = IV;
-            IVDecDataIn = IV;
-
-            OrigDataInValid = 1'b1;
-            DataInValid = 1'b1;
-            IVEncDataInValid = 1'b1;
-            IVDecDataInValid = 1'b1;
-
-            while (~OrigDataInAccept  || ~DataInAccept ||
-                   ~IVEncDataInAccept || ~IVDecDataInAccept) #(Cycle);
-            #(Cycle);
-
-            OrigDataInValid = 1'b0;
-            DataInValid = 1'b0;
-            IVEncDataInValid = 1'b0;
-            IVDecDataInValid = 1'b0;
-        end
-    endtask // TASK_EnqData
-
-    task TASK_QueueAES;
-        input [W*AESWidth-1:0] Data;
-        input                  DataValid;
-        input                  Enc;
-
-        begin
-            AESDataIn = Data;
-            AESDataInValid = DataValid;
-            if (Enc)
-              IVEncDataOutReady = AESDataInReady;
-            else
-              IVDecDataOutReady = AESDataInReady;
-
-            if (Enc)
-              while (~IVEncDataOutValid || ~AESDataInReady) #(Cycle);
-            else
-              while (~IVDecDataOutValid || ~AESDataInReady) #(Cycle);
-        end
-    endtask // TASK_QueueAES
-
-    task TASK_AES;
-        input Enc;
-        begin
-            if (Enc)
-              while (~AESDataOutValid || ~DataOutReady) #(Cycle);
-            else
-              while (~AESDataOutValid || ~EncDataOutReady) #(Cycle);
-
-            if (Enc) begin
-                EncDataIn = AESDataOut ^ DataOut;
-                EncDataInValid = 1'b1;
-
-                while (~EncDataInAccept) #(Cycle);
-                EncDataInValid = 1'b0;
-            end else begin
-                DecDataIn = AESDataOut ^ EncDataOut;
-                DecDataInValid = 1'b1;
-                while (~DecDataInAccept) #(Cycle);
-                DecDataInValid = 1'b0;
-            end // else: !if(Enc)
-        end
-    endtask // TASK_AESEnc
-
-
+    FIFOLinear#(.Width(W*AESWidth),
+                .Depth(DataFIFODepth*10))
+    aesres_fifo (.Clock(Clock),
+                 .Reset(Reset),
+                 .InData(AESResDataIn),
+                 .InValid(AESResDataInValid),
+                 .InAccept(AESResDataInAccept),
+                 .OutData(AESResDataOut),
+                 .OutValid(AESResDataOutValid),
+                 .OutReady(AESResDataOutReady)
+                 );
 
 
     //--------------------------------------------------------------------------
-    //      Test Stimulus
+    //      Test
     //--------------------------------------------------------------------------
 
     integer i;
 
     initial begin
 
-        //--------------------------------------------------------------------------
-        //      Test 1: Filled fifo
-        //--------------------------------------------------------------------------
 
         Reset = 1'b1;
         #(Cycle);
         Reset = 1'b0;
 
-        i = 0;
+        Enc = 1;
+        Loading = 1;
+
         // enq data till filled
-        while (i < DataFIFODepth) begin
-            TASK_EnqData($random(0), $random(1));
+        for (i = 0; i < DataFIFODepth*2; i = i + 1) #(Cycle);
+
+        Loading = 0;
+        #(Cycle * DataFIFODepth * 30);
+
+        Enc = 0;
+        #(Cycle * DataFIFODepth * 30);
+
+
+        //verify
+        Test1Ready = 1;
+        for (i = 0; i < DataFIFODepth; i = i + 1) begin
+            if (OrigDataOutValid && DecDataOutValid &&
+                (OrigDataOut != DecDataOut)) begin
+                $display("Different values after enc/dec. TEST FAILED");
+                $display("%dth value: (%x, %x)", i, OrigDataOut, DecDataOut);
+                $finish;
+            end else
+                #(Cycle);
         end
-
-        TASK_QueueAES(IVEncDataOut, IVEncDataOutValid, 1'b1);
-        TASK_AES(1);
-
-        #(Cycle * 100);
-
-        TASK_QueueAES(IVDecDataOut, IVDecDataOutValid, 1'b0);
-        TASK_AES(0);  //done encrypting and decrypting
+        $display ("TEST PASSED");
+        $finish;
     end
-
-    //--------------------------------------------------------------------------
-    //      Test checks
-    //--------------------------------------------------------------------------
-
 
 
     //--------------------------------------------------------------------------
