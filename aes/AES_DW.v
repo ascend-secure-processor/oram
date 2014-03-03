@@ -44,6 +44,7 @@ module AES_DW #(parameter W = 4, parameter D = 12,
     reg      [LOGD-1:0]      Count;
     reg      [LOGD-1:0]      InTurn;
     reg      [LOGD-1:0]      OutTurn;
+    reg      [D-1:0]             AESValid;
     wire                         DInReady;
     wire                         DOutValid;
     wire     [W*AESWidth-1:0]    DOut;
@@ -86,6 +87,21 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         end
     end
 
+    always @( posedge Clock ) begin
+        if (Reset) begin
+            for (integer i = 0; i < D; i = i + 1)
+                AESWorking <= 0;
+        end else begin
+            for (integer i = 0; i < D; i = i + 1) begin
+                if (DOut && OutTurn == i)
+                    AESWorking[i] <= 0;
+                else if (DataInValid && KeyValid &&
+                         (InTurn == i) && !AESWorking[i])
+                    AESWorking[i] <= 1;
+            end
+        end
+    end
+
 
     genvar i, j;
     generate
@@ -93,7 +109,8 @@ module AES_DW #(parameter W = 4, parameter D = 12,
             for (j = 0; j < W; j = j + 1) begin: InnerAES
                 aes_cipher_top aes(.clk(Clock),
                                    .rst(~Reset),
-                                   .ld(DataInValid && KeyValid && (InTurn == i)),
+                                   .ld(DataInValid && KeyValid &&
+                                       (InTurn == i) && !AESWorking[i]),
                                    .done(AESResValid[i][j]),
                                    .key(Key),
                                    .text_in({{(AESWidth-IVEntropyWidth){1'b0}}, DataIn + j}),
