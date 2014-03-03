@@ -54,6 +54,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Constants
 	//--------------------------------------------------------------------------
 	
+	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
 	
 	localparam				FIFOWidth =				`log2(BlocksOnPath+1);
@@ -96,6 +97,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[SEAWidth-1:0]	DMAAddr_Internal;
 	wire					DMAValid_Internal, DMAReady_Internal;						
 	wire	[FIFOWidth-1:0]	STFIFOCount;
+	
+	wire					DMAStarted;
 	
 	wire	[SEAWidth-1:0]	DummyWire;
 	
@@ -332,7 +335,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				2'b11),
 							.Write(					{1'b0, 					ScanTable_WE}),
 							.Address(				{InDMAAddr, 			ScanTable_Address}),
-							.DIn(					{{SEAWidth{1'bx}}, 	ScanTable_DataIn}),
+							.DIn(					{{SEAWidth{1'bx}}, 		ScanTable_DataIn}),
 							.DOut(					{DMAAddr_Internal, 		DummyWire}));
 
 	Pipeline	#(			.Width(					1),
@@ -355,8 +358,21 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutSend(				OutDMAValid),
 							.OutReady(				OutDMAReady));
 
-	assign	OutDMALast =							~DMAValid_Internal & STFIFOCount == 1;
-							
+	Register	#(			.Width(					1))
+				dma_start(	.Clock(					Clock),
+							.Reset(					Reset | AccessComplete),
+							.Set(					DMAValid_Internal & STFIFOCount == 2),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					DMAStarted));
+	Register	#(			.Width(					1))
+				dma_last(	.Clock(					Clock),
+							.Reset(					Reset | AccessComplete),
+							.Set(					DMAStarted & STFIFOCount == 2 & OutDMAValid & OutDMAReady),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					OutDMALast));
+
 	//--------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------

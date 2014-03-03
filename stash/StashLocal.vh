@@ -19,11 +19,10 @@
 	localparam					BCLWidth =	 		ORAMLP1 * BCWidth; // bitvector of bucket counts
 			
 	localparam					ScanTableLatency =	(Overclock) ? 2 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
-	localparam					ScanDelay =			(StashCapacity - BlocksOnPath) + ScanTableLatency;
+	localparam					ScanDelay =			ORAMC + ScanTableLatency;
 	localparam					SCWidth =			`log2(ScanDelay);
 
 	// Commands understood by StashCore, called by Stash
-	// TODO change naming to match PathORAMBackend
 	localparam					SCMDWidth =			3,
 								SCMD_Push =			3'd0,
 								SCMD_Overwrite =	3'd1,

@@ -126,12 +126,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Constants
 	//-------------------------------------------------------------------------- 
 	
-	`include "StashLocal.vh"
 	`include "BucketLocal.vh"
+	`include "StashLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering) + 1;
-	
+	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering + 1);
+		
 	localparam				STWidth =				4,
 							ST_Reset =				4'd0,
 							ST_Idle = 				4'd1,
@@ -213,20 +213,22 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	wire	[STAWidth-1:0]	BlocksReading;
 	
-	wire					PathWriteback_Waiting;
 	wire	[STAWidth-1:0] 	BlocksRead;
 	
 	wire					Core_AccessComplete, Top_AccessComplete;
-	
-	wire					WritebackGate;
+
 	wire					ScanTableReset;		
 	
 	// Read control
 	
+	wire					StreamPeakReady;
+	
 	wire	[OBWidth-1:0]	OutBufferEmptyCount, OutBufferCount;	
-	wire					OutBufferHasSpace, TickOutHeader, OutHeaderValid;
-	wire					OutBufferInReady, OutHBufferInReady, OutBufferInValid;
-
+	wire					OutBufferInValid, OutBufferInReady;
+	wire					TickOutHeader, BlockReadCommit;
+	wire					OutHBufferInValid, OutHBufferInReady;
+	wire					OutHeaderValid;
+	
 	// Frontend control
 	
 	wire	[ORAML-1:0]		MappedLeaf;
@@ -257,12 +259,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 			
-			if (	(TickOutHeader & ~OutHeaderValid) |
-					(OutBufferInValid & ~OutBufferInReady) |
-					(OutBufferHInValid & ~OutHBufferInReady)	) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
-				$stop;
+			if (BlockReadCommit & ~OutHeaderValid) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination 1 (data will be lost)", $time);
+				$stop;			
 			end
+			if (OutBufferInValid & ~OutBufferInReady) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination 2 (data will be lost)", $time);
+				$stop;			
+			end
+			if (OutHBufferInValid & ~OutHBufferInReady) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination 3 (data will be lost)", $time);
+				$stop;			
+			end			
 
 			if (	(WriteInValid & WriteInReady & BlockWriteComplete) &
 					((^WriteLeaf === 1'bx) | (^WritePAddr === 1'bx))) begin
@@ -474,7 +482,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign 	Core_CommandValid =						((CSEvict | CSScan | CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
 													  CSPathRead | // increases path write performance
-													 (WritebackGate & OutDMAValid);
+													 (CSPathWriteback & OutDMAValid);
 	
 	// since UpdateData == EvictData most likely, this gets optimized away
 	assign	Core_InData = 							(CSEvict) ? 		EvictData : 
@@ -537,7 +545,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.StashOccupancy(		StashOccupancy),
 							
 							.CancelPushCommand(		StartWriteback_Pass),
-							.CancelPeakCommand(		OutDMALast),
+							.StreamPeakCommand(		CSPathWriteback),
+							.StreamPeakReady(		StreamPeakReady),
+							.LastPeakCommand(		OutDMALast),
 							.SyncComplete(			Core_AccessComplete));
 
 	// leaf remapping step
@@ -672,10 +682,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
 	
-	// NOTE: don't apply WritebackGate to this signal (we need to tick down the 
-	// scan table FIFO properly ...)
-	assign	OutDMAReady =							Core_CommandComplete;
-	
+	assign	OutDMAReady =							CSPathWriteback & Core_CommandComplete;
+
 	// which block are we currently writing back?
 	Counter		#(			.Width(					STAWidth))
 				rd_st_cnt(	.Clock(					Clock),
@@ -703,28 +711,18 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Compare(				BlocksOnPath))
 				rd_ret_cmp(	.Count(					BlocksRead), 
 							.TerminalCount(			Top_AccessComplete));
-
-	// Block-level backpressure for reads (due to random DRAM delays)
-	Register	#(			.Width(					1))
-				read_wait(	.Clock(					Clock),
-							.Reset(					Reset | OutBufferHasSpace),
-							.Set(					~OutBufferHasSpace),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					PathWriteback_Waiting));
-							
-	assign	WritebackGate = 						CSPathWriteback & ~PathWriteback_Waiting;	
 							
 	//--------------------------------------------------------------------------
 	// Read interface buffering
 	//--------------------------------------------------------------------------
-
-	assign	OutBufferHasSpace =						OutBufferEmptyCount >= BlkSize_BEDChunks;
-
-	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
-	assign	OutBufferHInValid =						CSPathWriteback & Core_OutValid & BlockReadComplete_Internal;
 	
-	assign	BlockReadComplete =						TickOutHeader & ReadOutValid & ReadOutReady;
+	assign	StreamPeakReady =						OutBufferEmptyCount >= (BlkSize_BEDChunks + 1);	
+	
+	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
+	assign	OutHBufferInValid =						OutBufferInValid & BlockReadComplete_Internal;
+	
+	assign	BlockReadComplete =						TickOutHeader;
+	assign	BlockReadCommit = 						BlockReadComplete & ReadOutValid & ReadOutReady;
 	
 	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				BlkSize_BEDChunks * StashOutBuffering))
@@ -743,15 +741,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				out_H_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				{Core_OutPAddr, Core_OutLeaf}),
-							.InValid(				OutBufferHInValid),
+							.InValid(				OutHBufferInValid),
 							.InAccept(				OutHBufferInReady),
 							.OutData(				{ReadPAddr, ReadLeaf}),
 							.OutSend(				OutHeaderValid),
-							.OutReady(				TickOutHeader));		
+							.OutReady(				BlockReadCommit));		
 
 	Counter		#(			.Width(					OBWidth))
 				out_H_cnt(	.Clock(					Clock),
-							.Reset(					Reset | BlockReadComplete),
+							.Reset(					Reset | BlockReadCommit),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				ReadOutValid & ReadOutReady),

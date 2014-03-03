@@ -21,10 +21,25 @@
 		
 		
 		
-	Questions to ask:
+	Master TODO [ASIC]
+	
 		- 	Does MIT have Synopsis Synplify?  
 			No.  Arvind's group never bothered with it b/c Bluespec's backend is in terms of raw BRAM blocks
 			
-		-	Ease to get ASIC SRAMs
+		-	Ease to get ASIC SRAMs [Talk to Mike]
 		
-		-	
+		-	Simulate higher ORAM bandwidth by serializing data on ASIC?
+		
+		
+		
+	Master TODO [FPGA]
+	
+		- 	AES
+		
+		- 	REW ORAM
+		
+		- 	Integrity verification
+		
+		- 	Big programs running on board / uBlaze
+		
+		

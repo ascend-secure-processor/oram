@@ -118,7 +118,9 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	/*	We will issue one more push request than we want during path reads (this 
 		helps maintain 100% throughput).  So, we need to kill the last request. */
 	input					CancelPushCommand,
-	input					CancelPeakCommand,
+	input					StreamPeakCommand,
+	input					StreamPeakReady,
+	input					LastPeakCommand,
 	output					SyncComplete
 	);
 	
@@ -423,7 +425,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 	
 	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Push & Transfer_Terminator;
-	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator) & ~CancelPeakCommand;
+	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator) & ~LastPeakCommand;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -449,7 +451,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 						NS =						ST_Pushing;
 					if (InCommand == SCMD_Overwrite)
 						NS =						ST_Overwriting;
-					if (InCommand == SCMD_Peak & ~CancelPeakCommand)
+					if (InCommand == SCMD_Peak & (~StreamPeakCommand | StreamPeakReady))
 						NS =						ST_Peaking;
 					if (InCommand == SCMD_Dump)
 						NS =						ST_Dumping;
@@ -469,7 +471,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;
 			ST_Peaking :
-				if (ContinuePeak)
+				if (ContinuePeak & (StreamPeakCommand & StreamPeakReady))
 					NS =							ST_Peaking;
 				else if (Transfer_Terminator)
 					NS =							ST_Idle;

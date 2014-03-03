@@ -35,12 +35,12 @@ module	StashTestbench;
 							ORAMC =					10;
 
 	parameter				FEDWidth =				64,
-							BEDWidth =				128;
+							BEDWidth =				256;
 		
-	parameter				Overclock =				0;
+	parameter				Overclock =				1; // TODO test
 							
-	parameter				StashOutBuffering = 	2;
-								
+	parameter				StashOutBuffering = 	3;
+							
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
 	
@@ -134,6 +134,13 @@ module	StashTestbench;
 		$display("\n\n[%m @ %t] Starting big test %d \n\n", $time, num);
 		end
 	endtask
+	
+	task TASK_TestPoint;
+		input [31:0] num;
+		begin
+		$display("[%m @ %t] Reached tests for big test %d", $time, num);
+		end
+	endtask	
 	
 	task TASK_StartScan;
 		input	[ORAML-1:0] Leaf;
@@ -274,7 +281,7 @@ module	StashTestbench;
 			while (done == 0) begin
 				if (ReturnDataOutValid /* & ReturnDataOutReady */) begin
 					if (ReturnData !== Data) begin
-						$display("FAIL: Stash return data %d, expected %d", ReturnData, Data);
+						$display("FAIL: Stash return data %d, expected %d [expected leaf/paddr = %x,%x]", ReturnData, Data, Leaf, PAddr);
 						$stop;
 					end
 					//$display("OK: Stash return data %d, expected %d", ReturnData, Data);
@@ -685,18 +692,22 @@ module	StashTestbench;
 	//--------------------------------------------------------------------------
 
 	// Irregular ReadOutReady
+	// This will keep happening for future tests as well
 	initial begin
 		while (ActivateBurstReady == 0) #(Cycle);
 		#(Cycle);
 		
-		j = 1;
-		while (j < 512) begin
-			ReadOutReady = 1'b0;
-			#(Cycle*j);
-			ReadOutReady = 1'b1;
-			#(Cycle*j);
-			j = j << 1;
-		end
+		// TODO put in infinite loop
+		//while (1) begin
+			j = 1;
+			while (j < 512) begin
+				ReadOutReady = 1'b0;
+				#(Cycle*j);
+				ReadOutReady = 1'b1;
+				#(Cycle*j);
+				j = j << 1;
+			end
+		//end
 	end
 	
 	//--------------------------------------------------------------------------
@@ -710,6 +721,7 @@ module	StashTestbench;
 		#(Cycle);
 		
 		// big test 1
+		TASK_TestPoint(1);
 		TASK_CheckReadDummy(BlocksOnPath - 4);
 		TASK_CheckRead(NumChunks * 2, 	32'hf0000002, 32'h0000ffff);
 		TASK_CheckRead(NumChunks * 3, 	32'hf0000003, 32'h0000ffff);
@@ -717,16 +729,19 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 1, 	32'hf0000001, 32'h0000ffff);
 		
 		// big test 2
+		TASK_TestPoint(2);
 		TASK_CheckRead(NumChunks * 4, 	32'hf0000004, 32'hffff0000);
 		TASK_CheckRead(NumChunks * 5, 	32'hf0000005, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 3
+		TASK_TestPoint(3);
 		TASK_CheckRead(NumChunks * 6, 	32'hf0000006, 32'hffff0000);
 		TASK_CheckRead(NumChunks * 7, 	32'hf0000007, 32'hffff0000);
 		TASK_CheckReadDummy(BlocksOnPath - 2);
 		
 		// big test 4
+		TASK_TestPoint(4);
 		TASK_CheckRead(NumChunks * 12, 	32'hf0000008, 32'h00000001);
 		TASK_CheckRead(NumChunks * 13, 	32'hf0000009, 32'h00000001);
 		TASK_CheckReadDummy(ORAMZ - 2);
@@ -740,15 +755,18 @@ module	StashTestbench;
 		TASK_CheckReadDummy(ORAMZ - 1);
 		
 		// big test 5
+		TASK_TestPoint(5);
 		TASK_CheckRead(NumChunks * 14, 	32'hf000000e, 32'hffffffff);
 		TASK_CheckRead(NumChunks * 15, 	32'hf000000f, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 
 		// big test 6
+		TASK_TestPoint(6);
 		TASK_CheckReadDummy(ORAMZ);
 		TASK_SkipRead(BlocksOnPath-ORAMZ);
 		
 		// big test 7
+		TASK_TestPoint(7);
 		TASK_CheckRead(NumChunks * 2, 	32'hf0000011, 32'h00000000);
 		TASK_CheckRead(NumChunks * 3, 	32'hf0000012, 32'h00000000);
 		TASK_CheckReadDummy(ORAMZ * 15);
@@ -759,6 +777,7 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 1, 	32'hf0000010, 32'hffffffff);
 		
 		// big test 8
+		TASK_TestPoint(8);
 		TASK_CheckRead(NumChunks * 7, 	32'hf00003ff, 32'hffffffff);
 		TASK_CheckReadDummy(ORAMZ - 1);
 		TASK_CheckRead(NumChunks,		32'hf00005ff, 32'h00000002);
@@ -772,12 +791,14 @@ module	StashTestbench;
 		TASK_CheckReadDummy(ORAMZ - 1);
 		
 		// big test 9
+		TASK_TestPoint(9);
 		TASK_CheckReturn(0, 			32'hf0000000, 32'h00000000);
 		TASK_CheckRead(NumChunks * 2,	32'hf0000002, 32'hffffffff);
 		TASK_CheckRead(NumChunks, 		32'hf0000001, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath-ORAMZ);
 		
 		// big test 10
+		TASK_TestPoint(10);
 		TASK_CheckReturn(NumChunks,		32'hba5eba11, 32'h00000000);
 		TASK_CheckRead(NumChunks,		32'hf0000001, 32'hffffffff);
 		TASK_CheckRead(0, 				32'hf0000000, 32'hffffffff);		
@@ -786,6 +807,7 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks * 2,	32'hf0000003, 32'h00000000);
 		
 		// big test 11
+		TASK_TestPoint(11);
 		TASK_CheckReturn(NumChunks * 2,	32'hba5eba11, 32'h00000000);
 		TASK_CheckRead(NumChunks * 5,	32'hf0000005, 32'hffffffff);
 		TASK_CheckRead(NumChunks * 4,	32'hf0000004, 32'hffffffff);	
@@ -801,6 +823,7 @@ module	StashTestbench;
 		TASK_CheckRead(NumChunks,		32'hf0000002, 32'hffffffff);
 		
 		// big test 12
+		TASK_TestPoint(12);
 		TASK_CheckRead(UpdateINIT,	32'hba5eba11, 32'hffffffff);
 		TASK_CheckReadDummy(BlocksOnPath-1);
 		
