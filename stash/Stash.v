@@ -223,7 +223,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire					StreamPeakReady;
 	
-	wire	[OBWidth-1:0]	OutBufferEmptyCount, OutBufferCount;	
+	wire	[OBWidth-1:0]	OutBufferSpace, OutBufferCount;	
 	wire					OutBufferInValid, OutBufferInReady;
 	wire					TickOutHeader, BlockReadCommit;
 	wire					OutHBufferInValid, OutHBufferInReady;
@@ -250,8 +250,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		reg [STWidth-1:0] CS_Delayed;
 		
 		initial begin
-			if (StashOutBuffering < 1) begin
-				$display("[%m @ %t] ERROR (usage): StashOutBuffering must be >= 1", $time);
+			if (StashOutBuffering < 2) begin
+				$display("[%m @ %t] ERROR (usage): StashOutBuffering must be >= 2", $time);
 				$stop;
 			end
 		end
@@ -260,15 +260,15 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 			CS_Delayed <= CS;
 			
 			if (BlockReadCommit & ~OutHeaderValid) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination 1 (data will be lost)", $time);
+				$display("[%m @ %t] ERROR: Illegal signal combination 1 (HEADER lost)", $time);
 				$stop;			
 			end
 			if (OutBufferInValid & ~OutBufferInReady) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination 2 (data will be lost)", $time);
+				$display("[%m @ %t] ERROR: Illegal signal combination 2 (DATA buffer overflow)", $time);
 				$stop;			
 			end
 			if (OutHBufferInValid & ~OutHBufferInReady) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination 3 (data will be lost)", $time);
+				$display("[%m @ %t] ERROR: Illegal signal combination 3 (HEADER buffer overflow)", $time);
 				$stop;			
 			end			
 
@@ -716,7 +716,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	// Read interface buffering
 	//--------------------------------------------------------------------------
 	
-	assign	StreamPeakReady =						OutBufferEmptyCount >= (BlkSize_BEDChunks + 1);	
+	// *2 = this is the largest number of blocks StashCore might still give us even after we tell it to stop
+	assign	StreamPeakReady =						OutBufferSpace >= (BlkSize_BEDChunks * 2);	
 	
 	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
 	assign	OutHBufferInValid =						OutBufferInValid & BlockReadComplete_Internal;
@@ -731,7 +732,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InData(				Core_OutData),
 							.InValid(				OutBufferInValid),
 							.InAccept(				OutBufferInReady),
-							.InEmptyCount(			OutBufferEmptyCount),
+							.InEmptyCount(			OutBufferSpace),
 							.OutData(				ReadData),
 							.OutSend(				ReadOutValid),
 							.OutReady(				ReadOutReady));
