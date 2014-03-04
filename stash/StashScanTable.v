@@ -98,7 +98,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					DMAValid_Internal, DMAReady_Internal;						
 	wire	[FIFOWidth-1:0]	STFIFOCount;
 	
-	wire					DMAStarted;
+	wire					DMAGate;
+	wire					OutDMAValid_Pre, OutDMAReady_Pre;
 	
 	wire	[SEAWidth-1:0]	DummyWire;
 	
@@ -346,6 +347,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.OutData(				DMAValid_Internal));								
 	
 	// decouple the ScanTableLatency from path writeback control logic
+	// ... we can avoid this FIFO by just wrapping st_ram better
 	FIFORAM		#(			.Width(					SEAWidth),
 							.Buffering(				BlocksOnPath))
 				st_fifo(	.Clock(					Clock),
@@ -355,20 +357,26 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InAccept(				DMAReady_Internal),
 							.OutFullCount(			STFIFOCount),
 							.OutData(				OutDMAAddr),
-							.OutSend(				OutDMAValid),
-							.OutReady(				OutDMAReady));
+							.OutSend(				OutDMAValid_Pre),
+							.OutReady(				OutDMAReady_Pre));
 
+	assign	OutDMAValid =							DMAGate & OutDMAValid_Pre;
+	assign	OutDMAReady_Pre = 						DMAGate & OutDMAReady;
+							
+	// TODO rename to outDMADone
+	// TODO adjust to == 2
+	// We don't set DMAGate until STFIFOCount == 3 because when BEDWidth = 512, (STFIFOCount == 3) will never be true
 	Register	#(			.Width(					1))
 				dma_start(	.Clock(					Clock),
 							.Reset(					Reset | AccessComplete),
-							.Set(					DMAValid_Internal & STFIFOCount == 2),
+							.Set(					DMAValid_Internal & STFIFOCount == 3),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					DMAStarted));
+							.Out(					DMAGate));
 	Register	#(			.Width(					1))
 				dma_last(	.Clock(					Clock),
 							.Reset(					Reset | AccessComplete),
-							.Set(					DMAStarted & STFIFOCount == 2 & OutDMAValid & OutDMAReady),
+							.Set(					STFIFOCount == 1 & OutDMAValid_Pre & OutDMAReady_Pre),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					OutDMALast));

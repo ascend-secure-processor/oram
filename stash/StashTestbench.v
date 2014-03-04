@@ -35,12 +35,13 @@ module	StashTestbench;
 							ORAMC =					10;
 
 	parameter				FEDWidth =				64,
-							BEDWidth =				256;
+							BEDWidth =				512;
 		
-	parameter				Overclock =				1;
+	parameter				Overclock =				0;
 							
-	parameter				StashOutBuffering = 	3;
-							
+	parameter				StashOutBuffering = 	4;
+	
+	`include "BucketLocal.vh"
     `include "StashLocal.vh"
     `include "PathORAMBackendLocal.vh"
 	
@@ -77,16 +78,16 @@ module	StashTestbench;
 	wire					BlockUpdateComplete;
 	
 	wire	[BEDWidth-1:0]	EvictData;
-	reg		[ORAMU-1:0]		EvictPAddr;
-	reg		[ORAML-1:0]		EvictLeaf;
-	reg						EvictDataInValid;
+	wire	[ORAMU-1:0]		EvictPAddr;
+	wire	[ORAML-1:0]		EvictLeaf;
+	wire					EvictDataInValid;
 	wire					EvictDataInReady;
 	wire					BlockEvictComplete;	
 	
 	wire 	[BEDWidth-1:0]	WriteData;
-	reg		[ORAMU-1:0]		WritePAddr;
-	reg		[ORAML-1:0]		WriteLeaf;
-	reg						WriteInValid;
+	wire	[ORAMU-1:0]		WritePAddr;
+	wire	[ORAML-1:0]		WriteLeaf;
+	wire					WriteInValid;
 	wire					WriteInReady;	
 	wire					BlockWriteComplete;
 	
@@ -154,8 +155,24 @@ module	StashTestbench;
 		end
 	endtask
 
+	// TODO cleanup
+	wire WriteData_HeaderValid;
+	reg	WriteInValid_Reg, WriteInValidCommand_Reg;
+	wire	[BEDWidth-1:0]	WriteData_Reg;
+	reg	[ORAMU-1:0] WritePAddr_Reg;
+	reg	[ORAML-1:0] WriteLeaf_Reg;	
+	
+	// TODO cleanup
+	wire EvictData_HeaderValid;
+	reg	EvictInValid_Reg, EvictInValidCommand_Reg;
+	wire	[BEDWidth-1:0]	EvictData_Reg;
+	reg	[ORAMU-1:0] EvictPAddr_Reg;
+	reg	[ORAML-1:0] EvictLeaf_Reg;		
+	
 	task TASK_StartWriteback;
 		begin
+			while (WriteData_HeaderValid) #(Cycle);
+			
 			StartWriteback = 1'b1;
 			#(Cycle);
 			StartWriteback = 1'b0;
@@ -167,10 +184,28 @@ module	StashTestbench;
 							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				EvictDataInValid & EvictDataInReady),
+							.Enable(				EvictInValid_Reg),
 							.In(					{BEDWidth{1'bx}}),
-							.Count(					EvictData));
-
+							.Count(					EvictData_Reg));
+	FIFORAM	#(				.Width(					ORAMU + ORAML),
+							.Buffering(				99))
+				ev_HW_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{EvictPAddr_Reg, EvictLeaf_Reg}),
+							.InValid(				EvictInValidCommand_Reg),
+							.OutData(				{EvictPAddr, EvictLeaf}),
+							.OutSend(				EvictData_HeaderValid),
+							.OutReady(				BlockEvictComplete));
+	FIFORAM	#(				.Width(					BEDWidth),
+							.Buffering(				99))
+				ev_DW_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				EvictData_Reg),
+							.InValid(				EvictInValid_Reg),
+							.OutData(				EvictData),
+							.OutSend(				EvictDataInValid),
+							.OutReady(				EvictDataInReady));						
+							
 	Counter		#(			.Width(					BEDWidth))
 				UpdateGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
@@ -181,43 +216,77 @@ module	StashTestbench;
 							.Count(					UpdateData_Pre));
 							
 	assign	UpdateData =		UpdateData_Pre + UpdateINIT;						
-							
+	
+	// TODO cleanup
 	Counter		#(			.Width(					BEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				WriteInValid & WriteInReady),
+							.Enable(				WriteInValid_Reg),
 							.In(					{BEDWidth{1'bx}}),
-							.Count(					WriteData));
-
+							.Count(					WriteData_Reg));
+	FIFORAM	#(				.Width(					ORAMU + ORAML),
+							.Buffering(				99))
+				in_HW_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{WritePAddr_Reg, WriteLeaf_Reg}),
+							.InValid(				WriteInValidCommand_Reg),
+							.OutData(				{WritePAddr, WriteLeaf}),
+							.OutSend(				WriteData_HeaderValid),
+							.OutReady(				BlockWriteComplete));
+	FIFORAM	#(				.Width(					BEDWidth),
+							.Buffering(				99))
+				in_DW_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				WriteData_Reg),
+							.InValid(				WriteInValid_Reg),
+							.OutData(				WriteData),
+							.OutSend(				WriteInValid),
+							.OutReady(				WriteInReady));
+							
 	task TASK_QueueWrite;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
-		begin
-			WriteInValid = 1'b1;
-			WritePAddr = PAddr;
-			WriteLeaf = Leaf;
 		
-			while (~BlockWriteComplete) #(Cycle);
-			#(Cycle);
-
-			WriteInValid = 1'b0;
+		integer i;
+		begin
+			i = 0;
+			WriteInValid_Reg = 1'b1;
+			WriteInValidCommand_Reg = 1'b1;
+			WritePAddr_Reg = PAddr;
+			WriteLeaf_Reg = Leaf;
+			while (i < BlkSize_BEDChunks) begin
+				i = i + 1;
+				#(Cycle);
+				
+				WriteInValidCommand_Reg = 1'b0;
+			end
+			WriteInValid_Reg = 1'b0;
 		end
 	endtask
 	
 	task TASK_QueueEvict;
 		input	[ORAMU-1:0] PAddr;
 		input	[ORAML-1:0] Leaf;
-		begin
-			EvictDataInValid = 1'b1;
-			EvictPAddr = PAddr;
-			EvictLeaf = Leaf;
 		
+		integer i;
+		begin
+			i = 0;
+			EvictInValid_Reg = 1'b1;
+			EvictInValidCommand_Reg = 1'b1;
+			EvictPAddr_Reg = PAddr;
+			EvictLeaf_Reg = Leaf;
+			while (i < BlkSize_BEDChunks) begin
+				i = i + 1;
+				#(Cycle);
+				
+				EvictInValidCommand_Reg = 1'b0;
+			end
+			EvictInValid_Reg = 1'b0;
+			
 			while (~BlockEvictComplete) #(Cycle);
 			#(Cycle);
-
-			EvictDataInValid = 1'b0;
 		end
 	endtask
 	
@@ -245,7 +314,7 @@ module	StashTestbench;
 			while (done == 0) begin
 				if (ReadOutValid & ReadOutReady) begin
 					if (ReadData !== Data) begin
-						$display("FAIL: Stash read data %d, expected %d", ReadData, Data);
+						$display("FAIL: Stash read data %d, expected %d", ReadData[31:0], Data[31:0]);
 						#(Cycle*4); // helps us see where the problem actually occurs ...
 						$stop;
 					end
@@ -262,7 +331,7 @@ module	StashTestbench;
 				end
 				#(Cycle);
 			end
-			$display("PASS: Test %d (read @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData);
+			$display("PASS: Test %d (read @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData[31:0]);
 			TestID = TestID + 1;
 		end
 	endtask	
@@ -281,7 +350,7 @@ module	StashTestbench;
 			while (done == 0) begin
 				if (ReturnDataOutValid /* & ReturnDataOutReady */) begin
 					if (ReturnData !== Data) begin
-						$display("FAIL: Stash return data %d, expected %d [expected leaf/paddr = %x,%x]", ReturnData, Data, Leaf, PAddr);
+						$display("FAIL: Stash return data %d, expected %d [expected leaf/paddr = %x,%x]", ReturnData[31:0], Data[31:0], Leaf, PAddr);
 						$stop;
 					end
 					//$display("OK: Stash return data %d, expected %d", ReturnData, Data);
@@ -297,7 +366,7 @@ module	StashTestbench;
 				end
 				#(Cycle);
 			end
-			$display("PASS: Test %d (return @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData);
+			$display("PASS: Test %d (return @ addr=%x leaf=%x, base=%d)", TestID, PAddr, Leaf, BaseData[31:0]);
 			TestID = TestID + 1;
 		end
 	endtask	
@@ -393,8 +462,11 @@ module	StashTestbench;
 		StartScan = 1'b0;
 		StartWriteback = 1'b0;
 
-		WriteInValid = 1'b0;
-		EvictDataInValid = 1'b0;
+		WriteInValid_Reg = 1'b0;
+		WriteInValidCommand_Reg = 1'b0;
+		
+		EvictInValid_Reg = 1'b0;
+		EvictInValidCommand_Reg = 1'b0;
 		UpdateDataInValid = 1'b0;
 		
 		ReadOutReady = 1'b1;
@@ -420,7 +492,7 @@ module	StashTestbench;
 		
 		#(Cycle*10); // will be > 10, (probably) < 100 in practice
 
-		TASK_QueueWrite(32'hf0000000, 32'h0000ffff);
+		TASK_QueueWrite(32'hf0000000, 32'hffff0000);
 		TASK_QueueWrite(32'hf0000001, 32'h0000ffff);
 		TASK_QueueWrite(32'hf0000002, 32'h0000ffff);
 		TASK_QueueWrite(32'hf0000003, 32'h0000ffff);
@@ -722,11 +794,12 @@ module	StashTestbench;
 		
 		// big test 1
 		TASK_TestPoint(1);
-		TASK_CheckReadDummy(BlocksOnPath - 4);
-		TASK_CheckRead(NumChunks * 2, 	32'hf0000002, 32'h0000ffff);
+		TASK_CheckRead(0, 32'hf0000000, 32'hffff0000);
+		TASK_CheckReadDummy(BlocksOnPath - 5);
 		TASK_CheckRead(NumChunks * 3, 	32'hf0000003, 32'h0000ffff);
-		TASK_CheckRead(0, 32'hf0000000, 32'h0000ffff);
+		TASK_CheckReadDummy(1);
 		TASK_CheckRead(NumChunks * 1, 	32'hf0000001, 32'h0000ffff);
+		TASK_CheckRead(NumChunks * 2, 	32'hf0000002, 32'h0000ffff);
 		
 		// big test 2
 		TASK_TestPoint(2);
@@ -862,7 +935,6 @@ module	StashTestbench;
 							.ReturnPAddr(			ReturnPAddr),
 							.ReturnLeaf(			ReturnLeaf),
 							.ReturnDataOutValid(	ReturnDataOutValid),
-							//.ReturnDataOutReady(	ReturnDataOutReady),
 							.BlockReturnComplete(	BlockReturnComplete),
 							
 							.UpdateData(			UpdateData),

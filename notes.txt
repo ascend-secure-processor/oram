@@ -17,7 +17,12 @@
 		- MIG is introducing 14 cycles of latency between CommandValid -> RAS and 5 cycles between DQ valid and ReadOutValid
 		
 		
+	
+	Simple optimizations to mention to make Phantom-like readers happy:
+	
+		- Half latency trick
 		
+		- Tree-top caching: at least mention that we don't do it bc of (whatever) short path lengths ...
 		
 		
 		

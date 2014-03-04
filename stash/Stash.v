@@ -208,8 +208,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	// Writeback control
 	
-	wire					BlockReadComplete_InternalPre;
-	reg						BlockReadComplete_Internal;
+	wire					BlockReadComplete_Internal;
 
 	wire	[STAWidth-1:0]	BlocksReading;
 	
@@ -221,7 +220,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	// Read control
 	
-	wire					StreamPeakReady;
+	wire					OutSpaceGate;
 	
 	wire	[OBWidth-1:0]	OutBufferSpace, OutBufferCount;	
 	wire					OutBufferInValid, OutBufferInReady;
@@ -340,7 +339,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	BlockUpdateComplete =					TurnoverUpdate & 	Core_CommandComplete;
 	assign	BlockEvictComplete =					CSEvict & 			Evict_CommandComplete;
 	assign	BlockWriteComplete =					CSPathRead & 		Core_CommandComplete;
-	assign	BlockReadComplete_InternalPre =			(CSTurnaround1 | CSPathWriteback) & Core_CommandComplete;
+	assign	BlockReadComplete_Internal =			(CSTurnaround1 | CSPathWriteback) & Core_CommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
 	
 	assign	TurnoverUpdate =						~AccessIsDummy & CSTurnaround1 & (AccessCommand == BECMD_Update);
@@ -361,7 +360,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		else CS <= 									NS;
 		
 		CSTurnaround1_Delayed <=					CSTurnaround1;
-		BlockReadComplete_Internal <=				BlockReadComplete_InternalPre;
 	end
 	
 	always @( * ) begin
@@ -480,9 +478,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.In(					1'bx),
 							.Out(					SentCoreCommand));	
 	
+	wire	OutDMAValid_Pre;
+	
 	assign 	Core_CommandValid =						((CSEvict | CSScan | CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
 													  CSPathRead | // increases path write performance
-													 (CSPathWriteback & OutDMAValid);
+													  OutDMAValid;
 	
 	// since UpdateData == EvictData most likely, this gets optimized away
 	assign	Core_InData = 							(CSEvict) ? 		EvictData : 
@@ -546,7 +546,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 							.CancelPushCommand(		StartWriteback_Pass),
 							.StreamPeakCommand(		CSPathWriteback),
-							.StreamPeakReady(		StreamPeakReady),
+							.StreamPeakReady(		OutSpaceGate),
 							.LastPeakCommand(		OutDMALast),
 							.SyncComplete(			Core_AccessComplete));
 
@@ -591,7 +591,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InDMAValid(			InDMAValid),
 							
 							.OutDMAAddr(			OutDMAAddr),
-							.OutDMAValid(			OutDMAValid),
+							.OutDMAValid(			OutDMAValid_Pre),
 							.OutDMAReady(			OutDMAReady),
 							.OutDMALast(			OutDMALast));
 
@@ -682,7 +682,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
 	
-	assign	OutDMAReady =							CSPathWriteback & Core_CommandComplete;
+	// TODO cleanup
+	assign	OutDMAValid = 							CSPathWriteback & OutSpaceGate & OutDMAValid_Pre;
+	assign	OutDMAReady =							CSPathWriteback & OutSpaceGate & Core_CommandReady;
 
 	// which block are we currently writing back?
 	Counter		#(			.Width(					STAWidth))
@@ -717,12 +719,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	
 	// *2 = this is the largest number of blocks StashCore might still give us even after we tell it to stop
-	assign	StreamPeakReady =						OutBufferSpace >= (BlkSize_BEDChunks * 2);	
+	assign	OutSpaceGate =							OutBufferSpace > (BlkSize_BEDChunks * 2);	
 	
 	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
 	assign	OutHBufferInValid =						OutBufferInValid & BlockReadComplete_Internal;
 	
-	assign	BlockReadComplete =						TickOutHeader;
+	assign	BlockReadComplete =						TickOutHeader; // TODO should be BlockReadCommit ...
 	assign	BlockReadCommit = 						BlockReadComplete & ReadOutValid & ReadOutReady;
 	
 	FIFORAM		#(			.Width(					BEDWidth),
