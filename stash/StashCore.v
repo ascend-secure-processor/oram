@@ -170,7 +170,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					ContinuePeak, ContinuePush;
 							
 	wire					WriteTransfer, DataTransfer;
-	wire					Add_Terminator;
+	wire					FirstChunk_Transfer;
 	wire					Transfer_Terminator;
 	wire 					AddBlock, RemoveBlock;
 
@@ -421,7 +421,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign 	ReadTransfer = 							OutValid; // will we have valid data out in the next cycle?
 	assign 	DataTransfer = 							WriteTransfer | ReadTransfer;
 
-	assign	Add_Terminator =						LastChunk & WriteTransfer & CSPushing;
+	assign	FirstChunk_Transfer =					FirstChunk & WriteTransfer & CSPushing;
 	assign	Transfer_Terminator =					LastChunk & DataTransfer; // TODO cleanup
 
 	assign	CSReset =								CS == ST_Reset;
@@ -610,7 +610,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSSyncing_FirstCycle & Sync_SettingFLH) ? 	SNULL :	
 																								SyncCount;
   
-	wire Add_Terminator_Delayed;
+	wire FirstChunk_Terminator_Delayed;
 	wire CSPushing_Delayed, CSPushing_FirstCycle; // TODO
 	wire StashP_EN;
 	
@@ -620,8 +620,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Enable(				1'b1),
-							.In(					{CSPushing, 		Add_Terminator}),
-							.Out(					{CSPushing_Delayed, Add_Terminator_Delayed}));
+							.In(					{CSPushing, 		FirstChunk_Transfer}),
+							.Out(					{CSPushing_Delayed, FirstChunk_Terminator_Delayed}));
 	assign	CSPushing_FirstCycle =					~CSPushing_Delayed & CSPushing;
 	
 	/*
@@ -632,14 +632,14 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 				UsedListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				Add_Terminator | Sync_SettingULH | CSSyncing_FirstCycle),
+							.Enable(				FirstChunk_Transfer | Sync_SettingULH | CSSyncing_FirstCycle),
 							.In(					UsedListHead_New),
 							.Out(					UsedListHead));
 	Register	#(			.Width(					SEAWidth))
 				FreeListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				Add_Terminator_Delayed | Sync_SettingFLH | CSSyncing_FirstCycle),
+							.Enable(				FirstChunk_Terminator_Delayed | Sync_SettingFLH | CSSyncing_FirstCycle),
 							.In(					FreeListHead_New),
 							.Out(					FreeListHead));
 							
@@ -655,11 +655,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 													(CSSyncing) ? 	SyncCount : 
 																	UsedListHead;
 	assign	StashP_WE =								CSReset | 
-													Add_Terminator | 
+													FirstChunk_Transfer | 
 													(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |
 													(CSSyncing_CapUL & ULHSet) | 
 													(CSSyncing_CapFL & FLHSet);
-	assign	StashP_EN =								~CSPushing | Add_Terminator;
+	assign	StashP_EN =								~CSPushing | FirstChunk_Transfer;
 	
 	wire	[SEAWidth-1:0]	DummyWire; // TODO move
 			
@@ -756,7 +756,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	OutScanAdd =							CSPushing;
 	assign	OutScanStreaming =						CSPushing | CSDumping;
 	
-	assign	OutScanValidPush =						CSPushing & Add_Terminator;
+	assign	OutScanValidPush =						CSPushing & FirstChunk_Transfer;
 	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot
 													OutScanSAddr != SNULL; // don't send end-of-list marker
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
