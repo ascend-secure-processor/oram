@@ -37,7 +37,7 @@ module	StashTestbench;
 	parameter				FEDWidth =				64,
 							BEDWidth =				512;
 		
-	parameter				Overclock =				0;
+	parameter				Overclock =				1;
 							
 	parameter				StashOutBuffering = 	4;
 	
