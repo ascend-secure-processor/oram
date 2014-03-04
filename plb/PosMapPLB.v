@@ -44,7 +44,14 @@ module PosMapPLB
     
     assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
          
-    reg [ORAML-1:0] NewLeafIn;      // TODO: should be the output of some RNG
+    wire [ORAML-1:0] NewLeafIn;      // TODO: should be the output of some RNG
+    wire NewLeafValid, NewLeafAccept;
+    PRNG #(.RandWidth(LeafWidth))
+        LeafGen (   Clock, Reset,
+                    NewLeafAccept,
+                    NewLeafValid,
+                    NewLeafIn
+                );
 
     // ============================== onchip PosMap ====================================
     wire PosMapEnable, PosMapWrite;
@@ -123,11 +130,12 @@ module PosMapPLB
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
     // =============================================================================  
+    assign NewLeafAccept = (PosMapValid || PLBValid) && !Valid && LastCmd == CacheWrite;
    
     always @(posedge Clock) begin
         if (Reset) begin
             Valid <= 0;              
-            NewLeafIn <= $random;    
+    //        NewLeafIn <= $random;    
         end    
         else if (Valid && OutReady) begin
             Valid <= 0;
@@ -142,8 +150,10 @@ module PosMapPLB
             AddrOut <= PLBAddrOut;         
                             
             if (LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
-                NewLeafIn <= $random;      // TODO: should be the output of some RNG
+      //          NewLeafIn <= $random;      // TODO: should be the output of some RNG
                 NewLeafOut <= NewLeafIn;
+                if (!NewLeafValid)
+                    $display("Error: run out of random leaves.");
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin
                 NewLeafOut <= PLBLeafOut;

@@ -45,6 +45,7 @@ module AES_DW #(parameter W = 4, parameter D = 12,
     reg      [LOGD-1:0]      InTurn;
     reg      [LOGD-1:0]      OutTurn;
     reg      [D-1:0]             AESValid;
+    reg      [D-1:0]             AESWorking;
     wire                         DInReady;
     wire                         DOutValid;
     wire     [W*AESWidth-1:0]    DOut;
@@ -93,7 +94,7 @@ module AES_DW #(parameter W = 4, parameter D = 12,
                 AESWorking <= 0;
         end else begin
             for (integer i = 0; i < D; i = i + 1) begin
-                if (DOut && OutTurn == i)
+                if (DOutValid && OutTurn == i)
                     AESWorking[i] <= 0;
                 else if (DataInValid && KeyValid &&
                          (InTurn == i) && !AESWorking[i])
