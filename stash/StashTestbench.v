@@ -84,12 +84,24 @@ module	StashTestbench;
 	wire					EvictDataInReady;
 	wire					BlockEvictComplete;	
 	
+	wire 					EvictData_HeaderValid;
+	reg						EvictInValid_Reg, EvictInValidCommand_Reg;
+	wire	[BEDWidth-1:0]	EvictData_Reg;
+	reg		[ORAMU-1:0] 	EvictPAddr_Reg;
+	reg		[ORAML-1:0] 	EvictLeaf_Reg;	
+
 	wire 	[BEDWidth-1:0]	WriteData;
 	wire	[ORAMU-1:0]		WritePAddr;
 	wire	[ORAML-1:0]		WriteLeaf;
 	wire					WriteInValid;
 	wire					WriteInReady;	
 	wire					BlockWriteComplete;
+	
+	wire 					WriteData_HeaderValid;
+	reg						WriteInValid_Reg, WriteInValidCommand_Reg;
+	wire	[BEDWidth-1:0]	WriteData_Reg;
+	reg		[ORAMU-1:0] 	WritePAddr_Reg;
+	reg		[ORAML-1:0] 	WriteLeaf_Reg;		
 	
 	wire	[BEDWidth-1:0]	ReadData;
 	wire	[ORAMU-1:0]		ReadPAddr;
@@ -154,20 +166,6 @@ module	StashTestbench;
 			StartScan = 1'b0;
 		end
 	endtask
-
-	// TODO cleanup
-	wire WriteData_HeaderValid;
-	reg	WriteInValid_Reg, WriteInValidCommand_Reg;
-	wire	[BEDWidth-1:0]	WriteData_Reg;
-	reg	[ORAMU-1:0] WritePAddr_Reg;
-	reg	[ORAML-1:0] WriteLeaf_Reg;	
-	
-	// TODO cleanup
-	wire EvictData_HeaderValid;
-	reg	EvictInValid_Reg, EvictInValidCommand_Reg;
-	wire	[BEDWidth-1:0]	EvictData_Reg;
-	reg	[ORAMU-1:0] EvictPAddr_Reg;
-	reg	[ORAML-1:0] EvictLeaf_Reg;		
 	
 	task TASK_StartWriteback;
 		begin
@@ -176,6 +174,41 @@ module	StashTestbench;
 			StartWriteback = 1'b1;
 			#(Cycle);
 			StartWriteback = 1'b0;
+		end
+	endtask
+	
+	Counter		#(			.Width(					BEDWidth))
+				UpdateGen(	.Clock(					Clock),
+							.Reset(					Reset | ResetDataCounter),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				UpdateDataInValid & UpdateDataInReady),
+							.In(					{BEDWidth{1'bx}}),
+							.Count(					UpdateData_Pre));
+							
+	assign	UpdateData =		UpdateData_Pre + UpdateINIT;						
+	
+	task TASK_QueueEvict;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		
+		integer i;
+		begin
+			i = 0;
+			EvictInValid_Reg = 1'b1;
+			EvictInValidCommand_Reg = 1'b1;
+			EvictPAddr_Reg = PAddr;
+			EvictLeaf_Reg = Leaf;
+			while (i < BlkSize_BEDChunks) begin
+				i = i + 1;
+				#(Cycle);
+				
+				EvictInValidCommand_Reg = 1'b0;
+			end
+			EvictInValid_Reg = 1'b0;
+			
+			while (~BlockEvictComplete) #(Cycle);
+			#(Cycle);
 		end
 	endtask
 	
@@ -205,19 +238,28 @@ module	StashTestbench;
 							.OutData(				EvictData),
 							.OutSend(				EvictDataInValid),
 							.OutReady(				EvictDataInReady));						
+
+	task TASK_QueueWrite;
+		input	[ORAMU-1:0] PAddr;
+		input	[ORAML-1:0] Leaf;
+		
+		integer i;
+		begin
+			i = 0;
+			WriteInValid_Reg = 1'b1;
+			WriteInValidCommand_Reg = 1'b1;
+			WritePAddr_Reg = PAddr;
+			WriteLeaf_Reg = Leaf;
+			while (i < BlkSize_BEDChunks) begin
+				i = i + 1;
+				#(Cycle);
+				
+				WriteInValidCommand_Reg = 1'b0;
+			end
+			WriteInValid_Reg = 1'b0;
+		end
+	endtask							
 							
-	Counter		#(			.Width(					BEDWidth))
-				UpdateGen(	.Clock(					Clock),
-							.Reset(					Reset | ResetDataCounter),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				UpdateDataInValid & UpdateDataInReady),
-							.In(					{BEDWidth{1'bx}}),
-							.Count(					UpdateData_Pre));
-							
-	assign	UpdateData =		UpdateData_Pre + UpdateINIT;						
-	
-	// TODO cleanup
 	Counter		#(			.Width(					BEDWidth))
 				DataGen(	.Clock(					Clock),
 							.Reset(					Reset | ResetDataCounter),
@@ -244,52 +286,7 @@ module	StashTestbench;
 							.OutData(				WriteData),
 							.OutSend(				WriteInValid),
 							.OutReady(				WriteInReady));
-							
-	task TASK_QueueWrite;
-		input	[ORAMU-1:0] PAddr;
-		input	[ORAML-1:0] Leaf;
 		
-		integer i;
-		begin
-			i = 0;
-			WriteInValid_Reg = 1'b1;
-			WriteInValidCommand_Reg = 1'b1;
-			WritePAddr_Reg = PAddr;
-			WriteLeaf_Reg = Leaf;
-			while (i < BlkSize_BEDChunks) begin
-				i = i + 1;
-				#(Cycle);
-				
-				WriteInValidCommand_Reg = 1'b0;
-			end
-			WriteInValid_Reg = 1'b0;
-		end
-	endtask
-	
-	task TASK_QueueEvict;
-		input	[ORAMU-1:0] PAddr;
-		input	[ORAML-1:0] Leaf;
-		
-		integer i;
-		begin
-			i = 0;
-			EvictInValid_Reg = 1'b1;
-			EvictInValidCommand_Reg = 1'b1;
-			EvictPAddr_Reg = PAddr;
-			EvictLeaf_Reg = Leaf;
-			while (i < BlkSize_BEDChunks) begin
-				i = i + 1;
-				#(Cycle);
-				
-				EvictInValidCommand_Reg = 1'b0;
-			end
-			EvictInValid_Reg = 1'b0;
-			
-			while (~BlockEvictComplete) #(Cycle);
-			#(Cycle);
-		end
-	endtask
-	
 	task TASK_QueueUpdate;
 		begin
 			UpdateDataInValid = 1'b1;
@@ -448,7 +445,7 @@ module	StashTestbench;
 		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin
 			#(Cycle*1000);
 			$display("*** TESTBENCH COMPLETED & PASSED ***");
-			$stop;
+			$finish;
 		end
 	end
 	
