@@ -35,7 +35,7 @@ module	StashTestbench;
 							ORAMC =					10;
 
 	parameter				FEDWidth =				64,
-							BEDWidth =				256;
+							BEDWidth =				128;
 		
 	parameter				Overclock =				0;
 							

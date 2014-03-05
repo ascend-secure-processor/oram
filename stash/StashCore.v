@@ -165,7 +165,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					CSReset, CSIdle, CSPeaking, CSPushing, 
 							CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
 
-	wire 					StreamingCRUDop;
+	wire 					StreamingCRUDOp;
 							
 	wire					ContinuePeak, ContinuePush;
 							
@@ -406,10 +406,16 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		NOTE: 	This interface isn't RV... we assume CommandValid is high when 
 				CommandReady is high (is this still true???)
 	*/
-	assign	InCommandReady =						(CSPeaking | CSPushing | CSOverwriting) ? FirstChunk : CSIdle;
+	
+	assign	InCommandReady =						(CSPushing | CSOverwriting) ? FirstChunk & StreamingCRUDOp : 
+													(CSPeaking) ? FirstChunk : 
+													CSIdle;
 
+	wire Transfer_Terminator_Delayed; // TODO		
+											
 	// Note: Stash.v doesn't expect CommandComplete for Dumps
-	assign	InCommandComplete =						(CSPeaking | CSPushing | CSOverwriting) ? Transfer_Terminator : // TODO cleanup
+	assign	InCommandComplete =						(CSPushing | CSOverwriting) ? Transfer_Terminator : // TODO cleanup
+													(CSPeaking) ? Transfer_Terminator_Delayed : // TODO cleanup 
 													(CSHUpdate | CSStartSync);
 													
 	assign	OutData =								StashD_DataOut;
@@ -438,7 +444,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 	
 	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Push & Transfer_Terminator;
-	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & LastChunk); // TODO cleanup
+	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & FirstChunk); // TODO cleanup
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -486,7 +492,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			ST_Peaking :
 				if (ContinuePeak)
 					NS =							ST_Peaking;
-				else if (LastChunk) // TODO cleanup
+				else if (Transfer_Terminator_Delayed)
 					NS =							ST_Idle;
 			ST_Dumping : 
 				if (StashWalk_Terminator)
@@ -498,20 +504,25 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		endcase
 	end
 	
-	// TODO remove StreamingCRUDop
-	/*
-	generate if (BlkSize_BEDChunks > 1) begin:HOLD_RDY // TODO
+	generate if (BlkSize_BEDChunks > 1) begin:HOLD_RDY
 		Register #(			.Width(					1))
 				stream_reg(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					(CSPeaking | CSPushing | CSOverwriting) & FirstChunk & DataTransfer),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					StreamingCRUDop));
+							.Out(					StreamingCRUDOp));
+		Register #(			.Width(					1))
+				term_dly(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				1'b1),
+							.In(					Transfer_Terminator),
+							.Out(					Transfer_Terminator_Delayed));							
 	end else begin:PASS_RDY
-		assign	StreamingCRUDop =					1'b1;
+		assign	StreamingCRUDOp =					1'b1;
+		assign	Transfer_Terminator_Delayed =		1'b1;
 	end endgenerate
-	*/
 	
 	//--------------------------------------------------------------------------
 	//	Reset logic
@@ -539,9 +550,19 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Enable(				InCommandValid & InCommandReady),
 							.In(					InSAddr),
 							.Out(					InSAddr_Reg));	
-	
+
+	wire	[SEAWidth-1:0] FLResolved_Reg; // TODO
+	Register	#(			.Width(					SEAWidth))
+				Faddr(		.Clock(					Clock), // TODO name
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				FirstChunk & InValid & InReady),
+							.In(					FreeList_Resolved),
+							.Out(					FLResolved_Reg));	
+							
 	assign	StashE_Address = 						(CSDumping) ? 	StashWalk : 
-													(CSPushing) ? 	FreeList_Resolved : 
+													(CSPushing & FirstChunk) ? 	FreeList_Resolved : 
+													(CSPushing) ? FLResolved_Reg :
 													(FirstChunk) ?	InSAddr :
 																	InSAddr_Reg;
 	assign	StashD_Address =						{StashE_Address, {ChnkAWidth{1'b0}}} + CurrentChunk;
@@ -568,7 +589,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | Transfer_Terminator),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~LastChunk & (DataTransfer | CSPeaking)),
+							.Enable(				~LastChunk & (DataTransfer | (InCommandValid & InCommandReady & CSIdle & InCommand == SCMD_Peak)) & ~(CSPeaking & ~ContinuePeak)), // TODO cleanup
 							.In(					{ChnkAWidth{1'bx}}),
 							.Count(					CurrentChunk));
 	CountCompare #(			.Width(					ChnkAWidth),
