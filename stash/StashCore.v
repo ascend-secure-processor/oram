@@ -444,7 +444,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 	
 	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Push & Transfer_Terminator;
-	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & FirstChunk); // TODO cleanup
+	assign	ContinuePeak =							(InCommandValid & InCommand == SCMD_Peak & Transfer_Terminator_Delayed); // TODO cleanup
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -589,7 +589,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 							.Reset(					Reset | Transfer_Terminator),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~LastChunk & (DataTransfer | (InCommandValid & InCommandReady & CSIdle & InCommand == SCMD_Peak)) & ~(CSPeaking & ~ContinuePeak)), // TODO cleanup
+							.Enable(				~LastChunk & (DataTransfer | (InCommandValid & InCommandReady & CSIdle & InCommand == SCMD_Peak)) & ~(CSPeaking & ~ContinuePeak & Transfer_Terminator_Delayed)), // TODO cleanup
 							.In(					{ChnkAWidth{1'bx}}),
 							.Count(					CurrentChunk));
 	CountCompare #(			.Width(					ChnkAWidth),
