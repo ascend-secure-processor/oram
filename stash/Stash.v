@@ -198,7 +198,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire	[SEAWidth-1:0]	OutDMAAddr;
 	wire					InDMAValid;
 	wire					OutDMAValid, OutDMAReady;
-	wire					OutDMALast;	
 	
 	// Scan control
 	
@@ -545,9 +544,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							.StashOccupancy(		StashOccupancy),
 							
 							.CancelPushCommand(		StartWriteback_Pass),
-							.StreamPeakCommand(		CSPathWriteback),
-							.StreamPeakReady(		OutSpaceGate),
-							.LastPeakCommand(		OutDMALast),
 							.SyncComplete(			Core_AccessComplete));
 
 	// leaf remapping step
@@ -592,8 +588,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							
 							.OutDMAAddr(			OutDMAAddr),
 							.OutDMAValid(			OutDMAValid_Pre),
-							.OutDMAReady(			OutDMAReady),
-							.OutDMALast(			OutDMALast));
+							.OutDMAReady(			OutDMAReady));
 
 	//--------------------------------------------------------------------------
 	// Front-end command handling
@@ -682,7 +677,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	assign	InDMAValid =							CSPathWriteback & ~ReadingLastBlock;
 	
-	// TODO cleanup
 	assign	OutDMAValid = 							CSPathWriteback & OutSpaceGate & OutDMAValid_Pre;
 	assign	OutDMAReady =							CSPathWriteback & OutSpaceGate & Core_CommandReady;
 

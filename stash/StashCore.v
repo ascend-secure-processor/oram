@@ -121,9 +121,6 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	/*	We will issue one more push request than we want during path reads (this 
 		helps maintain 100% throughput).  So, we need to kill the last request. */
 	input					CancelPushCommand,
-	input					StreamPeakCommand,
-	input					StreamPeakReady, // TODO remove
-	input					LastPeakCommand, // TODO remove
 	output					SyncComplete
 	);
 	

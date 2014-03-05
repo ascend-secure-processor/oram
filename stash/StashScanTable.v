@@ -46,8 +46,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	output	[SEAWidth-1:0]	OutDMAAddr,
 	output 					OutDMAValid,
-	output					OutDMAReady,
-	output					OutDMALast
+	output					OutDMAReady
 	);
 	
 	//--------------------------------------------------------------------------
@@ -357,29 +356,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 							.InAccept(				DMAReady_Internal),
 							.OutFullCount(			STFIFOCount),
 							.OutData(				OutDMAAddr),
-							.OutSend(				OutDMAValid_Pre),
-							.OutReady(				OutDMAReady_Pre));
-
-	assign	OutDMAValid =							DMAGate & OutDMAValid_Pre;
-	assign	OutDMAReady_Pre = 						DMAGate & OutDMAReady;
-							
-	// TODO rename to outDMADone
-	// TODO adjust to == 2
-	// We don't set DMAGate until STFIFOCount == 3 because when BEDWidth = 512, (STFIFOCount == 3) will never be true
-	Register	#(			.Width(					1))
-				dma_start(	.Clock(					Clock),
-							.Reset(					Reset | AccessComplete),
-							.Set(					DMAValid_Internal & STFIFOCount == 3),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					DMAGate));
-	Register	#(			.Width(					1))
-				dma_last(	.Clock(					Clock),
-							.Reset(					Reset | AccessComplete),
-							.Set(					STFIFOCount == 1 & OutDMAValid_Pre & OutDMAReady_Pre),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					OutDMALast));
+							.OutSend(				OutDMAValid),
+							.OutReady(				OutDMAReady));
 
 	//--------------------------------------------------------------------------
 endmodule
