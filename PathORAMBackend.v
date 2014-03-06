@@ -523,8 +523,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	[Read path] Buffers and down shifters
 	//------------------------------------------------------------------------------
 		
-	// Buffers the whole incoming path (... this is a lazy design?)
-	// NOTE: This buffer requires ~1% of the LUT RAM on the chip
+	// Buffers the whole incoming path
+	// NOTE: This buffer requires ~1% of the LUT/BLOCK RAM on the chip
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full, PathBuffer_Empty;
 
@@ -577,6 +577,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
 	
+	// TODO set register to 1
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
 				in_U_shft(	.Clock(					Clock),
@@ -594,6 +595,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Load(					HeaderDownShift_InValid & HeaderDownShift_InReady), 
 							.Enable(				InPath_BlockReadComplete), 
 							.PIn(					HeaderDownShift_Leaves), 
+							.SIn(					{ORAML{1'bx}}),
 							.SOut(					HeaderDownShift_OutLeaf));
 
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
@@ -666,7 +668,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Stash
 	//------------------------------------------------------------------------------
 	
-	Stash	#(				.StashOutBuffering(		3), // this should be good enough ...
+	Stash	#(				.StashOutBuffering(		4), // this should be good enough ...
 							.StopOnBlockNotFound(	StopOnBlockNotFound),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
@@ -693,7 +695,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ReturnPAddr(			), // not connected
 							.ReturnLeaf(			), // not connected
 							.ReturnDataOutValid(	Stash_ReturnDataValid),
-							//.ReturnDataOutReady(	Stash_ReturnDataReady),
 							.BlockReturnComplete(	), // not connected
 							
 							.UpdateData(			Stash_StoreData),
@@ -743,7 +744,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (~HeaderUpShift_InReady & Stash_BlockReadComplete) begin
+			if (~HeaderUpShift_InReady & Stash_BlockReadComplete & DataUpShift_InValid & DataUpShift_InReady) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
 				$stop;
 			end

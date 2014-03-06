@@ -160,8 +160,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			end
 			
 			if (CurrentLeafValid & InScanValid & InScanLeaf &
-				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx))) begin
-				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf", $time);
+				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx) | (^InScanSAddr === 1'bx))) begin
+				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf or InScanSAddr", $time);
 				$stop;
 			end
 			

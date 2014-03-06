@@ -448,7 +448,7 @@ module	PathORAMBackendTestbench;
 		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin
 			#(Cycle*1000);
 			$display("*** TESTBENCH COMPLETED & PASSED ***");
-			$stop;
+			$finish;
 		end
 	end
 	
