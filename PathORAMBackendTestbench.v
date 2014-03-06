@@ -35,7 +35,7 @@ module	PathORAMBackendTestbench;
 								ORAMC =				10;
 
 	parameter					FEDWidth =			64,
-								BEDWidth =			256;
+								BEDWidth =			512;
 
 	parameter					Overclock =			1;
 								

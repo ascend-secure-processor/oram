@@ -111,8 +111,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
 	wire					Command_InternalValid, Command_InternalReady;
 
-	wire	[BlkBEDWidth:0]	EvictBuf_Chunks;
-	wire	[BlkBEDWidth:0]	ReturnBuf_Space;
+	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
+	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
 		
 	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
 	wire					Store_ShiftBufValid, Store_ShiftBufReady;
@@ -151,7 +151,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					HeaderDownShift_OutValid;		
 	
 	wire	[PBEDWidth-1:0]	PathReadCtr;
-	wire					IncrementReadCtr;
+	wire					DataDownShift_Transfer;
 	
 	wire					BlockReadCtr_Reset;
 	wire	[BlkBEDWidth-1:0] BlockReadCtr; 	
@@ -176,6 +176,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
 	
 	wire					WritebackBlockIsValid;
+	wire 					WritebackBlockCommit; // TODO change stash to generate WritebackBlockCommit for us ...
 	
 	wire 					WritebackProcessingHeader;		
 	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
@@ -485,7 +486,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
-							.Cmd(					AddrGen_DRAMCommand_Internal),
+							.Cmd(					AddrGen_DRAMCommand_Internal), // TODO command width == 4???
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
 	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
 							.FWLatency(				Overclock))
@@ -560,7 +561,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Load(					1'b0),
 							.Enable(				PathBuffer_OutValid & PathBuffer_OutReady),
 							.In(					{BktBSTWidth{1'bx}}),
-							.Count(					BucketReadCtr));	
+							.Count(					BucketReadCtr));
 	CountCompare #(			.Width(					BktBSTWidth),
 							.Compare(				BktSize_DRBursts - 1))
 				in_bkt_cmp(	.Count(					BucketReadCtr), 
@@ -577,7 +578,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
 	
-	// TODO set register to 1
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
 				in_U_shft(	.Clock(					Clock),
@@ -599,7 +599,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.SOut(					HeaderDownShift_OutLeaf));
 
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
-							.OWidth(				BEDWidth))
+							.OWidth(				BEDWidth),
+							.Register(				1))
 				in_D_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				PathBuffer_OutData),
@@ -613,9 +614,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	[Read path] Dummy block handling
 	//------------------------------------------------------------------------------
 
-	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | BlockReadCtr_Reset;
+	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
 	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ReadBlockIsValid & BlockPresent);
 	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
+	
+	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
 	// Use FIFOShiftRound to generate BlockPresent signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
@@ -634,7 +637,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset | BlockReadCtr_Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				DataDownShift_OutValid & DataDownShift_OutReady & ~ReadBlockIsValid & BlockPresent),
+							.Enable(				DataDownShift_Transfer & ~ReadBlockIsValid & BlockPresent),
 							.In(					{BlkBEDWidth{1'bx}}),
 							.Count(					BlockReadCtr));	
 	CountCompare #(			.Width(					BlkBEDWidth),
@@ -649,14 +652,12 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
 	
-	assign	IncrementReadCtr =						DataDownShift_OutValid & DataDownShift_OutReady;
-	
 	Counter		#(			.Width(					PBEDWidth))
 				in_path_cnt(.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				IncrementReadCtr & ~PathReadComplete),
+							.Enable(				DataDownShift_Transfer & ~PathReadComplete),
 							.In(					{PBEDWidth{1'bx}}),
 							.Count(					PathReadCtr));
 	CountCompare #(			.Width(					PBEDWidth),
@@ -741,10 +742,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	// TODO change the stash interface so that dummies are single bit signals
 	assign	WritebackBlockIsValid =					HeaderUpShift_InPAddr != DummyBlockAddress;
+	assign	WritebackBlockCommit =					Stash_BlockReadComplete & DataUpShift_InValid & DataUpShift_InReady;
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (~HeaderUpShift_InReady & Stash_BlockReadComplete & DataUpShift_InValid & DataUpShift_InReady) begin
+			if (~HeaderUpShift_InReady & WritebackBlockCommit) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
 				$stop;
 			end
@@ -756,7 +758,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				out_U_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				HeaderUpShift_InPAddr),
-							.InValid(				Stash_BlockReadComplete),
+							.InValid(				WritebackBlockCommit),
 							.InAccept(				HeaderUpShift_InReady),
 							.OutData(			    HeaderUpShift_PAddrs),
 							.OutValid(				HeaderUpShift_OutValid),
@@ -766,7 +768,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				out_L_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Load(					1'b0), 
-							.Enable(				Stash_BlockReadComplete), 
+							.Enable(				WritebackBlockCommit), 
 							.SIn(					HeaderUpShift_InLeaf), 
 							.POut(					HeaderUpShift_Leaves));							
 	ShiftRegister #(		.PWidth(				ORAMZ),
@@ -774,7 +776,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				out_V_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Load(					1'b0), 
-							.Enable(				Stash_BlockReadComplete), 
+							.Enable(				WritebackBlockCommit), 
 							.SIn(					WritebackBlockIsValid), 
 							.POut(					HeaderUpShift_ValidBits));
 							
