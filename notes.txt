@@ -39,6 +39,10 @@
 		
 	Master TODO [FPGA]
 	
+		- 	Regenerate MIG to do internal re-ordering (and test bandwidth through MIG simulation)
+		
+		- 	Fix backend bug where access finishes after read operation
+	
 		- 	AES
 		
 		- 	REW ORAM
