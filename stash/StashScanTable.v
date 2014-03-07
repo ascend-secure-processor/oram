@@ -66,8 +66,8 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire	[ORAMLP1-1:0]	CurrentLeafP1, InLeafP1;
 	
-	wire	[ORAMLP1-1:0]	FullMask, Intersection, CommonSubpath,
-							CommonSubpath_Space, CommonSubpath_Space_rev,
+	wire	[ORAMLP1-1:0]	FullMask, Intersection, CommonSubpath, CompatibleBuckets,
+							CompatibleBuckets_Space, CompatibleBuckets_Space_rev,
 							HighestLevel_Onehot;
 	wire	[BktAWidth-1:0]	HighestLevel_Bin;
 
@@ -82,9 +82,10 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	// Pipelining
 	
-	wire	[ORAMLP1-1:0]	CommonSubpath_Dly;
-	wire	[SEAWidth-1:0]	InScanSAddr_Dly;
-	wire					CurrentLeafValid_Dly, InScanValid_Dly;	
+	wire	[ORAMLP1-1:0]	CommonSubpath_Dly, CompatibleBuckets_Dly;
+	wire	[SEAWidth-1:0]	InScanSAddr_Dly, InScanSAddr_Dly2;
+	wire					CurrentLeafValid_Dly, CurrentLeafValid_Dly2;
+	wire					InScanValid_Dly, InScanValid_Dly2;	
 
 	wire	[BktAWidth-1:0]	HighestLevel_Bin_Pre;
 	wire	[BCLWidth-1:0]	BCounts_Pre;
@@ -126,12 +127,12 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 			
 	`ifdef SIMULATION_VERBOSE_STASH	
 			if (InScanValid & CurrentLeafValid) begin
-				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr_Dly, InScanPAddr, CurrentLeaf, InScanLeaf);
+				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr_Dly2, InScanPAddr, CurrentLeaf, InScanLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
-				$display("\tCommonSubpath:       %x", CommonSubpath);
+				$display("\tCommonSubpath:       %x", CompatibleBuckets);
 				$display("\tFull mask:           %x", FullMask);
-				$display("\tCommonSubpath_Space: %x", CommonSubpath_Space);
+				$display("\tCommonSubpath_Space: %x", CompatibleBuckets_Space);
 				$display("\tHighest level:       %x (one hot), %d (bin)", HighestLevel_Onehot, HighestLevel_Bin_Pre);
 				
 				if (OutScanAccepted_Pre & OutScanValid_Pre)
@@ -203,23 +204,32 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//							.Out(				Intersection));
 	assign	Intersection =							InLeafP1 ^ CurrentLeafP1;
 							
-	assign	CommonSubpath = 						(Intersection & -Intersection) - 1;
+	assign	CommonSubpath = 						Intersection & -Intersection;
 	
 	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
 							.Stages(				Overclock))
-			mpipe_1(		.Clock(					Clock),
+				mpipe_1(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 	CommonSubpath}), 
-							.OutData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly,CommonSubpath_Dly}));
+							.OutData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly,CommonSubpath_Dly}));	
+	
+	assign	CompatibleBuckets =						CommonSubpath_Dly - 1;
+	
+	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
+							.Stages(				Overclock))
+				mpipe_2(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly, 	CompatibleBuckets}), 
+							.OutData(				{InScanValid_Dly2,	CurrentLeafValid_Dly2,	InScanSAddr_Dly2,	CompatibleBuckets_Dly}));
 							
-	assign	CommonSubpath_Space =					CommonSubpath_Dly & ~FullMask;
+	assign	CompatibleBuckets_Space =				CompatibleBuckets_Dly & ~FullMask;
 
 	Reverse		#(			.Width(					ORAMLP1))
-				Rev2(		.In(					CommonSubpath_Space),
-							.Out(					CommonSubpath_Space_rev));
+				Rev2(		.In(					CompatibleBuckets_Space),
+							.Out(					CompatibleBuckets_Space_rev));
 
 	Reverse		#(			.Width(					ORAMLP1))
-				Rev3(		.In(					CommonSubpath_Space_rev & -CommonSubpath_Space_rev), 
+				Rev3(		.In(					CompatibleBuckets_Space_rev & -CompatibleBuckets_Space_rev), 
 							.Out(					HighestLevel_Onehot));
 
 	OneHot2Bin	#(			.Width(					ORAMLP1))
@@ -230,9 +240,9 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly & InScanValid_Dly & |HighestLevel_Onehot;
-	assign	OutScanSAddr_Pre =						InScanSAddr_Dly;
-	assign	OutScanValid_Pre = 						InScanValid_Dly;
+	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly2 & InScanValid_Dly2 & |HighestLevel_Onehot;
+	assign	OutScanSAddr_Pre =						InScanSAddr_Dly2;
+	assign	OutScanValid_Pre = 						InScanValid_Dly2;
 	
 	//--------------------------------------------------------------------------
 	//	Feed-forward retiming
@@ -240,7 +250,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Pipeline	#(			.Width(					2),
 							.Stages(				ScanTableLatency))
-			full_dly(		.Clock(					Clock),
+				full_dly(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{InScanAdd,	InScanStreaming}), 
 							.OutData(				{OutScanAdd,OutScanStreaming}));						
@@ -276,7 +286,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Pipeline	#(			.Width(					BktAWidth + BCLWidth + 2 + SEAWidth),
 							.Stages(				Overclock))
-			mpipe_2(		.Clock(					Clock),
+				mpipe_3(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{HighestLevel_Bin_Pre,	BCounts_Pre,	OutScanValid_Pre,	OutScanAccepted_Pre,	OutScanSAddr_Pre}), 
 							.OutData(				{HighestLevel_Bin, 		BCounts, 		OutScanValid, 		OutScanAccepted, 		OutScanSAddr}));			
@@ -311,7 +321,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	Mux			#(			.Width(					BCWidth),
 							.NPorts(				ORAMLP1),
 							.SelectCode(			0))
-				BCMux(		.Select(				HighestLevel_Bin), 
+				bc_mux(		.Select(				HighestLevel_Bin), 
 							.Input(					BCounts),
 							.Output(				BucketOccupancy));
 							

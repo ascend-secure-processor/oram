@@ -18,7 +18,7 @@
 	localparam					BCWidth =			`log2(ORAMZ) + 1; // need +1 to account for full buckets
 	localparam					BCLWidth =	 		ORAMLP1 * BCWidth; // bitvector of bucket counts
 			
-	localparam					ScanTableLatency =	(Overclock) ? 2 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
+	localparam					ScanTableLatency =	(Overclock) ? 3 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
 	localparam					ScanDelay =			ORAMC + ScanTableLatency;
 	localparam					SCWidth =			`log2(ScanDelay);
 

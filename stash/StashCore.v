@@ -642,7 +642,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	FreeList_Resolved =						(CSPushing_FirstCycle) ? 					FreeListHead :
 																								StashP_DataOut;
 	
-	assign 	FreeListHead_New =						(CSPushing_FirstTransferred) ? 						StashP_DataOut : 
+	assign 	FreeListHead_New =						(CSPushing_FirstTransferred) ? 				StashP_DataOut : 
 													(CSSyncing_FirstCycle & Sync_SettingULH) ? 	SNULL :	
 																								SyncCount;
 	assign 	UsedListHead_New = 						(CSPushing) ? 								FreeList_Resolved :
