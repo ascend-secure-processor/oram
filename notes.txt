@@ -51,4 +51,7 @@
 		
 		- 	Big programs running on board / uBlaze
 		
-		
+
+	Xelab uses infinite memory?
+		-	Check the AddrWidth of SynthesizedDRAM, cannot be too large like 28
+		-	If it hangs at a certain line of code when stopped, there's probably a dead loop.		
