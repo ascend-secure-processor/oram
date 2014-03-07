@@ -46,7 +46,7 @@ module UORamController
     // FrontEnd state machines
     wire [BECMDWidth-1:0] LastCmd;
     Register #(.Width(2))
-        CmdReg (Clock, Reset, 1'b0, CmdReady && CmdValid, CmdIn, LastCmd);
+        CmdReg (Clock, Reset, 1'b0, CmdInReady && CmdInValid, CmdIn, LastCmd);
     
     reg [MaxLogRecursion-1:0] QDepth;   // TODO: maximum recursion
     reg [ORAMU-1:0] AddrQ [Recursion-1:0];
