@@ -103,6 +103,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					AppendComplete, PathReadComplete, Stash_PathWritebackComplete;
 	
 	wire	[ORAML-1:0]		DummyLeaf;
+	wire					DummyLeaf_Valid;
 	
 	// Front-end interfaces
 	
@@ -205,6 +206,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					Stash_EvictBlockValid, Stash_EvictBlockReady;
 
 	wire					Stash_BlockWriteComplete;
+	
+	wire					Stash_AccessComplete_Reg, Stash_AccessComplete;	
 	
 	// ORAM initialization
 	
@@ -328,18 +331,20 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 					NS =						 	ST_Idle;
 			ST_Idle :
 				// stash capacity check gets highest priority
-				if (StashAlmostFull)
-					NS =							ST_StartRead;
-				// do appends first ("greedily") because they are cheap
-				else if (Command_InternalValid 	& 	Command_Internal == BECMD_Append)
-					NS =							ST_Append;
-				else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
-													(Command_Internal == BECMD_ReadRmv))
-												&	(ReturnBuf_Space >= BlkSize_BEDChunks))
-					NS =							ST_StartRead;
-				else if (Command_InternalValid 	& (	Command_Internal == BECMD_Update)
-												& (	EvictBuf_Chunks >= BlkSize_BEDChunks))
-					NS = 							ST_StartRead;
+				if (DummyLeaf_Valid) begin
+					if (StashAlmostFull)
+						NS =						ST_StartRead;
+					// do appends first ("greedily") because they are cheap
+					else if (Command_InternalValid	& 	Command_Internal == BECMD_Append)
+						NS =						ST_Append;
+					else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
+														(Command_Internal == BECMD_ReadRmv))
+													&	(ReturnBuf_Space >= BlkSize_BEDChunks))
+						NS =						ST_StartRead;
+					else if (Command_InternalValid 	& (	Command_Internal == BECMD_Update)
+													& (	EvictBuf_Chunks >= BlkSize_BEDChunks))
+						NS = 						ST_StartRead;
+				end
 			ST_Append :
 				if (AppendComplete)
 					NS = 							ST_Idle;
@@ -353,11 +358,11 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				if (AddrGen_InReady)
 					NS =							ST_PathWriteback;
 			ST_PathWriteback : 
-				if (Stash_PathWritebackComplete)
+				if (Stash_AccessComplete & AddrGen_InReady)
 					NS =							ST_Idle;
 		endcase
 	end
-	
+
 	Register	#(			.Width(					1))
 				dummy_reg(	.Clock(					Clock),
 							.Reset(					Reset | (CSIdle & ~StashAlmostFull)),
@@ -449,17 +454,21 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Random leaf generator
 	//------------------------------------------------------------------------------ 
 	
-	// TODO use AES/Gentry counting for this
+	// Gentry leaves for REW ORAM
+
+	// TODO cleanup
 	
-	Counter		#(			.Width(					ORAML))
-				leaf_cnter(	.Clock(					Clock),
+	localparam	PRNGLWidth =						`divceil(ORAML, 8) * 8;
+	
+	wire	[PRNGLWidth-1:0]	DummyLeaf_Wide;
+	PRNG 		#(			.RandWidth(				PRNGLWidth))
+				leaf_gen(	.Clock(					Clock), 
 							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				Stash_PathWritebackComplete),
-							.In(					{ORAML{1'bx}}),
-							.Count(					DummyLeaf));
-	
+							.RandOutReady(			Stash_PathWritebackComplete),
+							.RandOutValid(			DummyLeaf_Valid),
+							.RandOut(				DummyLeaf_Wide));
+	assign	DummyLeaf =								DummyLeaf_Wide[ORAML-1:0];
+							
 	//------------------------------------------------------------------------------
 	//	Address generation & ORAM initialization
 	//------------------------------------------------------------------------------
@@ -731,6 +740,15 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.BlockNotFound(			), // not connected
 							.BlockNotFoundValid(	)); // not connected
 		
+	Register	#(			.Width(					1))
+				wb_complete(.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					Stash_PathWritebackComplete),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					Stash_AccessComplete_Reg));		
+	assign	Stash_AccessComplete =					Stash_PathWritebackComplete | Stash_AccessComplete_Reg;
+	
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters
 	//------------------------------------------------------------------------------

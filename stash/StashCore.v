@@ -282,7 +282,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 		
 		always @(posedge Clock) begin
 			if (MS_StartingWrite) begin
-				$display("[%m @ %t] Writing [a=%x, l=%x, sloc=%d]", $time, InPAddr, InLeaf, StashE_Address);
+				$display("[%m @ %t] Writing [a=%x, l=%x (dec = %d), sloc=%d]", $time, InPAddr, InLeaf, InLeaf, StashE_Address);
 				if (CSOverwriting) begin
 					$display("\t(Overwrite)");
 				end
