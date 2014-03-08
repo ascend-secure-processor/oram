@@ -109,7 +109,7 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		                .LoadDataValid(     LoadValid), 
 		                .LoadData(          LoadData)
 		            );
-	
+
 	
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -148,5 +148,5 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteMask(			DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));				
-	
+
 endmodule

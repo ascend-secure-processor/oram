@@ -130,8 +130,12 @@ module PosMapPLB
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
     // =============================================================================  
-    assign NewLeafAccept = (PosMapValid || PLBValid) && !Valid && LastCmd == CacheWrite;
+    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;
    
+   
+    wire PPPHit;
+    assign PPPHit = PosMapValid || (PLBValid && PLBHit);
+       
     always @(posedge Clock) begin
         if (Reset) begin
             Valid <= 0;              
@@ -143,14 +147,13 @@ module PosMapPLB
         
         else if ((PosMapValid || PLBValid) && !Valid) begin
             Valid <= 1;
-            Hit <= PosMapValid || (PLBValid && PLBHit);
+            Hit <= PPPHit;
             UnInit <= (PosMapValid && PosMapOut[ORAML] == 0) || (PLBValid && PLBHit && PLBDOut[ORAML] == 0);
             OldLeafOut <= PosMapValid ? PosMapOut[ORAML-1:0] : PLBDOut[ORAML-1:0];
             Evict <= PLBValid && PLBEvict;
             AddrOut <= PLBAddrOut;         
                             
-            if (LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
-      //          NewLeafIn <= $random;      // TODO: should be the output of some RNG
+            if (PPPHit && LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
                 NewLeafOut <= NewLeafIn;
                 if (!NewLeafValid)
                     $display("Error: run out of random leaves.");
