@@ -1,5 +1,8 @@
 
-	Notes/Insights:
+	============================================================================
+	Notes/Insights
+	============================================================================
+	
 		- with 64B blocks, DRAM bandwidth on FPGA [ ~ 1KB / FPGA cycle ] makes stash design complicated; this isn't a problem with 4KB blocks.
 		- What matters here is bits / cycle, or blocks / cycle. <=(1 block / cycle) is usually fine, but  >(1 blocks / cycle) makes the design complicated.
 
@@ -13,20 +16,23 @@
 
 		- By buffering the entire path (only possible for small block sizes), we can make the stash logic simpler bc it doesn't need scan pre-emption.
 		
-	Known performance bugs:
+	============================================================================	
+	Known performance bugs
+	============================================================================
+	
 		- MIG is introducing 14 cycles of latency between CommandValid -> RAS and 5 cycles between DQ valid and ReadOutValid
 		
-		
-	
-	Simple optimizations to mention to make Phantom-like readers happy:
+	============================================================================
+	Simple optimizations to mention to make Phantom-like readers happy
+	============================================================================
 	
 		- Half latency trick
 		
 		- Tree-top caching: at least mention that we don't do it bc of (whatever) short path lengths ...
 		
-		
-		
+	============================================================================
 	Master TODO [ASIC]
+	============================================================================
 	
 		- 	Does MIT have Synopsis Synplify?  
 			No.  Arvind's group never bothered with it b/c Bluespec's backend is in terms of raw BRAM blocks
@@ -35,9 +41,9 @@
 		
 		-	Simulate higher ORAM bandwidth by serializing data on ASIC?
 		
-		
-		
+	============================================================================
 	Master TODO [FPGA]
+	============================================================================
 	
 		- 	Regenerate MIG to do internal re-ordering (and test bandwidth through MIG simulation)
 		
@@ -51,7 +57,13 @@
 		
 		- 	Big programs running on board / uBlaze
 		
+	============================================================================
+	FAQ
+	============================================================================
 
 	Xelab uses infinite memory?
 		-	Check the AddrWidth of SynthesizedDRAM, cannot be too large like 28
-		-	If it hangs at a certain line of code when stopped, there's probably a dead loop.		
+		-	If it hangs at a certain line of code when stopped, there's probably an infinite loop.		
+
+	Can't find *.vh header file when trying to start a simulation
+		-	Add header as simulation-only source to the simulation set that you are trying to run
