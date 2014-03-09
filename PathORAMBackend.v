@@ -112,8 +112,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
 	wire					Command_InternalValid, Command_InternalReady;
 
-	wire	[BlkBEDWidth:0] EvictBuf_Chunks;      // these counters have to be [0, 4], must add one bit
-	wire	[BlkBEDWidth:0] ReturnBuf_Space;
+	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
+	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
 		
 	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
 	wire					Store_ShiftBufValid, Store_ShiftBufReady;
@@ -402,7 +402,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							
 	// SECURITY: Don't make a write-update unless the FE gives us a block first
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				BlkSize_BEDChunks+1))
+							.Buffering(				BlkSize_BEDChunks))
 				st_buf(		.Clock(					Clock),
 							.Reset(					Reset),
 							.OutFullCount(			EvictBuf_Chunks),
@@ -428,7 +428,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// NOTE: this should come before the shifter because the Stash ReturnData path 
 	// doesn't have backpressure
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				BlkSize_BEDChunks+1))
+							.Buffering(				BlkSize_BEDChunks))
 				ld_buf(		.Clock(					Clock),
 							.Reset(					Reset),
 							.InEmptyCount(			ReturnBuf_Space),
@@ -797,7 +797,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Enable(				WritebackBlockCommit), 
 							.SIn(					WritebackBlockIsValid), 
 							.POut(					HeaderUpShift_ValidBits));
-							
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				DDRDWidth))
 				out_D_shft(	.Clock(					Clock),
@@ -808,6 +807,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.OutData(			    DataUpShift_OutData),
 							.OutValid(				DataUpShift_OutValid),
 							.OutReady(				DataUpShift_OutReady));
+							
+	// FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer whole bucket 
+	// so that we can write back to DRAM in {Header, Payload} order
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				BktPSize_DRBursts))
 				out_bkt_buf(.Clock(					Clock),
