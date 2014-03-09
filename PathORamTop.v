@@ -10,8 +10,8 @@
 //	Desc:		Unified Front + basic PathORAM Backend
 //==============================================================================
 module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
-							`include "AES.vh", `include "Stash.vh", 
-							`include "UORAM.vh", `include "PLB.vh") (
+						`include "AES.vh", `include "Stash.vh", 
+						`include "UORAM.vh", `include "PLB.vh") (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -65,51 +65,56 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh"; 
-	
-	
-	wire						BEnd_CmdReady, BEnd_CmdValid;
-	wire	[BECMDWidth-1:0] 	BEnd_Cmd;
-	wire	[ORAMU-1:0]			BEnd_PAddr;
-	wire	[ORAML-1:0]			CurrentLeaf, RemappedLeaf;
 
-	wire	[FEDWidth-1:0]		LoadData, StoreData;
-	wire						LoadReady, LoadValid, StoreValid, StoreReady;
+	//------------------------------------------------------------------------------
+	//	Wires & Regs
+	//------------------------------------------------------------------------------ 
+
+	wire					BEnd_CmdReady, BEnd_CmdValid;
+	wire	[BECMDWidth-1:0] BEnd_Cmd;
+	wire	[ORAMU-1:0]		BEnd_PAddr;
+	wire	[ORAML-1:0]		CurrentLeaf, RemappedLeaf;
+
+	wire	[FEDWidth-1:0]	LoadData, StoreData;
+	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 	
-	UORamController #(  .ORAMU(         	ORAMU), 
-                        .ORAML(         	ORAML), 
-                        .ORAMB(         	ORAMB), 
-                   		.FEDWidth(			FEDWidth),
-                        .NumValidBlock( 	NumValidBlock), 
-                        .Recursion(     	Recursion), 
-                        .LeafWidth(     	LeafWidth), 
-                        .PLBCapacity(   	PLBCapacity)) 
-		FrontEnd    (   .Clock(             Clock), 
-		                .Reset(             Reset), 
-		                .CmdInReady(        CmdReady), 
-		                .CmdInValid(        CmdValid), 
-		                .CmdIn(             Cmd), 
-		                .ProgAddrIn(        PAddr),
-		                .DataInReady(       DataInReady), 
-		                .DataInValid(       DataInValid), 
-		                .DataIn(            DataIn),                                    
-		                .ReturnDataReady(   ReturnDataReady), 
-		                .ReturnDataValid(   ReturnDataValid), 
-		                .ReturnData(        ReturnData),
+	//------------------------------------------------------------------------------
+	//	Core modules
+	//------------------------------------------------------------------------------ 	
+	
+	UORamController #(  	.ORAMU(         		ORAMU), 
+							.ORAML(         		ORAML), 
+							.ORAMB(         		ORAMB), 
+							.FEDWidth(				FEDWidth),
+							.NumValidBlock( 		NumValidBlock), 
+							.Recursion(     		Recursion), 
+							.LeafWidth(     		LeafWidth), 
+							.PLBCapacity(   		PLBCapacity)) 
+				front_end(	.Clock(             	Clock), 
+							.Reset(					Reset), 
+							.CmdInReady(			CmdReady), 
+							.CmdInValid(			CmdValid), 
+							.CmdIn(					Cmd), 
+							.ProgAddrIn(			PAddr),
+							.DataInReady(			DataInReady), 
+							.DataInValid(			DataInValid), 
+							.DataIn(				DataIn),                                    
+							.ReturnDataReady(		ReturnDataReady), 
+							.ReturnDataValid(		ReturnDataValid), 
+							.ReturnData(			ReturnData),
 		                        
-		                .CmdOutReady(       BEnd_CmdReady), 
-		                .CmdOutValid(       BEnd_CmdValid), 
-		                .CmdOut(            BEnd_Cmd), 
-		                .AddrOut(           BEnd_PAddr), 
-		                .OldLeaf(           CurrentLeaf), 
-		                .NewLeaf(           RemappedLeaf), 
-		                .StoreDataReady(    StoreReady), 
-		                .StoreDataValid(    StoreValid), 
-		                .StoreData(         StoreData),
-		                .LoadDataReady(     LoadReady), 
-		                .LoadDataValid(     LoadValid), 
-		                .LoadData(          LoadData)
-		            );
-
+							.CmdOutReady(			BEnd_CmdReady), 
+							.CmdOutValid(			BEnd_CmdValid), 
+							.CmdOut(				BEnd_Cmd), 
+							.AddrOut(				BEnd_PAddr), 
+							.OldLeaf(				CurrentLeaf), 
+							.NewLeaf(				RemappedLeaf), 
+							.StoreDataReady(		StoreReady), 
+							.StoreDataValid(		StoreValid), 
+							.StoreData(				StoreData),
+							.LoadDataReady(			LoadReady), 
+							.LoadDataValid(			LoadValid), 
+							.LoadData(				LoadData));
 	
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -124,7 +129,7 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
-        BackEnd (			.Clock(					Clock),
+				back_end (	.Clock(					Clock),
 							.Reset(					Reset),			
 							.Command(				BEnd_Cmd),
 							.PAddr(					BEnd_PAddr),
@@ -138,6 +143,7 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.StoreData(				StoreData),
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
+							
 							.DRAMCommandAddress(	DRAMAddress),
 							.DRAMCommand(			DRAMCommand),
 							.DRAMCommandValid(		DRAMCommandValid),
@@ -147,6 +153,8 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteMask(			DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMWriteDataReady));				
-
+							.DRAMWriteDataReady(	DRAMWriteDataReady));
+							
+	//--------------------------------------------------------------------------
 endmodule
+//--------------------------------------------------------------------------
