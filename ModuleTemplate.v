@@ -28,24 +28,24 @@
 //	Module:		
 //	Desc:		
 //==============================================================================
-module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
+module MyModule #(/* parameters; e.g., `include "PathORAM.vh" */) (
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-	// col 5					// col 33
-  	input 						Clock, Reset,
+	// col 5				// col 29
+  	input 					Clock, Reset,
 
 	//--------------------------------------------------------------------------
 	//	Interface 1
 	//--------------------------------------------------------------------------
 		
-	// col5 // col 13			// col 33
-	input	[StashDWidth-1:0]	InData,
-	input	[ORAMU-1:0]			InPAddr,
-	input	[ORAML-1:0]			InLeaf,
-	input						InValid,
-	output 						InReady,
+	// col5 // col 13		// col 29
+	input	[StashDWidth-1:0] InData,
+	input	[ORAMU-1:0]		InPAddr,
+	input	[ORAML-1:0]		InLeaf,
+	input					InValid,
+	output 					InReady,
 	
 	//--------------------------------------------------------------------------
 	//	Interface 2
@@ -59,22 +59,22 @@ module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
 		
 	// Local params; e.g., `include "DDR3SDRAMLocal.vh"	
 	
-	// col 5					// col 33				// col 53
-	localparam					STWidth =			3,
-								ST_Reset =			3'd0,
-								ST_Idle = 			3'd1,
-								ST_Pushing = 		3'd2,
-								ST_Overwriting = 	3'd3, 
-								ST_Peaking =		3'd4, 
-								ST_Dumping =		3'd5; 
+	// col 5				// col 29				// col 53
+	localparam				STWidth =				3,
+							ST_Reset =				3'd0,
+							ST_Idle = 				3'd1,
+							ST_Pushing = 			3'd2,
+							ST_Overwriting = 		3'd3, 
+							ST_Peaking =			3'd4, 
+							ST_Dumping =			3'd5; 
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 	
-	// col5 // col 13			// col 33
-	reg		[STWidth-1:0]		CS, NS;
-	wire	[StashEAWidth-1:0]	StashC_Address;
+	// col5 // col 13		// col 29
+	reg		[STWidth-1:0]	CS, NS;
+	wire	[StashEAWidth-1:0] StashC_Address;
 	
 	//--------------------------------------------------------------------------
 	//	State machines
@@ -130,4 +130,3 @@ module  #(/* parameters; e.g., `include "PathORAM.vh" */) (
 	//--------------------------------------------------------------------------	
 endmodule
 //--------------------------------------------------------------------------
-
