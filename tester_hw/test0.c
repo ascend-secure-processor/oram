@@ -2,7 +2,7 @@
 #include <SWTestHarnessDriver.h>
 
 void main() {
-	int fd; initialize_uart("/dev/ttyUSB0", B115200);
+	int fd = initialize_uart("/dev/ttyUSB0", B115200);
 
 	send_cmd(fd, CMD_Update, 	0x80000000, 0xf, 10);
 	send_cmd(fd, CMD_Append, 	0x80000001, 0x1f, 2);

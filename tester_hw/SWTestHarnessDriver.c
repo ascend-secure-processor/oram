@@ -71,6 +71,8 @@ int initialize_uart(char * portname, int baud) {
 
 	set_interface_attribs(fd, baud, 0); // set speed to 115,200 bps, 8n1 (no parity)
 	set_blocking(fd, 0); // set no blocking
+
+	return fd;
 }
 
 /* Send a new command to PathORAMTop */
@@ -83,8 +85,8 @@ void send_cmd(int fd, cmd_t cmd, paddr_t paddr, datab_t datab, timed_t timed) {
 
 /* Send the start command to PathORAMTop */
 void send_start_cmd(int fd) {
-	write_packet(fd, 	CMD_Start, 
-						0xdeadbeef /* don't care */, 
-						0xba5eba11 /* don't care */, 
-						0);
+	send_cmd(fd, 	CMD_Start, 
+					0xdeadbeef /* don't care */, 
+					0xba5eba11 /* don't care */, 
+					0);
 }
