@@ -11,7 +11,7 @@
 	localparam				UARTBaud =				115200;
 	`endif
 	
-	localparam				PcktWidth =				TCMDWidth + ORAMU + DBaseWidth + TimeWidth,
+	localparam				THPWidth =				TCMDWidth + ORAMU + DBaseWidth + TimeWidth,
 							TCMD_Update =			{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_Update},
 							TCMD_Append =			{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_Append},
 							TCMD_Read =				{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_Read},

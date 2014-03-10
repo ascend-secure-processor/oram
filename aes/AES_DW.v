@@ -88,12 +88,14 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         end
     end
 
+    integer i;
+
     always @( posedge Clock ) begin
         if (Reset) begin
-            for (integer i = 0; i < D; i = i + 1)
+            for (i = 0; i < D; i = i + 1)
                 AESWorking <= 0;
         end else begin
-            for (integer i = 0; i < D; i = i + 1) begin
+            for (i = 0; i < D; i = i + 1) begin
                 if (DOutValid && OutTurn == i)
                     AESWorking[i] <= 0;
                 else if (DataInValid && KeyValid &&
@@ -103,19 +105,18 @@ module AES_DW #(parameter W = 4, parameter D = 12,
         end
     end
 
-
-    genvar i, j;
+    genvar k, j;
     generate
-        for (i = 0; i < D; i = i + 1) begin: OuterAES
+        for (k = 0; k < D; k = k + 1) begin: OuterAES
             for (j = 0; j < W; j = j + 1) begin: InnerAES
                 aes_cipher_top aes(.clk(Clock),
                                    .rst(~Reset),
                                    .ld(DataInValid && KeyValid &&
-                                       (InTurn == i) && !AESWorking[i]),
-                                   .done(AESResValid[i][j]),
+                                       (InTurn == k) && !AESWorking[k]),
+                                   .done(AESResValid[k][j]),
                                    .key(Key),
                                    .text_in({{(AESWidth-IVEntropyWidth){1'b0}}, DataIn + j}),
-                                   .text_out(AESRes[i][(j+1)*AESWidth - 1:j*AESWidth]));
+                                   .text_out(AESRes[k][(j+1)*AESWidth - 1:j*AESWidth]));
             end
         end
     endgenerate
