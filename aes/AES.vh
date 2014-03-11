@@ -1,3 +1,3 @@
 
 	parameter					IVEntropyWidth =	64,
-	parameter					AESWidth      =	128
+	           					AESWidth      =	128

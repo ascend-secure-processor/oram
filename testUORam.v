@@ -6,14 +6,29 @@ module testUORam;
 						
 	parameter 					DDR_nCK_PER_CLK = 	4,
 								DDRDQWidth =		64,
-								DDRCWidth =			3,
-								DDRAWidth =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;;
+								DDRCWidth =			3;
+								
 	
 	parameter					IVEntropyWidth =	64;
 
-    `include "PathORAM.vh";
-    `include "UORAM.vh";
-    `include "PLB.vh";
+    parameter					ORAMB =				512, // block size in bits
+								ORAMU =				32, // program addr (at byte-addressable block granularity) width
+								ORAML =				10, // the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
+								ORAMZ =				5, // bucket Z
+								ORAMC =				10, // Number of slots in the stash, _in addition_ to the length of one path
+								
+	           					FEDWidth =			64, // data width of frontend busses (reading/writing from/to stash, LLC network interface width)
+								BEDWidth =			512, // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
+	
+								Overclock = 		1; // Pipeline various operations inside the stash (needed for 200 Mhz operation) 
+    
+    parameter                   DDRAWidth =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
+    parameter   NumValidBlock = 1024,
+                Recursion = 3;
+                
+    parameter   LeafWidth = 32,         // in bits       
+                PLBCapacity = 8192;     // in bits
+
     `include "PathORAMBackendLocal.vh";
     `include "PLBLocal.vh"; 
     `include "BucketLocal.vh"
@@ -51,6 +66,7 @@ module testUORam;
                             .Recursion(             Recursion), 
                             .LeafWidth(             LeafWidth), 
                             .PLBCapacity(           PLBCapacity))
+                            
             ORAM    (		.Clock(					Clock),
                             .Reset(					Reset),
                             
@@ -125,7 +141,7 @@ module testUORam;
     assign Reset = CycleCount < 30;
     assign DataIn = 1;
   
-    localparam   Freq =	100_000_000;
+    localparam   Freq =	200_000_000;
     localparam   Cycle = 1000000000/Freq;	
     ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
@@ -209,7 +225,7 @@ module testUORam;
    
    always @(posedge Clock) begin
        if (CmdInReady) begin
-           if (TestCount < 2000) begin
+           if (TestCount < 500) begin
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle);       
                AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;
