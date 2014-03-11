@@ -61,7 +61,7 @@ void set_blocking(int fd, int should_block) {
 // HWTestHarness interface
 //------------------------------------------------------------------------------
 
-int initialize_uart(char * portname, int baud) {
+int initialize_uart(char * portname, int baud /* must match TestHarnessLocal.vh */) {
 	int fd = open(portname, O_RDWR | O_NOCTTY | O_SYNC);
 
 	if (fd < 0) {
