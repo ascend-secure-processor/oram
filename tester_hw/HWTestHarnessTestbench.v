@@ -19,7 +19,7 @@ module ascend_vc707_testbench_HWTestHarness;
   wire                               sys_rst;
 
 
-  reg                     sys_clk_i;
+  reg								sys_clk_i;
   wire                               sys_clk_p;
   wire                               sys_clk_n;
 
@@ -92,10 +92,10 @@ module ascend_vc707_testbench_HWTestHarness;
 							.Count(					CmdCount));
 
 	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : 
-													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'hf, 32'd128} : 
-													(CmdCount == 2) ? {8'd2, 32'hf0000001, 32'h2f, 32'd256} :
-													(CmdCount == 3) ? {8'd3, 32'hf0000002, 32'h3f, 32'd512} :
-													(CmdCount == 4) ? {8'd0, 32'hf0000003, 32'h4f, 32'd1024} :
+													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'h2f, 32'd128} : 
+													(CmdCount == 2) ? {8'd2, 32'hf0000001, 32'h3f, 32'd256} :
+													(CmdCount == 3) ? {8'd3, 32'hf0000002, 32'h4f, 32'd512} :
+													(CmdCount == 4) ? {8'd0, 32'hf0000003, 32'h5f, 32'd1024} :
 													{8'hff, 32'h0, 32'h0, 32'd512};
 	assign	UARTShftDataInValid =					CmdCount < 6;
 	

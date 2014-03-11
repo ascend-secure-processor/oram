@@ -11,11 +11,16 @@
 //				host machine, which can send address requests directly to 
 //				PathORAMTop
 //
+//				TODO clean up signal names
 //==============================================================================
 module HWTestHarness #(		`include "PathORAM.vh",
 
 	parameter				SlowClockFreq =			100_000_000,
-							Buffering =				1024 // the number of cache lines that can be buffered before the first is sent
+	
+							// the number of cache lines that can be buffered 
+							// before the first is sent NOTE: you should 
+							// regenerate THSendFIFO/THReceiveFIFO if Buffering,ORAMB,DBaseWidth changes
+							Buffering =				1024
 	) (
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -52,7 +57,9 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	//	Status interface
 	//--------------------------------------------------------------------------
 	
-	output					ErrorReceivePattern
+	output					ErrorReceiveOverflow,
+	output					ErrorReceivePattern,	
+	output					ErrorSendOverflow
 	);
 
 	//--------------------------------------------------------------------------
@@ -71,6 +78,20 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 	// Receive pipeline
 	
+	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
+	(* mark_debug = "TRUE" *)	wire				DataOutActualValid;
+
+	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
+	(* mark_debug = "TRUE" *)	wire				CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
+	
+	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
+	(* mark_debug = "TRUE" *)	wire				DataOutActual_BaseValid;	
+	
+	(* mark_debug = "TRUE" *)	wire				MismatchReceivePattern;
+		
+	(* mark_debug = "TRUE" *)	wire	[BlkDBaseWidth-1:0] ReceiveChunkID;
+	(* mark_debug = "TRUE" *)	wire				ReceiveBlockComplete_Pre, ReceiveBlockComplete;
+
 	// UART
 	
 	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	UARTDataIn;
@@ -85,7 +106,7 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0] CrossBufIn_DataOut;
 	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataInValid, CrossBufIn_DataInReady;	
 	
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_Full, CrossBufIn_Empty;
+	(* mark_debug = "TRUE" *)	wire				CrossBufIn_Full, CrossBufIn_DataOutValid;
 	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataOutReady;
 	
 	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	SlowCommand, FastCommand;
@@ -120,20 +141,11 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	// 	[Receive path] Shifts & buffers
 	//------------------------------------------------------------------------------	
 	
-	// This requires that UARTWidth <= DBaseWidth <= FEDWidth
-	
-	/*
-	DataOutCheck
-	DataOutCheckValid
-	
-	CrossBufOut_DataIn
-	CrossBufOut_DataInValid
-	CrossBufOut_DataInReady
-	CrossBufOut_Full	
-	
+	// TODO [add check] This requires that UARTWidth <= DBaseWidth <= FEDWidth
+
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				UARTWidth))
-				O_fast_shft(.Clock(					FastClock),
+				O_down_shft(.Clock(					FastClock),
 							.Reset(					FastReset),
 							.InData(				ORAMDataOut),
 							.InValid(				ORAMDataOutValid),
@@ -145,34 +157,20 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	assign	CrossBufOut_DataInReady =				~CrossBufOut_Full;
 	
 	// Clock crossing; we should never have to change the depth of this module
-	RAMB18Crossing	O_cross(.rst(					FastReset), 
+	THReceiveFIFO recv_fifo(.rst(					FastReset), 
 							.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					CrossBufOut_DataIn), 
-							.wr_en(					CrossBufOut_DataInValid), 
-							.full(					CrossBufOut_Full), 
-							.rd_en(					UARTDataIn), 
-							.dout(					UARTDataInValid), 
-							.valid(					UARTDataInReady));
-
-	*/						
-							
+							.wr_en(					CrossBufOut_DataInValid),
+							.full(					CrossBufOut_Full),  
+							.dout(					UARTDataIn), 
+							.valid(					UARTDataInValid),
+							.rd_en(					UARTDataInReady));				
+	
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Data checker
 	//------------------------------------------------------------------------------	
 
-	/*
-	
-							MismatchReceivePattern
-							
-							DataOutCheck_Base
-							DataOutCheck_BaseValid
-							
-							ReceiveChunkID
-							ReceiveBlockComplete
-							
-							ReceiveBlockComplete_Pre 
-							
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				DBaseWidth))
 				O_db_shft(	.Clock(					FastClock),
@@ -180,45 +178,38 @@ module HWTestHarness #(		`include "PathORAM.vh",
 							.InData(				ORAMDataOut),
 							.InValid(				ORAMDataOutValid & ORAMDataOutReady),
 							.InAccept(				),
-							.OutData(				DataOutCheck),
-							.OutValid(				DataOutCheckValid),
+							.OutData(				DataOutActual),
+							.OutValid(				DataOutActualValid),
 							.OutReady(				1'b1));
+
+	FIFORegister #(			.Width(					DBaseWidth))
+				base_reg(	.Clock(					FastClock),
+							.Reset(					FastReset),
+							.InData(				DataOutActual + 1),
+							.InValid(				DataOutActualValid),
+							.InAccept(				),
+							.OutData(				DataOutActual_Base),
+							.OutSend(				DataOutActual_BaseValid),
+							.OutReady(				ReceiveBlockComplete));						
+							
 	Counter		#(			.Width(					BlkDBaseWidth))
 				O_chnk_cnt(	.Clock(					FastClock),
-							.Reset(					FastReset | ReceiveBlockComplete)),
+							.Reset(					FastReset | ReceiveBlockComplete),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				DataOutCheckValid),
-							.In(					{{1'bx}}),
+							.Enable(				DataOutActualValid & DataOutActual_BaseValid),
+							.In(					{BlkDBaseWidth{1'bx}}),
 							.Count(					ReceiveChunkID));
+	assign	DataOutExpected =						DataOutActual_Base + ReceiveChunkID;
+	
 	CountCompare #(			.Width(					BlkDBaseWidth),
 							.Compare(				BlkSize_DBaseChunks - 1))
 				O_chnk_term(.Count(					ReceiveChunkID), 
 							.TerminalCount(			ReceiveBlockComplete_Pre));
-	assign	ReceiveBlockComplete = 					ReceiveBlockComplete_Pre & DataOutCheckValid;
+	assign	ReceiveBlockComplete = 					ReceiveBlockComplete_Pre & DataOutActualValid;	
 	
-	FIFORegister #(			.Width(					DBaseWidth))
-				base_reg(	.Clock(					FastClock),
-							.Reset(					FastReset),
-							.InData(				DataOutCheck),
-							.InValid(				(ReceiveChunkID == 0) & DataOutCheckValid),
-							.InAccept(				),
-							.OutData(				DataOutCheck_Base),
-							.OutSend(				DataOutCheck_BaseValid),
-							.OutReady(				ReceiveBlockComplete));			
-	
-	assign	MismatchReceivePattern =				(DataOutCheck_Base != (DataOutCheck + ReceiveChunkID)) & 
-													DataOutCheckValid & DataOutCheck_BaseValid; 
-	
-	Register	#(			.Width(					1))
-				error(		.Clock(					FastClock),
-							.Reset(					FastReset),
-							.Set(					MismatchReceivePattern),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ErrorReceivePattern));	
-	
-	*/
+	assign	MismatchReceivePattern =				(DataOutActual != DataOutExpected) & ~ReceiveBlockComplete_Pre &
+													DataOutActualValid & DataOutActual_BaseValid; 
 	
 	//------------------------------------------------------------------------------
 	// 	HW<->SW Bridge (UART)
@@ -270,26 +261,25 @@ module HWTestHarness #(		`include "PathORAM.vh",
 							.rd_en(					1'b1));	
 	assign	FastStartSignal =						FastStartSignal_Pre & ~StarCrossEmpty;
 	
-	// 1024x104b FIFO
-	HWTestBuffer tst_fifo(	.rst(					SlowReset),
+	THSendFIFO send_fifo(	.rst(					SlowReset),
 							.wr_clk(				SlowClock),
 							.rd_clk(				FastClock),
 							.din(					CrossBufIn_DataIn),
 							.full(					CrossBufIn_Full),
 							.wr_en(					CrossBufIn_DataInValid),
 							.dout(					CrossBufIn_DataOut),
-							.empty(					CrossBufIn_Empty),
+							.valid(					CrossBufIn_DataOutValid),
 							.rd_en(					CrossBufIn_DataOutReady));
 
 	assign	{FastCommand, FastPAddr, FastDataBase, FastTimeDelay} =	CrossBufIn_DataOut;
-	assign	ORAMRegInValid =						StartGate & ~CrossBufIn_Empty & FastCommand != TCMD_Start;
+	assign	ORAMRegInValid =						StartGate & CrossBufIn_DataOutValid & FastCommand != TCMD_Start;
 	assign	CrossBufIn_DataOutReady =				StartGate & ORAMRegInReady;
 	
 	//------------------------------------------------------------------------------
 	// 	[Send path] Start command gating
 	//------------------------------------------------------------------------------
 
-	assign	BurstComplete =							StartGate & CrossBufIn_Empty;
+	assign	BurstComplete =							StartGate & ~CrossBufIn_DataOutValid;
 	
 	Register	#(			.Width(					1))
 				start_reg(	.Clock(					FastClock),
@@ -372,6 +362,34 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 	assign	ORAMCommandTransfer =					ORAMCommandValid & ORAMCommandReady;
 				
+	//------------------------------------------------------------------------------
+	//	Error messages
+	//------------------------------------------------------------------------------
+
+	Register	#(			.Width(					1))
+				recv_ovflw(	.Clock(					FastClock),
+							.Reset(					FastReset),
+							.Set(					CrossBufOut_Full & CrossBufOut_DataInValid),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ErrorReceiveOverflow));
+	
+	Register	#(			.Width(					1))
+				send_ovflw(	.Clock(					SlowClock),
+							.Reset(					SlowReset),
+							.Set(					CrossBufIn_Full & CrossBufIn_DataInValid),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ErrorSendOverflow));	
+
+	Register	#(			.Width(					1))
+				error(		.Clock(					FastClock),
+							.Reset(					FastReset),
+							.Set(					MismatchReceivePattern),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ErrorReceivePattern));	
+	
 	//------------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------
