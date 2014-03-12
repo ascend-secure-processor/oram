@@ -41,12 +41,47 @@ module UORamController
 
     `include "PathORAMBackendLocal.vh";
     `include "CacheCmdLocal.vh";
-    `include "PLBLocal.vh";  
+    `include "BucketLocal.vh";
+	`include "PLBLocal.vh";
 
+	// ============================== Frontend buffers =============================
+	
+	// Frontend must handle two cases on writes: data arrives {before, after} command
+	
+	wire 	[FEDWidth-1:0] 	DataIn_Internal;
+	wire					DataInValid_Internal, DataInReady_Internal;
+	
+	wire 					CmdInReady_Internal, CmdInValid_Internal; 
+    wire 	[BECMDWidth-1:0] CmdIn_Internal;
+    wire 	[ORAMU-1:0] 	ProgAddrIn_Internal;
+	
+	FIFORAM	#(				.Width(					FEDWidth),
+							.Buffering(				BlkSize_FEDChunks))
+				in_D_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DataIn),
+							.InValid(				DataInValid),
+							.InAccept(				DataInReady),
+							.OutData(				DataIn_Internal),
+							.OutSend(				DataInValid_Internal),
+							.OutReady(				DataInReady_Internal));	
+	
+	FIFORegister #(			.Width(					BECMDWidth + ORAMU))
+				in_C_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{CmdIn, 			ProgAddrIn}),
+							.InValid(				CmdInValid),
+							.InAccept(				CmdInReady),
+							.OutData(				{CmdIn_Internal, 	ProgAddrIn_Internal}),
+							.OutSend(				CmdInValid_Internal),
+							.OutReady(				CmdInReady_Internal));	
+	
+	// =============================================================================
+	
     // FrontEnd state machines
     wire [BECMDWidth-1:0] LastCmd;
     Register #(.Width(2))
-        CmdReg (Clock, Reset, 1'b0, CmdInReady && CmdInValid, CmdIn, LastCmd);
+        CmdReg (Clock, Reset, 1'b0, CmdInReady_Internal && CmdInValid_Internal, CmdIn_Internal, LastCmd);
     
     reg [MaxLogRecursion-1:0] QDepth;   // TODO: maximum recursion
     reg [ORAMU-1:0] AddrQ [Recursion-1:0];
@@ -54,7 +89,7 @@ module UORamController
     wire Preparing, Accessing;
     wire RefillStarted, ExpectingProgramData;
     
-    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
+    assign CmdInReady_Internal = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
        
     // ================================== PosMapPLB ============================
     wire PPPCmdReady, PPPCmdValid;
@@ -132,7 +167,7 @@ module UORamController
     Register #(.Width(1))
         PreparingReg (  .Clock(     Clock), 
                         .Reset(     Reset || (PPPValid && PPPHit)), 
-                        .Set(       CmdInValid && CmdInReady), 
+                        .Set(       CmdInValid_Internal && CmdInReady_Internal), 
                         .Enable(    1'b0), 
                         .Out(       Preparing));    
     Register #(.Width(1))
@@ -158,7 +193,7 @@ module UORamController
     Register #(.Width(1))
       PPPLookupReg (.Clock(     Clock), 
                         .Reset(     Reset || (Accessing && SwitchReq)), 
-                        .Set(       CmdInValid && CmdInReady),          // this sets up PLB lookup for the first access
+                        .Set(       CmdInValid_Internal && CmdInReady_Internal),          // this sets up PLB lookup for the first access
                         .Enable(    1'b1),
                         .In(        Preparing ? PPPMiss : RefillStarted && PPPCmdReady),
                                                                         // make the next query after receiving the previous one
@@ -167,9 +202,9 @@ module UORamController
     //(Preparing && PPPValid && PPPHit) || 
 
     always @(posedge Clock) begin
-       if (CmdInValid && CmdInReady) begin
+       if (CmdInValid_Internal && CmdInReady_Internal) begin
             QDepth <= 0;                             
-            AddrQ[0] = ProgAddrIn; 
+            AddrQ[0] = ProgAddrIn_Internal; 
         end
         
         else if (Preparing) begin
@@ -211,9 +246,9 @@ module UORamController
                         .ExpectingProgramData(  ExpectingProgramData),
 
                         // IO interface with network
-                        .DataInReady(           DataInReady),
-                        .DataInValid(           DataInValid),
-                        .DataIn(                DataIn),                    
+                        .DataInReady(           DataInReady_Internal),
+                        .DataInValid(           DataInValid_Internal),
+                        .DataIn(                DataIn_Internal),                    
                         .ReturnDataReady(       ReturnDataReady), 
                         .ReturnDataValid(       ReturnDataValid), 
                         .ReturnData(            ReturnData),
