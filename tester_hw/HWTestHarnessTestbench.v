@@ -82,6 +82,12 @@ module ascend_vc707_testbench_HWTestHarness;
 	wire	[THPWidth-1:0]	UARTShftDataIn;
 	wire					UARTShftDataInValid, UARTShftDataInReady;
 	
+	wire	[UARTWidth-1:0]	UARTDataOut;
+	wire					UARTDataOutValid, UARTDataOutReady;
+	
+	wire	[DBaseWidth-1:0] RecvData;
+	wire					RecvDataValid;
+	
 	Counter		#(			.Width(					TimeWidth))
 				rd_ret_cnt(	.Clock(					sys_clk_p),
 							.Reset(					sys_rst),
@@ -91,18 +97,18 @@ module ascend_vc707_testbench_HWTestHarness;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 
-	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : 
-													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'h2f, 32'd128} : 
-													(CmdCount == 2) ? {8'd2, 32'hf0000001, 32'h3f, 32'd256} :
-													(CmdCount == 3) ? {8'd3, 32'hf0000002, 32'h4f, 32'd512} :
-													(CmdCount == 4) ? {8'd0, 32'hf0000003, 32'h5f, 32'd1024} :
+	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : // write
+													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'h2f, 32'd128} : // write
+													(CmdCount == 2) ? {8'd2, 32'hf0000001, 32'h3f, 32'd256} : 
+													(CmdCount == 3) ? {8'd3, 32'hf0000002, 32'h4f, 32'd512} : 
+													(CmdCount == 4) ? {8'd0, 32'hf0000003, 32'h5f, 32'd1024} : // write
 													{8'hff, 32'h0, 32'h0, 32'd512};
 	assign	UARTShftDataInValid =					CmdCount < 6;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),
 							.Reverse(				1))
-				uart_shft(	.Clock(					sys_clk_p),
+				uart_I_shft(.Clock(					sys_clk_p),
 							.Reset(					sys_rst),
 							.InData(				UARTShftDataIn),
 							.InValid(				UARTShftDataInValid),
@@ -119,13 +125,29 @@ module ascend_vc707_testbench_HWTestHarness;
 							.DataIn(				UARTDataIn), 
 							.DataInValid(			UARTDataInValid), 
 							.DataInReady(			UARTDataInReady), 
-							.DataOut(				), 
-							.DataOutValid(			), 
-							.DataOutReady(			), 
+							.DataOut(				UARTDataOut), 
+							.DataOutValid(			UARTDataOutValid), 
+							.DataOutReady(			UARTDataOutReady), 
 							.SIn(					uart_txd), 
 							.SOut(					uart_rxd));
 				
-	ascend_vc707 #(			.ORAMB(					ORAMB),
+	FIFOShiftRound #(		.IWidth(				UARTWidth),
+							.OWidth(				DBaseWidth))
+				uart_O_shft(.Clock(					sys_clk_p),
+							.Reset(					sys_rst),
+							.InData(				UARTDataOut),
+							.InValid(				UARTDataOutValid),
+							.InAccept(				UARTDataOutReady),
+							.OutData(				RecvData),
+							.OutValid(				RecvDataValid),
+							.OutReady(				1'b1));				
+				
+	always @(posedge sys_clk_p) begin
+		if (RecvDataValid)
+			$display("[%m @ %t] Received data = %x", $time, RecvData);
+	end
+
+	HWTestHarnessTop #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),

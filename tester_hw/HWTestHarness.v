@@ -10,8 +10,6 @@
 //	Desc:		Connect PathORAMTop directly to a software routine, running on a 
 //				host machine, which can send address requests directly to 
 //				PathORAMTop
-//
-//				TODO clean up signal names
 //==============================================================================
 module HWTestHarness #(		`include "PathORAM.vh",
 
@@ -19,7 +17,8 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 							// the number of cache lines that can be buffered 
 							// before the first is sent NOTE: you should 
-							// regenerate THSendFIFO/THReceiveFIFO if Buffering,ORAMB,DBaseWidth changes
+							// regenerate THSendFIFO/THReceiveFIFO if Buffering,
+							// ORAMB,DBaseWidth changes
 							Buffering =				1024
 	) (
 	//--------------------------------------------------------------------------
@@ -70,7 +69,11 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	`include "TestHarnessLocal.vh"
 	
 	localparam				BlkSize_DBaseChunks = 	ORAMB / DBaseWidth;
-	localparam				BlkDBaseWidth =			`log2(BlkSize_DBaseChunks);	
+	localparam				BlkDBaseWidth =			`log2(BlkSize_DBaseChunks);
+	
+	localparam				BlkSize_UARTChunks = 	ORAMB / UARTWidth;
+	localparam				DBSize_UARTChunks = 	DBaseWidth / UARTWidth;
+	localparam				BlkUARTWidth =			`log2(BlkSize_UARTChunks);	
 	
 	//------------------------------------------------------------------------------
 	// 	Wires & Regs
@@ -78,12 +81,15 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 	// Receive pipeline
 	
+	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
+	(* mark_debug = "TRUE" *)	wire				CrossBufOut_DataInValid_Pre, CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
+	
+	(* mark_debug = "TRUE" *)	wire	[BlkUARTWidth-1:0] BlkKeepCount;
+	(* mark_debug = "TRUE" *)	wire				BlkKeepTerminal, BlkKeepTerminal_Pre;
+	
 	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
 	(* mark_debug = "TRUE" *)	wire				DataOutActualValid;
 
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
-	(* mark_debug = "TRUE" *)	wire				CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
-	
 	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
 	(* mark_debug = "TRUE" *)	wire				DataOutActual_BaseValid;	
 	
@@ -140,9 +146,15 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Shifts & buffers
 	//------------------------------------------------------------------------------	
-	
-	// TODO [add check] This requires that UARTWidth <= DBaseWidth <= FEDWidth
 
+	`ifdef SIMULATION
+		initial begin
+			if ( (UARTWidth > DBaseWidth) | (DBaseWidth > FEDWidth) ) begin
+				$display("[%m @ %t] Illegal parameter settings", $time);
+			end
+		end
+	`endif
+	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				UARTWidth))
 				O_down_shft(.Clock(					FastClock),
@@ -151,10 +163,25 @@ module HWTestHarness #(		`include "PathORAM.vh",
 							.InValid(				ORAMDataOutValid),
 							.InAccept(				ORAMDataOutReady),
 							.OutData(				CrossBufOut_DataIn),
-							.OutValid(				CrossBufOut_DataInValid),
+							.OutValid(				CrossBufOut_DataInValid_Pre),
 							.OutReady(				CrossBufOut_DataInReady));
 	
-	assign	CrossBufOut_DataInReady =				~CrossBufOut_Full;
+	assign	CrossBufOut_DataInValid =				CrossBufOut_DataInValid_Pre & (BlkKeepCount < DBSize_UARTChunks);
+	
+	// Only send the base seed back to SW
+	Counter		#(			.Width(					BlkUARTWidth))
+				O_keep_cnt(	.Clock(					FastClock),
+							.Reset(					FastReset | BlkKeepTerminal),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CrossBufOut_DataInValid_Pre & CrossBufOut_DataInReady),
+							.In(					{BlkUARTWidth{1'bx}}),
+							.Count(					BlkKeepCount));
+	CountCompare #(			.Width(					BlkUARTWidth),
+							.Compare(				BlkSize_UARTChunks - 1))
+				O_keep_term(.Count(					BlkKeepCount), 
+							.TerminalCount(			BlkKeepTerminal_Pre));	
+	assign	BlkKeepTerminal =						BlkKeepTerminal_Pre & CrossBufOut_DataInValid_Pre & CrossBufOut_DataInReady;
 	
 	// Clock crossing; we should never have to change the depth of this module
 	THReceiveFIFO recv_fifo(.rst(					FastReset), 
@@ -166,11 +193,14 @@ module HWTestHarness #(		`include "PathORAM.vh",
 							.dout(					UARTDataIn), 
 							.valid(					UARTDataInValid),
 							.rd_en(					UARTDataInReady));				
+	assign	CrossBufOut_DataInReady =				~CrossBufOut_Full;
 	
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Data checker
 	//------------------------------------------------------------------------------	
 
+	// Check that the data in the cache line matches the seed + its generated data
+	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				DBaseWidth))
 				O_db_shft(	.Clock(					FastClock),
