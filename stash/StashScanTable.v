@@ -82,10 +82,10 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	// Pipelining
 	
-	wire	[ORAMLP1-1:0]	CommonSubpath_Dly, CompatibleBuckets_Dly;
-	wire	[SEAWidth-1:0]	InScanSAddr_Dly, InScanSAddr_Dly2;
-	wire					CurrentLeafValid_Dly, CurrentLeafValid_Dly2;
-	wire					InScanValid_Dly, InScanValid_Dly2;	
+	wire	[ORAMLP1-1:0]	Intersection_Dly, CommonSubpath_Dly, CompatibleBuckets_Dly;
+	wire	[SEAWidth-1:0]	InScanSAddr_Dly0, InScanSAddr_Dly1, InScanSAddr_Dly2;
+	wire					CurrentLeafValid_Dly0, CurrentLeafValid_Dly1, CurrentLeafValid_Dly2;
+	wire					InScanValid_Dly0, InScanValid_Dly1, InScanValid_Dly2;	
 
 	wire	[BktAWidth-1:0]	HighestLevel_Bin_Pre;
 	wire	[BCLWidth-1:0]	BCounts_Pre;
@@ -203,23 +203,30 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	//				Rev1(		.In(				InLeafP1 ^ CurrentLeafP1), 
 	//							.Out(				Intersection));
 	assign	Intersection =							InLeafP1 ^ CurrentLeafP1;
-							
-	assign	CommonSubpath = 						Intersection & -Intersection;
-	
+
 	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
 							.Stages(				Overclock))
 				mpipe_1(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 	CommonSubpath}), 
-							.OutData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly,CommonSubpath_Dly}));	
+							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 		Intersection}), 
+							.OutData(				{InScanValid_Dly0,	CurrentLeafValid_Dly0,	InScanSAddr_Dly0,	Intersection_Dly}));	
 	
-	assign	CompatibleBuckets =						CommonSubpath_Dly - 1;
+	assign	CommonSubpath = 						Intersection_Dly & -Intersection_Dly;
 	
 	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
 							.Stages(				Overclock))
 				mpipe_2(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid_Dly,	CurrentLeafValid_Dly,	InScanSAddr_Dly, 	CompatibleBuckets}), 
+							.InData(				{InScanValid_Dly0,	CurrentLeafValid_Dly0,	InScanSAddr_Dly0, 	CommonSubpath}), 
+							.OutData(				{InScanValid_Dly1,	CurrentLeafValid_Dly1,	InScanSAddr_Dly1,	CommonSubpath_Dly}));	
+	
+	assign	CompatibleBuckets =						CommonSubpath_Dly - 1;
+	
+	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
+							.Stages(				Overclock))
+				mpipe_3(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.InData(				{InScanValid_Dly1,	CurrentLeafValid_Dly1,	InScanSAddr_Dly1, 	CompatibleBuckets}), 
 							.OutData(				{InScanValid_Dly2,	CurrentLeafValid_Dly2,	InScanSAddr_Dly2,	CompatibleBuckets_Dly}));
 							
 	assign	CompatibleBuckets_Space =				CompatibleBuckets_Dly & ~FullMask;
@@ -286,7 +293,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 
 	Pipeline	#(			.Width(					BktAWidth + BCLWidth + 2 + SEAWidth),
 							.Stages(				Overclock))
-				mpipe_3(	.Clock(					Clock),
+				mpipe_4(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.InData(				{HighestLevel_Bin_Pre,	BCounts_Pre,	OutScanValid_Pre,	OutScanAccepted_Pre,	OutScanSAddr_Pre}), 
 							.OutData(				{HighestLevel_Bin, 		BCounts, 		OutScanValid, 		OutScanAccepted, 		OutScanSAddr}));			

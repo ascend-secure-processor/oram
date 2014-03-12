@@ -33,7 +33,7 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input					DataInValid,
 	output 					DataInReady,
 
-	output	[FEDWidth-1:0]	ReturnData,
+	output	[FEDWidth-1:0]	ReturnData, // TODO naming convention [change to DataOut]
 	output 					ReturnDataValid,
 	input 					ReturnDataReady,
 	

@@ -167,8 +167,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				
 	wire					Core_ResetDone;
 	wire	[SCMDWidth-1:0]	Core_Command;
-	wire					Core_CommandValid, Core_CommandReady, Core_CommandComplete;				
-	wire					Evict_CommandComplete;
+	wire					Core_CommandValid, Core_CommandReady, Core_CommandComplete;
 	wire					PerformCoreHeaderUpdate, CoreHeaderRemove;
 	
 	wire	[BEDWidth-1:0]	Core_InData;
@@ -197,7 +196,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	wire	[SEAWidth-1:0]	OutDMAAddr;
 	wire					InDMAValid;
-	wire					OutDMAValid, OutDMAReady;
+	wire					OutDMAValid_Pre, OutDMAValid, OutDMAReady;
 	
 	// Scan control
 	
@@ -210,7 +209,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					BlockReadComplete_Internal;
 
 	wire	[STAWidth-1:0]	BlocksReading;
-	
 	wire	[STAWidth-1:0] 	BlocksRead;
 	
 	wire					Core_AccessComplete, Top_AccessComplete;
@@ -332,12 +330,26 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
-	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
-	assign	PerAccessReset =						Top_AccessComplete & Core_AccessComplete;
+	assign	ResetDone =								Core_ResetDone & 					ScanTableResetDone;
+	assign	PerAccessReset =						Top_AccessComplete & 				Core_AccessComplete;
 	
-	assign	BlockUpdateComplete =					TurnoverUpdate & 	Core_CommandComplete;
-	assign	BlockEvictComplete =					CSEvict & 			Evict_CommandComplete;
-	assign	BlockWriteComplete =					CSPathRead & 		Core_CommandComplete;
+	assign	BlockUpdateComplete =					TurnoverUpdate & 					Core_CommandComplete;
+	
+	// FUNCTIONALITY: scan table latency will delay updating StashOccupancy
+	generate if (Overclock) begin:DELAY_EVICT
+		ShiftRegister #(	.PWidth(				ScanTableLatency),
+							.SWidth(				1))
+				evict_cmpl(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				1'b1), 
+							.SIn(					CSEvict & Core_CommandComplete), 
+							.SOut(					BlockEvictComplete));
+	end else begin:PASS_EVICT
+		assign	BlockEvictComplete =				CSEvict & Core_CommandComplete;
+	end endgenerate	
+	
+	assign	BlockWriteComplete =					CSPathRead & 						Core_CommandComplete;
 	assign	BlockReadComplete_Internal =			(CSTurnaround1 | CSPathWriteback) & Core_CommandComplete;
 	assign	PathReadComplete =						PerAccessReset;
 	
@@ -390,7 +402,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
-				if (Evict_CommandComplete)
+				if (BlockEvictComplete)
 					NS =							ST_Idle;
 		endcase
 	end
@@ -471,13 +483,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 													StartWriteback_Pass | 
 													PerAccessReset | 
 													(~CSEvict & Core_CommandComplete) |
-													(CSEvict & Evict_CommandComplete)),
+													BlockEvictComplete),
 							.Set(					Core_CommandValid & Core_CommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					SentCoreCommand));	
-	
-	wire	OutDMAValid_Pre;
 	
 	assign 	Core_CommandValid =						((CSEvict | CSScan | CSTurnaround1 | CSTurnaround2 | CSCoreSync) & ~SentCoreCommand) |
 													  CSPathRead | // increases path write performance
@@ -640,20 +650,6 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//--------------------------------------------------------------------------
 	//	Intra-access waiting
 	//--------------------------------------------------------------------------
-
-	// FUNCTIONALITY: scan table latency will delay updating StashOccupancy
-	generate if (Overclock) begin:DELAY_EVICT
-		ShiftRegister #(	.PWidth(				ScanTableLatency),
-							.SWidth(				1))
-				evict_cmpl(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					1'b0), 
-							.Enable(				1'b1), 
-							.SIn(					Core_CommandComplete), 
-							.SOut(					Evict_CommandComplete));
-	end else begin:PASS_EVICT
-		assign	Evict_CommandComplete =				Core_CommandComplete;
-	end endgenerate
 	
 	// SECURITY: count the worst-case scan latency
 	Counter		#(			.Width(					SCWidth),
