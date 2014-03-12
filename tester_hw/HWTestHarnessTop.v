@@ -71,10 +71,12 @@ module HWTestHarnessTop (
 	//------------------------------------------------------------------------------
 	
 	wire					ClockF200;
-								
-	(* mark_debug = "FALSE" *)	wire				ResetF200;
-	(* mark_debug = "FALSE" *)	wire				DDR3SDRAM_ResetDone;
+	wire					ClockF200_Bufg;
+	wire					ClockF100;
+	wire					MMCMF100Locked;
 	
+	(* mark_debug = "FALSE" *)	wire				ResetF100, ResetF200;
+
 	// ORAM
 	
 	wire	[BECMDWidth-1:0] PathORAM_Command;
@@ -91,11 +93,6 @@ module HWTestHarnessTop (
 	// 	Clocking
 	//------------------------------------------------------------------------------
 
-	wire					ClockF200_Bufg;
-	
-	(* mark_debug = "TRUE" *)	wire				ClockF100;
-	(* mark_debug = "TRUE" *)	wire				MMCMF100Locked, ResetF100;
-	
 	IBUFGDS	clk_f200_p(		.I(						sys_clk_p),
 							.IB(					sys_clk_n),
 							.O(						ClockF200_Bufg));

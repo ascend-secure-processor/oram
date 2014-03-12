@@ -280,6 +280,8 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 	assign	CrossBufIn_DataInReady =				~CrossBufIn_Full;
 
+	// TODO there will be a bug if 2 start signals appear before the first is finished emptying its buffer ...
+	
 	CmdCross start_cross(	.rst(					SlowReset),
 							.wr_clk(				SlowClock),
 							.rd_clk(				FastClock),
