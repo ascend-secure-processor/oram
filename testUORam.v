@@ -78,9 +78,9 @@ module testUORam;
                             .DataInReady(           DataInReady), 
                             .DataInValid(           DataInValid), 
                             .DataIn(                DataIn),                                    
-                            .ReturnDataReady(       ReturnDataReady), 
-                            .ReturnDataValid(       ReturnDataValid), 
-                            .ReturnData(            ReturnData),
+                            .DataOutReady(          DataOutReady), 
+                            .DataOutValid(          DataOutValid), 
+                            .DataOut(               DataOut),
                             
                             // interface with DRAM		
                             .DRAMAddress(           DDR3SDRAM_Address),
@@ -99,36 +99,43 @@ module testUORam;
 	//--------------------------------------------------------------------------
 	//	DDR -> BRAM (to make simulation faster)
 	//--------------------------------------------------------------------------
+    parameter   InBufDepth = 6,
+                OutInitLat = 30,
+                OutBandWidth = 57;
 	
-	SynthesizedDRAM	#(		.UWidth(				8),
-							.AWidth(				DDRAWidth + 6),
-							.DWidth(				DDRDWidth),
-							.BurstLen(				1), // just for this module ...
-							.EnableMask(			1),
-							.Class1(				1),
-							.RLatency(				1),
-							.WLatency(				1)) 
-				ddr3model(	.Clock(					Clock),
-							.Reset(					Reset),
-
-							.Initialized(			),
-							.PoweredUp(				),
-
-							.CommandAddress(		{DDR3SDRAM_Address, 6'b000000}),
-							.Command(				DDR3SDRAM_Command),
-							.CommandValid(			DDR3SDRAM_CommandValid),
-							.CommandReady(			DDR3SDRAM_CommandReady),
-
-							.DataIn(				DDR3SDRAM_WriteData),
-							.DataInMask(			DDR3SDRAM_WriteMask),
-							.DataInValid(			DDR3SDRAM_WriteValid),
-							.DataInReady(			DDR3SDRAM_WriteReady),
-
-							.DataOut(				DDR3SDRAM_ReadData),
-							.DataOutErrorChecked(	),
-							.DataOutErrorCorrected(	),
-							.DataOutValid(			DDR3SDRAM_ReadValid),
-							.DataOutReady(			1'b1));
+	SynthesizedRandDRAM	#(	.InBufDepth(InBufDepth),
+	                        .OutInitLat(OutInitLat),
+	                        .OutBandWidth(OutBandWidth),
+	                           
+                            .UWidth(				8),
+                            .AWidth(				DDRAWidth + 6),
+                            .DWidth(				DDRDWidth),
+                            .BurstLen(				1), // just for this module ...
+                            .EnableMask(			1),
+                            .Class1(				1),
+                            .RLatency(				1),
+                            .WLatency(				1)) 
+        ddr3model(	        .Clock(					Clock),
+                            .Reset(					Reset),
+                            
+                            .Initialized(			),
+                            .PoweredUp(				),
+                            
+                            .CommandAddress(		{DDR3SDRAM_Address, 6'b000000}),
+                            .Command(				DDR3SDRAM_Command),
+                            .CommandValid(			DDR3SDRAM_CommandValid),
+                            .CommandReady(			DDR3SDRAM_CommandReady),
+                            
+                            .DataIn(				DDR3SDRAM_WriteData),
+                            .DataInMask(			DDR3SDRAM_WriteMask),
+                            .DataInValid(			DDR3SDRAM_WriteValid),
+                            .DataInReady(			DDR3SDRAM_WriteReady),
+                            
+                            .DataOut(				DDR3SDRAM_ReadData),
+                            .DataOutErrorChecked(	),
+                            .DataOutErrorCorrected(	),
+                            .DataOutValid(			DDR3SDRAM_ReadValid),
+                            .DataOutReady(			1'b1));
 
     reg [64-1:0] CycleCount;
     initial begin

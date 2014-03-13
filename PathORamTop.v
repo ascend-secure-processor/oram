@@ -26,16 +26,14 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input					CmdValid,
 	output 					CmdReady,
 	input	[ORAMU-1:0]		PAddr,
-
-	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
 	
 	input	[FEDWidth-1:0]	DataIn,
 	input					DataInValid,
 	output 					DataInReady,
 
-	output	[FEDWidth-1:0]	ReturnData, // TODO naming convention [change to DataOut]
-	output 					ReturnDataValid,
-	input 					ReturnDataReady,
+	output	[FEDWidth-1:0]	DataOut, // TODO naming convention [change to DataOut]
+	output 					DataOutValid,
+	input 					DataOutReady,
 	
 	//--------------------------------------------------------------------------
 	//	Interface to DRAM
@@ -99,9 +97,9 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DataInReady(			DataInReady), 
 							.DataInValid(			DataInValid), 
 							.DataIn(				DataIn),                                    
-							.ReturnDataReady(		ReturnDataReady), 
-							.ReturnDataValid(		ReturnDataValid), 
-							.ReturnData(			ReturnData),
+							.ReturnDataReady(		DataOutReady), 
+							.ReturnDataValid(		DataOutValid), 
+							.ReturnData(			DataOut),
 		                        
 							.CmdOutReady(			BEnd_CmdReady), 
 							.CmdOutValid(			BEnd_CmdValid), 
