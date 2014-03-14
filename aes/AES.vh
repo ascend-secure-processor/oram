@@ -1,3 +1,4 @@
 
 	parameter					IVEntropyWidth =	64,
-	           					AESWidth      =	128
+	parameter					AESWidth      =	128,
+        parameter                                       AESDelay      = 12
