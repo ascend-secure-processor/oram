@@ -47,6 +47,12 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Constants
 	//------------------------------------------------------------------------------
 	
+	// uBlaze/caches/System
+	
+	parameter				SystemClockFreq =		100_000_000;
+	
+	parameter				UseMIG =				1; // NOTE: leave default to 1
+	
 	// ORAM related
 	
 	`include "BucketLocal.vh"
@@ -56,7 +62,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					25,
+							ORAML =					10,
 							ORAMZ =					5,
 							ORAMC =					10;
 
@@ -71,7 +77,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							DDRAWidth =				28;
 								
 	parameter				IVEntropyWidth =		64;	
-	
 
     parameter				NumValidBlock = 		1024,
 							Recursion = 			3,
@@ -79,66 +84,62 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
     parameter				LeafWidth = 			32,
 							PLBCapacity = 			8192;
-
-	// uBlaze/caches/System
 	
-	parameter				SystemClockFreq =		100_000_000;
+	`ifdef SIMULATION
+		initial begin
+			if ((UseMIG == 0) & (ORAML > 10)) begin
+				$display("[%m @ %t] ERROR: you are about to crash your computer", $time);
+				$stop;
+			end
+		end
+	`endif
 	
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
 	
-	wire					ClockF200;
-								
-	(* mark_debug = "FALSE" *)	wire				ResetF200;
-	(* mark_debug = "FALSE" *)	wire				DDR3SDRAM_ResetDone;
+	wire					MemoryClock;
+	wire					MemoryReset;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_ResetDone;
 	
+	wire					SlowClock;
+	wire					MMCMF100Locked, SlowReset;
+		
 	// ORAM
 	
-	wire	[BECMDWidth-1:0] PathORAM_Command;
-	wire	[ORAMU-1:0]		PathORAM_PAddr;
-	wire					PathORAM_CommandValid, PathORAM_CommandReady;
+	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] PathORAM_Command;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PathORAM_PAddr;
+	(* mark_debug = "TRUE" *)	wire					PathORAM_CommandValid, PathORAM_CommandReady;
 	
-	wire	[FEDWidth-1:0]	PathORAM_DataIn;
-	wire					PathORAM_DataInValid, PathORAM_DataInReady;
+	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_DataIn;
+	(* mark_debug = "TRUE" *)	wire					PathORAM_DataInValid, PathORAM_DataInReady;
 
-	wire	[FEDWidth-1:0]	PathORAM_ReturnData;
-	wire 					PathORAM_ReturnDataValid, PathORAM_ReturnDataReady;
+	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_ReturnData;
+	(* mark_debug = "TRUE" *)	wire 					PathORAM_ReturnDataValid, PathORAM_ReturnDataReady;
 	
 	// MIG/DDR3 DRAM
 	
-	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
-	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
-	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
+	(* mark_debug = "TRUE" *)	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
-	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
-	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
-	wire					DDR3SDRAM_DataOutValid;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
 
 	//------------------------------------------------------------------------------
 	// 	Clocking
 	//------------------------------------------------------------------------------
 
-	wire					ClockF200_Bufg;
-	
-	(* mark_debug = "TRUE" *)	wire				ClockF100;
-
-	(* mark_debug = "TRUE" *)	wire				MMCMF100Locked, ResetF100;
-	
-/*	
-	IBUFGDS	clk_f200_p(		.I(						sys_clk_p),
-							.IB(					sys_clk_n),
-							.O(						ClockF200_Bufg));
-    BUFG 	clk_f200(		.I(						ClockF200_Bufg),
-							.O(						ClockF200));
-	assign	ResetF200 =								sys_rst;
-*/
-	F100ClockGen clk_div_2(	.clk_in1(				ClockF200),
-							.clk_out1(				ClockF100),
-							.reset(					ResetF200),
+	F100ClockGen clk_div_2(	.clk_in1(				MemoryClock),
+							.clk_out1(				SlowClock),
+							.reset(					MemoryReset),
 							.locked(				MMCMF100Locked));
-	assign	ResetF100 =								~MMCMF100Locked;
+	assign	SlowReset =								~MMCMF100Locked;
+	
+	assign	FastClock =								MemoryClock;
+	assign	FastReset =								MemoryReset;
 	
 	//------------------------------------------------------------------------------
 	// 	GPIO
@@ -153,10 +154,10 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	HWTestHarness #(		.ORAMU(					ORAMU),
 							.SlowClockFreq(			SystemClockFreq))
-				tester(		.SlowClock(				ClockF100),
-							.FastClock(				ClockF200),
-							.SlowReset(				ResetF100), 
-							.FastReset(				ResetF200),
+				tester(		.SlowClock(				SlowClock),
+							.FastClock(				FastClock),
+							.SlowReset(				SlowReset), 
+							.FastReset(				FastReset),
 							
 							.ORAMCommand(			PathORAM_Command),
 							.ORAMPAddr(				PathORAM_PAddr),
@@ -178,17 +179,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ErrorReceivePattern(	led[1]),	
 							.ErrorSendOverflow(		led[2]));
 
-	FIFORAM		#(			.Width(					FEDWidth),
-							.Buffering(				16))
-				loopback(	.Clock(					ClockF200),
-							.Reset(					ResetF200),
-							.InData(				PathORAM_DataIn),
-							.InValid(				PathORAM_DataInValid),
-							.InAccept(				PathORAM_DataInReady),
-							.OutData(				PathORAM_ReturnData),
-							.OutSend(				PathORAM_ReturnDataValid),
-							.OutReady(				PathORAM_ReturnDataReady));
-
 	//------------------------------------------------------------------------------
 	// 	ORAM Controller
 	//------------------------------------------------------------------------------
@@ -209,8 +199,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.MaxLogRecursion(		MaxLogRecursion),
 							.LeafWidth(             LeafWidth), 
 							.PLBCapacity(           PLBCapacity))
-                oram(		.Clock(					ClockF200),
-							.Reset(					ResetF200),
+                oram(		.Clock(					FastClock),
+							.Reset(					FastReset),
 		
 							.Cmd(				    PathORAM_Command),
 							.PAddr(					PathORAM_PAddr),
@@ -238,57 +228,18 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteDataValid(	DDR3SDRAM_DataInValid),
 							.DRAMWriteDataReady(	DDR3SDRAM_DataInReady));
 	
-	/*
-	PathORAMBackend #(		.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.Overclock(				Overclock),
-							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
-			oram(			.Clock(					ClockF200),
-							.Reset(					ResetF200),			
-							.Command(				BEnd_Command),
-							.PAddr(					BEnd_PAddr),
-							.CurrentLeaf(			BEnd_CurrentLeaf),
-							.RemappedLeaf(			BEnd_RemappedLeaf),
-							.CommandValid(			BEnd_CommandValid),
-							.CommandReady(			BEnd_CommandReady),
-							.LoadData(				BEnd_LoadData),
-							.LoadValid(				BEnd_LoadValid),
-							.LoadReady(				BEnd_LoadReady),
-							.StoreData(				BEnd_StoreData),
-							.StoreValid(			BEnd_StoreValid),
-							.StoreReady(			BEnd_StoreReady),
-							.DRAMCommandAddress(	DDR3SDRAM_Address),
-							.DRAMCommand(			DDR3SDRAM_Command),
-							.DRAMCommandValid(		DDR3SDRAM_CommandValid),
-							.DRAMCommandReady(		DDR3SDRAM_CommandReady),			
-							.DRAMReadData(			DDR3SDRAM_ReadData),
-							.DRAMReadDataValid(		DDR3SDRAM_DataOutValid),			
-							.DRAMWriteData(			DDR3SDRAM_WriteData),
-							.DRAMWriteMask(			DDR3SDRAM_WriteMask),
-							.DRAMWriteDataValid(	DDR3SDRAM_DataInValid),
-							.DRAMWriteDataReady(	DDR3SDRAM_DataInReady));
-	*/
-	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7)
 	//------------------------------------------------------------------------------
 
-	DDR3SDRAM 	DDR3SDRAMController(
+	generate if (UseMIG == 1) begin:MIG
+		DDR3SDRAM DDR3SDRAMController(
 							// System interface
 							.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 							.sys_rst(				sys_rst),
-  							.ui_clk(				ClockF200),
-							.ui_clk_sync_rst(		ResetF200),
+  							.ui_clk(				MemoryClock),
+							.ui_clk_sync_rst(		MemoryReset),
 							.init_calib_complete(	DDR3SDRAM_ResetDone), // TODO not needed?
 														
 							// DDR3 interface
@@ -329,7 +280,46 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.app_zq_req(			1'b0),
 							.app_sr_active(			), // not connected
 							.app_ref_ack(			), // not connected
-							.app_zq_ack(			)); // not connected	
+							.app_zq_ack(			)); // not connected
+	end else begin:SYNTH_DRAM
+		wire				MemoryClock_Bufg;
+		IBUFGDS	clk_f200_p(	.I(						sys_clk_p),
+							.IB(					sys_clk_n),
+							.O(						MemoryClock_Bufg));
+		BUFG 	clk_f200(	.I(						MemoryClock_Bufg),
+							.O(						MemoryClock));
+		assign	MemoryReset =						sys_rst;
+
+		SynthesizedDRAM	#(	.UWidth(				8),
+							.AWidth(				DDRAWidth + 6),
+							.DWidth(				DDRDWidth),
+							.BurstLen(				1), // just for this module ...
+							.EnableMask(			1),
+							.Class1(				1),
+							.RLatency(				1),
+							.WLatency(				1)) 
+				DDR3SDRAMController(.Clock(			MemoryClock),
+							.Reset(					MemoryReset),
+
+							.Initialized(			),
+							.PoweredUp(				),
+
+							.CommandAddress(		{DDR3SDRAM_Address_MIG, 6'b000000}),
+							.Command(				DDR3SDRAM_Command_MIG),
+							.CommandValid(			DDR3SDRAM_CommandValid_MIG),
+							.CommandReady(			DDR3SDRAM_CommandReady_MIG),
+
+							.DataIn(				DDR3SDRAM_WriteData_MIG),
+							.DataInMask(			DDR3SDRAM_WriteMask_MIG),
+							.DataInValid(			DDR3SDRAM_DataInValid_MIG),
+							.DataInReady(			DDR3SDRAM_DataInReady_MIG),
+
+							.DataOut(				DDR3SDRAM_ReadData_MIG),
+							.DataOutErrorChecked(	),
+							.DataOutErrorCorrected(	),
+							.DataOutValid(			DDR3SDRAM_DataOutValid_MIG),
+							.DataOutReady(			1'b1));
+	end endgenerate
 	
 	//------------------------------------------------------------------------------
 endmodule
