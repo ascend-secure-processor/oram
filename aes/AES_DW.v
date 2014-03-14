@@ -55,15 +55,14 @@ module AES_DW #(parameter W = 4, parameter D = 12,
 
     assign DInReady = Count < D;
     assign DOut = AESRes[OutTurn];
-    assign DOutValid = |(AESResValid[OutTurn]);
+    assign DOutValid = &(AESResValid[OutTurn]);
 
     always @( posedge Clock ) begin
         if (Reset)
             Count <= 0;
         else if (DataInValid && DInReady && ~DOutValid)
             Count <= Count + 1;
-        // else if (~DataInValid && ~DInReady && DOutValid) 
-        else if (!(DataInValid && DInReady) && DOutValid)   // I modified this line. Please check
+        else if (!(DataInValid && DInReady) && DOutValid)
             Count <= Count - 1;
     end
 
