@@ -222,6 +222,8 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire					OutScanValidPush, OutScanValidDump;
 	
+	wire					StashWalkValid, DumpCompleted;
+	
 	// Syncing
 	
 	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync;
@@ -769,7 +771,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	StashWalk = 							(CSDumping_FirstCycle) ? UsedListHead : StashP_DataOut;
 																							
 	assign	SWTerminator_Finished =					CSDumping & ~InScanValid & InScanValid_Delayed;
-	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & StashWalk == SNULL;
+	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & (UsedListHead == SNULL);
 	assign 	StashWalk_Terminator =					SWTerminator_Finished | SWTerminator_Empty;
 	
 	assign	OutScanSAddr =							(CSPushing) ? FreeList_Resolved : StashWalk_Delayed;
@@ -779,9 +781,19 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	assign	OutScanAdd =							CSPushing;
 	assign	OutScanStreaming =						CSPushing | CSDumping;
 	
+	assign	StashWalkValid =						StashWalk_Delayed != SNULL;
+	
+	Register	#(			.Width(					1))
+				dump_kill(	.Clock(					Clock),
+							.Reset(					Reset | PerAccessReset),
+							.Set(					CSDumping & ~StashWalkValid),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					DumpCompleted));	
+	
 	assign	OutScanValidPush =						CSPushing & FirstChunk_Transfer_Write;
 	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot
-													OutScanSAddr != SNULL; // don't send end-of-list marker
+													StashWalkValid & ~DumpCompleted; // don't send end-of-list marker
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
 
 	//--------------------------------------------------------------------------
