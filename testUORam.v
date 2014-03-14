@@ -78,9 +78,9 @@ module testUORam;
                             .DataInReady(           DataInReady), 
                             .DataInValid(           DataInValid), 
                             .DataIn(                DataIn),                                    
-                            .DataOutReady(          DataOutReady), 
-                            .DataOutValid(          DataOutValid), 
-                            .DataOut(               DataOut),
+                            .DataOutReady(          ReturnDataReady), 
+                            .DataOutValid(          ReturnDataValid), 
+                            .DataOut(               ReturnData),
                             
                             // interface with DRAM		
                             .DRAMAddress(           DDR3SDRAM_Address),
