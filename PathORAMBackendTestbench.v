@@ -56,6 +56,8 @@ module	PathORAMBackendTestbench;
 	
 	localparam					UpdateINIT =		10000;
 	
+	localparam					NumTests =			100;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -242,7 +244,7 @@ module	PathORAMBackendTestbench;
 		Reset = 1'b0;
 		
 		//----------------------------------------------------------------------
-		//	Test 1: Append
+		//	Test 0: Append
 		//----------------------------------------------------------------------	
 
 		// Append until stash is full and force background evictions
@@ -250,7 +252,7 @@ module	PathORAMBackendTestbench;
 		TASK_BigTest(0); // tasks 0-99
 		
 		i = 0;
-		while (i < StashCapacity) begin
+		while (i < NumTests) begin
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 
@@ -262,7 +264,7 @@ module	PathORAMBackendTestbench;
 		// If it gets past this point, it means we didn't deadlock :-)
 		
 		//----------------------------------------------------------------------
-		//	Test 2-3: Reads
+		//	Test 1-2: Reads
 		//----------------------------------------------------------------------
 		
 		TASK_BigTest(1); // tasks 100-199
@@ -270,11 +272,11 @@ module	PathORAMBackendTestbench;
 		// Read all blocks previously appended and remap them to different leaves
 		
 		i = 0;
-		while (i < StashCapacity) begin
+		while (i < NumTests) begin
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 paddr	current leaf 	remap leaf
-			TASK_Command(BECMD_Read, i, 	i, 				StashCapacity + i);
+			TASK_Command(BECMD_Read, i, 	i, 				NumTests + i);
 			i = i + 1;
 		end
 		
@@ -284,16 +286,16 @@ module	PathORAMBackendTestbench;
 		// a.) the blocks got remapped correctly
 		// b.) they are still in ORAM (i.e., not ReadRmv'ed)
 		i = 0;
-		while (i < StashCapacity) begin
+		while (i < NumTests) begin
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 		remap leaf
-			TASK_Command(BECMD_Read, 	i, 		StashCapacity + i, 	2 * StashCapacity + i);
+			TASK_Command(BECMD_Read, 	i, 		NumTests + i, 	2 * NumTests + i);
 			i = i + 1;
 		end		
 		
 		//----------------------------------------------------------------------
-		//	Test 4-5: Read/Remove
+		//	Test 3-4: Read/Remove
 		//----------------------------------------------------------------------
 
 		// Look for those same blocks again and remove them
@@ -302,17 +304,17 @@ module	PathORAMBackendTestbench;
 		TASK_BigTest(3); // tasks 300-399
 		
 		i = 0;
-		while (i < StashCapacity) begin
+		while (i < NumTests) begin
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 			remap leaf
 			// NOTE: remap leaf is really XX here, but we want to test a common bug 
 			// in the next wave of read/rm
-			TASK_Command(BECMD_ReadRmv, i, 		2 * StashCapacity + i, 	3 * StashCapacity + i);
+			TASK_Command(BECMD_ReadRmv, i, 		2 * NumTests + i, 	3 * NumTests + i);
 			i = i + 1;
 		end
 		
-		TASK_WaitForRealAccess(3 * StashCapacity);
+		TASK_WaitForRealAccess(3 * NumTests);
 		AllowBlockNotFound = 1;
 	
 		// Try removing the blocks again (we should get errors saying the blocks 
@@ -321,19 +323,19 @@ module	PathORAMBackendTestbench;
 		TASK_BigTest(4); // tasks 400-499
 			
 		i = 0;
-		while (i < StashCapacity) begin
+		while (i < NumTests) begin
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 			remap leaf
-			TASK_Command(BECMD_ReadRmv, i, 		3 * StashCapacity + i, 	{ORAML{1'bx}});
+			TASK_Command(BECMD_ReadRmv, i, 		3 * NumTests + i, 		{ORAML{1'bx}});
 			i = i + 1;
 		end
 		
-		TASK_WaitForRealAccess(4 * StashCapacity);
+		TASK_WaitForRealAccess(4 * NumTests);
 		AllowBlockNotFound = 0;
 		
 		//----------------------------------------------------------------------
-		//	Test 6: Update test
+		//	Test 5: Update test
 		//----------------------------------------------------------------------	
 
 		TASK_BigTest(5);
@@ -357,7 +359,7 @@ module	PathORAMBackendTestbench;
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 	remap leaf
-			TASK_Command(BECMD_Update, 	i, 		i, 				StashCapacity + i);
+			TASK_Command(BECMD_Update, 	i, 		i, 				NumTests + i);
 			#(Cycle * (1 << i)); // wait a while to present the data --- we should stall
 			TASK_Data();
 			i = i + 1;
@@ -368,7 +370,7 @@ module	PathORAMBackendTestbench;
 			TASK_Test(TestLaunchLD);
 			TestLaunchLD = TestLaunchLD + 1;
 			//						 	paddr	current leaf 		remap leaf
-			TASK_Command(BECMD_Read, 	i, 		StashCapacity + i, 	2 * StashCapacity + i);
+			TASK_Command(BECMD_Read, 	i, 		NumTests + i, 	2 * NumTests + i);
 			i = i + 1;
 		end
 		
@@ -399,19 +401,19 @@ module	PathORAMBackendTestbench;
 	
 		// big test 2-3
 		j = 0;
-		while (j < StashCapacity) begin
+		while (j < NumTests) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
 			j = j + 1;
 		end
 		j = 0;
-		while (j < StashCapacity) begin
+		while (j < NumTests) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
 			j = j + 1;
 		end
 		
 		// big test 4-5
 		j = 0;
-		while (j < StashCapacity) begin
+		while (j < NumTests) begin
 			TASK_CheckLoad(j * BlkSize_FEDChunks);
 			j = j + 1;
 		end
@@ -431,7 +433,7 @@ module	PathORAMBackendTestbench;
 	always @(posedge Clock) begin
 		if (Reset)
 			RealAccessCount <= 0;
-		else if (CUT.Stash_PathWritebackComplete & ~CUT.AccessIsDummy)
+		else if (CUT.OperationComplete & ~CUT.AccessIsDummy)
 			RealAccessCount <= RealAccessCount + 1;
 			
 		if ((AllowBlockNotFound == 1) & 

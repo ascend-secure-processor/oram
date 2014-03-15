@@ -100,7 +100,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire					MemoryClock;
 	wire					MemoryReset;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_ResetDone;
 	
 	wire					SlowClock;
 	wire					MMCMF100Locked, SlowReset;
@@ -118,6 +117,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	(* mark_debug = "TRUE" *)	wire 					PathORAM_ReturnDataValid, PathORAM_ReturnDataReady;
 	
 	// MIG/DDR3 DRAM
+	
+	wire					DDR3SDRAM_ResetDone;
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
@@ -146,8 +147,10 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 
 	// do something with this
-	assign	led[7:2] = 								0;
+	assign	led[6:2] = 								0;
 
+	assign	led[7] =								DDR3SDRAM_ResetDone;
+	
 	//------------------------------------------------------------------------------
 	// 	uBlaze core & caches
 	//------------------------------------------------------------------------------
@@ -240,7 +243,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.sys_rst(				sys_rst),
   							.ui_clk(				MemoryClock),
 							.ui_clk_sync_rst(		MemoryReset),
-							.init_calib_complete(	DDR3SDRAM_ResetDone), // TODO not needed?
+							.init_calib_complete(	DDR3SDRAM_ResetDone),
 														
 							// DDR3 interface
 							.ddr3_addr(				ddr3_addr),
@@ -290,7 +293,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.O(						MemoryClock));
 		assign	MemoryReset =						sys_rst;
 
-		SynthesizedDRAM	#(	.UWidth(				8),
+		SynthesizedRandDRAM	#(.InBufDepth(			36),
+							.UWidth(				8),
 							.AWidth(				DDRAWidth + 6),
 							.DWidth(				DDRDWidth),
 							.BurstLen(				1), // just for this module ...
@@ -304,20 +308,20 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Initialized(			),
 							.PoweredUp(				),
 
-							.CommandAddress(		{DDR3SDRAM_Address_MIG, 6'b000000}),
-							.Command(				DDR3SDRAM_Command_MIG),
-							.CommandValid(			DDR3SDRAM_CommandValid_MIG),
-							.CommandReady(			DDR3SDRAM_CommandReady_MIG),
+							.CommandAddress(		{DDR3SDRAM_Address, 6'b000000}),
+							.Command(				DDR3SDRAM_Command),
+							.CommandValid(			DDR3SDRAM_CommandValid),
+							.CommandReady(			DDR3SDRAM_CommandReady),
 
-							.DataIn(				DDR3SDRAM_WriteData_MIG),
-							.DataInMask(			DDR3SDRAM_WriteMask_MIG),
-							.DataInValid(			DDR3SDRAM_DataInValid_MIG),
-							.DataInReady(			DDR3SDRAM_DataInReady_MIG),
+							.DataIn(				DDR3SDRAM_WriteData),
+							.DataInMask(			DDR3SDRAM_WriteMask),
+							.DataInValid(			DDR3SDRAM_DataInValid),
+							.DataInReady(			DDR3SDRAM_DataInReady),
 
-							.DataOut(				DDR3SDRAM_ReadData_MIG),
+							.DataOut(				DDR3SDRAM_ReadData),
 							.DataOutErrorChecked(	),
 							.DataOutErrorCorrected(	),
-							.DataOutValid(			DDR3SDRAM_DataOutValid_MIG),
+							.DataOutValid(			DDR3SDRAM_DataOutValid),
 							.DataOutReady(			1'b1));
 	end endgenerate
 	

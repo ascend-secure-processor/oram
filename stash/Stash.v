@@ -314,7 +314,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 				if (CSScan)
 					$display("[%m @ %t] Stash: start Scan", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: start PathRead (leaf = %x, paddr = %x, dummy = %b)", $time, AccessLeaf, AccessPAddr, AccessIsDummy);
+					$display("[%m @ %t] Stash: start PathRead (cmd = %d, leaf = %x, paddr = %x, dummy = %b)", $time, AccessCommand, AccessLeaf, AccessPAddr, AccessIsDummy);
 				if (CSTurnaround1)
 					$display("[%m @ %t] Stash: start frontend operation", $time);
 				if (CSPathWriteback)

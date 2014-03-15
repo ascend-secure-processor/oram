@@ -68,13 +68,13 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Wires & Regs
 	//------------------------------------------------------------------------------ 
 
-	wire					BEnd_CmdReady, BEnd_CmdValid;
-	wire	[BECMDWidth-1:0] BEnd_Cmd;
-	wire	[ORAMU-1:0]		BEnd_PAddr;
-	wire	[ORAML-1:0]		CurrentLeaf, RemappedLeaf;
+	(* mark_debug = "TRUE" *)	wire					BEnd_CmdReady, BEnd_CmdValid;
+	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] BEnd_Cmd;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		BEnd_PAddr;
+	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		CurrentLeaf, RemappedLeaf;
 
-	wire	[FEDWidth-1:0]	LoadData, StoreData;
-	wire					LoadReady, LoadValid, StoreValid, StoreReady;
+	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
+	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 	
 	//------------------------------------------------------------------------------
 	//	Core modules

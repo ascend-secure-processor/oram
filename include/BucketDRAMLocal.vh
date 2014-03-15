@@ -29,5 +29,6 @@
 
 	localparam					PathSize_DRBursts =		(ORAML + 1) * BktSize_DRBursts;	
 	
-	// Width of a counter for the # of DDR3 bursts in a bucket
+	// Width of a counter for the # of DDR3 bursts in a bucket/path
 	localparam					BktBSTWidth =			`log2(BktSize_DRBursts);
+	localparam					PthBSTWidth =			`log2(PathSize_DRBursts);
