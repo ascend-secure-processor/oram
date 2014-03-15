@@ -396,7 +396,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 			
 			if (CSPeaking & LastChunk_Read)
 				if (OutPAddr == DummyBlockAddress)
-					$display("[%m @ %t] Reading dummy block", $time);
+					;//$display("[%m @ %t] Reading dummy block", $time);
 				else
 					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed);
 		end	

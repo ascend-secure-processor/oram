@@ -4,30 +4,30 @@
 
 module testUORam;
 						
-	parameter 					DDR_nCK_PER_CLK = 	4,
-								DDRDQWidth =		64,
-								DDRCWidth =			3;
+	parameter 					DDR_nCK_PER_CLK = 	4;
+	parameter					DDRDQWidth =		64;
+	parameter					DDRCWidth =			3;
 								
-	
 	parameter					IVEntropyWidth =	64;
 
-    parameter					ORAMB =				512, // block size in bits
-								ORAMU =				32, // program addr (at byte-addressable block granularity) width
-								ORAML =				10, // the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
-								ORAMZ =				5, // bucket Z
-								ORAMC =				10, // Number of slots in the stash, _in addition_ to the length of one path
+    parameter					ORAMB =				512;
+	parameter				    ORAMU =				32; 
+	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
+	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
+	parameter					ORAMC =				10; 
 								
-	           					FEDWidth =			64, // data width of frontend busses (reading/writing from/to stash, LLC network interface width)
-								BEDWidth =			512, // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
+	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 64 `endif;
+	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-								Overclock = 		1; // Pipeline various operations inside the stash (needed for 200 Mhz operation) 
+    parameter					Overclock = 		1;  
     
     parameter                   DDRAWidth =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
-    parameter   NumValidBlock = 1024,
-                Recursion = 3;
+    
+    parameter                   NumValidBlock = 1024;
+    parameter                   Recursion = 3;
                 
-    parameter   LeafWidth = 32,         // in bits       
-                PLBCapacity = 8192;     // in bits
+    parameter                   LeafWidth = 32;         // in bits       
+    parameter                   PLBCapacity = 8192;     // in bits
 
     `include "PathORAMBackendLocal.vh";
     `include "PLBLocal.vh"; 
@@ -216,15 +216,16 @@ module testUORam;
    assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
    
    initial begin
-       TestCount <= 0;
-       CmdInValid <= 0;
-       DataInValid <= 0;
-       ReturnDataReady <= 1;   
-       AddrRand <= 0;
+        $display("ORAML = %d", ORAML);
+        TestCount <= 0;
+        CmdInValid <= 0;
+        DataInValid <= 0;
+        ReturnDataReady <= 1;   
+        AddrRand <= 0;
          
-       for (integer i = 0; i < TotalNumBlock; i=i+1) begin
-           GlobalPosMap[i][ORAML] <= 0;
-       end         
+        for (integer i = 0; i < TotalNumBlock; i=i+1) begin
+            GlobalPosMap[i][ORAML] <= 0;
+        end         
    end
    
    wire WriteCmd;
@@ -232,14 +233,14 @@ module testUORam;
    
    always @(posedge Clock) begin
        if (CmdInReady) begin
-           if (TestCount < 500) begin
+           if (TestCount < 1000) begin
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle);       
                AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;
                TestCount <= TestCount + 1;
            end
            else begin
-               $display("FULL ORAM TESTS PASSED!");
+               $display("ALL TESTS PASSED!");
                $finish;  
            end
        end
