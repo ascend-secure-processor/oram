@@ -60,7 +60,13 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	output	[DDRDWidth-1:0]	DRAMWriteData,
 	output	[DDRMWidth-1:0]	DRAMWriteMask,
 	output					DRAMWriteDataValid,
-	input					DRAMWriteDataReady
+	input					DRAMWriteDataReady,
+
+	//--------------------------------------------------------------------------
+	//	Status Interface
+	//--------------------------------------------------------------------------
+
+	output					DRAMInitializationComplete
 	);
 		
 	//------------------------------------------------------------------------------
@@ -224,8 +230,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[DDRMWidth-1:0]	DRAMInit_DRAMWriteMask;
 	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 	
-	wire					DRAMInit_Done;
-	
 	// Address generator
 	
 	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
@@ -247,7 +251,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
-	
+		integer WriteCount_Sim = 0;
+		reg	StartedFirstAccess = 1'b0;
+		
 		initial begin
 			if (BEDWidth > DDRDWidth) begin
 				$display("[%m @ %t] ERROR: BEDWidth should never be > DDRDWidth", $time);
@@ -258,7 +264,16 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 		
-		
+			if (CSStartRead) StartedFirstAccess <= 1'b1;
+				
+			if (~CSInitialize & DRAMWriteDataValid & DRAMWriteDataReady)
+				WriteCount_Sim = WriteCount_Sim + 1;
+				
+			if (StartedFirstAccess & CSIdle & (WriteCount_Sim % PathSize_DRBursts)) begin
+				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
+				$stop;
+			end
+			
 	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
 				if (CSStartRead)
@@ -313,7 +328,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	assign	CSORAMAccess =							~CSInitialize & ~CSIdle;
 	
-	assign	AllResetsDone =							Stash_ResetDone & DRAMInit_Done;
+	assign	AllResetsDone =							Stash_ResetDone & DRAMInitializationComplete;
 
 	assign	Stash_StartScanOp =						CSStartRead;
 	assign	Stash_StartWritebackOp =				CSStartWriteback;
@@ -500,7 +515,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), // TODO command width == 4???
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
-	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
+	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth), // TODO remove this register if the big FIFO register works out
 							.FWLatency(				Overclock))
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -530,7 +545,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInit_Done));
+							.Done(					DRAMInitializationComplete));
 							
 	//------------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
