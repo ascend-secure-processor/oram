@@ -46,7 +46,7 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	
 	output	[SEAWidth-1:0]	OutDMAAddr,
 	output 					OutDMAValid,
-	output					OutDMAReady
+	input					OutDMAReady
 	);
 	
 	//--------------------------------------------------------------------------
