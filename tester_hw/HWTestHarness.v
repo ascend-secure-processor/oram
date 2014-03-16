@@ -81,67 +81,67 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	
 	// Receive pipeline
 	
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
-	(* mark_debug = "TRUE" *)	wire				CrossBufOut_DataInValid_Pre, CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
+	(* mark_debug = "FALSE" *)	wire				CrossBufOut_DataInValid_Pre, CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
 	
-	(* mark_debug = "TRUE" *)	wire	[BlkUARTWidth-1:0] BlkKeepCount;
-	(* mark_debug = "TRUE" *)	wire				BlkKeepTerminal, BlkKeepTerminal_Pre;
+	(* mark_debug = "FALSE" *)	wire	[BlkUARTWidth-1:0] BlkKeepCount;
+	(* mark_debug = "FALSE" *)	wire				BlkKeepTerminal, BlkKeepTerminal_Pre;
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
-	(* mark_debug = "TRUE" *)	wire				DataOutActualValid;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
+	(* mark_debug = "FALSE" *)	wire				DataOutActualValid;
 
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
-	(* mark_debug = "TRUE" *)	wire				DataOutActual_BaseValid;	
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
+	(* mark_debug = "FALSE" *)	wire				DataOutActual_BaseValid;	
 	
-	(* mark_debug = "TRUE" *)	wire				MismatchReceivePattern;
+	(* mark_debug = "FALSE" *)	wire				MismatchReceivePattern;
 		
-	(* mark_debug = "TRUE" *)	wire	[BlkDBaseWidth-1:0] ReceiveChunkID;
-	(* mark_debug = "TRUE" *)	wire				ReceiveBlockComplete_Pre, ReceiveBlockComplete;
+	(* mark_debug = "FALSE" *)	wire	[BlkDBaseWidth-1:0] ReceiveChunkID;
+	(* mark_debug = "FALSE" *)	wire				ReceiveBlockComplete_Pre, ReceiveBlockComplete;
 
 	// UART
 	
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	UARTDataIn;
-	(* mark_debug = "TRUE" *)	wire				UARTDataInValid, UARTDataInReady;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0]	UARTDataIn;
+	(* mark_debug = "FALSE" *)	wire				UARTDataInValid, UARTDataInReady;
 
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0] UARTDataOut;
-	(* mark_debug = "TRUE" *)	wire				UARTDataOutValid, UARTDataOutReady;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0] UARTDataOut;
+	(* mark_debug = "FALSE" *)	wire				UARTDataOutValid, UARTDataOutReady;
 	
 	// Send pipeline
 	
-	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0] CrossBufIn_DataIn;
-	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0] CrossBufIn_DataOut;
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataInValid, CrossBufIn_DataInReady;	
+	(* mark_debug = "FALSE" *)	wire	[THPWidth-1:0] CrossBufIn_DataIn;
+	(* mark_debug = "FALSE" *)	wire	[THPWidth-1:0] CrossBufIn_DataOut;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_DataInValid, CrossBufIn_DataInReady;	
 	
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_Full, CrossBufIn_DataOutValid;
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataOutReady;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_Full, CrossBufIn_DataOutValid;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_DataOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	SlowCommand, FastCommand;
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]	FastPAddr;
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] FastDataBase;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	FastTimeDelay;
+	(* mark_debug = "FALSE" *)	wire	[TCMDWidth-1:0]	SlowCommand, FastCommand;
+	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]	FastPAddr;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] FastDataBase;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	FastTimeDelay;
 	
-	(* mark_debug = "TRUE" *)	wire				TimeGate;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	PacketAge;
+	(* mark_debug = "FALSE" *)	wire				TimeGate;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	PacketAge;
 	
-	(* mark_debug = "TRUE" *)	wire				StartGate, SlowStartSignal;
-	(* mark_debug = "TRUE" *)	wire				FastStartSignal;
-	(* mark_debug = "TRUE" *)	wire				FastStartSignal_Pre, StarCrossEmpty;
+	(* mark_debug = "FALSE" *)	wire				StartGate, SlowStartSignal;
+	(* mark_debug = "FALSE" *)	wire				FastStartSignal;
+	(* mark_debug = "FALSE" *)	wire				FastStartSignal_Pre, StarCrossEmpty;
 		
-	(* mark_debug = "TRUE" *)	wire				BurstComplete;
-	(* mark_debug = "TRUE" *)	wire				ORAMRegInValid, ORAMRegInReady;
-	(* mark_debug = "TRUE" *)	wire				ORAMRegOutValid, ORAMRegOutReady;
+	(* mark_debug = "FALSE" *)	wire				BurstComplete;
+	(* mark_debug = "FALSE" *)	wire				ORAMRegInValid, ORAMRegInReady;
+	(* mark_debug = "FALSE" *)	wire				ORAMRegOutValid, ORAMRegOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire				ORAMCommandTransfer;	
+	(* mark_debug = "FALSE" *)	wire				ORAMCommandTransfer;	
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] ORAMDataBase;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	ORAMTimeDelay;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] ORAMDataBase;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	ORAMTimeDelay;
 	
-	(* mark_debug = "TRUE" *)	wire				WriteCommandValid;
-	(* mark_debug = "TRUE" *)	wire				ORAMDataSendValid, ORAMDataSendReady;
-	(* mark_debug = "TRUE" *)	wire				WriteGate_Pre, WriteGate;
+	(* mark_debug = "FALSE" *)	wire				WriteCommandValid;
+	(* mark_debug = "FALSE" *)	wire				ORAMDataSendValid, ORAMDataSendReady;
+	(* mark_debug = "FALSE" *)	wire				WriteGate_Pre, WriteGate;
 	
-	(* mark_debug = "TRUE" *)	wire				SendBlockComplete;
-	(* mark_debug = "TRUE" *)	wire	[BlkDBaseWidth-1:0] SendChunkID;
+	(* mark_debug = "FALSE" *)	wire				SendBlockComplete;
+	(* mark_debug = "FALSE" *)	wire	[BlkDBaseWidth-1:0] SendChunkID;
 		
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Shifts & buffers

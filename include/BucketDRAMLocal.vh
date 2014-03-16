@@ -5,11 +5,12 @@
 	// 	DRBursts = in terms of DDR3 bursts
 	// 	DRWords = in terms of DDR3 DQ bus width (typically 64b)
 	
-	`ifdef SIMULATION
+	// TODO return to simulation when the board is working ...
+	//`ifdef SIMULATION
 	localparam					IVINITValue =			{{IVEntropyWidth-32{1'b0}}, 32'hdeadbeef};
-	`else
-	localparam					IVINITValue =			{IVEntropyWidth{1'bx}};
-	`endif
+	//`else
+	//localparam					IVINITValue =			{IVEntropyWidth{1'bx}};
+	//`endif
 	
 	localparam					BktHSize_ValidBits =	`divceil(ORAMZ,8) * 8; // = 8 bits for Z < 9
 	localparam					BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ;

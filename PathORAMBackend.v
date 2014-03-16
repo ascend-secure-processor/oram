@@ -132,18 +132,18 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
 		
-	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
+	(* mark_debug = "TRUE" *)	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
 	wire					DataDownShift_InValid, DataDownShift_InReady;
 		
 	wire	[BktBSTWidth-1:0] BucketReadCtr;
 	wire					ReadProcessingHeader;	
 	wire					BucketReadCtr_Reset, ReadBucketTransition;	
 	
-	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
-	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
-	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
+	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
+	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
+	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
-	wire					ReadBlockIsValid, BlockPresent;
+	(* mark_debug = "TRUE" *)	wire					ReadBlockIsValid, BlockPresent;
 	
 	wire	[BEDWidth-1:0]	DataDownShift_OutData;
 	wire					DataDownShift_OutValid, DataDownShift_OutReady;
@@ -153,7 +153,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
 	wire					HeaderDownShift_OutValid;		
 	
-	wire	[PBEDWidth-1:0]	PathReadCtr;
+	(* mark_debug = "TRUE" *)	wire	[PBEDWidth-1:0]	PathReadCtr;
 	wire					DataDownShift_Transfer;
 	
 	wire					BlockReadCtr_Reset;
@@ -166,22 +166,22 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire	[ORAMU-1:0]		HeaderUpShift_InPAddr; 
 	wire	[ORAML-1:0]		HeaderUpShift_InLeaf;
-	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
 	wire					HeaderUpShift_InReady;
+	(* mark_debug = "TRUE" *)	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
+
+	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
+	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
+	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
 	
 	wire	[BEDWidth-1:0]	DataUpShift_InData;
 	wire					DataUpShift_InValid, DataUpShift_InReady;
 	wire	[DDRDWidth-1:0]	DataUpShift_OutData;
-	wire					DataUpShift_OutValid, DataUpShift_OutReady;
-	
-	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
-	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
-	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
-	
+	(* mark_debug = "TRUE" *)	wire					DataUpShift_OutValid, DataUpShift_OutReady;
+
 	wire					WritebackBlockIsValid;
 	wire 					WritebackBlockCommit; // TODO change stash to generate WritebackBlockCommit for us ...
 	
-	wire 					WritebackProcessingHeader;		
+	(* mark_debug = "TRUE" *)	wire 					WritebackProcessingHeader;		
 	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
 	wire					BucketBuf_OutValid, BucketBuf_OutReady;
 							
@@ -210,6 +210,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					Stash_BlockWriteComplete;
 	
 	(* mark_debug = "TRUE" *)	wire					StashAlmostFull, StashOverflow;
+	
+	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
+	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
 	
 	// ORAM initialization
 	
@@ -736,9 +739,9 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		), // not connected
-							.BlockNotFound(			), // not connected
-							.BlockNotFoundValid(	)); // not connected
+							.StashOccupancy(		StashOccupancy), // not connected
+							.BlockNotFound(			BlockNotFound), // not connected
+							.BlockNotFoundValid(	BlockNotFoundValid)); // not connected
 
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters
@@ -852,7 +855,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
 		
-	wire	[PthBSTWidth-1:0] PathWritebackCtr; // TODO move
+	(* mark_debug = "TRUE" *)	wire	[PthBSTWidth-1:0] PathWritebackCtr; // TODO move
 	wire					PathWritebackComplete_Pre;
 
 	Counter		#(			.Width(					PthBSTWidth))

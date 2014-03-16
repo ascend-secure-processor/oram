@@ -107,10 +107,12 @@ module PathORAMTopTestbench;
 							
 	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'h38c, 32'h0, 32'd0} : // write
 													(CmdCount == 1) ? {8'd0, 32'h3f9, 32'hf, 32'd0} : // write
-													(CmdCount == 2) ? {8'd2, 32'h38c, 32'h0, 32'd100} :
-													(CmdCount == 3) ? {8'd2, 32'h3f9, 32'h0, 32'd100} :
+													(CmdCount == 2) ? {8'd0, 32'h300, 32'hff, 32'd0} : // write
+													(CmdCount == 3) ? {8'd2, 32'h38c, 32'h0, 32'd100} :
+													(CmdCount == 4) ? {8'd2, 32'h3f9, 32'h0, 32'd100} :
+													(CmdCount == 5) ? {8'd2, 32'h300, 32'h0, 32'd100} :
 													{8'hff, 32'h0, 32'h0, 32'd512};
-	assign	UARTShftDataInValid =					CmdCount < 5;
+	assign	UARTShftDataInValid =					CmdCount < 7;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),

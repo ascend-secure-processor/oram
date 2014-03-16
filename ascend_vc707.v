@@ -101,6 +101,9 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					MemoryClock;
 	wire					MemoryReset;
 	
+	wire					ORAMClock;
+	wire					ORAMReset;
+	
 	wire					SlowClock;
 	wire					MMCMF100Locked, SlowReset;
 		
@@ -122,13 +125,25 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
-	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	(* mark_debug = "TRUE" *)	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
 
+	
+	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
+	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
+	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
+	
+	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	wire					DDR3SDRAM_DataOutValid_MIG;	
+	
+	wire					CommandBuf_Full, WriteDataBuf_Full;
+		
 	//------------------------------------------------------------------------------
 	// 	Clocking
 	//------------------------------------------------------------------------------
@@ -139,8 +154,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.locked(				MMCMF100Locked));
 	assign	SlowReset =								~MMCMF100Locked;
 	
-	assign	FastClock =								MemoryClock;
-	assign	FastReset =								MemoryReset;
+	assign	ORAMClock =								SlowClock;//MemoryClock;
+	assign	ORAMReset =								SlowReset;//MemoryReset;
 	
 	//------------------------------------------------------------------------------
 	// 	GPIO
@@ -158,9 +173,9 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	HWTestHarness #(		.ORAMU(					ORAMU),
 							.SlowClockFreq(			SystemClockFreq))
 				tester(		.SlowClock(				SlowClock),
-							.FastClock(				FastClock),
+							.FastClock(				ORAMClock),
 							.SlowReset(				SlowReset), 
-							.FastReset(				FastReset),
+							.FastReset(				ORAMReset),
 							
 							.ORAMCommand(			PathORAM_Command),
 							.ORAMPAddr(				PathORAM_PAddr),
@@ -202,8 +217,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.MaxLogRecursion(		MaxLogRecursion),
 							.LeafWidth(             LeafWidth), 
 							.PLBCapacity(           PLBCapacity))
-                oram(		.Clock(					FastClock),
-							.Reset(					FastReset),
+                oram(		.Clock(					ORAMClock),
+							.Reset(					ORAMReset),
 		
 							.Cmd(				    PathORAM_Command),
 							.PAddr(					PathORAM_PAddr),
@@ -214,9 +229,9 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DataInValid(           PathORAM_DataInValid),
 							.DataInReady(           PathORAM_DataInReady), 
 							
-							.ReturnData(            PathORAM_ReturnData),
-							.ReturnDataValid(       PathORAM_ReturnDataValid),
-							.ReturnDataReady(       PathORAM_ReturnDataReady), 
+							.DataOut(           	PathORAM_ReturnData),
+							.DataOutValid(      	PathORAM_ReturnDataValid),
+							.DataOutReady(      	PathORAM_ReturnDataReady), 
 							
 							.DRAMCommand(			DDR3SDRAM_Command),
 							.DRAMAddress(           DDR3SDRAM_Address),
@@ -232,9 +247,51 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteDataReady(	DDR3SDRAM_DataInReady));
 	
 	//------------------------------------------------------------------------------
-	//	DDR3SDRAM (MIG7)
-	//------------------------------------------------------------------------------
+	//	Debugging clock crossings
+	//------------------------------------------------------------------------------	
 
+	assign	DDR3SDRAM_CommandReady = 				~CommandBuf_Full;
+	DebugCommandFIFO dcmd(	.rst(					ORAMReset),
+							.wr_clk(				ORAMClock),
+							.rd_clk(				MemoryClock),
+							
+							.din(					{DDR3SDRAM_Command, 	DDR3SDRAM_Address}),
+							.wr_en(					DDR3SDRAM_CommandValid),
+							.full(					CommandBuf_Full),
+							
+							.dout(					{DDR3SDRAM_Command_MIG, DDR3SDRAM_Address_MIG}),
+							.rd_en(					DDR3SDRAM_CommandReady_MIG),
+							.valid(					DDR3SDRAM_CommandValid_MIG));
+	
+	assign	DDR3SDRAM_WriteMask_MIG =				{DDRMWidth{1'b0}}; // TODO This will break for REW ORAM
+	
+	assign	DDR3SDRAM_DataInReady = 				~WriteDataBuf_Full;
+	DebugDataFIFO dwr(		.rst(					ORAMReset),
+							.wr_clk(				ORAMClock),
+							.rd_clk(				MemoryClock),
+							
+							.din(					DDR3SDRAM_WriteData),
+							.wr_en(					DDR3SDRAM_DataInValid),
+							.full(					WriteDataBuf_Full),
+							
+							.dout(					DDR3SDRAM_WriteData_MIG),
+							.rd_en(					DDR3SDRAM_DataInReady_MIG),
+							.valid(					DDR3SDRAM_DataInValid_MIG));
+	
+	DebugDataFIFO drd(		.rst(					ORAMReset),
+							.wr_clk(				MemoryClock),
+							.rd_clk(				ORAMClock),
+							.din(					DDR3SDRAM_ReadData_MIG),
+							.wr_en(					DDR3SDRAM_DataOutValid_MIG),
+							.rd_en(					1'b1),
+							.dout(					DDR3SDRAM_ReadData),
+							.full(					),
+							.valid(					DDR3SDRAM_DataOutValid));	
+	
+	//------------------------------------------------------------------------------
+	//	DDR3SDRAM (MIG7)
+	//------------------------------------------------------------------------------	
+	
 	generate if (UseMIG == 1) begin:MIG
 		DDR3SDRAM DDR3SDRAMController(
 							// System interface
@@ -263,20 +320,20 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ddr3_odt(				ddr3_odt),
 							
 							// DRAM Controller <-> ORAM Controller 
-							.app_cmd(				DDR3SDRAM_Command),
-							.app_addr(				DDR3SDRAM_Address),
-							.app_en(				DDR3SDRAM_CommandValid),
-							.app_rdy(				DDR3SDRAM_CommandReady),
+							.app_cmd(				DDR3SDRAM_Command_MIG),
+							.app_addr(				DDR3SDRAM_Address_MIG),
+							.app_en(				DDR3SDRAM_CommandValid_MIG),
+							.app_rdy(				DDR3SDRAM_CommandReady_MIG),
 
-							.app_rd_data(			DDR3SDRAM_ReadData),
+							.app_rd_data(			DDR3SDRAM_ReadData_MIG),
 							.app_rd_data_end(		), // useless?
-							.app_rd_data_valid(		DDR3SDRAM_DataOutValid),
+							.app_rd_data_valid(		DDR3SDRAM_DataOutValid_MIG),
 														
-							.app_wdf_data(			DDR3SDRAM_WriteData),
-							.app_wdf_mask(			DDR3SDRAM_WriteMask), // this is synchronous to data interface
-							.app_wdf_end(			DDR3SDRAM_DataInValid), // since DDR3 BL = 8, each 512b data chunk is the "end" of that burst
-							.app_wdf_wren(			DDR3SDRAM_DataInValid),
-							.app_wdf_rdy(			DDR3SDRAM_DataInReady),
+							.app_wdf_data(			DDR3SDRAM_WriteData_MIG),
+							.app_wdf_mask(			DDR3SDRAM_WriteMask_MIG), // this is synchronous to data interface
+							.app_wdf_end(			DDR3SDRAM_DataInValid_MIG), // since DDR3 BL = 8, each 512b data chunk is the "end" of that burst
+							.app_wdf_wren(			DDR3SDRAM_DataInValid_MIG),
+							.app_wdf_rdy(			DDR3SDRAM_DataInReady_MIG),
 
 							.app_sr_req(			1'b0),
 							.app_ref_req(			1'b0),
@@ -308,20 +365,20 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Initialized(			),
 							.PoweredUp(				),
 
-							.CommandAddress(		{DDR3SDRAM_Address, 6'b000000}),
-							.Command(				DDR3SDRAM_Command),
-							.CommandValid(			DDR3SDRAM_CommandValid),
-							.CommandReady(			DDR3SDRAM_CommandReady),
+							.CommandAddress(		{DDR3SDRAM_Address_MIG, 6'b000000}),
+							.Command(				DDR3SDRAM_Command_MIG),
+							.CommandValid(			DDR3SDRAM_CommandValid_MIG),
+							.CommandReady(			DDR3SDRAM_CommandReady_MIG),
 
-							.DataIn(				DDR3SDRAM_WriteData),
-							.DataInMask(			DDR3SDRAM_WriteMask),
-							.DataInValid(			DDR3SDRAM_DataInValid),
-							.DataInReady(			DDR3SDRAM_DataInReady),
+							.DataIn(				DDR3SDRAM_WriteData_MIG),
+							.DataInMask(			DDR3SDRAM_WriteMask_MIG),
+							.DataInValid(			DDR3SDRAM_DataInValid_MIG),
+							.DataInReady(			DDR3SDRAM_DataInReady_MIG),
 
-							.DataOut(				DDR3SDRAM_ReadData),
+							.DataOut(				DDR3SDRAM_ReadData_MIG),
 							.DataOutErrorChecked(	),
 							.DataOutErrorCorrected(	),
-							.DataOutValid(			DDR3SDRAM_DataOutValid),
+							.DataOutValid(			DDR3SDRAM_DataOutValid_MIG),
 							.DataOutReady(			1'b1));
 	end endgenerate
 	
