@@ -8,13 +8,7 @@ module PathGen
 );
  
   reg [ORAML-1:0] Accum, Child;  
-  
-  initial begin
-      NodeIdx <= 0;
-      Accum <= 0;
-      Child <= 0;
-  end
-  
+
   always@(posedge Clock) begin
     if (Reset) begin
       NodeIdx <= 0;

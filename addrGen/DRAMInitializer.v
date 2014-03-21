@@ -16,38 +16,38 @@
 //------------------------------------------------------------------------------
 module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh", 
 							`include "AES.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 						Clock, Reset,
+		Clock, Reset, Done,
+		DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
+		DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
+	);
+
+	`include "DDR3SDRAMLocal.vh"
+	
+  	input 						Clock, Reset;
 
 	//--------------------------------------------------------------------------
 	//	Data return interface (ORAM controller -> LLC)
 	//--------------------------------------------------------------------------
+	output	[DDRAWidth-1:0]		DRAMCommandAddress;
+	output	[DDRCWidth-1:0]		DRAMCommand;
+	output						DRAMCommandValid;
+	input						DRAMCommandReady;
 
-	output	[DDRAWidth-1:0]		DRAMCommandAddress,
-	output	[DDRCWidth-1:0]		DRAMCommand,
-	output						DRAMCommandValid,
-	input						DRAMCommandReady,
-
-	output	[DDRDWidth-1:0]		DRAMWriteData,
-	output	[DDRMWidth-1:0]		DRAMWriteMask,
-	output						DRAMWriteDataValid,
-	input						DRAMWriteDataReady,
+	output	[DDRDWidth-1:0]		DRAMWriteData;
+	output	[DDRMWidth-1:0]		DRAMWriteMask;
+	output						DRAMWriteDataValid;
+	input						DRAMWriteDataReady;
 	
 	//--------------------------------------------------------------------------
 	//	Status interface
 	//--------------------------------------------------------------------------
-
-	output 						Done
-	);
-
+	output 						Done;
+	
+	
 	//--------------------------------------------------------------------------
 	//	Constants
 	//-------------------------------------------------------------------------- 
-	
-	`include "DDR3SDRAMLocal.vh"
+
 	`include "BucketDRAMLocal.vh"
 	`include "SubTreeLocal.vh"
 	

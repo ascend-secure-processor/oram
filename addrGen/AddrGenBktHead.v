@@ -37,7 +37,7 @@ module AddrGenBktHead
   assign switchST = currentLvlinST >= L_st - 1;
   always@(posedge Clock) begin
     if (Reset) begin
-      currentLevel = -1;
+      currentLevel <= -1;
     end
     else if (Start) begin
       currentLevel <= 0;
@@ -55,7 +55,7 @@ module AddrGenBktHead
   // adjust for the (possibly) shorter subtrees at the bottom 
   wire shortTreeAtBottom;
   assign shortTreeAtBottom = (numST * L_st != ORAML) && currentLevel >= (numST-1) * L_st;
-  //assign BktIdx = STIdx * STSize + BktIdxInST - shortTreeAtBottom * (STSize-STSize_bot) * (STIdx-numTallST); 
+  
   assign BktIdx = BktIdxInST + 
                 (
                     shortTreeAtBottom ? 

@@ -8,7 +8,7 @@ module UORamController
     // receive command from network
     output CmdInReady,
     input CmdInValid, 
-    input [BECMDWidth-1:0] CmdIn,                // 00 for write, 01 for read, 10 for read_remove
+    input [BECMDWidth-1:0] CmdIn,  
     input [ORAMU-1:0] ProgAddrIn,
     
     // receive data from network
