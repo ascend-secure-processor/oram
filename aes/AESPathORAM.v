@@ -54,7 +54,9 @@ module AESPathORAM #(`include "PathORAM.vh",
      input [DDRAWidth-1:0]  DRAMCmdAddr,
      input [DDRCWidth-1:0]  DRAMCmd,
      input                  DRAMCmdValid,
-     output                 DRAMCmdReady
+     output                 DRAMCmdReady,
+
+     input                  DRAMInitDone
      );
 
     //------------------------------------------------------------------------------
@@ -66,6 +68,8 @@ module AESPathORAM #(`include "PathORAM.vh",
     `include "BucketLocal.vh"
     localparam W = DDRDWidth / AESWidth;
     localparam D = AESDelay;
+
+    localparam FIFO_D = D;
 
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
@@ -90,7 +94,7 @@ module AESPathORAM #(`include "PathORAM.vh",
     wire                                           IVDupOutValid;
     wire                                           IVDupOutReady;
 
-    wire                                           Key;
+    wire [AESWidth-1:0]                            Key;
     wire                                           KeyValid;
     wire                                           KeyReady;
 
@@ -118,6 +122,7 @@ module AESPathORAM #(`include "PathORAM.vh",
     wire                                           PathBuffer_OutReady;
 
     wire                                           IsIV;
+    reg                                            IVDone;
 
     wire [DDRDWidth-1:0]                           DataIn;
     wire                                           DataInValid;
@@ -127,9 +132,22 @@ module AESPathORAM #(`include "PathORAM.vh",
     wire                                           BucketReadCtr_Reset;
     wire                                           ReadBucketTransition;
 
+    wire [BktBSTWidth-1:0]                         DWBucketReadCtr;
+    wire                                           DWBucketReadCtr_Reset;
+    wire                                           DWBucketTransition;
+
+    wire [BktBSTWidth-1:0]                         IVDeqCtr;
+    wire                                           IVDeqCtr_Reset;
+    wire                                           IVDeqTransition;
+
     wire [BktBSTWidth-1:0]                         AESBucketReadCtr;
     wire                                           AESBucketReadCtr_Reset;
     wire                                           AESReadBucketTransition;
+
+    wire [`log2(PathSize_DRBursts)-1:0]            PathReadCtr;
+    wire                                           PathReadCtr_Reset;
+    wire                                           PathTransition;
+
 
     wire [DDRDWidth-1:0]                           DataOut;
     wire                                           DataOutValid;
@@ -139,37 +157,142 @@ module AESPathORAM #(`include "PathORAM.vh",
     wire [DDRCWidth-1:0]                           MIGCmdOut;
     wire                                           MIGCmdOutValid;
 
+    wire [DDRMWidth-1:0]                           MIGMaskOut;
+
     //used for enc/dec
     wire                                           IsAESIV;
+    reg                                            AESIVDone;
+
     wire [DDRDWidth-1:0]                           XorRes;
 
-    wire [`log2(PathSize_DRBursts)-1:0]            PathCtr;
-    wire                                           PathComplete;
-
+    wire                                           DRAMCmdOutReady;
     wire                                           WriteMaskReady;
     wire                                           WriteMaskValid;
+
+    wire                                           PassThroughCmd;
+    wire                                           PassThroughW;
+    wire                                           PassThroughR;
+
+    wire [`log2(FIFO_D)-1:0]                       AESDataEmptyCount;
+    reg                                            InitDone;
+
+    reg [31:0]                                     numinp;
+    reg [31:0]                                     numreadreq;
+    reg [31:0]                                     numencdata;
+    reg [31:0]                                     numdata;
+    reg [31:0]                                     nummask;
+    reg [31:0]                                     numaesin;
+    reg [31:0]                                     numaesout;
+
+    //------------------------------------------------------------------------------
+    //  Debug
+    //------------------------------------------------------------------------------
+
+    always @( posedge Clock ) begin
+        if (Reset) begin
+            numinp <= 0;
+            numdata <= 0;
+            nummask <= 0;
+            numreadreq <= 0;
+            numencdata <= 0;
+            numaesin <= 0;
+            numaesout <= 0;
+        end else begin
+            if (BackendWValid & BackendWReady)
+              numinp <= numinp + 1;
+            if (DRAMCmdValid & DRAMCmdOutReady & (DRAMCmd == DDR3CMD_Read))
+              numreadreq <= numreadreq + 1;
+            if (DataOutValid)
+              numencdata <= numencdata + 1;
+            if (PathBuffer_OutValid & PathBuffer_OutReady)
+              numdata <= numdata + 1;
+            if (IVDataOutValid & AESDWDataInAccept)
+              nummask <= nummask + 1;
+            if (AESResDataOutValid & AESResDataOutReady)
+              numaesout <= numaesout + 1;
+        end
+    end
 
     //------------------------------------------------------------------------------
     //  Control logic
     //------------------------------------------------------------------------------
 
-    assign Key = 1;
+    assign Key = {(AESWidth){1'b1}};
     assign KeyValid = 1;
+
+    assign PassThroughCmd = 0; //~DRAMInitDone;//  |
+                            // (DRAMInitDone & (DRAMCmd == DDR3CMD_Read));
+    assign PassThroughW = 0; //~DRAMInitDone;
+    assign PassThroughR = 0; //~DRAMInitDone;//  |
+                          // ((DRAMCmd == DDR3CMD_Read) & DRAMCmdValid) |
+                          // (RW == PATH_READ);
+
+    always @( posedge Clock ) begin
+        if (Reset) begin
+            RW <= PATH_WRITE;
+            InitDone <= 0;
+        end
+        else if (PathTransition)
+          RW <= ~RW;
+        else if (DRAMInitDone & (AESDataEmptyCount == FIFO_D) & ~InitDone) begin
+            RW <= PATH_READ;
+            InitDone <= 1;
+        end
+    end
+
+    always @( posedge Clock ) begin
+        if (Reset)
+          IVDone <= 0;
+        else if (~InitDone | ReadBucketTransition)
+          IVDone <= 0;
+        else if (IsIV & IVDataInValid & IVDataInAccept)
+          IVDone <= 1;
+    end
+
+    always @( posedge Clock ) begin
+        if (Reset)
+          AESIVDone <= 0;
+        else if (~InitDone | AESReadBucketTransition)
+          AESIVDone <= 0;
+        else if (IsAESIV & DataOutValid & DataOutReady)
+          AESIVDone <= 1;
+    end
+
 
     //------------------------------------------------------------------------------
     //  Check bucket
     //------------------------------------------------------------------------------
 
-    FIFORAM#(.Width(DDRDWidth),
-             .Buffering(PathSize_DRBursts))
-    in_P_buf(.Clock(Clock),
-             .Reset(Reset),
-             .InData(MIGIn),
-             .InValid(MIGInValid),
-             .InAccept(PathBuffer_InReady), //debugging
-             .OutData(PathBuffer_OutData),
-             .OutSend(PathBuffer_OutValid),
-             .OutReady(PathBuffer_OutReady));
+    wire ReadGood = DRAMInitDone & PathBuffer_OutValid & PathBuffer_OutReady;
+    wire WriteGood = DRAMInitDone & BackendWValid & AESDataInAccept & WriteMaskReady;
+
+    generate
+        if (Overclock) begin:INBUF_BRAM
+	    wire PathBuffer_Full, PathBuffer_Empty;
+
+	    PathBuffer in_P_buf(.clk(Clock),
+			        .srst(Reset),
+			        .din(MIGIn),
+			        .wr_en(MIGInValid),
+			        .rd_en(PathBuffer_OutReady),
+			        .dout(PathBuffer_OutData),
+			        .full(PathBuffer_Full),
+			        .empty(PathBuffer_Empty));
+	    assign PathBuffer_InReady =	~PathBuffer_Full;
+	    assign PathBuffer_OutValid = ~PathBuffer_Empty;
+        end else begin:INBUF_LUTRAM
+            FIFORAM#(.Width(DDRDWidth),
+                     .Buffering(PathSize_DRBursts))
+            in_P_buf(.Clock(Clock),
+                     .Reset(Reset),
+                     .InData(MIGIn),
+                     .InValid(MIGInValid),
+                     .InAccept(PathBuffer_InReady), //debugging
+                     .OutData(PathBuffer_OutData),
+                     .OutSend(PathBuffer_OutValid),
+                     .OutReady(PathBuffer_OutReady));
+        end // block: INBUF_LUTRAM
+    endgenerate
 
     // Count where we are in a bucket (so we can determine when we are at a header)
     Counter#(.Width(BktBSTWidth))
@@ -177,86 +300,81 @@ module AESPathORAM #(`include "PathORAM.vh",
                .Reset(Reset | ReadBucketTransition),
                .Set(1'b0),
                .Load(1'b0),
-               .Enable(PathBuffer_OutValid && PathBuffer_OutReady),
+               .Enable(DRAMInitDone & (ReadGood | WriteGood)), //read | write
                .In({BktBSTWidth{1'bx}}),
                .Count(BucketReadCtr)
                );
 
     CountCompare#(.Width(BktBSTWidth),
-                   .Compare(BktSize_DRBursts - 1))
+                  .Compare(BktSize_DRBursts - 1))
     in_bkt_cmp(.Count(BucketReadCtr),
                .TerminalCount(BucketReadCtr_Reset)
                );
 
-    assign ReadBucketTransition = AESResDataInAccept & BucketReadCtr_Reset &
-                                  PathBuffer_OutValid & PathBuffer_OutReady;
+    assign ReadBucketTransition = BucketReadCtr_Reset & (ReadGood | WriteGood);
+
+    // Count number of already processed ivs
+    Counter#(.Width(BktBSTWidth))
+    ivdeq_cnt(.Clock(Clock),
+              .Reset(Reset | IVDeqTransition),
+              .Set(1'b0),
+              .Load(1'b0),
+              .Enable(IVDataOutValid & AESDWDataInAccept),
+              .In({BktBSTWidth{1'bx}}),
+              .Count(IVDeqCtr)
+              );
+
+    CountCompare#(.Width(BktBSTWidth),
+                  .Compare(BktSize_DRBursts - 1))
+    ivdeq_cmp(.Count(IVDeqCtr),
+              .TerminalCount(IVDeqCtr_Reset)
+              );
+
+    assign IVDeqTransition = (IVDeqCtr_Reset & IVDataOutValid & AESDWDataInAccept) |
+                             (~InitDone);
 
 
     //------------------------------------------------------------------------------
     //	MIG CMD FIFO and MASK
     //------------------------------------------------------------------------------
 
-    FIFOLinear#(.Width(DDRAWidth + DDRCWidth),
-                .Depth(1024)) //[AK]: what depth?
+    FIFORAM#(.Width(DDRAWidth + DDRCWidth),
+             .Buffering(FIFO_D)) //[AK]: what depth?
     cmd_fifo (.Clock(Clock),
               .Reset(Reset),
               .InData({DRAMCmdAddr, DRAMCmd}),
               .InValid(DRAMCmdValid),
-              .InAccept(DRAMCmdReady),
+              .InAccept(DRAMCmdOutReady),
               .OutData({MIGAddrOut, MIGCmdOut}),
-              .OutValid(MIGCmdOutValid),
-              .OutReady(MIGCmdReady & DataOutReady)
+              .OutSend(MIGCmdOutValid),
+              .OutReady(MIGCmdReady)
               );
 
-    FIFOLinear#(.Width(DDRMWidth),
-                .Depth(1024)) //[AK]: what depth?
+    //used only for write
+    FIFORAM#(.Width(DDRMWidth),
+             .Buffering(FIFO_D))
     mask_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(BackendWMask),
                .InValid(BackendWValid),
                .InAccept(WriteMaskReady),
-               .OutData(MIGOutMask),
-               .OutValid(WriteMaskValid),
-               .OutReady(MIGCmdReady & DataOutReady)
+               .OutData(MIGMaskOut),
+               .OutSend(WriteMaskValid),
+               .OutReady(MIGOutReady & (RW == PATH_WRITE) & DataOutValid)
                );
 
-
-    //------------------------------------------------------------------------------
-    //	Path counters (R/W)
-    //------------------------------------------------------------------------------
-
-    Counter#(.Width(`log2(PathSize_DRBursts)))
-    in_path_cnt(.Clock(Clock),
-                .Reset(Reset | PathComplete),
-                .Set(1'b0),
-                .Load(1'b0),
-                .Enable(DataInValid),
-                .In({(`log2(PathSize_DRBursts)){1'bx}}),
-                .Count(PathCtr));
-
-    CountCompare#(.Width(`log2(PathSize_DRBursts)),
-                  .Compare(PathSize_DRBursts))
-    in_path_cmp(.Count(PathCtr),
-                .TerminalCount(PathComplete));
-
-    always @( posedge Clock ) begin
-        if (Reset)
-            RW <= PATH_READ;
-        else if (PathComplete)
-            RW <= ~RW;
-    end
 
     //------------------------------------------------------------------------------
     //  IV and Data FIFO
     //------------------------------------------------------------------------------
 
-    assign DataIn = (RW == PATH_READ) ? PathBuffer_OutData : BackendWData;
-    assign DataInValid = (RW == PATH_READ) ? PathBuffer_OutValid :
-                         BackendWValid;
+    assign DataIn = BackendWValid ? BackendWData : PathBuffer_OutData;
+    //both should never be valid
+    assign DataInValid = (PathBuffer_OutValid  ^ (BackendWValid & BackendWReady));
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
-    assign IsIV = BucketReadCtr == 0;
+    assign IsIV = (BucketReadCtr == 0) & ~IVDone;
 
     assign IVDataIn = DataIn[IVEntropyWidth-1:0];
     assign IVDataInValid = IsIV & DataInValid;
@@ -270,46 +388,47 @@ module AESPathORAM #(`include "PathORAM.vh",
     assign PathBuffer_OutReady = DataInReady;
 
     //only remove IV when we are done with the bucket
-    assign IVDataOutReady = ReadBucketTransition;
+    assign IVDataOutReady = IVDeqTransition;
 
-    assign AESDataOutReady = AESResDataOutValid && DataOutReady;
+    assign AESDataOutReady = AESResDataOutValid & DataOutReady;
 
     //only remove the duplicate IV when we output to MIG/Stash
     assign IVDupOutReady = IsAESIV & DataOutValid & DataOutReady;
 
-    FIFOLinear#(.Width(IVEntropyWidth),
-                .Depth(D))
+    FIFORAM#(.Width(IVEntropyWidth),
+             .Buffering(FIFO_D))
     iv_fifo (.Clock(Clock),
              .Reset(Reset),
              .InData(IVDataIn),
              .InValid(IVDataInValid),
              .InAccept(IVDataInAccept),
              .OutData(IVDataOut),
-             .OutValid(IVDataOutValid),
+             .OutSend(IVDataOutValid),
              .OutReady(IVDataOutReady)
              );
 
-    FIFOLinear#(.Width(IVEntropyWidth),
-                .Depth(D))
+    FIFORAM#(.Width(IVEntropyWidth),
+             .Buffering(FIFO_D))
     ivdup_fifo (.Clock(Clock),
                 .Reset(Reset),
                 .InData(IVDupIn),
                 .InValid(IVDupInValid),
                 .InAccept(IVDupInAccept),
                 .OutData(IVDupOut),
-                .OutValid(IVDupOutValid),
+                .OutSend(IVDupOutValid),
                 .OutReady(IVDupOutReady)
                 );
 
-    FIFOLinear#(.Width(DDRDWidth),
-                .Depth(1024)) //what depth?
+    FIFORAM#(.Width(DDRDWidth),
+             .Buffering(FIFO_D)) //what depth?
     data_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(AESDataIn),
                .InValid(AESDataInValid),
                .InAccept(AESDataInAccept),
+               .InEmptyCount(AESDataEmptyCount),
                .OutData(AESDataOut),
-               .OutValid(AESDataOutValid),
+               .OutSend(AESDataOutValid),
                .OutReady(AESDataOutReady)
                );
 
@@ -318,6 +437,25 @@ module AESPathORAM #(`include "PathORAM.vh",
     //  AES_DW and result FIFO
     //------------------------------------------------------------------------------
 
+    // Count where we are in a bucket (so we can determine when we are at a header)
+    Counter#(.Width(BktBSTWidth))
+    dw_in_bkt_cnt(.Clock(Clock),
+                  .Reset(Reset | DWBucketTransition),
+                  .Set(1'b0),
+                  .Load(1'b0),
+                  .Enable(InitDone & AESDWDataInValid & AESDWDataInAccept),
+                  .In({BktBSTWidth{1'bx}}),
+                  .Count(DWBucketReadCtr)
+                  );
+
+    CountCompare#(.Width(BktBSTWidth),
+                  .Compare(BktSize_DRBursts - 1))
+    dw_in_bkt_cmp(.Count(DWBucketReadCtr),
+               .TerminalCount(DWBucketReadCtr_Reset)
+               );
+
+    assign DWBucketTransition = DWBucketReadCtr_Reset;
+
     assign AESDWDataIn = IVDataOut;
     assign AESDWDataInValid = IVDataOutValid;
 
@@ -325,14 +463,14 @@ module AESPathORAM #(`include "PathORAM.vh",
 
     //[AK]: Need a ready signal?
     AES_DW #(.W(W),
-             .D(D))
+             .D(D+1)) //+1 so you can enq/deq same cycle for D things
     aes_dw (.Clock(Clock),
             .Reset(Reset),
 
             //multiply is slow; shift instead?
-            .DataIn(AESDWDataIn + (BucketReadCtr * W)),
+            .DataIn(AESDWDataIn + (DWBucketReadCtr << `log2(W))),
             .DataInValid(AESDWDataInValid),
-            .DataInReady(AESDWDataInReady),
+            .DataInReady(AESDWDataInAccept),
 
             .Key(Key),
             .KeyValid(KeyValid),
@@ -342,28 +480,30 @@ module AESPathORAM #(`include "PathORAM.vh",
             .DataOutValid(AESResDataInValid)
             );
 
-    FIFOLinear#(.Width(W*AESWidth),
-                .Depth(D))
+    FIFORAM#(.Width(W*AESWidth),
+             .Buffering(D+1))
     aesres_fifo (.Clock(Clock),
                  .Reset(Reset),
                  .InData(AESResDataIn),
                  .InValid(AESResDataInValid),
                  .InAccept(AESResDataInAccept),
                  .OutData(AESResDataOut),
-                 .OutValid(AESResDataOutValid),
+                 .OutSend(AESResDataOutValid),
                  .OutReady(AESResDataOutReady)
                  );
+
 
     //------------------------------------------------------------------------------
     //  Enc/Dec
     //------------------------------------------------------------------------------
 
+    //counts how many things we've encrypted
     Counter #(.Width(BktBSTWidth))
     in_bkt_aes_cnt(.Clock(Clock),
-                   .Reset(Reset || AESReadBucketTransition),
+                   .Reset(Reset | AESReadBucketTransition),
                    .Set(1'b0),
                    .Load(1'b0),
-                   .Enable(AESResDataOutValid && AESDataOutValid),
+                   .Enable(InitDone & DataOutValid & DataOutReady),
                    .In({BktBSTWidth{1'bx}}),
                    .Count(AESBucketReadCtr)
                    );
@@ -375,9 +515,9 @@ module AESPathORAM #(`include "PathORAM.vh",
                    );
 
     assign AESReadBucketTransition = AESBucketReadCtr_Reset &
-                                     AESResDataOutValid & AESDataOutValid;
+                                     DataOutValid & DataOutReady;
 
-    assign IsAESIV = AESBucketReadCtr == 0;
+    assign IsAESIV = (AESBucketReadCtr == 0) & ~AESIVDone;
     assign XorRes = AESDataOut ^ AESResDataOut;
 
     //replace the IV portion with actual IV
@@ -389,23 +529,51 @@ module AESPathORAM #(`include "PathORAM.vh",
     assign DataOutValid = AESDataOutValid & AESResDataOutValid;
     assign DataOutReady = (RW == PATH_READ) | ((RW == PATH_WRITE) & MIGOutReady);
 
+    //------------------------------------------------------------------------------
+    //  Path Counter
+    //------------------------------------------------------------------------------
+
+    Counter#(.Width(`log2(PathSize_DRBursts)))
+    path_cnt(.Clock(Clock),
+             .Reset(Reset | PathTransition),
+             .Set(1'b0),
+             .Load(1'b0),
+             .Enable(InitDone & DataOutValid & DataOutReady),
+             .In({BktBSTWidth{1'bx}}),
+             .Count(PathReadCtr)
+             );
+
+    CountCompare#(.Width(`log2(PathSize_DRBursts)),
+                  .Compare(PathSize_DRBursts - 1))
+    path_cmp(.Count(PathReadCtr),
+             .TerminalCount(PathReadCtr_Reset)
+             );
+
+    assign PathTransition = PathReadCtr_Reset & DataOutValid & DataOutReady;
+
 
     //------------------------------------------------------------------------------
     //  I/O assignment
     //------------------------------------------------------------------------------
 
-    assign MIGAddr = MIGAddrOut;
-    assign MIGCmd = MIGCmdOut;
-    assign MIGCmdValid = MIGCmdOutValid;
+    //Cmd related
+    assign MIGAddr = PassThroughCmd ? DRAMCmdAddr : MIGAddrOut;
+    assign MIGCmd = PassThroughCmd ? DRAMCmd : MIGCmdOut;
+    assign MIGCmdValid = PassThroughCmd ? DRAMCmdValid : MIGCmdOutValid;
+    assign DRAMCmdReady = PassThroughCmd ? MIGCmdReady : DRAMCmdOutReady;
 
-    assign MIGOut = DataOut;
-    assign MIGOutValid = (RW == PATH_WRITE) & DataOutValid & WriteMaskValid;
+    //BackendW related
+    assign MIGOut = PassThroughW ? BackendWData : DataOut ;
+    assign MIGOutMask = PassThroughW ? BackendWMask : MIGMaskOut;
+    assign MIGOutValid = PassThroughW ? BackendWValid :
+                         (RW == PATH_WRITE) & DataOutValid & WriteMaskValid;
+    assign BackendWReady = PassThroughW ? MIGOutReady :
+                           DataInReady & WriteMaskReady;
 
-    assign BackendRData = DataOut;
-    assign BackEndRValid = (RW == PATH_READ) & DataOutValid;
-
-    //probably can do better..
-    assign BackendWReady = MIGOutReady & AESDataInAccept & WriteMaskReady;
+    //BackendR related
+    assign BackendRData = PassThroughR ? MIGIn : DataOut;
+    assign BackendRValid = PassThroughR ? MIGInValid :
+                           (RW == PATH_READ) & DataOutValid;
 
 endmodule
 //--------------------------------------------------------------------------

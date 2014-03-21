@@ -44,7 +44,6 @@ module AES_DW #(parameter W = 4, parameter D = 12,
     reg      [LOGD-1:0]      Count;
     reg      [LOGD-1:0]      InTurn;
     reg      [LOGD-1:0]      OutTurn;
-    reg      [D-1:0]             AESValid;
     reg      [D-1:0]             AESWorking;
     wire                         DInReady;
     wire                         DOutValid;
@@ -93,7 +92,7 @@ module AES_DW #(parameter W = 4, parameter D = 12,
     always @( posedge Clock ) begin
         if (Reset) begin
             for (i = 0; i < D; i = i + 1)
-                AESWorking <= 0;
+                AESWorking[i] <= 0;
         end else begin
             for (i = 0; i < D; i = i + 1) begin
                 if (DOutValid && OutTurn == i)
