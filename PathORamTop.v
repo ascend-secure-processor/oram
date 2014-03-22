@@ -91,6 +91,16 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 	
+    wire 	[DDRCWidth-1:0]							AES_DRAMCommand;
+    wire 	[DDRAWidth-1:0]							AES_DRAMAddress;
+    wire 	[DDRDWidth-1:0]							AES_DRAMWriteData, AES_DRAMReadData;
+    wire 	[DDRMWidth-1:0]							AES_DRAMWriteMask;
+    wire											AES_DRAMCommandValid, AES_DRAMCommandReady;
+    wire											AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
+    wire											AES_DRAMReadDataValid;
+	
+	wire											DRAMInitComplete;
+	
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
@@ -105,6 +115,7 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.PLBCapacity(   		PLBCapacity)) 
 				front_end(	.Clock(             	Clock), 
 							.Reset(					Reset), 
+							
 							.CmdInReady(			CmdReady), 
 							.CmdInValid(			CmdValid), 
 							.CmdIn(					Cmd), 
@@ -143,7 +154,8 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
 				back_end (	.Clock(					Clock),
-							.Reset(					Reset),			
+							.Reset(					Reset),
+							
 							.Command(				BEnd_Cmd),
 							.PAddr(					BEnd_PAddr),
 							.CurrentLeaf(			CurrentLeaf),
@@ -157,17 +169,82 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
 							
-							.DRAMCommandAddress(	DRAMAddress),
-							.DRAMCommand(			DRAMCommand),
-							.DRAMCommandValid(		DRAMCommandValid),
-							.DRAMCommandReady(		DRAMCommandReady),			
-							.DRAMReadData(			DRAMReadData),
-							.DRAMReadDataValid(		DRAMReadDataValid),			
-							.DRAMWriteData(			DRAMWriteData),
-							.DRAMWriteMask(			DRAMWriteMask),
-							.DRAMWriteDataValid(	DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMWriteDataReady));
-							
+							.DRAMCommandAddress(	AES_DRAMAddress),
+							.DRAMCommand(			AES_DRAMCommand),
+							.DRAMCommandValid(		AES_DRAMCommandValid),
+							.DRAMCommandReady(		AES_DRAMCommandReady),			
+							.DRAMReadData(			AES_DRAMReadData),
+							.DRAMReadDataValid(		AES_DRAMReadDataValid),			
+							.DRAMWriteData(			AES_DRAMWriteData),
+							.DRAMWriteMask(			AES_DRAMWriteMask),
+							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
+							.DRAMInitComplete(		DRAMInitComplete));
+
+	//--------------------------------------------------------------------------
+	//	Symmetric Encryption
+	//--------------------------------------------------------------------------
+	
+	generate if (EnableAES) begin:AES
+							// TODO which of these params are really needed?
+		AESPathORAM #(		.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
+							.Overclock(				Overclock),
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
+				aes(		.Clock(					Clock),
+							.Reset(					Reset),
+
+							.MIGAddr(				DRAMAddress),
+							.MIGCmd(				DRAMCommand),
+							.MIGCmdValid(			DRAMCommandValid),
+							.MIGCmdReady(			DRAMCommandReady),
+
+							.MIGOut(				DRAMWriteData),
+							.MIGOutMask(			DRAMWriteMask),
+							.MIGOutValid(			DRAMWriteDataValid),
+							.MIGOutReady(			DRAMWriteDataReady),
+
+							.MIGIn(					DRAMReadData),
+							.MIGInValid(			DRAMReadDataValid),
+
+							.BackendRData(			AES_DRAMReadData),
+							.BackendRValid(			AES_DRAMReadDataValid),
+
+							.BackendWData(			AES_DRAMWriteData),
+							.BackendWMask(			AES_DRAMWriteMask),
+							.BackendWValid(			AES_DRAMWriteDataValid),
+							.BackendWReady(			AES_DRAMWriteDataReady),
+
+							.DRAMCmdAddr(			AES_DRAMAddress),
+							.DRAMCmd(				AES_DRAMCommand),
+							.DRAMCmdValid(			AES_DRAMCommandValid),
+							.DRAMCmdReady(			AES_DRAMCommandReady),
+
+							.DRAMInitDone(			DRAMInitComplete));							
+	end else begin:NO_AES
+		assign	DRAMCommand =						AES_DRAMCommand;
+		assign	DRAMAddress =						AES_DRAMAddress;
+		assign	DRAMCommandValid =					AES_DRAMCommandValid;
+		assign	AES_DRAMCommandReady =				DRAMCommandReady;
+	
+		assign	DRAMWriteData = 					AES_DRAMWriteData;
+		assign	DRAMWriteMask =						AES_DRAMWriteMask;
+		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
+		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
+	
+		assign	AES_DRAMReadData =					DRAMReadData;
+		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
+	end endgenerate
+
 	//--------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------

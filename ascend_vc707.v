@@ -49,14 +49,14 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	// uBlaze/caches/System
 	
-	parameter				SystemClockFreq =		100_000_000;
+	parameter				SlowClockFreq =			100_000_000;
 	
 	/* 	Debugging.
-		UseMIG: 		use MIG or a simple synthesized DRAM for memory?
-		SlowORAMClock:	slow the ORAM controller down to make it easier to add 
-						ChipScope signals & meet timing */
+		UseMIG: 			use MIG or a simple synthesized DRAM for memory?
+		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
+							ChipScope signals & meet timing */
 	parameter				UseMIG =				1; // NOTE: leave default to 1
-	parameter				SlowORAMClock =			1; // NOTE: leave default to 0
+	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
 	
 	// ORAM related
 	
@@ -75,7 +75,9 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
-								
+	
+	parameter				EnableAES =				0;
+	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
 							DDRCWidth =				3,
@@ -170,7 +172,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	
 	HWTestHarness #(		.ORAMU(					ORAMU),
-							.SlowClockFreq(			SystemClockFreq))
+							.SlowClockFreq(			SlowClockFreq))
 				tester(		.SlowClock(				SlowClock),
 							.FastClock(				ORAMClock),
 							.SlowReset(				SlowReset), 
@@ -204,6 +206,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -249,8 +253,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
 
-	generate if (SlowORAMClock) begin:SLOW_ORAM	
-		wire					CommandBuf_Full, WriteDataBuf_Full;
+	generate if (SlowDownORAMClock) begin:SLOW_ORAM	
+		wire				CommandBuf_Full, WriteDataBuf_Full;
 	
 		assign	ORAMClock =							SlowClock;
 		assign	ORAMReset =							SlowReset;
@@ -317,6 +321,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	generate if (UseMIG == 1) begin:MIG
 		wire				MemoryReset_Pre;
 	
+		// To help with timing closure ...
 		Pipeline	#(		.Width(					1),
 							.Stages(				4))
 				rst_pipe(	.Clock(					MemoryClock),
@@ -381,6 +386,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.O(						MemoryClock));
 		assign	MemoryReset =						sys_rst;
 
+		assign	DDR3SDRAM_ResetDone =				~MemoryReset;
+		
 		SynthesizedRandDRAM	#(.InBufDepth(			36),
 							.UWidth(				8),
 							.AWidth(				DDRAWidth + 6),

@@ -61,7 +61,9 @@ module PathORAMTopTestbench;
 							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
-								
+
+	parameter				EnableAES =				1;
+	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
 							DDRCWidth =				3,
@@ -76,7 +78,8 @@ module PathORAMTopTestbench;
     parameter				LeafWidth = 			32,
 							PLBCapacity = 			8192;
 		
-	parameter				SystemClockFreq =		100_000_000;
+	parameter				SlowDownORAMClock = 	1;
+	parameter				SlowClockFreq =			100_000_000;
 	
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
@@ -126,7 +129,7 @@ module PathORAMTopTestbench;
 							.OutValid(				UARTDataInValid),
 							.OutReady(				UARTDataInReady));
 	
-	UART		#(			.ClockFreq(				200_000_000),
+	UART		#(			.ClockFreq(				200_000_000), // this much match sys_clk_p freq
 							.Baud(					UARTBaud),
 							.Width(					UARTWidth))
 				uart(		.Clock(					sys_clk_p), 
@@ -162,6 +165,7 @@ module PathORAMTopTestbench;
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -173,8 +177,9 @@ module PathORAMTopTestbench;
                             .Recursion(             Recursion), 
                             .LeafWidth(             LeafWidth), 
                             .PLBCapacity(           PLBCapacity),						
-							.SystemClockFreq(		SystemClockFreq),
-							.UseMIG(				0))
+							.SlowClockFreq(			SlowClockFreq),
+							.UseMIG(				0),
+							.SlowDownORAMClock(		SlowDownORAMClock))
 				CUT(		.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 

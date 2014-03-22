@@ -33,7 +33,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	DRAMInitializationComplete
+	DRAMInitComplete
 	);
 		
 	//------------------------------------------------------------------------------
@@ -108,7 +108,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Status Interface
 	//--------------------------------------------------------------------------
 
-	output					DRAMInitializationComplete; // TODO move/rename to be part of the MIG interface
+	output					DRAMInitComplete;
 								
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
@@ -345,7 +345,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	assign	CSORAMAccess =							~CSInitialize & ~CSIdle;
 	
-	assign	AllResetsDone =							Stash_ResetDone & DRAMInitializationComplete;
+	assign	AllResetsDone =							Stash_ResetDone & DRAMInitComplete;
 
 	assign	Stash_StartScanOp =						CSStartRead;
 	assign	Stash_StartWritebackOp =				CSStartWriteback;
@@ -562,7 +562,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInitializationComplete));
+							.Done(					DRAMInitComplete));
 							
 	//------------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
@@ -570,6 +570,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 	// Buffers the whole incoming path
 	// NOTE: This buffer requires ~1% of the LUT/BLOCK RAM on the chip
+	// TODO: move this out of Backend (AES now has PathBuffer... what if EnableAES == 0?)
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full, PathBuffer_Empty;
 
