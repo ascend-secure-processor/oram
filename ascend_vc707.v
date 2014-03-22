@@ -51,7 +51,12 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	parameter				SystemClockFreq =		100_000_000;
 	
+	/* 	Debugging.
+		UseMIG: 		use MIG or a simple synthesized DRAM for memory?
+		SlowORAMClock:	slow the ORAM controller down to make it easier to add 
+						ChipScope signals & meet timing */
 	parameter				UseMIG =				1; // NOTE: leave default to 1
+	parameter				SlowORAMClock =			1; // NOTE: leave default to 0
 	
 	// ORAM related
 	
@@ -132,7 +137,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
 
-	
 	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
 	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
 	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
@@ -141,8 +145,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
 	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
 	wire					DDR3SDRAM_DataOutValid_MIG;	
-	
-	wire					CommandBuf_Full, WriteDataBuf_Full;
 		
 	//------------------------------------------------------------------------------
 	// 	Clocking
@@ -153,10 +155,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.reset(					MemoryReset),
 							.locked(				MMCMF100Locked));
 	assign	SlowReset =								~MMCMF100Locked;
-	
-	assign	ORAMClock =								SlowClock;//MemoryClock;
-	assign	ORAMReset =								SlowReset;//MemoryReset;
-	
+
 	//------------------------------------------------------------------------------
 	// 	GPIO
 	//------------------------------------------------------------------------------
@@ -250,56 +249,88 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
 
-	assign	DDR3SDRAM_CommandReady = 				~CommandBuf_Full;
-	DebugCommandFIFO dcmd(	.rst(					ORAMReset),
-							.wr_clk(				ORAMClock),
-							.rd_clk(				MemoryClock),
-							
-							.din(					{DDR3SDRAM_Command, 	DDR3SDRAM_Address}),
-							.wr_en(					DDR3SDRAM_CommandValid),
-							.full(					CommandBuf_Full),
-							
-							.dout(					{DDR3SDRAM_Command_MIG, DDR3SDRAM_Address_MIG}),
-							.rd_en(					DDR3SDRAM_CommandReady_MIG),
-							.valid(					DDR3SDRAM_CommandValid_MIG));
+	generate if (SlowORAMClock) begin:SLOW_ORAM	
+		wire					CommandBuf_Full, WriteDataBuf_Full;
 	
-	assign	DDR3SDRAM_WriteMask_MIG =				{DDRMWidth{1'b0}}; // TODO This will break for REW ORAM
-	
-	assign	DDR3SDRAM_DataInReady = 				~WriteDataBuf_Full;
-	DebugDataFIFO dwr(		.rst(					ORAMReset),
-							.wr_clk(				ORAMClock),
-							.rd_clk(				MemoryClock),
-							
-							.din(					DDR3SDRAM_WriteData),
-							.wr_en(					DDR3SDRAM_DataInValid),
-							.full(					WriteDataBuf_Full),
-							
-							.dout(					DDR3SDRAM_WriteData_MIG),
-							.rd_en(					DDR3SDRAM_DataInReady_MIG),
-							.valid(					DDR3SDRAM_DataInValid_MIG));
-	
-	DebugDataFIFO drd(		.rst(					ORAMReset),
-							.wr_clk(				MemoryClock),
-							.rd_clk(				ORAMClock),
-							.din(					DDR3SDRAM_ReadData_MIG),
-							.wr_en(					DDR3SDRAM_DataOutValid_MIG),
-							.rd_en(					1'b1),
-							.dout(					DDR3SDRAM_ReadData),
-							.full(					),
-							.valid(					DDR3SDRAM_DataOutValid));	
+		assign	ORAMClock =							SlowClock;
+		assign	ORAMReset =							SlowReset;
+		
+		assign	DDR3SDRAM_CommandReady = 			~CommandBuf_Full;
+		DebugCommandFIFO dcmd(	.rst(				ORAMReset),
+								.wr_clk(			ORAMClock),
+								.rd_clk(			MemoryClock),
+								
+								.din(				{DDR3SDRAM_Command, 	DDR3SDRAM_Address}),
+								.wr_en(				DDR3SDRAM_CommandValid),
+								.full(				CommandBuf_Full),
+								
+								.dout(				{DDR3SDRAM_Command_MIG, DDR3SDRAM_Address_MIG}),
+								.rd_en(				DDR3SDRAM_CommandReady_MIG),
+								.valid(				DDR3SDRAM_CommandValid_MIG));
+		
+		assign	DDR3SDRAM_WriteMask_MIG =			{DDRMWidth{1'b0}}; // TODO This will break for REW ORAM
+		
+		assign	DDR3SDRAM_DataInReady = 			~WriteDataBuf_Full;
+		DebugDataFIFO dwr(		.rst(				ORAMReset),
+								.wr_clk(			ORAMClock),
+								.rd_clk(			MemoryClock),
+								
+								.din(				DDR3SDRAM_WriteData),
+								.wr_en(				DDR3SDRAM_DataInValid),
+								.full(				WriteDataBuf_Full),
+								
+								.dout(				DDR3SDRAM_WriteData_MIG),
+								.rd_en(				DDR3SDRAM_DataInReady_MIG),
+								.valid(				DDR3SDRAM_DataInValid_MIG));
+		
+		DebugDataFIFO drd(		.rst(				ORAMReset),
+								.wr_clk(			MemoryClock),
+								.rd_clk(			ORAMClock),
+								.din(				DDR3SDRAM_ReadData_MIG),
+								.wr_en(				DDR3SDRAM_DataOutValid_MIG),
+								.rd_en(				1'b1),
+								.dout(				DDR3SDRAM_ReadData),
+								.full(				),
+								.valid(				DDR3SDRAM_DataOutValid));	
+	end else begin:FAST_ORAM
+		assign	ORAMClock =							MemoryClock;
+		assign	ORAMReset =							MemoryReset;
+		
+		assign	DDR3SDRAM_Command_MIG =				DDR3SDRAM_Command;
+		assign	DDR3SDRAM_Address_MIG =				DDR3SDRAM_Address;
+		assign	DDR3SDRAM_CommandValid_MIG =		DDR3SDRAM_CommandValid;
+		assign	DDR3SDRAM_CommandReady = 			DDR3SDRAM_CommandReady_MIG;
+		
+		assign	DDR3SDRAM_WriteData_MIG =			DDR3SDRAM_WriteData;
+		assign	DDR3SDRAM_WriteMask_MIG =			DDR3SDRAM_WriteMask;
+		assign	DDR3SDRAM_DataInValid_MIG =			DDR3SDRAM_DataInValid;
+		assign	DDR3SDRAM_DataInReady = 			DDR3SDRAM_DataInReady_MIG;
+		
+		assign	DDR3SDRAM_ReadData =				DDR3SDRAM_ReadData_MIG;
+		assign	DDR3SDRAM_DataOutValid = 			DDR3SDRAM_DataOutValid_MIG;			
+	end endgenerate
 	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7)
 	//------------------------------------------------------------------------------	
 	
 	generate if (UseMIG == 1) begin:MIG
+		wire				MemoryReset_Pre;
+	
+		Pipeline	#(		.Width(					1),
+							.Stages(				4))
+				rst_pipe(	.Clock(					MemoryClock),
+							.Reset(					1'b0), 
+							.InData(				MemoryReset_Pre), 
+							.OutData(				MemoryReset));
+	
 		DDR3SDRAM DDR3SDRAMController(
 							// System interface
 							.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 							.sys_rst(				sys_rst),
   							.ui_clk(				MemoryClock),
-							.ui_clk_sync_rst(		MemoryReset),
+							.ui_clk_sync_rst(		MemoryReset_Pre),
 							.init_calib_complete(	DDR3SDRAM_ResetDone),
 														
 							// DDR3 interface
