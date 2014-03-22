@@ -17,109 +17,33 @@
 //	NOTE #2:
 //		- Leaf orientation: least significant bit is root bucket
 // 		- Writeback occurs in root -> leaf bucket order
-//
 //------------------------------------------------------------------------------
 module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
+  	Clock, Reset,
+	ResetDone,
+
+	RemapLeaf, AccessLeaf, AccessPAddr,
+	AccessIsDummy, AccessCommand,
+	StartScan, StartWriteback,		
 		
-  	input 					Clock, Reset,
-	output					ResetDone,
-
-	//--------------------------------------------------------------------------
-	//	Commands
-	//--------------------------------------------------------------------------
+	ReturnData, ReturnPAddr, ReturnLeaf,
+	ReturnDataOutValid, BlockReturnComplete,
 	
-	input	[ORAML-1:0]		RemapLeaf,
-	input	[ORAML-1:0]		AccessLeaf,
-	input	[ORAMU-1:0]		AccessPAddr,
+	EvictData, EvictPAddr, EvictLeaf, 
+	EvictDataInValid, EvictDataInReady, BlockEvictComplete,	
 	
-	/*	Controls the Return/Eviction interfaces 
-		Command code:
-			IsDummy ==	1		Command ==	X
-			IsDummy ==	0		Perform command */
-	input					AccessIsDummy,
-	input	[BECMDWidth-1:0]AccessCommand,
+	UpdateData, 
+	UpdateDataInValid, UpdateDataInReady, BlockUpdateComplete,
+ 
+	WriteData, WritePAddr, WriteLeaf,
+	WriteInValid, WriteInReady, BlockWriteComplete,
 	
-	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
-		as the PosMap is read.  The level command signals must be valid at this 
-		time. */
-	input					StartScan,
+	ReadData, ReadPAddr, ReadLeaf,
+	ReadOutValid, ReadOutReady, BlockReadComplete, PathReadComplete,
 	
-	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
-		pulsed as soon as the last dummy block is decrypted */
-	input					StartWriteback,		
-		
-	//--------------------------------------------------------------------------
-	//	Data return interface (Stash -> LLC)
-	//--------------------------------------------------------------------------
+	StashAlmostFull, StashOverflow, StashOccupancy,
 	
-	output	[BEDWidth-1:0]	ReturnData,
-	output	[ORAMU-1:0]		ReturnPAddr,
-	output	[ORAML-1:0]		ReturnLeaf,
-	output					ReturnDataOutValid,
-	//input					ReturnDataOutReady,	// reads are block DMAs
-	output					BlockReturnComplete,
-	
-	//--------------------------------------------------------------------------
-	//	Data eviction interface (LLC -> Stash)
-	//--------------------------------------------------------------------------	
-	
-	input	[BEDWidth-1:0]	EvictData,
-	input	[ORAMU-1:0]		EvictPAddr,
-	input	[ORAML-1:0]		EvictLeaf,
-	input					EvictDataInValid,
-	output					EvictDataInReady,
-	output					BlockEvictComplete,	
-	
-	//--------------------------------------------------------------------------
-	//	Data update (dirty block update) interface (LLC -> Stash)
-	//--------------------------------------------------------------------------	
-	
-	input	[BEDWidth-1:0]	UpdateData,
-	input					UpdateDataInValid,
-	output					UpdateDataInReady,
-	output					BlockUpdateComplete,
-	
-	//--------------------------------------------------------------------------
-	//	ORAM write interface (external memory -> Decryption -> stash)
-	//--------------------------------------------------------------------------
-
-	input	[BEDWidth-1:0]	WriteData,
-	input	[ORAMU-1:0]		WritePAddr,
-	input	[ORAML-1:0]		WriteLeaf,
-	input					WriteInValid,
-	output					WriteInReady,	
-	/* Pulsed during the last cycle that a block is being written */
-	output					BlockWriteComplete,
-	
-	//--------------------------------------------------------------------------
-	//	ORAM read interface (stash -> encryption -> external memory)
-	//--------------------------------------------------------------------------
-
-	output	[BEDWidth-1:0]	ReadData,
-	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
-	output	[ORAMU-1:0]		ReadPAddr,
-	output	[ORAML-1:0]		ReadLeaf,
-	output					ReadOutValid,
-	input					ReadOutReady,
-	/* Pulsed during last cycle that a block is being read */
-	output	 				BlockReadComplete,
-	output					PathReadComplete,
-	
-	//--------------------------------------------------------------------------
-	//	Status/Debugging interface
-	//--------------------------------------------------------------------------
-
-	output 					StashAlmostFull,
-	output					StashOverflow,
-	output	[SEAWidth-1:0] 	StashOccupancy,
-	
-	// Indicates that on a read/rm/update, the requested block wasn't found
-	// THIS IS AN ERROR
-	output					BlockNotFound,
-	output					BlockNotFoundValid
+	BlockNotFound, BlockNotFoundValid
 	);
 
 	//--------------------------------------------------------------------------
@@ -141,7 +65,108 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 							ST_Evict =				4'd5,
 							ST_Turnaround1 =		4'd6,
 							ST_Turnaround2 =		4'd7,
-							ST_CoreSync =			4'd8;
+							ST_CoreSync =			4'd8;	
+	
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 					Clock, Reset;
+	output					ResetDone;
+
+	//--------------------------------------------------------------------------
+	//	Commands
+	//--------------------------------------------------------------------------
+	
+	input	[ORAML-1:0]		RemapLeaf;
+	input	[ORAML-1:0]		AccessLeaf;
+	input	[ORAMU-1:0]		AccessPAddr;
+	
+	/*	Controls the Return/Eviction interfaces 
+		Command code:
+			IsDummy ==	1		Command ==	X
+			IsDummy ==	0		Perform command */
+	input					AccessIsDummy;
+	input	[BECMDWidth-1:0]AccessCommand;
+	
+	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
+		as the PosMap is read.  The level command signals must be valid at this 
+		time. */
+	input					StartScan;
+	
+	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
+		pulsed as soon as the last dummy block is decrypted */
+	input					StartWriteback;		
+		
+	//--------------------------------------------------------------------------
+	//	Data return interface (Stash -> LLC)
+	//--------------------------------------------------------------------------
+	
+	output	[BEDWidth-1:0]	ReturnData;
+	output	[ORAMU-1:0]		ReturnPAddr;
+	output	[ORAML-1:0]		ReturnLeaf;
+	output					ReturnDataOutValid;
+	//input					ReturnDataOutReady;	// reads are block DMAs
+	output					BlockReturnComplete;
+	
+	//--------------------------------------------------------------------------
+	//	Data eviction interface (LLC -> Stash)
+	//--------------------------------------------------------------------------	
+	
+	input	[BEDWidth-1:0]	EvictData;
+	input	[ORAMU-1:0]		EvictPAddr;
+	input	[ORAML-1:0]		EvictLeaf;
+	input					EvictDataInValid;
+	output					EvictDataInReady;
+	output					BlockEvictComplete;	
+	
+	//--------------------------------------------------------------------------
+	//	Data update (dirty block update) interface (LLC -> Stash)
+	//--------------------------------------------------------------------------	
+	
+	input	[BEDWidth-1:0]	UpdateData;
+	input					UpdateDataInValid;
+	output					UpdateDataInReady;
+	output					BlockUpdateComplete;
+	
+	//--------------------------------------------------------------------------
+	//	ORAM write interface (external memory -> Decryption -> stash)
+	//--------------------------------------------------------------------------
+
+	input	[BEDWidth-1:0]	WriteData;
+	input	[ORAMU-1:0]		WritePAddr;
+	input	[ORAML-1:0]		WriteLeaf;
+	input					WriteInValid;
+	output					WriteInReady;	
+	/* Pulsed during the last cycle that a block is being written */
+	output					BlockWriteComplete;
+	
+	//--------------------------------------------------------------------------
+	//	ORAM read interface (stash -> encryption -> external memory)
+	//--------------------------------------------------------------------------
+
+	output	[BEDWidth-1:0]	ReadData;
+	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
+	output	[ORAMU-1:0]		ReadPAddr;
+	output	[ORAML-1:0]		ReadLeaf;
+	output					ReadOutValid;
+	input					ReadOutReady;
+	/* Pulsed during last cycle that a block is being read */
+	output	 				BlockReadComplete;
+	output					PathReadComplete;
+	
+	//--------------------------------------------------------------------------
+	//	Status/Debugging interface
+	//--------------------------------------------------------------------------
+
+	output 					StashAlmostFull;
+	output					StashOverflow;
+	output	[SEAWidth-1:0] 	StashOccupancy;
+	
+	// Indicates that on a read/rm/update; the requested block wasn't found
+	// THIS IS AN ERROR
+	output					BlockNotFound;
+	output					BlockNotFoundValid;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs

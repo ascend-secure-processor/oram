@@ -11,23 +11,41 @@
 //				is complete.  This must occur before the first real/dummy ORAM
 //				request.
 //
-//				TODO: 	this module can be re-implemented as the F-bit scheme 
-//						from the ISCA paper
+//	Note: 		This module can be re-implemented as the F-bit scheme from the 
+//				ISCA paper
 //------------------------------------------------------------------------------
 module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh", 
 							`include "AES.vh") (
-		Clock, Reset, Done,
-		DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
-		DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
+	Clock, Reset, Done,
+	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
+	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
 	);
 
+	//--------------------------------------------------------------------------
+	//	Constants
+	//-------------------------------------------------------------------------- 
+
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+	`include "SubTreeLocal.vh"
+	
+	localparam					SpaceRemaining = 	BktHSize_RndBits - 2 * IVEntropyWidth - BktHSize_ValidBits;
+	
+    localparam					EndOfTree =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
+    localparam					EndOfTreeAddr =  	EndOfTree * BktSize_DRWords;                                    
+		                                       
+	localparam					BAWidth =			`log2(EndOfTree);	
+	
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------	
 	
   	input 						Clock, Reset;
 
 	//--------------------------------------------------------------------------
 	//	Data return interface (ORAM controller -> LLC)
 	//--------------------------------------------------------------------------
+	
 	output	[DDRAWidth-1:0]		DRAMCommandAddress;
 	output	[DDRCWidth-1:0]		DRAMCommand;
 	output						DRAMCommandValid;
@@ -41,22 +59,8 @@ module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//--------------------------------------------------------------------------
 	//	Status interface
 	//--------------------------------------------------------------------------
-	output 						Done;
-	
-	
-	//--------------------------------------------------------------------------
-	//	Constants
-	//-------------------------------------------------------------------------- 
 
-	`include "BucketDRAMLocal.vh"
-	`include "SubTreeLocal.vh"
-	
-	localparam					SpaceRemaining = 	BktHSize_RndBits - 2 * IVEntropyWidth - BktHSize_ValidBits;
-	
-    localparam					EndOfTree =  (1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
-    localparam					EndOfTreeAddr =  EndOfTree * BktSize_DRWords;                                    
-		                                       
-	localparam					BAWidth =			`log2(EndOfTree);
+	output 						Done;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs

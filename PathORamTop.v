@@ -12,50 +12,25 @@
 module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 						`include "AES.vh", `include "Stash.vh", 
 						`include "UORAM.vh", `include "PLB.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 					Clock, Reset,
+  	Clock, Reset,
 	
-	//--------------------------------------------------------------------------
-	//	Interface to network
-	//--------------------------------------------------------------------------
+	Cmd, PAddr, 
+	CmdValid, CmdReady, 
+	
+	DataIn,
+	DataInValid, DataInReady,
 
-	input	[BECMDWidth-1:0] Cmd,
-	input					CmdValid,
-	output 					CmdReady,
-	input	[ORAMU-1:0]		PAddr,
+	DataOut,
+	DataOutValid, DataOutReady,
 	
-	input	[FEDWidth-1:0]	DataIn,
-	input					DataInValid,
-	output 					DataInReady,
-
-	output	[FEDWidth-1:0]	DataOut, // TODO naming convention [change to DataOut]
-	output 					DataOutValid,
-	input 					DataOutReady,
-	
-	//--------------------------------------------------------------------------
-	//	Interface to DRAM
-	//--------------------------------------------------------------------------
-
-	output	[DDRAWidth-1:0]	DRAMAddress,
-	output	[DDRCWidth-1:0]	DRAMCommand,
-	output					DRAMCommandValid,
-	input					DRAMCommandReady,
-	
-	input	[DDRDWidth-1:0]	DRAMReadData,
-	input					DRAMReadDataValid,
-	
-	output	[DDRDWidth-1:0]	DRAMWriteData,
-	output	[DDRMWidth-1:0]	DRAMWriteMask,
-	output					DRAMWriteDataValid,
-	input					DRAMWriteDataReady
+	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
+	DRAMReadData, DRAMReadDataValid,
+	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
 	);	
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Constants
-	//------------------------------------------------------------------------------ 
+	//--------------------------------------------------------------------------
 
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
@@ -64,9 +39,49 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	`include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh"; 
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 					Clock, Reset;
+	
+	//--------------------------------------------------------------------------
+	//	Interface to network
+	//--------------------------------------------------------------------------
+
+	input	[BECMDWidth-1:0] Cmd;
+	input	[ORAMU-1:0]		PAddr;
+	input					CmdValid;
+	output 					CmdReady;
+	
+	input	[FEDWidth-1:0]	DataIn;
+	input					DataInValid;
+	output 					DataInReady;
+
+	output	[FEDWidth-1:0]	DataOut; // TODO naming convention [change to DataOut]
+	output 					DataOutValid;
+	input 					DataOutReady;
+	
+	//--------------------------------------------------------------------------
+	//	Interface to DRAM
+	//--------------------------------------------------------------------------
+
+	output	[DDRAWidth-1:0]	DRAMAddress;
+	output	[DDRCWidth-1:0]	DRAMCommand;
+	output					DRAMCommandValid;
+	input					DRAMCommandReady;
+	
+	input	[DDRDWidth-1:0]	DRAMReadData;
+	input					DRAMReadDataValid;
+	
+	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[DDRMWidth-1:0]	DRAMWriteMask;
+	output					DRAMWriteDataValid;
+	input					DRAMWriteDataReady;	
+	
+	//--------------------------------------------------------------------------
 	//	Wires & Regs
-	//------------------------------------------------------------------------------ 
+	//-------------------------------------------------------------------------- 
 
 	(* mark_debug = "TRUE" *)	wire					BEnd_CmdReady, BEnd_CmdValid;
 	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] BEnd_Cmd;
@@ -76,9 +91,9 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Core modules
-	//------------------------------------------------------------------------------ 	
+	//-------------------------------------------------------------------------- 	
 	
 	UORamController #(  	.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 

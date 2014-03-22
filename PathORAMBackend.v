@@ -18,55 +18,22 @@
 //==============================================================================
 module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							`include "AES.vh", `include "Stash.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 					Clock, Reset,
+	Clock, Reset,
+
+	Command, PAddr, CurrentLeaf, RemappedLeaf, 
+	CommandValid, CommandReady,
+
+	LoadData, 
+	LoadValid, LoadReady,
+
+	StoreData, 
+	StoreValid, StoreReady,
 	
-	//--------------------------------------------------------------------------
-	//	Frontend Interface
-	//--------------------------------------------------------------------------
+	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
+	DRAMReadData, DRAMReadDataValid,
+	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	input	[BECMDWidth-1:0] Command,
-	input	[ORAMU-1:0]		PAddr,
-	input	[ORAML-1:0]		CurrentLeaf, // If Command == Append, this is XX 
-	input	[ORAML-1:0]		RemappedLeaf,
-	input					CommandValid,
-	output 					CommandReady,
-
-	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
-	
-	output	[FEDWidth-1:0]	LoadData,
-	output					LoadValid,
-	input 					LoadReady,
-
-	input	[FEDWidth-1:0]	StoreData,
-	input 					StoreValid,
-	output 					StoreReady,
-	
-	//--------------------------------------------------------------------------
-	//	DRAM Interface
-	//--------------------------------------------------------------------------
-
-	output	[DDRAWidth-1:0]	DRAMCommandAddress,
-	output	[DDRCWidth-1:0]	DRAMCommand,
-	output					DRAMCommandValid,
-	input					DRAMCommandReady,
-	
-	input	[DDRDWidth-1:0]	DRAMReadData,
-	input					DRAMReadDataValid,
-	
-	output	[DDRDWidth-1:0]	DRAMWriteData,
-	output	[DDRMWidth-1:0]	DRAMWriteMask,
-	output					DRAMWriteDataValid,
-	input					DRAMWriteDataReady,
-
-	//--------------------------------------------------------------------------
-	//	Status Interface
-	//--------------------------------------------------------------------------
-
-	output					DRAMInitializationComplete
+	DRAMInitializationComplete
 	);
 		
 	//------------------------------------------------------------------------------
@@ -92,6 +59,56 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							ST_PathRead =		3'd4,
 							ST_StartWriteback =	3'd5,
 							ST_PathWriteback =	3'd6;
+								
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 					Clock, Reset;
+	
+	//--------------------------------------------------------------------------
+	//	Frontend Interface
+	//--------------------------------------------------------------------------
+
+	input	[BECMDWidth-1:0] Command;
+	input	[ORAMU-1:0]		PAddr;
+	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX 
+	input	[ORAML-1:0]		RemappedLeaf;
+	input					CommandValid;
+	output 					CommandReady;
+
+	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
+	
+	output	[FEDWidth-1:0]	LoadData;
+	output					LoadValid;
+	input 					LoadReady;
+
+	input	[FEDWidth-1:0]	StoreData;
+	input 					StoreValid;
+	output 					StoreReady;
+	
+	//--------------------------------------------------------------------------
+	//	DRAM Interface
+	//--------------------------------------------------------------------------
+
+	output	[DDRAWidth-1:0]	DRAMCommandAddress;
+	output	[DDRCWidth-1:0]	DRAMCommand;
+	output					DRAMCommandValid;
+	input					DRAMCommandReady;
+	
+	input	[DDRDWidth-1:0]	DRAMReadData;
+	input					DRAMReadDataValid;
+	
+	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[DDRMWidth-1:0]	DRAMWriteMask;
+	output					DRAMWriteDataValid;
+	input					DRAMWriteDataReady;
+
+	//--------------------------------------------------------------------------
+	//	Status Interface
+	//--------------------------------------------------------------------------
+
+	output					DRAMInitializationComplete; // TODO move/rename to be part of the MIG interface
 								
 	//------------------------------------------------------------------------------
 	//	Wires & Regs

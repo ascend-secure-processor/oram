@@ -9,44 +9,21 @@
 //	Module:		StashScanTable
 //------------------------------------------------------------------------------
 module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 					Clock, Reset, PerAccessReset, 
-	input					AccessComplete, // debugging
-	output					ResetDone,
+  	Clock, Reset, PerAccessReset, 
+	AccessComplete,
+	ResetDone,
+
+	CurrentLeaf, CurrentLeafValid,
 	
-	//--------------------------------------------------------------------------
-	//	Scan interface
-	//--------------------------------------------------------------------------
-		
-	input	[ORAML-1:0]		CurrentLeaf,
-	input					CurrentLeafValid,
+	InScanLeaf, InScanPAddr, InScanSAddr, InScanAdd,
+	InScanValid, InScanStreaming,
 	
-	input	[ORAML-1:0]		InScanLeaf,
-	input	[ORAMU-1:0]		InScanPAddr, // debugging
-	input	[SEAWidth-1:0]	InScanSAddr,
-	input					InScanAdd,
-	input					InScanValid,
-	input					InScanStreaming,
+	OutScanSAddr, OutScanAccepted, OutScanAdd,
+	OutScanValid, OutScanStreaming,
 	
-	output	[SEAWidth-1:0]	OutScanSAddr,
-	output					OutScanAccepted,
-	output					OutScanAdd,
-	output					OutScanValid,
-	output					OutScanStreaming,
+	InDMAAddr, InDMAValid,
 	
-	//--------------------------------------------------------------------------
-	//	DMA (Path writeback) interface
-	//--------------------------------------------------------------------------
-		
-	input	[STAWidth-1:0] 	InDMAAddr,
-	input					InDMAValid,
-	
-	output	[SEAWidth-1:0]	OutDMAAddr,
-	output 					OutDMAValid,
-	input					OutDMAReady
+	OutDMAAddr, OutDMAValid, OutDMAReady
 	);
 	
 	//--------------------------------------------------------------------------
@@ -57,6 +34,45 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	`include "StashLocal.vh"
 	
 	localparam				FIFOWidth =				`log2(BlocksOnPath+1);
+	
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 					Clock, Reset, PerAccessReset; 
+	input					AccessComplete; // debugging
+	output					ResetDone;
+	
+	//--------------------------------------------------------------------------
+	//	Scan interface
+	//--------------------------------------------------------------------------
+		
+	input	[ORAML-1:0]		CurrentLeaf;
+	input					CurrentLeafValid;
+	
+	input	[ORAML-1:0]		InScanLeaf;
+	input	[ORAMU-1:0]		InScanPAddr; // debugging
+	input	[SEAWidth-1:0]	InScanSAddr;
+	input					InScanAdd;
+	input					InScanValid;
+	input					InScanStreaming;
+	
+	output	[SEAWidth-1:0]	OutScanSAddr;
+	output					OutScanAccepted;
+	output					OutScanAdd;
+	output					OutScanValid;
+	output					OutScanStreaming;
+	
+	//--------------------------------------------------------------------------
+	//	DMA (Path writeback) interface
+	//--------------------------------------------------------------------------
+		
+	input	[STAWidth-1:0] 	InDMAAddr;
+	input					InDMAValid;
+	
+	output	[SEAWidth-1:0]	OutDMAAddr;
+	output 					OutDMAValid;
+	input					OutDMAReady;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs

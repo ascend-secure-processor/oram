@@ -44,84 +44,24 @@
 //				scalable to large ORAMC: the bitvector and logic get slow 
 //------------------------------------------------------------------------------
 module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-		
-  	input 					Clock, Reset, PerAccessReset,
-	output					ResetDone,
+  	Clock, Reset, PerAccessReset,
+	ResetDone,
 
-	//--------------------------------------------------------------------------
-	//	Command interface
-	//--------------------------------------------------------------------------
-		
-	input	[SCMDWidth-1:0] InCommand,
-	input	[SEAWidth-1:0]	InSAddr,
-	input	[ORAMU-1:0]		InPAddr,
-	input	[ORAML-1:0]		InLeaf,
-	/* 	Only used for header update command
-		SECURITY: InHeaderUpdate is redundant, but we will always do real/dummy 
-		header update to prevent timing variations (we could also just use a 
-		counter but this is simpler to implement) */
-	input					InHeaderUpdate,
-	input					InHeaderRemove,
-	input					InCommandValid,
-	// High during at the beginning (first cycle) of an operation
-	output 					InCommandReady,
-	// High during the last cycle of an operation (the last cycle when valid 
-	// data is being written OR read out)
-	output					InCommandComplete,
+	InCommand, InSAddr, InPAddr, InLeaf,
+	InHeaderUpdate, InHeaderRemove, 
+	InCommandValid, InCommandReady, InCommandComplete,
 
-	//--------------------------------------------------------------------------
-	//	Input interface
-	//--------------------------------------------------------------------------
+	InData, InValid, InReady,
+	OutData, OutPAddr, OutLeaf, OutValid,
+
+	OutScanPAddr, OutScanLeaf, OutScanSAddr, OutScanAdd, 
+	OutScanValid, OutScanStreaming,
+	InScanSAddr, InScanAccepted, InScanAdd,
+	InScanValid, InScanStreaming,
 	
-	input	[BEDWidth-1:0]	InData,
-	input					InValid,
-	output 					InReady,
+	StashAlmostFull, StashOverflow,	StashOccupancy,
 
-	//--------------------------------------------------------------------------
-	//	Output interface
-	//--------------------------------------------------------------------------
-	
-	output	[BEDWidth-1:0]	OutData,
-	output	[ORAMU-1:0]		OutPAddr,
-	output	[ORAML-1:0]		OutLeaf,
-	output 					OutValid,
-
-	//--------------------------------------------------------------------------
-	//	Scan interface
-	//--------------------------------------------------------------------------
-	
-	output	[ORAMU-1:0]		OutScanPAddr,
-	output	[ORAML-1:0]		OutScanLeaf,
-	output	[SEAWidth-1:0]	OutScanSAddr,
-	output					OutScanAdd,
-	output					OutScanValid,
-	output					OutScanStreaming,
-
-	input	[SEAWidth-1:0]	InScanSAddr,
-	input					InScanAccepted,
-	input					InScanAdd,
-	input					InScanValid,
-	input					InScanStreaming,
-	
-	//--------------------------------------------------------------------------
-	//	Status interface
-	//--------------------------------------------------------------------------
-
-	output 					StashAlmostFull,
-	output					StashOverflow,	
-	output	[SEAWidth-1:0] 	StashOccupancy,
-
-	//--------------------------------------------------------------------------
-	//	Stash internal signals
-	//--------------------------------------------------------------------------
-	
-	/*	We will issue one more push request than we want during path reads (this 
-		helps maintain 100% throughput).  So, we need to kill the last request. */
-	input					CancelPushCommand, // TODO can we refactor to get rid of this signal?
-	output					SyncComplete
+	CancelPushCommand, SyncComplete
 	);
 	
 	//--------------------------------------------------------------------------
@@ -151,6 +91,85 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
 							EN_Used =				1'b1;
+	
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+		
+  	input 					Clock, Reset, PerAccessReset;
+	output					ResetDone;
+
+	//--------------------------------------------------------------------------
+	//	Command interface
+	//--------------------------------------------------------------------------
+		
+	input	[SCMDWidth-1:0] InCommand;
+	input	[SEAWidth-1:0]	InSAddr;
+	input	[ORAMU-1:0]		InPAddr;
+	input	[ORAML-1:0]		InLeaf;
+	/* 	Only used for header update command
+		SECURITY: InHeaderUpdate is redundant, but we will always do real/dummy 
+		header update to prevent timing variations (we could also just use a 
+		counter but this is simpler to implement) */
+	input					InHeaderUpdate;
+	input					InHeaderRemove;
+	input					InCommandValid;
+	// High during at the beginning (first cycle) of an operation
+	output 					InCommandReady;
+	// High during the last cycle of an operation (the last cycle when valid 
+	// data is being written OR read out)
+	output					InCommandComplete;
+
+	//--------------------------------------------------------------------------
+	//	Input interface
+	//--------------------------------------------------------------------------
+	
+	input	[BEDWidth-1:0]	InData;
+	input					InValid;
+	output 					InReady;
+
+	//--------------------------------------------------------------------------
+	//	Output interface
+	//--------------------------------------------------------------------------
+	
+	output	[BEDWidth-1:0]	OutData;
+	output	[ORAMU-1:0]		OutPAddr;
+	output	[ORAML-1:0]		OutLeaf;
+	output 					OutValid;
+
+	//--------------------------------------------------------------------------
+	//	Scan interface
+	//--------------------------------------------------------------------------
+	
+	output	[ORAMU-1:0]		OutScanPAddr;
+	output	[ORAML-1:0]		OutScanLeaf;
+	output	[SEAWidth-1:0]	OutScanSAddr;
+	output					OutScanAdd;
+	output					OutScanValid;
+	output					OutScanStreaming;
+
+	input	[SEAWidth-1:0]	InScanSAddr;
+	input					InScanAccepted;
+	input					InScanAdd;
+	input					InScanValid;
+	input					InScanStreaming;
+	
+	//--------------------------------------------------------------------------
+	//	Status interface
+	//--------------------------------------------------------------------------
+
+	output 					StashAlmostFull;
+	output					StashOverflow;	
+	output	[SEAWidth-1:0] 	StashOccupancy;
+
+	//--------------------------------------------------------------------------
+	//	Stash internal signals
+	//--------------------------------------------------------------------------
+	
+	/*	We will issue one more push request than we want during path reads (this 
+		helps maintain 100% throughput).  So, we need to kill the last request. */
+	input					CancelPushCommand; // TODO can we refactor to get rid of this signal?
+	output					SyncComplete;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
