@@ -60,6 +60,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							ST_StartWriteback =	3'd5,
 							ST_PathWriteback =	3'd6;
 								
+	localparam	PRNGLWidth =`divceil(ORAML, 8) * 8;
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -494,7 +495,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	// Gentry leaves for REW ORAM
 	
-	localparam	PRNGLWidth =						`divceil(ORAML, 8) * 8;
 	
 	PRNG 		#(			.RandWidth(				PRNGLWidth))
 				leaf_gen(	.Clock(					Clock), 
@@ -530,7 +530,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
-							.Cmd(					AddrGen_DRAMCommand_Internal), // TODO command width == 4???
+							.Cmd(					AddrGen_DRAMCommand_Internal), 
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
 	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth), // TODO remove this register if the big FIFO register works out
 							.FWLatency(				Overclock))

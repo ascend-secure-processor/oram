@@ -1,27 +1,29 @@
 `include "Const.vh"
 
 module DM_Cache
-#(parameter DataWidth = 32, LogLineSize = 4, Capacity = 32768, AddrWidth = 32, ExtraTagWidth = 32)
-(
-    input Clock, Reset,
-    output Ready,
-    input Enable,
-    input [CacheCmdWidth-1:0] Cmd,        // 00 for write, 01 for read, 10 for refill, 11 for remove
-    input [AddrWidth-1:0] AddrIn,
-    input [DataWidth-1:0] DIn,
-    input [ExtraTagWidth-1:0] ExtraTagIn,
- 
-    output OutValid,
-    output Hit,   
-    output [DataWidth-1:0] DOut,
-    output Evicting,
-    output [AddrWidth-1:0] AddrOut,
-    output [ExtraTagWidth-1:0] ExtraTagOut
+#(parameter DataWidth = 32, LogLineSize = 1, Capacity = 64, AddrWidth = 1, ExtraTagWidth = 32)
+(	Clock, Reset, Ready, Enable, Cmd, AddrIn, DIn, ExtraTagIn, 
+	OutValid, Hit, DOut, Evicting, AddrOut, ExtraTagOut
 );
  
     `include "CacheLocal.vh";
     `include "CacheCmdLocal.vh";
  
+    input Clock, Reset;
+    output Ready;
+    input Enable;
+    input [CacheCmdWidth-1:0] Cmd;        // 00 for write, 01 for read, 10 for refill, 11 for remove
+    input [AddrWidth-1:0] AddrIn;
+    input [DataWidth-1:0] DIn;
+    input [ExtraTagWidth-1:0] ExtraTagIn;
+ 
+    output OutValid;
+    output Hit;  
+    output [DataWidth-1:0] DOut;
+    output Evicting;
+    output [AddrWidth-1:0] AddrOut;
+    output [ExtraTagWidth-1:0] ExtraTagOut;
+
     // Registers to hold input data
     wire [CacheCmdWidth-1:0] LastCmd;
     wire [AddrWidth-1:0] LastAddr;
@@ -111,7 +113,8 @@ module DM_Cache
     assign Evicting = IsLastRefilling && LineValid; // a valid line is there. danger: on refillFinish, cannot use new tag!
     assign AddrOut = TagOut[TagWidth-1:0] << LogLineSize;
     assign ExtraTagOut = TagOut[TagWidth+ExtraTagWidth-1:TagWidth];
-        
+     
+`ifdef SIMULATION   
     always@(posedge Clock) begin
         if (Ready && Enable) begin             
             if (Cmd == CacheRefill && Offset != 0) begin
@@ -120,4 +123,5 @@ module DM_Cache
             end       
         end
     end
+`endif
 endmodule

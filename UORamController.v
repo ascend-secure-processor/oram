@@ -3,47 +3,75 @@
 module UORamController
 #(`include "UORAM.vh", `include "PathORAM.vh", `include "PLB.vh")
 (
-    input Clock, Reset, 
+    Clock, Reset, 
     
-    // receive command from network
-    output CmdInReady,
-    input CmdInValid, 
-    input [BECMDWidth-1:0] CmdIn,  
-    input [ORAMU-1:0] ProgAddrIn,
+    CmdInReady,
+    CmdInValid, 
+    CmdIn,  
+    ProgAddrIn,
     
-    // receive data from network
-    output DataInReady,
-    input DataInValid,
-    input [FEDWidth-1:0] DataIn,
+    DataInReady,
+    DataInValid,
+    DataIn,
     
-    // return data to network
-    input  ReturnDataReady,
-    output ReturnDataValid,
-    output [FEDWidth-1:0] ReturnData,
+    ReturnDataReady,
+    ReturnDataValid,
+    ReturnData,
     
-    // send request to backend
-    input  CmdOutReady,
-    output CmdOutValid,
-    output [BECMDWidth-1:0] CmdOut,
-    output [ORAMU-1:0] AddrOut,
-    output [ORAML-1:0] OldLeaf, NewLeaf,
+    CmdOutReady,
+    CmdOutValid,
+    CmdOut,
+    AddrOut,
+    OldLeaf, NewLeaf,
     
-    // send data to backend
-    input  StoreDataReady,
-    output StoreDataValid, 
-    output [FEDWidth-1:0] StoreData,
+    StoreDataReady,
+    StoreDataValid, 
+    StoreData,
     
-    // receive response from backend
-    output LoadDataReady,
-    input  LoadDataValid,
-    input  [FEDWidth-1:0] LoadData
+    LoadDataReady,
+    LoadDataValid,
+    LoadData
 );
 
     `include "PathORAMBackendLocal.vh";
     `include "CacheCmdLocal.vh";
     `include "BucketLocal.vh";
-	`include "PLBLocal.vh";
+    `include "PLBLocal.vh";
 
+    input Clock, Reset;
+    
+    // receive command from network
+    output CmdInReady;
+    input CmdInValid;
+    input [BECMDWidth-1:0] CmdIn;  
+    input [ORAMU-1:0] ProgAddrIn;
+    
+    // receive data from network
+    output DataInReady;
+    input DataInValid;
+    input [FEDWidth-1:0] DataIn;
+    
+    // return data to network
+    input  ReturnDataReady;
+    output ReturnDataValid;
+    output [FEDWidth-1:0] ReturnData;
+    
+    // send request to backend
+    input  CmdOutReady;
+    output CmdOutValid;
+    output [BECMDWidth-1:0] CmdOut;
+    output [ORAMU-1:0] AddrOut;
+    output [ORAML-1:0] OldLeaf, NewLeaf;
+    
+    // send data to backend
+    input  StoreDataReady;
+    output StoreDataValid; 
+    output [FEDWidth-1:0] StoreData;
+    
+    // receive response from backend
+    output LoadDataReady;
+    input  LoadDataValid;
+    input  [FEDWidth-1:0] LoadData;
 	// ============================== Frontend buffers =============================
 	
 	// Frontend must handle two cases on writes: data arrives {before, after} command
@@ -89,7 +117,6 @@ module UORamController
     wire Preparing, Accessing;
     wire RefillStarted, ExpectingProgramData;
     
-    assign CmdInReady_Internal = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
        
     // ================================== PosMapPLB ============================
     wire PPPCmdReady, PPPCmdValid;
@@ -98,7 +125,7 @@ module UORamController
     wire PPPRefill;
     wire [LeafWidth-1:0] PPPRefillData;  
     wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
-    wire PPPEvictDataValid;
+    wire PPPEvictDataValid, PPPRefillDataValid;
     wire [LeafWidth-1:0] PPPEvictData;
        
     PosMapPLB #(.ORAMU(             ORAMU), 
@@ -138,6 +165,7 @@ module UORamController
     assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill) : CacheWrite;//Preparing ? CacheRead : CacheWrite;
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
     
+    assign CmdInReady_Internal = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
     assign PPPOutReady = Preparing ? PPPMiss : 
                             ((PPPMiss && !PPPEvict) || (PPPUnInitialized && QDepth > 0) || CmdOutReady);
             // four cases: 
@@ -208,14 +236,17 @@ module UORamController
         end
         
         else if (Preparing) begin
-            if (PPPValid && PPPHit) begin       // PPP hit, done                
-                $display("\t\tPosMap Hit  in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
-            end
-            else if (PPPMiss) begin             // PPP (PLB) miss, look for the next PosMap block
+            if (PPPMiss) begin             // PPP (PLB) miss, look for the next PosMap block
                 QDepth <= QDepth + 1;
                 AddrQ[QDepth+1] = NumValidBlock + AddrQ[QDepth] / LeafInBlock;
             
+	`ifdef SIMULATION
                 $display("\t\tPosMap Miss in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
+            end
+	    else if (PPPValid && PPPHit) begin       // PPP hit, done                
+                $display("\t\tPosMap Hit  in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
+	`endif
+
             end
         end
         

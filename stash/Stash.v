@@ -173,6 +173,7 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	//-------------------------------------------------------------------------- 
 	
 	wire					PerAccessReset;
+	wire					AccessStart; 
 
 	// Control
 	
@@ -230,7 +231,8 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire 					ScanTableResetDone;	
 	
 	// Writeback control
-	
+
+	wire					ReadingLastBlock;	
 	wire					BlockReadComplete_Internal;
 
 	wire	[STAWidth-1:0]	BlocksReading;

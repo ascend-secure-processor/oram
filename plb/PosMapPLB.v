@@ -2,33 +2,34 @@
 
 module PosMapPLB
 #(`include "UORAM.vh", `include "PathORAM.vh", `include "PLB.vh")
-(
-    input Clock, Reset, 
-    output CmdReady,
-    input  CmdValid,
-    input  [CacheCmdWidth-1:0] Cmd,        // 00 for update, 01 for read, 10 for refill, 11 for init_refill
-    input  [ORAMU-1:0] AddrIn,
-    
-    input  DInValid,
-    input  [LeafWidth-1:0] DIn,
-    
-    input  OutReady,
-    output reg Valid,
-    output reg Hit,
-    output reg UnInit,
-    output reg [ORAML-1:0] OldLeafOut,
-    output reg [ORAML-1:0] NewLeafOut,    
-    output reg Evict,
-    output reg [ORAMU-1:0] AddrOut,
-    
-    // evict data
-    output EvictDataOutValid,
-    output [LeafWidth-1:0] EvictDataOut
+(	Clock, Reset, CmdReady, CmdValid, Cmd, AddrIn, DInValid, DIn, 
+	OutReady, Valid, Hit, UnInit, OldLeafOut, NewLeafOut, Evict, AddrOut, EvictDataOutValid, EvictDataOut
 );
  
     `include "CacheCmdLocal.vh"; 
     `include "PLBLocal.vh";     
  
+    input Clock, Reset; 
+    output CmdReady;
+    input  CmdValid;
+    input  [CacheCmdWidth-1:0] Cmd;        // 00 for update, 01 for read, 10 for refill, 11 for init_refill
+    input  [ORAMU-1:0] AddrIn;
+    
+    input  DInValid;
+    input  [LeafWidth-1:0] DIn;
+    
+    input  OutReady;
+    output reg Valid;
+    output reg Hit;
+    output reg UnInit;
+    output reg [ORAML-1:0] OldLeafOut;
+    output reg [ORAML-1:0] NewLeafOut;    
+    output reg Evict;
+    output reg [ORAMU-1:0] AddrOut;
+    // evict data
+    output EvictDataOutValid;
+    output [LeafWidth-1:0] EvictDataOut;
+
     // Select between PLB and PosMap
     wire InOnChipPosMap;
     assign InOnChipPosMap = AddrIn >= FinalPosMapStart; 
@@ -42,15 +43,13 @@ module PosMapPLB
     Register #(.Width(1))
         BusyReg (.Clock(Clock), .Reset(Reset || (Valid && OutReady)), .Set(CmdReady && CmdValid), .Enable(1'b0), .Out(Busy));
     
-    assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
-         
-    wire [ORAML-1:0] NewLeafIn;      // TODO: should be the output of some RNG
+    wire [ORAML-1:0] NewLeafIn;      
     wire NewLeafValid, NewLeafAccept;
     PRNG #(.RandWidth(LeafWidth))
         LeafGen (   Clock, Reset,
                     NewLeafAccept,
                     NewLeafValid,
-                    NewLeafIn
+                    {{(LeafWidth-ORAML){1'bz}}, NewLeafIn}
                 );
 
     // ============================== onchip PosMap ====================================
@@ -73,12 +72,6 @@ module PosMapPLB
         PosMapBusyReg (.Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
                         .In(PosMapSelect && Cmd == CacheWrite), .Out(PosMapBusy)); 
     
-    assign PosMapSelect = InOnChipPosMap && CmdReady && CmdValid;                       
-    assign PosMapEnable = PosMapInit || PosMapSelect || PosMapBusy;
-    assign PosMapWrite = PosMapInit || PosMapBusy;        
-    assign PosMapAddr = PosMapInit ? InitAddr : AddrIn - FinalPosMapStart;
-    assign PosMapIn = {!PosMapInit, NewLeafIn};     // if init, invalidate; otherwise, validate
-    
     wire InitEnd;
     wire [LogFinalPosMapEntry-1:0] InitAddr;
     Register #(.Width(1))
@@ -87,6 +80,12 @@ module PosMapPLB
         PosMapInitCounter (Clock, Reset, 1'b0, 1'b0, PosMapInit, {LogFinalPosMapEntry{1'bx}}, InitAddr); // load = set = 0, in= x
     CountCompare #(.Width(LogFinalPosMapEntry), .Compare(FinalPosMapEntry - 1))
         PosMapInitCountCmp(InitAddr, InitEnd);
+
+    assign PosMapSelect = InOnChipPosMap && CmdReady && CmdValid;                       
+    assign PosMapEnable = PosMapInit || PosMapSelect || PosMapBusy;
+    assign PosMapWrite = PosMapInit || PosMapBusy;        
+    assign PosMapAddr = PosMapInit ? InitAddr : AddrIn - FinalPosMapStart;
+    assign PosMapIn = {!PosMapInit, NewLeafIn};     // if init, invalidate; otherwise, validate
     // ===============================================================================
 
     // ============================================= PLB =============================
@@ -130,12 +129,12 @@ module PosMapPLB
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
     // =============================================================================  
-    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;
-   
-   
     wire PPPHit;
     assign PPPHit = PosMapValid || (PLBValid && PLBHit);
        
+    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;
+    assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
+
     always @(posedge Clock) begin
         if (Reset) begin
             Valid <= 0;              
@@ -155,8 +154,10 @@ module PosMapPLB
                             
             if (PPPHit && LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
                 NewLeafOut <= NewLeafIn;
+		`ifdef SIMULATION
                 if (!NewLeafValid)
                     $display("Error: run out of random leaves.");
+		`endif
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin
                 NewLeafOut <= PLBLeafOut;

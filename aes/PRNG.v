@@ -15,10 +15,10 @@ module PRNG #(parameter RandWidth = 32, `include "AES.vh")
 );
 
 	wire  SeedValid, SeedReady;
-	wire  [AESWidth-1:0] Seed;
+	wire  [IVEntropyWidth-1:0] Seed;
 
-    Counter #(.Width(AESWidth))
-        SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {AESWidth{1'bx}}, Seed); // load = set = 0, in= x 
+    Counter #(.Width(IVEntropyWidth))
+        SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {IVEntropyWidth{1'bx}}, Seed); // load = set = 0, in= x 
         	// TODO: if reset, seed goes back to 0, not secure anymore. 
 
     wire [AESWidth-1:0]                            AESKey;

@@ -2,51 +2,58 @@
 
 module UORamDataPath
 #(`include "UORAM.vh", `include "PathORAM.vh", `include "PLB.vh")
-(
-    input Clock, Reset, 
-    
-    // input control state, output data state
-    input SwitchReq,
-    input DataBlockReq,
-    input [BECMDWidth-1:0] Cmd,
-    
-    output ExpectingProgramData, 
-    
-    // receive data from network
-    output DataInReady,
-    input DataInValid,
-    input [FEDWidth-1:0] DataIn,
-    
-    // return data to network
-    input  ReturnDataReady,
-    output ReturnDataValid,
-    output [FEDWidth-1:0] ReturnData,
-    
-    // receive data from PLB
-    output PPPEvictDataReady,
-    input  PPPEvictDataValid,
-    input  [LeafWidth-1:0] PPPEvictData,
-    
-    // return data to PLB
-    input  PPPRefillDataReady,
-    output PPPRefillDataValid,
-    output [LeafWidth-1:0] PPPRefillData,
-    
-    // send data to backend
-    input  StoreDataReady,
-    output StoreDataValid, 
-    output [FEDWidth-1:0] StoreData,
-    
-    // receive response from backend
-    output LoadDataReady,
-    input  LoadDataValid,
-    input  [FEDWidth-1:0] LoadData
+(	Clock, Reset, SwitchReq, DataBlockReq, Cmd, ExpectingProgramData, 
+	DataInReady, DataInValid, DataIn, 
+	ReturnDataReady, ReturnDataValid, ReturnData,
+    	PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
+    	PPPRefillDataReady, PPPRefillDataValid, PPPRefillData,
+    	StoreDataReady, StoreDataValid, StoreData,
+    	LoadDataReady, LoadDataValid, LoadData
 );
 
     `include "PathORAMBackendLocal.vh";
     `include "CacheCmdLocal.vh";
     `include "PLBLocal.vh";  
     
+    input Clock, Reset; 
+    
+    // input control state, output data state
+    input SwitchReq;
+    input DataBlockReq;
+    input [BECMDWidth-1:0] Cmd;
+    
+    output ExpectingProgramData; 
+    
+    // receive data from network
+    output DataInReady;
+    input DataInValid;
+    input [FEDWidth-1:0] DataIn;
+    
+    // return data to network
+    input  ReturnDataReady;
+    output ReturnDataValid;
+    output [FEDWidth-1:0] ReturnData;
+    
+    // receive data from PLB
+    output PPPEvictDataReady;
+    input  PPPEvictDataValid;
+    input  [LeafWidth-1:0] PPPEvictData;
+    
+    // return data to PLB
+    input  PPPRefillDataReady;
+    output PPPRefillDataValid;
+    output [LeafWidth-1:0] PPPRefillData;
+    
+    // send data to backend
+    input  StoreDataReady;
+    output StoreDataValid; 
+    output [FEDWidth-1:0] StoreData;
+    
+    // receive response from backend
+    output LoadDataReady;
+    input  LoadDataValid;
+    input  [FEDWidth-1:0] LoadData;
+
     // PPPEvictBuffer
     wire EvictBufferOutReady, EvictBufferOutValid;
     wire [LeafWidth-1:0] EvictBufferDOut;
@@ -138,7 +145,8 @@ module UORamDataPath
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = ExpectingDataBlock && LoadDataValid;
     assign ReturnData = LoadData;
-    
+
+`ifdef SIMULATION   
     always @(posedge Clock) begin
         if (!ExpectingDataBlock && !ExpectingPosMapBlock && LoadDataValid) begin
             $display("Error: unexpected backend response");
@@ -149,5 +157,6 @@ module UORamDataPath
             $finish;
         end
     end
+`endif
      
 endmodule
