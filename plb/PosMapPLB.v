@@ -43,14 +43,16 @@ module PosMapPLB
     Register #(.Width(1))
         BusyReg (.Clock(Clock), .Reset(Reset || (Valid && OutReady)), .Set(CmdReady && CmdValid), .Enable(1'b0), .Out(Busy));
     
-    wire [ORAML-1:0] NewLeafIn;      
+	wire [LeafWidth-1:0] NewLeafIn_Pre;
+    wire [ORAML-1:0] NewLeafIn;
     wire NewLeafValid, NewLeafAccept;
     PRNG #(.RandWidth(LeafWidth))
         LeafGen (   Clock, Reset,
                     NewLeafAccept,
                     NewLeafValid,
-                    {{(LeafWidth-ORAML){1'bz}}, NewLeafIn}
+                    NewLeafIn_Pre
                 );
+	assign NewLeafIn = NewLeafIn_Pre[ORAML-1:0];
 
     // ============================== onchip PosMap ====================================
     wire PosMapEnable, PosMapWrite;
