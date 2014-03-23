@@ -51,7 +51,7 @@ void set_blocking(int fd, int should_block) {
 	}
 
 	tty.c_cc[VMIN]  = should_block ? 1 : 0;
-	tty.c_cc[VTIME] = 5; // 0.5 seconds read timeout
+	tty.c_cc[VTIME] = 100; // 0.5 seconds read timeout
 
 	if (tcsetattr (fd, TCSANOW, &tty) != 0)
 		printf ("error %d setting term attributes", errno);
@@ -70,8 +70,8 @@ int initialize_uart(char * portname, int baud /* must match TestHarnessLocal.vh 
 	}
 
 	set_interface_attribs(fd, baud, 0); // set speed to 115,200 bps, 8n1 (no parity)
-	set_blocking(fd, 0); // set no blocking
-
+	set_blocking(fd, 1); // set blocking
+	
 	return fd;
 }
 
