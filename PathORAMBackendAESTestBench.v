@@ -506,7 +506,7 @@ module  PathORAMBackendAESTestbench;
                         .DRAMWriteMask(                 AES_DRAM_WriteMask),
                         .DRAMWriteDataValid(    AES_DRAM_WriteDataValid),
                         .DRAMWriteDataReady(    AES_DRAM_WriteDataReady),
-                        .DRAMInitializationComplete(DRAMInitDone));
+                        .DRAMInitComplete(DRAMInitDone));
     //--------------------------------------------------------------------------
 
     AESPathORAM#(.ORAMB(ORAMB),
