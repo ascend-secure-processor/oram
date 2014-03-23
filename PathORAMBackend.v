@@ -51,16 +51,17 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
 	
-	localparam				STWidth =			3,
-							ST_Initialize =		3'd0,
-							ST_Idle =			3'd1,
-							ST_Append =			3'd2,
-							ST_StartRead =		3'd3,
-							ST_PathRead =		3'd4,
-							ST_StartWriteback =	3'd5,
-							ST_PathWriteback =	3'd6;
+	localparam				STWidth =				3,
+							ST_Initialize =			3'd0,
+							ST_Idle =				3'd1,
+							ST_Append =				3'd2,
+							ST_StartRead =			3'd3,
+							ST_PathRead =			3'd4,
+							ST_StartWriteback =		3'd5,
+							ST_PathWriteback =		3'd6;
 								
-	localparam	PRNGLWidth =`divceil(ORAML, 8) * 8;
+	localparam				PRNGLWidth =			`divceil(ORAML, 8) * 8;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -216,6 +217,10 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	wire	[DDRMWidth-1:0]	UpShift_DRAMWriteMask;
 	
+	wire	[PthBSTWidth-1:0] PathWritebackCtr_Commands, PathWritebackCtr_Data;
+	wire					PathWritebackComplete_Commands_Pre, PathWritebackComplete_Data_Pre;
+	wire					PathWritebackComplete_Commands, PathWritebackComplete_Data;	
+	
 	// Stash
 	
 	wire					Stash_StartScanOp, Stash_StartWritebackOp;
@@ -291,7 +296,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
 				$stop;
 			end
-			
+		
 	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
 				if (CSStartRead)
@@ -494,7 +499,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------ 
 	
 	// Gentry leaves for REW ORAM
-	
 	
 	PRNG 		#(			.RandWidth(				PRNGLWidth))
 				leaf_gen(	.Clock(					Clock), 
@@ -862,11 +866,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	UpShift_DRAMWriteData =					(WritebackProcessingHeader) ? UpShift_HeaderFlit : BucketBuf_OutData;
 	assign	UpShift_DRAMWriteMask =					{DDRMWidth{1'b0}}; // TODO this will change with REW ORAM
 
-	// TODO clean up
-	wire	JointWriteValid, JointWriteReady, WritebackData_OutReady;
-	
-	assign	JointWriteValid = 						AddrGen_DRAMCommandValid & BucketWritebackValid;
-	
 	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
 													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
 
@@ -875,70 +874,87 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Reset(					Reset | WritebackBucketTransition),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				JointWriteValid & JointWriteReady),
+							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
 							.In(					{BktBSTWidth{1'bx}}),
 							.Count(					BucketWritebackCtr));	
 	CountCompare #(			.Width(					BktBSTWidth),
 							.Compare(				BktSize_DRBursts - 1))
 				out_bkt_cmp(.Count(					BucketWritebackCtr), 
 							.TerminalCount(			BucketWritebackCtr_Reset));
-	assign	WritebackBucketTransition =				BucketWritebackCtr_Reset & JointWriteValid & JointWriteReady;
+	assign	WritebackBucketTransition =				BucketWritebackCtr_Reset & BucketWritebackValid & DRAMWriteDataReady;
 	
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
-		
-	(* mark_debug = "TRUE" *)	wire	[PthBSTWidth-1:0] PathWritebackCtr; // TODO move
-	wire					PathWritebackComplete_Pre;
-
+	
+	// Count commands written back
 	Counter		#(			.Width(					PthBSTWidth))
-				out_pth_cnt(.Clock(					Clock),
+				out_C_cnt(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				JointWriteValid & JointWriteReady),
+							.Enable(				DRAMCommandValid & DRAMCommandReady),
 							.In(					{PthBSTWidth{1'bx}}),
-							.Count(					PathWritebackCtr));	
+							.Count(					PathWritebackCtr_Commands));	
 	CountCompare #(			.Width(					PthBSTWidth),
 							.Compare(				PathSize_DRBursts - 1))
-				out_pth_cmp(.Count(					PathWritebackCtr), 
-							.TerminalCount(			PathWritebackComplete_Pre));
-
+				out_C_cmp(	.Count(					PathWritebackCtr_Commands), 
+							.TerminalCount(			PathWritebackComplete_Commands_Pre));
 	Register	#(			.Width(					1))
-				path_wb_hld(.Clock(					Clock),
+				out_C_hld(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
-							.Set(					PathWritebackComplete_Pre & JointWriteValid & JointWriteReady),
+							.Set(					PathWritebackComplete_Commands_Pre & DRAMCommandValid & DRAMCommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					PathWritebackComplete));
+							.Out(					PathWritebackComplete_Commands));
+	
+	// NOTE: this is like having a joint ready-valid.  We only have this logic 
+	// here because a lot of the backend internal modules assume all data is 
+	// flushed before next access.  This won't impact performance since the next 
+	// read path won't be able to proceed until all writes are pushed to ORAM anyway.
+	
+	// Count data written back (identical logic as above)
+	Counter		#(			.Width(					PthBSTWidth))
+				out_D_cnt(	.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.In(					{PthBSTWidth{1'bx}}),
+							.Count(					PathWritebackCtr_Data));	
+	CountCompare #(			.Width(					PthBSTWidth),
+							.Compare(				PathSize_DRBursts - 1))
+				out_D_cmp(	.Count(					PathWritebackCtr_Data), 
+							.TerminalCount(			PathWritebackComplete_Data_Pre));
+	Register	#(			.Width(					1))
+				out_D_hld(	.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					PathWritebackComplete_Data_Pre & DRAMWriteDataValid & DRAMWriteDataReady),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					PathWritebackComplete_Data));	
+	
+	assign	PathWritebackComplete =					PathWritebackComplete_Commands & PathWritebackComplete_Data;
 	
 	//------------------------------------------------------------------------------
 	//	DRAM interface multiplexing
 	//------------------------------------------------------------------------------
 
-	// TODO clean up
-	
 	assign	DRAMCommandAddress =					(CSInitialize) ? DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
 	assign	DRAMCommand =							(CSInitialize) ? DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
-
-	assign	DRAMCommandValid =						(CSInitialize) ? DRAMInit_DRAMCommandValid 		: 
-													(CSPathRead) ? 	 AddrGen_DRAMCommandValid 		:
-																	 JointWriteValid; 
-	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : 
-																	 JointWriteValid;
-																		
-	assign	AddrGen_DRAMCommandReady =				~CSInitialize & DRAMCommandReady & ((CSPathRead) ? 1'b1 : DRAMWriteDataReady & BucketWritebackValid);
-	assign	WritebackData_OutReady =				~CSInitialize & DRAMCommandReady & DRAMWriteDataReady & AddrGen_DRAMCommandValid;
-	assign	JointWriteReady =						AddrGen_DRAMCommandReady & 		WritebackData_OutReady;
-	assign	BucketBuf_OutReady =					~WritebackProcessingHeader & 	WritebackData_OutReady;
-	assign	HeaderUpShift_OutReady =				WritebackProcessingHeader & 	WritebackData_OutReady;
-																	 
-	assign	DRAMInit_DRAMCommandReady =				CSInitialize & DRAMCommandReady;
-	assign	DRAMInit_DRAMWriteDataReady =			CSInitialize & DRAMWriteDataReady;
-
+	assign	DRAMCommandValid =						(CSInitialize) ? DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
+	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~CSInitialize;
+	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		CSInitialize;
+	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	CSInitialize;
+	
 	assign	DRAMWriteData =							(CSInitialize) ? DRAMInit_DRAMWriteData : UpShift_DRAMWriteData;
 	assign	DRAMWriteMask =							(CSInitialize) ? DRAMInit_DRAMWriteMask : UpShift_DRAMWriteMask;
-
+	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : BucketWritebackValid;
+	
+	assign	DRAMInit_DRAMWriteDataReady = 			 CSInitialize & DRAMWriteDataReady;										
+	assign	BucketBuf_OutReady =					~CSInitialize & ~WritebackProcessingHeader & DRAMWriteDataReady;
+	assign	HeaderUpShift_OutReady =				~CSInitialize &  WritebackProcessingHeader & DRAMWriteDataReady;
+		
 	//------------------------------------------------------------------------------	
 endmodule
 //------------------------------------------------------------------------------

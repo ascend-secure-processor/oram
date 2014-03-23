@@ -75,8 +75,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
-	
-	parameter				EnableAES =				0;
+	parameter				EnableAES =				1;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -253,6 +252,13 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
 
+	// TODO move
+	wire	DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
+	wire	DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
+	
+	wire	MIGWriting;
+	
+	
 	generate if (SlowDownORAMClock) begin:SLOW_ORAM	
 		wire				CommandBuf_Full, WriteDataBuf_Full;
 	
@@ -269,8 +275,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								.full(				CommandBuf_Full),
 								
 								.dout(				{DDR3SDRAM_Command_MIG, DDR3SDRAM_Address_MIG}),
-								.rd_en(				DDR3SDRAM_CommandReady_MIG),
-								.valid(				DDR3SDRAM_CommandValid_MIG));
+								.rd_en(				DDR3SDRAM_CommandReady_MIG_Pre),
+								.valid(				DDR3SDRAM_CommandValid_MIG_Pre));
 		
 		assign	DDR3SDRAM_WriteMask_MIG =			{DDRMWidth{1'b0}}; // TODO This will break for REW ORAM
 		
@@ -284,8 +290,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								.full(				WriteDataBuf_Full),
 								
 								.dout(				DDR3SDRAM_WriteData_MIG),
-								.rd_en(				DDR3SDRAM_DataInReady_MIG),
-								.valid(				DDR3SDRAM_DataInValid_MIG));
+								.rd_en(				DDR3SDRAM_DataInReady_MIG_Pre),
+								.valid(				DDR3SDRAM_DataInValid_MIG_Pre));
 		
 		DebugDataFIFO drd(		.rst(				ORAMReset),
 								.wr_clk(			MemoryClock),
@@ -302,17 +308,33 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 		
 		assign	DDR3SDRAM_Command_MIG =				DDR3SDRAM_Command;
 		assign	DDR3SDRAM_Address_MIG =				DDR3SDRAM_Address;
-		assign	DDR3SDRAM_CommandValid_MIG =		DDR3SDRAM_CommandValid;
-		assign	DDR3SDRAM_CommandReady = 			DDR3SDRAM_CommandReady_MIG;
+		assign	DDR3SDRAM_CommandValid_MIG_Pre =	DDR3SDRAM_CommandValid;
+		assign	DDR3SDRAM_CommandReady = 			DDR3SDRAM_CommandReady_MIG_Pre;
 		
 		assign	DDR3SDRAM_WriteData_MIG =			DDR3SDRAM_WriteData;
 		assign	DDR3SDRAM_WriteMask_MIG =			DDR3SDRAM_WriteMask;
-		assign	DDR3SDRAM_DataInValid_MIG =			DDR3SDRAM_DataInValid;
-		assign	DDR3SDRAM_DataInReady = 			DDR3SDRAM_DataInReady_MIG;
+		assign	DDR3SDRAM_DataInValid_MIG_Pre =		DDR3SDRAM_DataInValid;
+		assign	DDR3SDRAM_DataInReady = 			DDR3SDRAM_DataInReady_MIG_Pre;
 		
 		assign	DDR3SDRAM_ReadData =				DDR3SDRAM_ReadData_MIG;
 		assign	DDR3SDRAM_DataOutValid = 			DDR3SDRAM_DataOutValid_MIG;			
 	end endgenerate
+	
+	//------------------------------------------------------------------------------
+	//	Join command & write interface
+	//------------------------------------------------------------------------------	
+	
+	// This is needed only because MIG is bugged and will drop write data if we 
+	// present WriteCommands & WriteData out of sync with each other
+	// NOTE: this doesn't really impact writeback performance unless ...
+	
+	assign	MIGWriting =							DDR3SDRAM_Command_MIG == DDR3CMD_Write;
+	
+	assign	DDR3SDRAM_CommandValid_MIG =			DDR3SDRAM_CommandValid_MIG_Pre & 	((MIGWriting) ? DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG : 1'b1);
+	assign	DDR3SDRAM_DataInValid_MIG =				DDR3SDRAM_CommandValid_MIG_Pre & 					DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_CommandReady_MIG;
+	
+	assign	DDR3SDRAM_CommandReady_MIG_Pre =		DDR3SDRAM_CommandReady_MIG & 		((MIGWriting) ?	DDR3SDRAM_DataInValid_MIG_Pre &	DDR3SDRAM_DataInReady_MIG : 1'b1);
+	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 						DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG;
 	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7)
@@ -397,7 +419,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Class1(				1),
 							.RLatency(				1),
 							.WLatency(				1)) 
-				DDR3SDRAMController(.Clock(			MemoryClock),
+				fake_mig(	.Clock(					MemoryClock),
 							.Reset(					MemoryReset),
 
 							.Initialized(			),
