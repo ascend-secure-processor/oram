@@ -12,51 +12,35 @@ module AESPathORAM #(`include "PathORAM.vh",
                      `include "DDR3SDRAM.vh",
                      `include "AES.vh")
     (
-     //--------------------------------------------------------------------------
-     // System I/O
-     //--------------------------------------------------------------------------
+     Clock, Reset,
 
-     input                  Clock, Reset,
+     MIGAddr,
+     MIGCmd,
+     MIGCmdValid,
+     MIGCmdReady,
 
-     //--------------------------------------------------------------------------
-     // MIG <-> AES
-     //--------------------------------------------------------------------------
-     //AES -> MIG
-     output [DDRAWidth-1:0] MIGAddr,
-     output [DDRCWidth-1:0] MIGCmd,
-     output                 MIGCmdValid,
-     input                  MIGCmdReady,
+     MIGOut,
+     MIGOutMask,
+     MIGOutValid,
+     MIGOutReady,
 
-     output [DDRDWidth-1:0] MIGOut,
-     output [DDRMWidth-1:0] MIGOutMask,
-     output                 MIGOutValid,
-     input                  MIGOutReady,
+     MIGIn,
+     MIGInValid,
 
-     //MIG -> AES
-     input [DDRDWidth-1:0]  MIGIn,
-     input                  MIGInValid,
+     BackendRData,
+     BackendRValid,
 
+     BackendWData,
+     BackendWMask,
+     BackendWValid,
+     BackendWReady,
 
-     //--------------------------------------------------------------------------
-     // AES <-> BackEnd
-     //--------------------------------------------------------------------------
+     DRAMCmdAddr,
+     DRAMCmd,
+     DRAMCmdValid,
+     DRAMCmdReady,
 
-     //AES -> Backend
-     output [DDRDWidth-1:0] BackendRData,
-     output                 BackendRValid,
-
-     //BackEnd -> AES
-     input [DDRDWidth-1:0]  BackendWData,
-     input [DDRMWidth-1:0]  BackendWMask,
-     input                  BackendWValid,
-     output                 BackendWReady,
-
-     input [DDRAWidth-1:0]  DRAMCmdAddr,
-     input [DDRCWidth-1:0]  DRAMCmd,
-     input                  DRAMCmdValid,
-     output                 DRAMCmdReady,
-
-     input                  DRAMInitDone
+     DRAMInitDone
      );
 
     //------------------------------------------------------------------------------
@@ -73,6 +57,52 @@ module AESPathORAM #(`include "PathORAM.vh",
 
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
+
+     //--------------------------------------------------------------------------
+     // System I/O
+     //--------------------------------------------------------------------------
+
+     input                  Clock, Reset;
+
+     //--------------------------------------------------------------------------
+     // MIG <-> AES
+     //--------------------------------------------------------------------------
+     //AES -> MIG
+     output [DDRAWidth-1:0] MIGAddr;
+     output [DDRCWidth-1:0] MIGCmd;
+     output                 MIGCmdValid;
+     input                  MIGCmdReady;
+
+     output [DDRDWidth-1:0] MIGOut;
+     output [DDRMWidth-1:0] MIGOutMask;
+     output                 MIGOutValid;
+     input                  MIGOutReady;
+
+     //MIG -> AES
+     input [DDRDWidth-1:0]  MIGIn;
+     input                  MIGInValid;
+
+
+     //--------------------------------------------------------------------------
+     // AES <-> BackEnd
+     //--------------------------------------------------------------------------
+
+     //AES -> Backend
+     output [DDRDWidth-1:0] BackendRData;
+     output                 BackendRValid;
+
+     //BackEnd -> AES
+     input [DDRDWidth-1:0]  BackendWData;
+     input [DDRMWidth-1:0]  BackendWMask;
+     input                  BackendWValid;
+     output                 BackendWReady;
+
+     input [DDRAWidth-1:0]  DRAMCmdAddr;
+     input [DDRCWidth-1:0]  DRAMCmd;
+     input                  DRAMCmdValid;
+     output                 DRAMCmdReady;
+
+     input                  DRAMInitDone;
 
     //------------------------------------------------------------------------------
     //	Wires & Regs
@@ -539,7 +569,7 @@ module AESPathORAM #(`include "PathORAM.vh",
              .Set(1'b0),
              .Load(1'b0),
              .Enable(InitDone & DataOutValid & DataOutReady),
-             .In({BktBSTWidth{1'bx}}),
+             .In({`log2(PathSize_DRBursts){1'bx}}),
              .Count(PathReadCtr)
              );
 

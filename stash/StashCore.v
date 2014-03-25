@@ -186,7 +186,7 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	wire					ContinuePeak, ContinuePush, ContinueOverwrite;
 	wire 					EnterPeak, ExitPeak;
 		
-	wire					WriteTransfer, DataTransfer;
+	wire					ReadTransfer, WriteTransfer, DataTransfer;
 	wire					FirstChunk_Transfer_Write;
 	wire 					AddBlock, RemoveBlock;
 

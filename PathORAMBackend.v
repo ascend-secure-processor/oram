@@ -951,7 +951,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMWriteMask =							(CSInitialize) ? DRAMInit_DRAMWriteMask : UpShift_DRAMWriteMask;
 	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : BucketWritebackValid;
 	
-	assign	DRAMInit_DRAMWriteDataReady = 			 CSInitialize & DRAMWriteDataReady;										
 	assign	BucketBuf_OutReady =					~CSInitialize & ~WritebackProcessingHeader & DRAMWriteDataReady;
 	assign	HeaderUpShift_OutReady =				~CSInitialize &  WritebackProcessingHeader & DRAMWriteDataReady;
 		
