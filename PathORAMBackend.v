@@ -575,6 +575,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// Buffers the whole incoming path
 	// NOTE: This buffer requires ~1% of the LUT/BLOCK RAM on the chip
 	// TODO: move this out of Backend (AES now has PathBuffer... what if EnableAES == 0?)
+	// Ling: I'll recommend that we still have a dummy AES module even if
+	// EnableAES == 0, so that the AES module always has Path Buffer
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full, PathBuffer_Empty;
 

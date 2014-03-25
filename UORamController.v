@@ -111,7 +111,7 @@ module UORamController
     Register #(.Width(2))
         CmdReg (Clock, Reset, 1'b0, CmdInReady_Internal && CmdInValid_Internal, CmdIn_Internal, LastCmd);
     
-    reg [MaxLogRecursion-1:0] QDepth;   // TODO: maximum recursion
+    reg [MaxLogRecursion-1:0] QDepth;   
     reg [ORAMU-1:0] AddrQ [Recursion-1:0];
     
     wire Preparing, Accessing;
@@ -196,13 +196,15 @@ module UORamController
         PreparingReg (  .Clock(     Clock), 
                         .Reset(     Reset || (PPPValid && PPPHit)), 
                         .Set(       CmdInValid_Internal && CmdInReady_Internal), 
-                        .Enable(    1'b0), 
+                        .Enable(    1'b0),
+                        .In(        1'bx),
                         .Out(       Preparing));    
     Register #(.Width(1))
         AccessingReg (  .Clock(     Clock), 
                         .Reset(     Reset || (Accessing && SwitchReq && DataBlockReq)), 
                         .Set(       Preparing && PPPValid && PPPHit), 
                         .Enable(    1'b0), 
+                        .In(        1'bx),
                         .Out(       Accessing));  
     Register #(.Width(1))
         RefillStartReg (.Clock(     Clock), 
@@ -224,7 +226,7 @@ module UORamController
                         .Set(       CmdInValid_Internal && CmdInReady_Internal),          // this sets up PLB lookup for the first access
                         .Enable(    1'b1),
                         .In(        Preparing ? PPPMiss : RefillStarted && PPPCmdReady),
-                                                                        // make the next query after receiving the previous one
+                                                                        // make the next query only after receiving the previous one
                         .Out(       PPPLookup));                                                                       
     
     //(Preparing && PPPValid && PPPHit) || 
@@ -252,16 +254,19 @@ module UORamController
         
         else if (Accessing) begin       
             if (SwitchReq) begin                                          // sendint out or initializing the current one             
+	`ifdef SIMULATION
                 if (!DataBlockReq && PPPUnInitialized)
                     $display("\t\tInitialize Block %d", AddrQ[QDepth]);
                 else
                     $display("\t\tRequest Block %d", AddrQ[QDepth]);            
+	`endif
                 QDepth <= QDepth - 1;                       
             end
             
-            else if (CmdOutReady && CmdOutValid && EvictionRequest) begin
+	`ifdef SIMULATION
+            else if (CmdOutReady && CmdOutValid && EvictionRequest) 
                 $display("\t\tEvict Block %d to leaf %d", AddrOut, NewLeaf);
-            end
+	`endif
         end
     end            
 

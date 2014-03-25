@@ -104,7 +104,6 @@ reg	[3:0]	dcnt;
 always @(posedge clk)
 	if(!rst) begin 
 		dcnt <= #1 4'h0;
-		busy <= 1'b0;
 	end
 	else
 	if(ld)		dcnt <= #1 4'hb;
@@ -116,7 +115,8 @@ always @(posedge clk) if(ld) text_in_r <= #1 text_in;
 always @(posedge clk) ld_r <= #1 ld;
 
 always @(posedge clk) begin
-	if (ld) busy <= 1'b1;
+	if (!rst) busy <= 1'b0;
+	else if (ld) busy <= 1'b1;
 	else if (done) busy <= 1'b0;
 end
 

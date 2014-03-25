@@ -16,29 +16,43 @@
 module AES_DW #(parameter W = 4, parameter D = 12,
                 `include "AES.vh")
     (
+     Clock, Reset,
+
+     DataIn,
+     DataInValid,
+     DataInReady,
+
+     Key,
+     KeyValid,
+     KeyReady,
+
+     DataOut,
+     DataOutValid
+     );
      //--------------------------------------------------------------------------
      //	System I/O
      //--------------------------------------------------------------------------
 
-     input                       Clock, Reset,
+     input                       Clock, Reset;
 
      //--------------------------------------------------------------------------
      //	Interface 1
      //--------------------------------------------------------------------------
 
-     input  [IVEntropyWidth-1:0] DataIn,
-     input                       DataInValid,
-     output                      DataInReady,
+     input  [IVEntropyWidth-1:0] DataIn;
+     input                       DataInValid;
+     output                      DataInReady;
 
-     input   [AESWidth-1:0]      Key,
-     input                       KeyValid,
-     output                      KeyReady,
+     input   [AESWidth-1:0]      Key;
+     input                       KeyValid;
+     output                      KeyReady;
 
-     output  [W*AESWidth-1:0]    DataOut,
-     output                      DataOutValid
-     );
+     output  [W*AESWidth-1:0]    DataOut;
+     output                      DataOutValid;
 
-
+     //--------------------------------------------------------------------------
+     //	wires and regs
+     //--------------------------------------------------------------------------
     localparam LOGD = `log2(D);
 
     reg      [LOGD-1:0]      Count;
