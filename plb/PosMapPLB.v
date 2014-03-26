@@ -6,8 +6,8 @@ module PosMapPLB
 	OutReady, Valid, Hit, UnInit, OldLeafOut, NewLeafOut, Evict, AddrOut, EvictDataOutValid, EvictDataOut
 );
  
-    `include "CacheCmdLocal.vh"; 
-    `include "PLBLocal.vh";     
+    `include "CacheCmdLocal.vh" 
+    `include "PLBLocal.vh"     
  
     input Clock, Reset; 
     output CmdReady;

@@ -1,8 +1,11 @@
 `include "Const.vh"
 
 module AddrGen
-#(`include "PathORAM.vh", `include "DDR3SDRAM.vh", `include "AES.vh")
 (Clock, Reset, Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, Addr, currentLevel, STIdx, BktIdxInST, BktIdx);
+
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
   
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
@@ -29,7 +32,7 @@ module AddrGen
 	output [ORAML-1:0] STIdx, BktIdxInST;
 	output [ORAML+1:0] BktIdx;
 	// ====================================================
-  
+ 
 	// control logic for AddrGenBktHead
 	wire Enable, SwitchLevel;
 	reg RW, BH;

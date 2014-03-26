@@ -1,5 +1,5 @@
 module PathGen
-#(parameter ORAML = 0)
+#(parameter ORAML = 10)
 (
   input Clock, Reset, Enable,
   input Switch,     // indicating the degree of the tree. Assertion every k Enable means 2^k-ary tree. 

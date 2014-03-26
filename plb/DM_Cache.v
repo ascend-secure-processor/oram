@@ -6,8 +6,8 @@ module DM_Cache
 	OutValid, Hit, DOut, Evicting, AddrOut, ExtraTagOut
 );
  
-    `include "CacheLocal.vh";
-    `include "CacheCmdLocal.vh";
+    `include "CacheLocal.vh"
+    `include "CacheCmdLocal.vh"
  
     input Clock, Reset;
     output Ready;
