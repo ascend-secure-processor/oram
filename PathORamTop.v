@@ -9,9 +9,7 @@
 //	Module:		PathORAM
 //	Desc:		Unified Front + basic PathORAM Backend
 //==============================================================================
-module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
-						`include "AES.vh", `include "Stash.vh", 
-						`include "UORAM.vh", `include "PLB.vh") (
+module PathORamTop (
   	Clock, Reset,
 	
 	Cmd, PAddr, 
@@ -26,12 +24,19 @@ module PathORamTop #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
-	);	
+);	
 	
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
-
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
+	`include "Stash.vh"; 
+	`include "UORAM.vh"; 
+	`include "PLB.vh";
+	
+	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"

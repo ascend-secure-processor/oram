@@ -1,15 +1,18 @@
 `include "Const.vh"
 
 module UORamDataPath
-#(`include "UORAM.vh", `include "PathORAM.vh", `include "PLB.vh")
 (	Clock, Reset, SwitchReq, DataBlockReq, Cmd, ExpectingProgramData, 
 	DataInReady, DataInValid, DataIn, 
 	ReturnDataReady, ReturnDataValid, ReturnData,
-    	PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
-    	PPPRefillDataReady, PPPRefillDataValid, PPPRefillData,
-    	StoreDataReady, StoreDataValid, StoreData,
-    	LoadDataReady, LoadDataValid, LoadData
+    PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
+    PPPRefillDataReady, PPPRefillDataValid, PPPRefillData,
+    StoreDataReady, StoreDataValid, StoreData,
+    LoadDataReady, LoadDataValid, LoadData
 );
+
+	`include "UORAM.vh"; 
+	`include "PathORAM.vh"; 
+	`include "PLB.vh";
 
     `include "PathORAMBackendLocal.vh";
     `include "CacheCmdLocal.vh";

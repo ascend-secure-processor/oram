@@ -6,14 +6,17 @@
 
 //==============================================================================
 
-module PRNG #(parameter RandWidth = 32, `include "AES.vh")
-(
-	input  Clock, Reset,
-	input  RandOutReady,
-	output RandOutValid,
-	output [RandWidth-1:0] RandOut
-);
+module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 
+	parameter RandWidth = 32;
+	`include "AES.vh";
+	
+	input  Clock, Reset;
+	input  RandOutReady;
+	output RandOutValid;
+	output [RandWidth-1:0] RandOut;
+
+	
 	wire  SeedValid, SeedReady;
 	wire  [IVEntropyWidth-1:0] Seed;
 

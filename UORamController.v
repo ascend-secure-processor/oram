@@ -1,7 +1,6 @@
 `include "Const.vh"
 
 module UORamController
-#(`include "UORAM.vh", `include "PathORAM.vh", `include "PLB.vh")
 (
     Clock, Reset, 
     
@@ -33,10 +32,14 @@ module UORamController
     LoadData
 );
 
-    `include "PathORAMBackendLocal.vh";
-    `include "CacheCmdLocal.vh";
-    `include "BucketLocal.vh";
-    `include "PLBLocal.vh";
+	`include "UORAM.vh"; 
+	`include "PathORAM.vh"; 
+	`include "PLB.vh";
+
+    `include "PathORAMBackendLocal.vh"
+    `include "CacheCmdLocal.vh"
+    `include "BucketLocal.vh"
+    `include "PLBLocal.vh"
 
     input Clock, Reset;
     

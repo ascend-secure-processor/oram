@@ -1,10 +1,15 @@
 `include "Const.vh"
 
 module DM_Cache
-#(parameter DataWidth = 32, LogLineSize = 1, Capacity = 64, AddrWidth = 1, ExtraTagWidth = 32)
 (	Clock, Reset, Ready, Enable, Cmd, AddrIn, DIn, ExtraTagIn, 
 	OutValid, Hit, DOut, Evicting, AddrOut, ExtraTagOut
 );
+ 
+	parameter 	DataWidth = 32, 
+				LogLineSize = 1, 
+				Capacity = 64, 
+				AddrWidth = 2, 
+				ExtraTagWidth = 32;
  
     `include "CacheLocal.vh"
     `include "CacheCmdLocal.vh"

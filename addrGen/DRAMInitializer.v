@@ -14,17 +14,20 @@
 //	Note: 		This module can be re-implemented as the F-bit scheme from the 
 //				ISCA paper
 //------------------------------------------------------------------------------
-module DRAMInitializer #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh", 
-							`include "AES.vh") (
+module DRAMInitializer (
 	Clock, Reset, Done,
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
-	);
+);
 
 	//--------------------------------------------------------------------------
 	//	Constants
 	//-------------------------------------------------------------------------- 
 
+	`include "PathORAM.vh"; 
+	`include "DDR3SDRAM.vh"; 
+	`include "AES.vh";
+	
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SubTreeLocal.vh"

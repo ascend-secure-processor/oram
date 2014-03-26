@@ -13,8 +13,7 @@
 //            different IVs. Currently, is just holding data for 12 cycles, then
 //            passes it on.
 //==============================================================================
-module AES_DW #(parameter W = 4, parameter D = 12,
-                `include "AES.vh")
+module AES_DW
     (
      Clock, Reset,
 
@@ -29,6 +28,12 @@ module AES_DW #(parameter W = 4, parameter D = 12,
      DataOut,
      DataOutValid
      );
+
+	parameter W = 4;
+	parameter D = 12;
+	
+	`include "AES.vh";
+	
      //--------------------------------------------------------------------------
      //	System I/O
      //--------------------------------------------------------------------------
