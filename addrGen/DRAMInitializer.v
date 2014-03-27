@@ -17,7 +17,7 @@
 module DRAMInitializer (
 	Clock, Reset, Done,
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
 );
 
 	//--------------------------------------------------------------------------
@@ -55,7 +55,6 @@ module DRAMInitializer (
 	input						DRAMCommandReady;
 
 	output	[DDRDWidth-1:0]		DRAMWriteData;
-	output	[DDRMWidth-1:0]		DRAMWriteMask;
 	output						DRAMWriteDataValid;
 	input						DRAMWriteDataReady;
 	
@@ -106,7 +105,6 @@ module DRAMInitializer (
 														IVINITValue, 
 														{BktHSize_ValidBits{1'b0}}, 
 														IVINITValue	};
-	assign	DRAMWriteMask =							{DDRMWidth{1'b0}}; // enable all bits
 	
 	//--------------------------------------------------------------------------	
 endmodule

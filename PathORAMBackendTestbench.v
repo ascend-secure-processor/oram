@@ -38,7 +38,8 @@ module	PathORAMBackendTestbench;
 								BEDWidth =			512;
 
 	parameter					Overclock =			1;
-								
+	parameter					EnableREW =			0; // don't change this for this testbench
+	
 	parameter 					DDR_nCK_PER_CLK = 	4,
 								DDRDQWidth =		64,
 								DDRCWidth =			3,
@@ -465,6 +466,7 @@ module	PathORAMBackendTestbench;
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock),
+							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -493,10 +495,11 @@ module	PathORAMBackendTestbench;
 							.DRAMReadData(			DRAM_ReadData),
 							.DRAMReadDataValid(		DRAM_ReadDataValid),			
 							.DRAMWriteData(			DRAM_WriteData),
-							.DRAMWriteMask(			DRAM_WriteMask),
 							.DRAMWriteDataValid(	DRAM_WriteDataValid),
 							.DRAMWriteDataReady(	DRAM_WriteDataReady));
 							
+	assign	DRAM_WriteMask =						{DDRMWidth{1'b0}};
+	
 	//--------------------------------------------------------------------------
 
 	//--------------------------------------------------------------------------

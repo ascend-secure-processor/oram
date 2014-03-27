@@ -11,13 +11,11 @@
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //
 //	TODO
-//		- AES
 //		- REW ORAM
 //		- Integrity verification
 //		- Timing obfuscation
 //==============================================================================
-module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
-							`include "AES.vh", `include "Stash.vh") (
+module PathORAMBackend(
 	Clock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf, 
@@ -31,15 +29,20 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
 	DRAMInitComplete
 	);
 		
 	//------------------------------------------------------------------------------
-	//	Constants
+	//	Parameters & Constants
 	//------------------------------------------------------------------------------ 
 
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
+	`include "Stash.vh";
+	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
@@ -102,7 +105,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	input					DRAMReadDataValid;
 	
 	output	[DDRDWidth-1:0]	DRAMWriteData;
-	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -204,7 +206,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	(* mark_debug = "TRUE" *)	wire					DataUpShift_OutValid, DataUpShift_OutReady;
 
 	wire					WritebackBlockIsValid;
-	wire 					WritebackBlockCommit; // TODO change stash to generate WritebackBlockCommit for us ...
+	wire 					WritebackBlockCommit;
 	
 	(* mark_debug = "TRUE" *)	wire 					WritebackProcessingHeader;		
 	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
@@ -215,7 +217,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					BucketWritebackCtr_Reset, WritebackBucketTransition;
 							
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
-	wire	[DDRMWidth-1:0]	UpShift_DRAMWriteMask;
 	
 	wire	[PthBSTWidth-1:0] PathWritebackCtr_Commands, PathWritebackCtr_Data;
 	wire					PathWritebackComplete_Commands_Pre, PathWritebackComplete_Data_Pre;
@@ -250,7 +251,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
 	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
-	wire	[DDRMWidth-1:0]	DRAMInit_DRAMWriteMask;
 	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 	
 	// Address generator
@@ -310,7 +310,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			end
 		
 			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
-				$display("[%m @ %t] DRAM write %x (mask = %x)", $time, DRAMWriteData, DRAMWriteMask);
+				$display("[%m @ %t] DRAM write %x", $time, DRAMWriteData);
 			end
 			
 			if (DRAMReadDataValid) begin
@@ -340,6 +340,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//------------------------------------------------------------------------------
 	//	Control logic
 	//------------------------------------------------------------------------------
+		
+	wire	SetDummy, ClearDummy; // TODO cleanup
 		
 	assign	CSInitialize =							CS == ST_Initialize;
 	assign	CSIdle =								CS == ST_Idle;
@@ -376,7 +378,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 			ST_Idle :
 				// stash capacity check gets highest priority
 				if (DummyLeaf_Valid) begin
-					if (StashAlmostFull)
+					if (SetDummy)
 						NS =						ST_StartRead;
 					// do appends first ("greedily") because they are cheap
 					else if (Command_InternalValid	& 	Command_Internal == BECMD_Append)
@@ -406,14 +408,70 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 					NS =							ST_Idle;
 		endcase
 	end
+	
+	//------------------------------------------------------------------------------
+	//	REW - Basic split control logic
+	//------------------------------------------------------------------------------
+	
+	wire AddrGen_HeaderWriteback; // TODO
+	
+	generate if (EnableREW) begin:REW_BACKEND
+		wire				RWAccess, StartRW, REWRoundComplete;
+		
+		Counter	#(			.Width(					ORAML))
+				gentry_leaf(.Clock(					Clock),
+							.Reset(					Reset | (REWRoundComplete & &GentryLeaf_Pre)),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				REWRoundComplete),
+							.In(					{ORAML{1'bx}}),
+							.Count(					GentryLeaf_Pre));
+		
+		CountAlarm #(		.Threshold(				ORAME))
+				rew_rnd_ctr(.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				OperationComplete),
+							.Done(					StartRW));
+		Register #(			.Width(					1))
+				rew_rw(		.Clock(					Clock),
+							.Reset(					Reset | REWRoundComplete),
+							.Set(					StartRW),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					RWAccess));
+
+		assign	REWRoundComplete =					RWAccess & OperationComplete;
+							
+		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
+		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
+		
+		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
+
+		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
+	end else begin:BASIC_BACKEND
+		
+		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
+		assign	SetDummy =							CSIdle & StashAlmostFull;
+		
+		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
+		
+		assign	AddrGen_HeaderWriteback =			1'b0;
+	end endgenerate
 
 	Register	#(			.Width(					1))
 				dummy_reg(	.Clock(					Clock),
-							.Reset(					Reset | (CSIdle & ~StashAlmostFull)),
-							.Set(							 CSIdle & StashAlmostFull),
+							.Reset(					Reset | ClearDummy),
+							.Set(					SetDummy),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					AccessIsDummy));
+	
+	PRNG 		#(			.RandWidth(				PRNGLWidth))
+				leaf_gen(	.Clock(					Clock), 
+							.Reset(					Reset),
+							.RandOutReady(			OperationComplete),
+							.RandOutValid(			DummyLeaf_Valid),
+							.RandOut(				DummyLeaf_Wide));
 	
 	//------------------------------------------------------------------------------
 	//	Front-end commands
@@ -492,21 +550,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.InAccept(				Load_ShiftBufReady),
 							.OutData(				LoadData),
 							.OutValid(				LoadValid),
-							.OutReady(				LoadReady));	
-	
-	//------------------------------------------------------------------------------
-	//	Random leaf generator
-	//------------------------------------------------------------------------------ 
-	
-	// Gentry leaves for REW ORAM
-	
-	PRNG 		#(			.RandWidth(				PRNGLWidth))
-				leaf_gen(	.Clock(					Clock), 
-							.Reset(					Reset),
-							.RandOutReady(			OperationComplete),
-							.RandOutValid(			DummyLeaf_Valid),
-							.RandOut(				DummyLeaf_Wide));
-	assign	DummyLeaf =								DummyLeaf_Wide[ORAML-1:0];
+							.OutReady(				LoadReady));
 							
 	//------------------------------------------------------------------------------
 	//	Address generation & ORAM initialization
@@ -530,13 +574,13 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
 							.RWIn(					AddrGen_Reading),
-							.BHIn(					1'b0), // TODO change when we do REW ORAM
+							.BHIn(					AddrGen_HeaderWriteback),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), 
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
-	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth), // TODO remove this register if the big FIFO register works out
+	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
 							.FWLatency(				Overclock))
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -563,7 +607,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
 							.DRAMCommandReady(		DRAMInit_DRAMCommandReady),
 							.DRAMWriteData(			DRAMInit_DRAMWriteData),
-							.DRAMWriteMask(			DRAMInit_DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
 							.Done(					DRAMInitComplete));
@@ -577,6 +620,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	// TODO: move this out of Backend (AES now has PathBuffer... what if EnableAES == 0?)
 	// Ling: I'll recommend that we still have a dummy AES module even if
 	// EnableAES == 0, so that the AES module always has Path Buffer
+	// Chris: Agreed!  Will move it out when we do the low-level Backend
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full, PathBuffer_Empty;
 
@@ -791,7 +835,7 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//		to 
 	//		{ {Z{U}}, {Z{L}}, {Z{L}} } (the DRAM's format)
 	
-	// TODO change the stash interface so that dummies are single bit signals
+	// Note: It is probably best that Stash computes these; not changing them now to save time
 	assign	WritebackBlockIsValid =					HeaderUpShift_InPAddr != DummyBlockAddress;
 	assign	WritebackBlockCommit =					Stash_BlockReadComplete & DataUpShift_InValid & DataUpShift_InReady;
 	
@@ -866,7 +910,6 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 														HeaderUpShift_ValidBits, 
 														IVINITValue	};
 	assign	UpShift_DRAMWriteData =					(WritebackProcessingHeader) ? UpShift_HeaderFlit : BucketBuf_OutData;
-	assign	UpShift_DRAMWriteMask =					{DDRMWidth{1'b0}}; // TODO this will change with REW ORAM
 
 	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
 													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
@@ -949,9 +992,8 @@ module PathORAMBackend #(	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		CSInitialize;
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	CSInitialize;
 	
-	assign	DRAMWriteData =							(CSInitialize) ? DRAMInit_DRAMWriteData : UpShift_DRAMWriteData;
-	assign	DRAMWriteMask =							(CSInitialize) ? DRAMInit_DRAMWriteMask : UpShift_DRAMWriteMask;
-	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : BucketWritebackValid;
+	assign	DRAMWriteData =							(CSInitialize) ? DRAMInit_DRAMWriteData : 		UpShift_DRAMWriteData;
+	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : 	BucketWritebackValid;
 	
 	assign	BucketBuf_OutReady =					~CSInitialize & ~WritebackProcessingHeader & DRAMWriteDataReady;
 	assign	HeaderUpShift_OutReady =				~CSInitialize &  WritebackProcessingHeader & DRAMWriteDataReady;

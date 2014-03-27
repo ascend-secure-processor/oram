@@ -5,7 +5,7 @@
 `include "Const.vh"
 //==============================================================================
 
-`timescale		1 ns/1 ps		// Display things in ns, compute them in ps
+`timescale		1 ns/1 ps
 
 //==============================================================================
 //	Module:		StashTestbench
@@ -46,7 +46,7 @@ module	StashTestbench;
     `include "PathORAMBackendLocal.vh"
 	
 	localparam				Freq =					100_000_000,
-							Cycle = 				1000000000/Freq;	
+							Cycle = 				1_000_000_000/Freq;	
 	
 	localparam				UpdateINIT =			255;
 	

@@ -76,6 +76,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								
 	parameter				Overclock =				1;
 	parameter				EnableAES =				1;
+	parameter				EnableREW =				1;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -129,23 +130,28 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	
 	wire					DDR3SDRAM_ResetDone;
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
-	(* mark_debug = "TRUE" *)	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
+	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
+	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
+	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
+	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
+	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
+	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
+	wire					DDR3SDRAM_DataOutValid;
 
-	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
-	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
+	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
+	
+	wire					MIGWriting;
+	
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 	
-	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
-	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
-	wire					DDR3SDRAM_DataOutValid_MIG;	
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
 	//------------------------------------------------------------------------------
 	// 	Clocking
@@ -207,6 +213,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ORAMZ(					ORAMZ),
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -252,13 +259,6 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
 
-	// TODO move
-	wire	DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
-	wire	DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
-	
-	wire	MIGWriting;
-	
-	
 	generate if (SlowDownORAMClock) begin:SLOW_ORAM	
 		wire				CommandBuf_Full, WriteDataBuf_Full;
 	
@@ -277,19 +277,17 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 								.dout(				{DDR3SDRAM_Command_MIG, DDR3SDRAM_Address_MIG}),
 								.rd_en(				DDR3SDRAM_CommandReady_MIG_Pre),
 								.valid(				DDR3SDRAM_CommandValid_MIG_Pre));
-		
-		assign	DDR3SDRAM_WriteMask_MIG =			{DDRMWidth{1'b0}}; // TODO This will break for REW ORAM
-		
+
 		assign	DDR3SDRAM_DataInReady = 			~WriteDataBuf_Full;
-		DebugDataFIFO dwr(		.rst(				ORAMReset),
+		DebugDataWFIFO dwr(		.rst(				ORAMReset),
 								.wr_clk(			ORAMClock),
 								.rd_clk(			MemoryClock),
 								
-								.din(				DDR3SDRAM_WriteData),
+								.din(				{DDR3SDRAM_WriteMask, 		DDR3SDRAM_WriteData}),
 								.wr_en(				DDR3SDRAM_DataInValid),
 								.full(				WriteDataBuf_Full),
 								
-								.dout(				DDR3SDRAM_WriteData_MIG),
+								.dout(				{DDR3SDRAM_WriteMask_MIG, 	DDR3SDRAM_WriteData_MIG}),
 								.rd_en(				DDR3SDRAM_DataInReady_MIG_Pre),
 								.valid(				DDR3SDRAM_DataInValid_MIG_Pre));
 		

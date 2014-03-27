@@ -29,13 +29,13 @@ module PathORamTop (
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
+
 	`include "PathORAM.vh";
 	`include "DDR3SDRAM.vh";
 	`include "AES.vh";
 	`include "Stash.vh"; 
 	`include "UORAM.vh"; 
 	`include "PLB.vh";
-	
 	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
@@ -151,6 +151,7 @@ module PathORamTop (
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock),
+							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -181,7 +182,6 @@ module PathORamTop (
 							.DRAMReadData(			AES_DRAMReadData),
 							.DRAMReadDataValid(		AES_DRAMReadDataValid),			
 							.DRAMWriteData(			AES_DRAMWriteData),
-							.DRAMWriteMask(			AES_DRAMWriteMask),
 							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
 							.DRAMInitComplete(		DRAMInitComplete));
@@ -189,6 +189,13 @@ module PathORamTop (
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------
+	
+	// TODO don't comment this out entirely if EnableAES == 0
+	// (we still need path buffer, REW invalidations, data write mask generation)
+	
+	// TODO don't pass address lines through AES
+	
+	assign	AES_DRAMWriteMask =						{DDRMWidth{1'b0}}; // TODO: have LowLevelBackend.v choose what to do with this
 	
 	generate if (EnableAES) begin:AES
 							// TODO which of these params are really needed?
@@ -198,6 +205,7 @@ module PathORamTop (
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock),
+							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),

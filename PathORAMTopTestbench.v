@@ -78,7 +78,7 @@ module PathORAMTopTestbench;
     parameter				LeafWidth = 			32,
 							PLBCapacity = 			8192;
 		
-	parameter				SlowDownORAMClock = 	1;
+	parameter				SlowDownORAMClock = 	0;
 	parameter				SlowClockFreq =			100_000_000;
 	
 	`include "PathORAMBackendLocal.vh"

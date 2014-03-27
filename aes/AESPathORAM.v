@@ -82,7 +82,6 @@ module AESPathORAM #(`include "PathORAM.vh",
      input [DDRDWidth-1:0]  MIGIn;
      input                  MIGInValid;
 
-
      //--------------------------------------------------------------------------
      // AES <-> BackEnd
      //--------------------------------------------------------------------------
@@ -368,6 +367,7 @@ module AESPathORAM #(`include "PathORAM.vh",
     //	MIG CMD FIFO and MASK
     //------------------------------------------------------------------------------
 
+	// TODO [C F] why are command FIFOs necessary?
     FIFORAM#(.Width(DDRAWidth + DDRCWidth),
              .Buffering(FIFO_D)) //[AK]: what depth?
     cmd_fifo (.Clock(Clock),
