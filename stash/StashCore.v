@@ -43,7 +43,7 @@
 //			-	This new design isn't performance (in combinational latency) 
 //				scalable to large ORAMC: the bitvector and logic get slow 
 //------------------------------------------------------------------------------
-module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
+module StashCore(
   	Clock, Reset, PerAccessReset,
 	ResetDone,
 
@@ -65,8 +65,11 @@ module StashCore #(`include "PathORAM.vh", `include "Stash.vh") (
 	);
 	
 	//--------------------------------------------------------------------------
-	//	Constants
+	//	Parameters & Constants
 	//--------------------------------------------------------------------------
+	
+	`include "PathORAM.vh"; 
+	`include "Stash.vh";
 	
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"

@@ -18,13 +18,13 @@
 //		- Leaf orientation: least significant bit is root bucket
 // 		- Writeback occurs in root -> leaf bucket order
 //------------------------------------------------------------------------------
-module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
+module Stash(
   	Clock, Reset,
 	ResetDone,
 
 	RemapLeaf, AccessLeaf, AccessPAddr,
 	AccessIsDummy, AccessCommand,
-	StartScan, StartWriteback,		
+	StartScan, SkipWriteback, StartWriteback,
 		
 	ReturnData, ReturnPAddr, ReturnLeaf,
 	ReturnDataOutValid, BlockReturnComplete,
@@ -47,8 +47,11 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 	);
 
 	//--------------------------------------------------------------------------
-	//	Constants
+	//	Parameters & Constants
 	//-------------------------------------------------------------------------- 
+	
+	`include "PathORAM.vh";
+	`include "Stash.vh";	
 	
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
@@ -93,6 +96,9 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 		as the PosMap is read.  The level command signals must be valid at this 
 		time. */
 	input					StartScan;
+	
+	/**/
+	input					SkipWriteback;
 	
 	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
 		pulsed as soon as the last dummy block is decrypted */
@@ -449,6 +455,12 @@ module Stash #(`include "PathORAM.vh", `include "Stash.vh") (
 								.Out(				StartScan_Primed));
 	assign	StartScan_Pass = 						CSIdle & (StartScan | StartScan_Primed);
 
+	// TODO
+	
+	//SkipWriteback_Pass
+	
+	//ROAccess
+	
 	// Generate valid signals for this access
 	Register	#(				.Width(				1))
 				access_start(	.Clock(				Clock),

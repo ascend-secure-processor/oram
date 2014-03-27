@@ -8,7 +8,7 @@
 //------------------------------------------------------------------------------
 //	Module:		StashScanTable
 //------------------------------------------------------------------------------
-module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
+module StashScanTable(
   	Clock, Reset, PerAccessReset, 
 	AccessComplete,
 	ResetDone,
@@ -27,8 +27,11 @@ module StashScanTable #(`include "PathORAM.vh", `include "Stash.vh") (
 	);
 	
 	//--------------------------------------------------------------------------
-	//	Constants
+	//	Parameters & Constants
 	//--------------------------------------------------------------------------
+	
+	`include "PathORAM.vh";
+	`include "Stash.vh";	
 	
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
