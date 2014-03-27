@@ -226,7 +226,7 @@ module PathORAMBackend(
 	
 	// Stash
 	
-	wire					Stash_StartScanOp, Stash_StartWritebackOp;
+	wire					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
 	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
 	wire					Stash_StoreDataValid, Stash_StoreDataReady;
@@ -411,7 +411,7 @@ module PathORAMBackend(
 	end
 	
 	//------------------------------------------------------------------------------
-	//	REW - Basic split control logic
+	//	Basic/REW split control logic
 	//------------------------------------------------------------------------------
 	
 	generate if (EnableREW) begin:REW_CONTROL
@@ -438,7 +438,6 @@ module PathORAMBackend(
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					RWAccess));
-
 		assign	REWRoundComplete =					RWAccess & OperationComplete;
 							
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
@@ -447,14 +446,15 @@ module PathORAMBackend(
 		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
 
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
+		assign	Stash_SkipWritebackOp =				~RWAccess;
 	end else begin:BASIC_CONTROL
-		
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
 		
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 		
 		assign	AddrGen_HeaderWriteback =			1'b0;
+		assign	Stash_SkipWritebackOp =				1'b0;
 	end endgenerate
 
 	Register	#(			.Width(					1))
@@ -793,7 +793,8 @@ module PathORAMBackend(
 							.AccessIsDummy(			AccessIsDummy),
 							.AccessCommand(			Command_Internal),
 							
-							.StartScan(				Stash_StartScanOp),  
+							.StartScan(				Stash_StartScanOp),
+							.SkipWriteback(			Stash_SkipWritebackOp),
 							.StartWriteback(		Stash_StartWritebackOp),
 							
 							.ReturnData(			Stash_ReturnData),

@@ -13,7 +13,7 @@ module StashScanTable(
 	AccessComplete,
 	ResetDone,
 
-	CurrentLeaf, CurrentLeafValid,
+	CurrentLeaf, IsWritebackCandidate,
 	
 	InScanLeaf, InScanPAddr, InScanSAddr, InScanAdd,
 	InScanValid, InScanStreaming,
@@ -51,7 +51,7 @@ module StashScanTable(
 	//--------------------------------------------------------------------------
 		
 	input	[ORAML-1:0]		CurrentLeaf;
-	input					CurrentLeafValid;
+	input					IsWritebackCandidate;
 	
 	input	[ORAML-1:0]		InScanLeaf;
 	input	[ORAMU-1:0]		InScanPAddr; // debugging
@@ -103,7 +103,7 @@ module StashScanTable(
 	
 	wire	[ORAMLP1-1:0]	Intersection_Dly, CommonSubpath_Dly, CompatibleBuckets_Dly;
 	wire	[SEAWidth-1:0]	InScanSAddr_Dly0, InScanSAddr_Dly1, InScanSAddr_Dly2;
-	wire					CurrentLeafValid_Dly0, CurrentLeafValid_Dly1, CurrentLeafValid_Dly2;
+	wire					IsWritebackCandidate_Dly0, IsWritebackCandidate_Dly1, IsWritebackCandidate_Dly2;
 	wire					InScanValid_Dly0, InScanValid_Dly1, InScanValid_Dly2;	
 
 	wire	[BktAWidth-1:0]	HighestLevel_Bin_Pre;
@@ -145,7 +145,7 @@ module StashScanTable(
 			ResetDone_Delayed <= ResetDone;
 			
 	`ifdef SIMULATION_VERBOSE_STASH	
-			if (InScanValid & CurrentLeafValid) begin
+			if (InScanValid & IsWritebackCandidate) begin
 				$display("[%m @ %t] Scan table start [SAddr: %x, PAddr: %x, Access leaf: %x, Block leaf: %x]", $time, InScanSAddr_Dly2, InScanPAddr, CurrentLeaf, InScanLeaf);
 
 				$display("\tIntersection:        %x", Intersection);
@@ -165,7 +165,7 @@ module StashScanTable(
 			if (AccessComplete) begin
 				LeafSet <= 1'b0;
 			end
-			else if (CurrentLeafValid) begin
+			else if (IsWritebackCandidate) begin
 				LeafSet <= 1'b1;
 				LeafThisAccess <= CurrentLeaf;
 			end
@@ -179,7 +179,7 @@ module StashScanTable(
 				$stop;			
 			end
 			
-			if (CurrentLeafValid & InScanValid & InScanLeaf &
+			if (IsWritebackCandidate & InScanValid & InScanLeaf &
 				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx) | (^InScanSAddr === 1'bx))) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf or InScanSAddr", $time);
 				$stop;
@@ -227,8 +227,8 @@ module StashScanTable(
 							.Stages(				Overclock))
 				mpipe_1(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid,		CurrentLeafValid,		InScanSAddr, 		Intersection}), 
-							.OutData(				{InScanValid_Dly0,	CurrentLeafValid_Dly0,	InScanSAddr_Dly0,	Intersection_Dly}));	
+							.InData(				{InScanValid,		IsWritebackCandidate,		InScanSAddr, 		Intersection}), 
+							.OutData(				{InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0,	Intersection_Dly}));	
 	
 	assign	CommonSubpath = 						Intersection_Dly & -Intersection_Dly;
 	
@@ -236,8 +236,8 @@ module StashScanTable(
 							.Stages(				Overclock))
 				mpipe_2(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid_Dly0,	CurrentLeafValid_Dly0,	InScanSAddr_Dly0, 	CommonSubpath}), 
-							.OutData(				{InScanValid_Dly1,	CurrentLeafValid_Dly1,	InScanSAddr_Dly1,	CommonSubpath_Dly}));	
+							.InData(				{InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0, 	CommonSubpath}), 
+							.OutData(				{InScanValid_Dly1,	IsWritebackCandidate_Dly1,	InScanSAddr_Dly1,	CommonSubpath_Dly}));	
 	
 	assign	CompatibleBuckets =						CommonSubpath_Dly - 1;
 	
@@ -245,8 +245,8 @@ module StashScanTable(
 							.Stages(				Overclock))
 				mpipe_3(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid_Dly1,	CurrentLeafValid_Dly1,	InScanSAddr_Dly1, 	CompatibleBuckets}), 
-							.OutData(				{InScanValid_Dly2,	CurrentLeafValid_Dly2,	InScanSAddr_Dly2,	CompatibleBuckets_Dly}));
+							.InData(				{InScanValid_Dly1,	IsWritebackCandidate_Dly1,	InScanSAddr_Dly1, 	CompatibleBuckets}), 
+							.OutData(				{InScanValid_Dly2,	IsWritebackCandidate_Dly2,	InScanSAddr_Dly2,	CompatibleBuckets_Dly}));
 							
 	assign	CompatibleBuckets_Space =				CompatibleBuckets_Dly & ~FullMask;
 
@@ -266,7 +266,7 @@ module StashScanTable(
 	//	Outputs (these can be delayed if this module creates a critical path)
 	//--------------------------------------------------------------------------
 
-	assign 	OutScanAccepted_Pre =					CurrentLeafValid_Dly2 & InScanValid_Dly2 & |HighestLevel_Onehot;
+	assign 	OutScanAccepted_Pre =					IsWritebackCandidate_Dly2 & InScanValid_Dly2 & |HighestLevel_Onehot;
 	assign	OutScanSAddr_Pre =						InScanSAddr_Dly2;
 	assign	OutScanValid_Pre = 						InScanValid_Dly2;
 	

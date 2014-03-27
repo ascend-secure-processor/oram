@@ -925,7 +925,8 @@ module	StashTestbench;
 							.AccessIsDummy(			AccessIsDummy),
 							.AccessCommand(			AccessCommand),
 							
-							.StartScan(				StartScan),  
+							.StartScan(				StartScan),
+							.SkipWriteback(			1'b0),
 							.StartWriteback(		StartWriteback),
 							
 							.ReturnData(			ReturnData),

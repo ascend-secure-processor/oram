@@ -179,7 +179,7 @@ module Stash(
 	//-------------------------------------------------------------------------- 
 	
 	wire					PerAccessReset;
-	wire					AccessStart; 
+	wire					AccessStarted; 
 
 	// Control
 	
@@ -192,7 +192,7 @@ module Stash(
 	
 	// Input timing
 	
-	wire					StartScan_Pass, StartScan_set, StartScan_Primed;
+	wire					StartScan_Pass, StartScan_Set, StartScan_Primed;
 	wire					StartWriteback_Pass, StartWriteback_Primed;
 				
 	// Core interface
@@ -261,7 +261,7 @@ module Stash(
 	// Frontend control
 	
 	wire	[ORAML-1:0]		MappedLeaf;
-	wire					CurrentLeafValid;
+	wire					IsWritebackCandidate;
 	
 	wire					LookForBlock, FoundBlock_ThisCycle, BlockWasFound;
 	wire					FoundRemoveBlock;
@@ -363,10 +363,15 @@ module Stash(
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
 
-	assign	ResetDone =								Core_ResetDone & 					ScanTableResetDone;
-	assign	PerAccessReset =						Top_AccessComplete & 				Core_AccessComplete;
+	// TODO move
+	wire NormalWriteback, KillWriteback;
+	wire SkipWriteback_Primed, SkipWriteback_Pass, SkipWriteback_Set;
+	wire AccessSkipsWB;
+ 	
+	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
+	assign	PerAccessReset =						(Top_AccessComplete & Core_AccessComplete) | KillWriteback;
 	
-	assign	BlockUpdateComplete =					TurnoverUpdate & 					Core_CommandComplete;
+	assign	BlockUpdateComplete =					TurnoverUpdate & Core_CommandComplete;
 	
 	// FUNCTIONALITY: scan table latency will delay updating StashOccupancy
 	generate if (Overclock) begin:DELAY_EVICT
@@ -399,6 +404,9 @@ module Stash(
 	
 	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
 	
+	assign	NormalWriteback = 						CSTurnaround2 & Core_CommandComplete & ~AccessSkipsWB;
+	assign	KillWriteback = 						CSTurnaround2 & Core_CommandComplete & AccessSkipsWB;
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
 		else CS <= 									NS;
@@ -412,7 +420,7 @@ module Stash(
 			ST_Reset : 
 				if (Core_ResetDone) NS =			ST_Idle;
 			ST_Idle :
-				if (AccessStart) 
+				if (AccessStarted) 
 					NS =							ST_Scan;
 				else if (EvictDataInValid & AccessCommand == BECMD_Append)
 					NS =							ST_Evict;
@@ -426,8 +434,10 @@ module Stash(
 				if (Core_CommandComplete)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
-				if (Core_CommandComplete)
+				if (NormalWriteback)
 					NS =							ST_CoreSync;
+				else if (KillWriteback)
+					NS =							ST_Idle;
 			ST_CoreSync :
 				if (Core_CommandComplete)
 					NS =							ST_PathWriteback;
@@ -453,13 +463,15 @@ module Stash(
 								.Enable(			1'b0),
 								.In(				1'bx),
 								.Out(				StartScan_Primed));
-	assign	StartScan_Pass = 						CSIdle & (StartScan | StartScan_Primed);
-
-	// TODO
-	
-	//SkipWriteback_Pass
-	
-	//ROAccess
+	Register	#(				.Width(				1))
+				wbskip_hold(	.Clock(				Clock),
+								.Reset(				Reset | PerAccessReset),
+								.Set(				SkipWriteback),
+								.Enable(			1'b0),
+								.In(				1'bx),
+								.Out(				SkipWriteback_Primed));
+	assign	StartScan_Pass = 						CSIdle & (StartScan | 		StartScan_Primed);
+	assign	SkipWriteback_Pass =					CSIdle & (SkipWriteback | 	SkipWriteback_Primed);
 	
 	// Generate valid signals for this access
 	Register	#(				.Width(				1))
@@ -468,8 +480,16 @@ module Stash(
 								.Set(				StartScan_Pass),
 								.Enable(			1'b0),
 								.In(				1'bx),
-								.Out(				StartScan_set));
-	assign	AccessStart =							StartScan_set | StartScan_Pass;
+								.Out(				StartScan_Set));
+	Register	#(				.Width(				1))
+				skip_wb(		.Clock(				Clock),
+								.Reset(				Reset | PerAccessReset),
+								.Set(				SkipWriteback_Pass),
+								.Enable(			1'b0),
+								.In(				1'bx),
+								.Out(				SkipWriteback_Set));
+	assign	AccessStarted =							StartScan_Set | StartScan_Pass;
+	assign	AccessSkipsWB =							SkipWriteback_Pass | SkipWriteback_Set;
 	
 	Register	#(				.Width(				1))
 				wb_hold(		.Clock(				Clock),
@@ -600,7 +620,7 @@ module Stash(
 	
 	// don't try to push back blocks that we are removing
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
-	assign	CurrentLeafValid =						~FoundRemoveBlock & AccessStart;
+	assign	IsWritebackCandidate =					~FoundRemoveBlock & ~AccessSkipsWB & AccessStarted;
 	
 	StashScanTable #(		.Overclock(				Overclock),
 							.BEDWidth(				BEDWidth),
@@ -617,7 +637,7 @@ module Stash(
 							.ResetDone(				ScanTableResetDone),
 							
 							.CurrentLeaf(			AccessLeaf),
-							.CurrentLeafValid(		CurrentLeafValid),
+							.IsWritebackCandidate(	IsWritebackCandidate),
 							
 							.InScanLeaf(			MappedLeaf),
 							.InScanPAddr(			Scan_PAddr),
@@ -647,7 +667,7 @@ module Stash(
 				CRUD_op(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
-							.Enable(				CSIdle & AccessStart),
+							.Enable(				CSIdle & AccessStarted),
 							.In(					PerformCoreHeaderUpdate),
 							.Out(					LookForBlock));
 
