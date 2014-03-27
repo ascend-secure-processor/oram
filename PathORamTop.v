@@ -7,9 +7,10 @@
 
 //==============================================================================
 //	Module:		PathORAM
-//	Desc:		Unified Front + basic PathORAM Backend
+//	Desc:		Frontend, Backend, Encryption, Integrity verification, & 
+//				DRAM interface
 //==============================================================================
-module PathORamTop (
+module PathORamTop(
   	Clock, Reset,
 	
 	Cmd, PAddr, 
@@ -63,7 +64,7 @@ module PathORamTop (
 	input					DataInValid;
 	output 					DataInReady;
 
-	output	[FEDWidth-1:0]	DataOut; // TODO naming convention [change to DataOut]
+	output	[FEDWidth-1:0]	DataOut;
 	output 					DataOutValid;
 	input 					DataOutReady;
 	
@@ -150,6 +151,7 @@ module PathORamTop (
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
 							.Overclock(				Overclock),
 							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),

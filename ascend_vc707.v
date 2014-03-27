@@ -11,8 +11,7 @@
 //	Module:		ascend_vc707
 //	Desc: 		Top level module for the Ascend chip.
 //==============================================================================
-module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
-							`include "AES.vh", `include "Stash.vh" 	*/) (
+module ascend_vc707(
 			// GPIO
 			output	[7:0]	led,
 
@@ -69,7 +68,8 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							ORAMU =					32,
 							ORAML =					10,
 							ORAMZ =					5,
-							ORAMC =					10;
+							ORAMC =					10,
+							ORAME =					5;
 
 	parameter				FEDWidth =				64,
 							BEDWidth =				512;
@@ -211,6 +211,7 @@ module ascend_vc707 #(	/*	`include "PathORAM.vh", `include "DDR3SDRAM.vh",
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.ORAME(					ORAME),
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),

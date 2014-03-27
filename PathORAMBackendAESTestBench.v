@@ -32,13 +32,15 @@ module  PathORAMBackendAESTestbench;
       ORAMU =                           32,
       ORAML =                           10,
       ORAMZ =                           5,
-      ORAMC =                           10;
-
+      ORAMC =                           10,
+      ORAME =							5;
+	  
     parameter                                   FEDWidth =                      64,
       BEDWidth =                        512;
 
     parameter                                   Overclock =                     1;
-
+	parameter                                   EnableREW =                     0;
+	
     parameter                                   DDR_nCK_PER_CLK =       4,
       DDRDQWidth =              64,
       DDRCWidth =                       3,
@@ -474,7 +476,9 @@ module  PathORAMBackendAESTestbench;
                                 .ORAML(                                 ORAML),
                                 .ORAMZ(                                 ORAMZ),
                                 .ORAMC(                                 ORAMC),
+								.ORAME(									ORAME),
                                 .Overclock(                             Overclock),
+								.EnableREW(								EnableREW),
                                 .FEDWidth(                              FEDWidth),
                                 .BEDWidth(                              BEDWidth),
                                 .DDR_nCK_PER_CLK(               DDR_nCK_PER_CLK),
@@ -503,10 +507,11 @@ module  PathORAMBackendAESTestbench;
                         .DRAMReadData(                  AES_DRAM_ReadData),
                         .DRAMReadDataValid(             AES_DRAM_ReadDataValid),
                         .DRAMWriteData(                 AES_DRAM_WriteData),
-                        .DRAMWriteMask(                 AES_DRAM_WriteMask),
                         .DRAMWriteDataValid(    AES_DRAM_WriteDataValid),
                         .DRAMWriteDataReady(    AES_DRAM_WriteDataReady),
                         .DRAMInitComplete(DRAMInitDone));
+						
+	assign	AES_DRAM_WriteMask =					{DDRMWidth{1'b0}};
     //--------------------------------------------------------------------------
 
     AESPathORAM#(.ORAMB(ORAMB),

@@ -32,7 +32,7 @@ module DRAMInitializer (
 	`include "BucketDRAMLocal.vh"
 	`include "SubTreeLocal.vh"
 	
-	localparam					SpaceRemaining = 	BktHSize_RndBits - 2 * IVEntropyWidth - BktHSize_ValidBits;
+	localparam					SpaceRemaining = 	BktHSize_RndBits - IVEntropyWidth - BktHSize_ValidBits;
 	
     localparam					EndOfTree =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
     localparam					EndOfTreeAddr =  	EndOfTree * BktSize_DRWords;                                    
@@ -99,10 +99,7 @@ module DRAMInitializer (
 	
 	assign	DRAMCommand =							DDR3CMD_Write;
 	
-	// TODO remove second IV
-	// TODO set initialization vectors to real values when we add AES
-	assign	DRAMWriteData = 						{	{SpaceRemaining{1'bx}}, 
-														IVINITValue, 
+	assign	DRAMWriteData = 						{	{SpaceRemaining{1'bx}},  
 														{BktHSize_ValidBits{1'b0}}, 
 														IVINITValue	};
 	

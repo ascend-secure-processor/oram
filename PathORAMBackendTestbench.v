@@ -32,7 +32,8 @@ module	PathORAMBackendTestbench;
 								ORAMU =				32,
 								ORAML =				10,
 								ORAMZ =				5,
-								ORAMC =				10;
+								ORAMC =				10,
+								ORAME =				5;
 
 	parameter					FEDWidth =			64,
 								BEDWidth =			512;

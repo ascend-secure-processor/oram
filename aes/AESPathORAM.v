@@ -8,9 +8,7 @@
 //      Module: AES
 //      Desc: AES
 //==============================================================================
-module AESPathORAM #(`include "PathORAM.vh",
-                     `include "DDR3SDRAM.vh",
-                     `include "AES.vh")
+module AESPathORAM
     (
      Clock, Reset,
 
@@ -44,12 +42,17 @@ module AESPathORAM #(`include "PathORAM.vh",
      );
 
     //------------------------------------------------------------------------------
-    //  Constants
+    //  Parameters & Constants
     //------------------------------------------------------------------------------
 
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
+	
     `include "DDR3SDRAMLocal.vh"
     `include "BucketDRAMLocal.vh"
     `include "BucketLocal.vh"
+	
     localparam W = DDRDWidth / AESWidth;
     localparam D = AESDelay;
 
@@ -67,6 +70,9 @@ module AESPathORAM #(`include "PathORAM.vh",
      //--------------------------------------------------------------------------
      // MIG <-> AES
      //--------------------------------------------------------------------------
+	 
+	 // TODO don't push MIGAddr through AES module
+	 
      //AES -> MIG
      output [DDRAWidth-1:0] MIGAddr;
      output [DDRCWidth-1:0] MIGCmd;
@@ -580,7 +586,6 @@ module AESPathORAM #(`include "PathORAM.vh",
              );
 
     assign PathTransition = PathReadCtr_Reset & DataOutValid & DataOutReady;
-
 
     //------------------------------------------------------------------------------
     //  I/O assignment

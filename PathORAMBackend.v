@@ -125,6 +125,8 @@ module PathORAMBackend(
 	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, 
 							CSStartWriteback, CSPathRead, CSPathWriteback;
 	wire					CSORAMAccess;
+
+	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy;
 	
 	wire					AppendComplete, PathReadComplete, PathWritebackComplete;
@@ -166,7 +168,7 @@ module PathORAMBackend(
 	wire					ReadProcessingHeader;	
 	wire					BucketReadCtr_Reset, ReadBucketTransition;	
 	
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
+	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits_Pre, HeaderDownShift_ValidBits;
 	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
 	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
@@ -258,7 +260,8 @@ module PathORAMBackend(
 	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
 	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
-	
+
+	wire 					AddrGen_HeaderWriteback;	
 	wire					AddrGen_Reading;
 	
 	wire	[ORAML-1:0]		AddrGen_Leaf;
@@ -341,8 +344,6 @@ module PathORAMBackend(
 	//	Control logic
 	//------------------------------------------------------------------------------
 		
-	wire	SetDummy, ClearDummy; // TODO cleanup
-		
 	assign	CSInitialize =							CS == ST_Initialize;
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSAppend =								CS == ST_Append;
@@ -413,9 +414,7 @@ module PathORAMBackend(
 	//	REW - Basic split control logic
 	//------------------------------------------------------------------------------
 	
-	wire AddrGen_HeaderWriteback; // TODO
-	
-	generate if (EnableREW) begin:REW_BACKEND
+	generate if (EnableREW) begin:REW_CONTROL
 		wire				RWAccess, StartRW, REWRoundComplete;
 		
 		Counter	#(			.Width(					ORAML))
@@ -448,7 +447,7 @@ module PathORAMBackend(
 		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
 
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
-	end else begin:BASIC_BACKEND
+	end else begin:BASIC_CONTROL
 		
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
@@ -669,7 +668,7 @@ module PathORAMBackend(
 	assign	DataDownShift_InValid =					PathBuffer_OutValid & ~ReadProcessingHeader;
 	assign	PathBuffer_OutReady =					(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
 	
-	assign	HeaderDownShift_ValidBits =				PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
+	assign	HeaderDownShift_ValidBits_Pre =			PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
 	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
 	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
 	
@@ -714,6 +713,16 @@ module PathORAMBackend(
 	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
+	
+	// TODO
+	/*generate if (EnableREW) begin:
+		genvar i;
+		for (i = 0; i < ORAMZ; i++) begin
+		
+		end
+	end else begin:*/
+		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
+	//end endgenerate
 	
 	// Use FIFOShiftRound to generate BlockPresent signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
@@ -900,12 +909,9 @@ module PathORAMBackend(
 
 	assign	WritebackProcessingHeader =				BucketWritebackCtr < BktHSize_DRBursts;
 	
-	// TODO remove second IV
-	// TODO add real initialization vector when we add AES
 	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'bx}},
 														HeaderUpShift_Leaves,
 														HeaderUpShift_PAddrs,
-														IVINITValue, 
 														{BktHWaste_ValidBits{1'b0}},
 														HeaderUpShift_ValidBits, 
 														IVINITValue	};
