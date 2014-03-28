@@ -177,17 +177,17 @@ module PathORamTop(
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
 							
-							.DRAMCommandAddress(	AES_DRAMAddress),
-							.DRAMCommand(			AES_DRAMCommand),
-							.DRAMCommandValid(		AES_DRAMCommandValid),
-							.DRAMCommandReady(		AES_DRAMCommandReady),			
+							.DRAMCommandAddress(	DRAMAddress),
+							.DRAMCommand(			DRAMCommand),
+							.DRAMCommandValid(		DRAMCommandValid),
+							.DRAMCommandReady(		DRAMCommandReady),			
 							.DRAMReadData(			AES_DRAMReadData),
 							.DRAMReadDataValid(		AES_DRAMReadDataValid),			
 							.DRAMWriteData(			AES_DRAMWriteData),
 							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
 							.DRAMInitComplete(		DRAMInitComplete));
-
+							
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------
@@ -218,11 +218,6 @@ module PathORamTop(
 				aes(		.Clock(					Clock),
 							.Reset(					Reset),
 
-							.MIGAddr(				DRAMAddress),
-							.MIGCmd(				DRAMCommand),
-							.MIGCmdValid(			DRAMCommandValid),
-							.MIGCmdReady(			DRAMCommandReady),
-
 							.MIGOut(				DRAMWriteData),
 							.MIGOutMask(			DRAMWriteMask),
 							.MIGOutValid(			DRAMWriteDataValid),
@@ -239,18 +234,8 @@ module PathORamTop(
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady),
 
-							.DRAMCmdAddr(			AES_DRAMAddress),
-							.DRAMCmd(				AES_DRAMCommand),
-							.DRAMCmdValid(			AES_DRAMCommandValid),
-							.DRAMCmdReady(			AES_DRAMCommandReady),
-
 							.DRAMInitDone(			DRAMInitComplete));							
 	end else begin:NO_AES
-		assign	DRAMCommand =						AES_DRAMCommand;
-		assign	DRAMAddress =						AES_DRAMAddress;
-		assign	DRAMCommandValid =					AES_DRAMCommandValid;
-		assign	AES_DRAMCommandReady =				DRAMCommandReady;
-	
 		assign	DRAMWriteData = 					AES_DRAMWriteData;
 		assign	DRAMWriteMask =						AES_DRAMWriteMask;
 		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
@@ -259,6 +244,10 @@ module PathORamTop(
 		assign	AES_DRAMReadData =					DRAMReadData;
 		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
 	end endgenerate
+
+	//--------------------------------------------------------------------------
+	//	DRAM Interface
+	//--------------------------------------------------------------------------
 
 	//--------------------------------------------------------------------------
 endmodule

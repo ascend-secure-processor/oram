@@ -89,11 +89,8 @@ module  PathORAMBackendAESTestbench;
 
     // DRAM interface
 
-    wire [DDRCWidth-1:0]                                AES_DRAM_Command;
-    wire [DDRAWidth-1:0]                                AES_DRAM_Address;
     wire [DDRDWidth-1:0]                                AES_DRAM_WriteData, AES_DRAM_ReadData;
     wire [DDRMWidth-1:0]                                AES_DRAM_WriteMask;
-    wire                                                AES_DRAM_CommandValid, AES_DRAM_CommandReady;
     wire                                                AES_DRAM_WriteDataValid, AES_DRAM_WriteDataReady;
     wire                                                AES_DRAM_ReadDataValid;
 
@@ -500,10 +497,10 @@ module  PathORAMBackendAESTestbench;
                         .StoreData(                             StoreData),
                         .StoreValid(                    StoreValid),
                         .StoreReady(                    StoreReady),
-                        .DRAMCommandAddress(    AES_DRAM_Address),
-                        .DRAMCommand(                   AES_DRAM_Command),
-                        .DRAMCommandValid(              AES_DRAM_CommandValid),
-                        .DRAMCommandReady(              AES_DRAM_CommandReady),
+                        .DRAMCommandAddress(    DRAM_Address),
+                        .DRAMCommand(                   DRAM_Command),
+                        .DRAMCommandValid(              DRAM_CommandValid),
+                        .DRAMCommandReady(              DRAM_CommandReady),
                         .DRAMReadData(                  AES_DRAM_ReadData),
                         .DRAMReadDataValid(             AES_DRAM_ReadDataValid),
                         .DRAMWriteData(                 AES_DRAM_WriteData),
@@ -530,11 +527,6 @@ module  PathORAMBackendAESTestbench;
     aes(.Clock(Clock),
         .Reset(Reset),
 
-        .MIGAddr(DRAM_Address),
-        .MIGCmd(DRAM_Command),
-        .MIGCmdValid(DRAM_CommandValid),
-        .MIGCmdReady(DRAM_CommandReady),
-
         .MIGOut(DRAM_WriteData),
         .MIGOutMask(DRAM_WriteMask),
         .MIGOutValid(DRAM_WriteDataValid),
@@ -550,11 +542,6 @@ module  PathORAMBackendAESTestbench;
         .BackendWMask(AES_DRAM_WriteMask),
         .BackendWValid(AES_DRAM_WriteDataValid),
         .BackendWReady(AES_DRAM_WriteDataReady),
-
-        .DRAMCmdAddr(AES_DRAM_Address),
-        .DRAMCmd(AES_DRAM_Command),
-        .DRAMCmdValid(AES_DRAM_CommandValid),
-        .DRAMCmdReady(AES_DRAM_CommandReady),
 
         .DRAMInitDone(DRAMInitDone)
         );
@@ -579,7 +566,7 @@ module  PathORAMBackendAESTestbench;
                 .PoweredUp(                             ),
 
                 .CommandAddress(                {DRAM_Address, 6'b000000}),
-                .Command(                               DRAM_Command),
+                .Command(                       DRAM_Command),
                 .CommandValid(                  DRAM_CommandValid),
                 .CommandReady(                  DRAM_CommandReady),
 

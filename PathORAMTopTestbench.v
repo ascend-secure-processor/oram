@@ -55,14 +55,16 @@ module PathORAMTopTestbench;
 							ORAMU =					32,
 							ORAML =					10,
 							ORAMZ =					5,
-							ORAMC =					10;
+							ORAMC =					10,
+							ORAME = 				5;
 
 	parameter				FEDWidth =				64,
 							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
 
-	parameter				EnableAES =				1;
+	parameter				EnableAES =				1,
+							EnableREW =				0;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -164,8 +166,10 @@ module PathORAMTopTestbench;
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),

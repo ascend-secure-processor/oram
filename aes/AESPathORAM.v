@@ -12,11 +12,6 @@ module AESPathORAM
     (
      Clock, Reset,
 
-     MIGAddr,
-     MIGCmd,
-     MIGCmdValid,
-     MIGCmdReady,
-
      MIGOut,
      MIGOutMask,
      MIGOutValid,
@@ -32,11 +27,6 @@ module AESPathORAM
      BackendWMask,
      BackendWValid,
      BackendWReady,
-
-     DRAMCmdAddr,
-     DRAMCmd,
-     DRAMCmdValid,
-     DRAMCmdReady,
 
      DRAMInitDone
      );
@@ -73,12 +63,6 @@ module AESPathORAM
 	 
 	 // TODO don't push MIGAddr through AES module
 	 
-     //AES -> MIG
-     output [DDRAWidth-1:0] MIGAddr;
-     output [DDRCWidth-1:0] MIGCmd;
-     output                 MIGCmdValid;
-     input                  MIGCmdReady;
-
      output [DDRDWidth-1:0] MIGOut;
      output [DDRMWidth-1:0] MIGOutMask;
      output                 MIGOutValid;
@@ -101,11 +85,6 @@ module AESPathORAM
      input [DDRMWidth-1:0]  BackendWMask;
      input                  BackendWValid;
      output                 BackendWReady;
-
-     input [DDRAWidth-1:0]  DRAMCmdAddr;
-     input [DDRCWidth-1:0]  DRAMCmd;
-     input                  DRAMCmdValid;
-     output                 DRAMCmdReady;
 
      input                  DRAMInitDone;
 
@@ -188,9 +167,9 @@ module AESPathORAM
     wire                                           DataOutValid;
     wire                                           DataOutReady;
 
-    wire [DDRAWidth-1:0]                           MIGAddrOut;
-    wire [DDRCWidth-1:0]                           MIGCmdOut;
-    wire                                           MIGCmdOutValid;
+    wire [DDRAWidth-1:0]                           MIGAddrOut; // TODO remove
+    wire [DDRCWidth-1:0]                           MIGCmdOut; // TODO remove
+    wire                                           MIGCmdOutValid; // TODO remove
 
     wire [DDRMWidth-1:0]                           MIGMaskOut;
 
@@ -212,7 +191,6 @@ module AESPathORAM
     reg                                            InitDone;
 
     reg [31:0]                                     numinp;
-    reg [31:0]                                     numreadreq;
     reg [31:0]                                     numencdata;
     reg [31:0]                                     numdata;
     reg [31:0]                                     nummask;
@@ -228,15 +206,12 @@ module AESPathORAM
             numinp <= 0;
             numdata <= 0;
             nummask <= 0;
-            numreadreq <= 0;
             numencdata <= 0;
             numaesin <= 0;
             numaesout <= 0;
         end else begin
             if (BackendWValid & BackendWReady)
               numinp <= numinp + 1;
-            if (DRAMCmdValid & DRAMCmdOutReady & (DRAMCmd == DDR3CMD_Read))
-              numreadreq <= numreadreq + 1;
             if (DataOutValid)
               numencdata <= numencdata + 1;
             if (PathBuffer_OutValid & PathBuffer_OutReady)
@@ -255,7 +230,7 @@ module AESPathORAM
     assign Key = {(AESWidth){1'b1}};
     assign KeyValid = 1;
 
-    assign PassThroughCmd = 0; //~DRAMInitDone;//  |
+    assign PassThroughCmd = 0; // TODO remove //~DRAMInitDone;//  |
                             // (DRAMInitDone & (DRAMCmd == DDR3CMD_Read));
     assign PassThroughW = 0; //~DRAMInitDone;
     assign PassThroughR = 0; //~DRAMInitDone;//  |
@@ -373,19 +348,6 @@ module AESPathORAM
     //	MIG CMD FIFO and MASK
     //------------------------------------------------------------------------------
 
-	// TODO [C F] why are command FIFOs necessary?
-    FIFORAM#(.Width(DDRAWidth + DDRCWidth),
-             .Buffering(FIFO_D)) //[AK]: what depth?
-    cmd_fifo (.Clock(Clock),
-              .Reset(Reset),
-              .InData({DRAMCmdAddr, DRAMCmd}),
-              .InValid(DRAMCmdValid),
-              .InAccept(DRAMCmdOutReady),
-              .OutData({MIGAddrOut, MIGCmdOut}),
-              .OutSend(MIGCmdOutValid),
-              .OutReady(MIGCmdReady)
-              );
-
     //used only for write
     FIFORAM#(.Width(DDRMWidth),
              .Buffering(FIFO_D))
@@ -398,7 +360,6 @@ module AESPathORAM
                .OutSend(WriteMaskValid),
                .OutReady(MIGOutReady & (RW == PATH_WRITE) & DataOutValid)
                );
-
 
     //------------------------------------------------------------------------------
     //  IV and Data FIFO
@@ -590,12 +551,6 @@ module AESPathORAM
     //------------------------------------------------------------------------------
     //  I/O assignment
     //------------------------------------------------------------------------------
-
-    //Cmd related
-    assign MIGAddr = PassThroughCmd ? DRAMCmdAddr : MIGAddrOut;
-    assign MIGCmd = PassThroughCmd ? DRAMCmd : MIGCmdOut;
-    assign MIGCmdValid = PassThroughCmd ? DRAMCmdValid : MIGCmdOutValid;
-    assign DRAMCmdReady = PassThroughCmd ? MIGCmdReady : DRAMCmdOutReady;
 
     //BackendW related
     assign MIGOut = PassThroughW ? BackendWData : DataOut ;
