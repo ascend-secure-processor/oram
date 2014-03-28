@@ -43,7 +43,7 @@ module PathORamTop(
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
-    `include "PLBLocal.vh"; 
+    	`include "PLBLocal.vh" 
 
 	//--------------------------------------------------------------------------
 	//	System I/O

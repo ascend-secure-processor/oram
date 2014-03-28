@@ -1,6 +1,6 @@
 `include "Const.vh"
 
- `timescale 1ns/1ns
+// `timescale 1ns/1ns
 
 module testFrontEnd;
 						
@@ -19,12 +19,13 @@ module testFrontEnd;
     parameter                   Recursion = 3;
                 
     parameter                   LeafWidth = 32;         // in bits       
-    parameter                   PLBCapacity = 8192;     // in bits
+    parameter                   PLBCapacity = 1024;     // in bits
 
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh"
 
-    wire Clock, Reset; 
+    reg  Clock; 
+    wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
     wire CmdInReady, DataInReady, ReturnDataValid;
     reg [1:0] CmdIn;
@@ -40,7 +41,6 @@ module testFrontEnd;
     wire					LoadReady, StoreValid;
     reg                     LoadValid, StoreReady;
     
-    assign BEnd_CmdReady = (CycleCount % 100) == 0;
 
    UORamController #(  	        .ORAMU(         		ORAMU), 
     							.ORAML(         		ORAML), 
@@ -79,21 +79,34 @@ module testFrontEnd;
 					
 	//--------------------------------------------------------------------------
 
+    
+	// cycle count and clock generation
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;
     end
-    always@(posedge Clock) begin
+    always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
     end
 
     assign Reset = CycleCount < 30;
     assign DataIn = 1;
+    assign BEnd_CmdReady = (CycleCount % 100) == 0;
   
-    localparam   Freq =	200_000_000;
+    localparam   Freq =	100_000_000;
     localparam   Cycle = 1000000000/Freq;	
-    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+//    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
+    initial begin
+        Clock <= 0;    
+        while (1) begin
+            #(Cycle/2);
+            Clock <= ~Clock;
+         end
+    end
+
+    // tasks and check logic
+	
     reg [ORAML+1:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
     
@@ -145,13 +158,12 @@ module testFrontEnd;
                         
         end 
      endtask    
- /*   
+    
     integer ProgStore_iter;
     task Handle_ProgStore;
         begin
            #(Cycle);
-           DataInValid <= 1;
-           #(Cycle / 2);
+           #(Cycle / 2) DataInValid <= 1;
            for (ProgStore_iter = 0; ProgStore_iter < FEORAMBChunks; ProgStore_iter = ProgStore_iter + 1) begin
                while (!DataInReady)  #(Cycle);        
                #(Cycle);
@@ -159,16 +171,18 @@ module testFrontEnd;
            DataInValid <= 0;
         end
     endtask
- */
     
     integer BEResponse_iter;
     task Handle_BEResponse;
         begin
            #(Cycle * 30);
-           LoadValid <= 1;
-           #(Cycle / 2);
+           #(Cycle / 2) LoadValid <= 1;
            for (BEResponse_iter = 0; BEResponse_iter < FEORAMBChunks; BEResponse_iter = BEResponse_iter + 1) begin
                while (!LoadReady)  #(Cycle);  
+          //    	    $display("[Response Chunk %d]  Block %d currently --> leaf %d (existence = %d)",
+	  //		BEResponse_iter, 
+	  //		(BEnd_PAddr_Reg - NumValidBlock) * FEORAMBChunks + BEResponse_iter, 
+	  //		LoadData[ORAML-1:0], LoadData[ORAML]);
                #(Cycle);
            end
            LoadValid <= 0;
@@ -176,18 +190,25 @@ module testFrontEnd;
     endtask
     
     assign LoadData = BEnd_PAddr_Reg < NumValidBlock ? 0 : 
-            GlobalPosMap[(BEnd_PAddr_Reg - NumValidBlock) * FEORAMBChunks + BEResponse_iter][ORAML:0];
+            GlobalPosMap[(BEnd_PAddr_Reg - NumValidBlock) * FEORAMBChunks + BEResponse_iter];
 
     integer BEWrite_iter;    
     task Handle_BEWrite;
         begin
-           StoreReady <= 1;
-           #(Cycle / 2);
+           #(Cycle / 2) StoreReady <= 1;
            for (BEWrite_iter = 0; BEWrite_iter < FEORAMBChunks; BEWrite_iter = BEWrite_iter + 1) begin
-               while (!StoreValid)  #(Cycle);               
-               if (BEnd_PAddr_Reg >= NumValidBlock)
+	        while (!StoreValid)  begin
+			$display("[t = %d]", CycleCount);
+			#(Cycle);
+		end               
+                if (BEnd_PAddr_Reg >= NumValidBlock) begin
                     GlobalPosMap[(BEnd_PAddr_Reg - NumValidBlock) * FEORAMBChunks + BEWrite_iter][ORAML:0] <= StoreData[ORAML:0];     
-               #(Cycle);
+		end
+        //       	    $display("[t = %d, Chunk %d (end = %d)] Block %d currently --> leaf %d (existence = %d)",
+	//		CycleCount, BEWrite_iter , StoreValid,
+	//		(BEnd_PAddr_Reg - NumValidBlock) * FEORAMBChunks + BEWrite_iter, 
+	//		StoreData[ORAML-1:0], StoreData[ORAML]);
+		#(Cycle);
            end
            StoreReady <= 0;
         end
@@ -199,7 +220,8 @@ module testFrontEnd;
     
     assign Exist = GlobalPosMap[AddrRand][ORAML];
     assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-    
+   
+    integer i; 
     initial begin
          $display("ORAML = %d", ORAML);
          TestCount <= 0;
@@ -208,11 +230,12 @@ module testFrontEnd;
          ReturnDataReady <= 1;  
          LoadValid <= 0; 
          AddrRand <= 0;
-         
+         StoreReady <= 0;         
+
          DataInValid <= 1;
           
-         for (integer i = 0; i < TotalNumBlock; i=i+1) begin
-             GlobalPosMap[i][ORAML] <= 0;
+         for (i = 0; i < TotalNumBlock; i=i+1) begin
+             GlobalPosMap[i][ORAML+1:ORAML] <= 0;
          end         
     end
     
@@ -222,6 +245,7 @@ module testFrontEnd;
     always @(posedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 1000) begin
+                #(Cycle * 10);       
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);       
                 AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;

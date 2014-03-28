@@ -14,9 +14,9 @@ module UORamDataPath
 	`include "PathORAM.vh"; 
 	`include "PLB.vh";
 
-    `include "PathORAMBackendLocal.vh";
-    `include "CacheCmdLocal.vh";
-    `include "PLBLocal.vh";  
+    `include "PathORAMBackendLocal.vh"
+    `include "CacheCmdLocal.vh"
+    `include "PLBLocal.vh"  
     
     input Clock, Reset; 
     
@@ -71,6 +71,7 @@ module UORamDataPath
                         .OutSend(EvictBufferOutValid), 
                         .OutData(EvictBufferDOut)
                     ); 
+
     
     // Funnel for PPPEvictBuffer --> BackEnd
     wire EvictFunnelOutValid;

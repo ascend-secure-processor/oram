@@ -3,38 +3,35 @@
 // `timescale 1ns/1ns
 
 module testUORam;
-						
 	parameter 					DDR_nCK_PER_CLK = 	4;
 	parameter					DDRDQWidth =		64;
 	parameter					DDRCWidth =			3;
-								
-	parameter					IVEntropyWidth =	64;
-
+						
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
 	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
 	parameter					ORAMC =				10; 
 								
-	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 64 `endif;
+	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter					Overclock = 		1;  
-    
+
     parameter                   DDRAWidth =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
     
     parameter                   NumValidBlock = 1024;
     parameter                   Recursion = 3;
                 
     parameter                   LeafWidth = 32;         // in bits       
-    parameter                   PLBCapacity = 8192;     // in bits
+    parameter                   PLBCapacity = 1024;     // in bits
 
-    `include "PathORAMBackendLocal.vh";
-    `include "PLBLocal.vh"; 
+    `include "PathORAMBackendLocal.vh"
+    `include "PLBLocal.vh" 
     `include "BucketLocal.vh"
     `include "DDR3SDRAMLocal.vh"
 
-    wire Clock, Reset; 
+    reg Clock; 
+    wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
     wire CmdInReady, DataInReady, ReturnDataValid;
     reg [1:0] CmdIn;
@@ -57,11 +54,6 @@ module testUORam;
                             .ORAMZ(					ORAMZ),
                             .FEDWidth(				FEDWidth),
                             .BEDWidth(				BEDWidth),							
-                            .DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-                            .DDRDQWidth(			DDRDQWidth),
-                            .DDRCWidth(				DDRCWidth),
-                            .DDRAWidth(				DDRAWidth),
-                            .IVEntropyWidth(		IVEntropyWidth),
                             .NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 
                             .LeafWidth(             LeafWidth), 
@@ -141,16 +133,24 @@ module testUORam;
     initial begin
         CycleCount = 0;
     end
-    always@(posedge Clock) begin
+    always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
     end
 
     assign Reset = CycleCount < 30;
     assign DataIn = 1;
   
-    localparam   Freq =	200_000_000;
+    localparam   Freq =	100_000_000;
     localparam   Cycle = 1000000000/Freq;	
-    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+    //ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+
+    initial begin
+        Clock <= 0;    
+        while (1) begin
+            #(Cycle/2);
+            Clock <= ~Clock;
+         end
+    end
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
@@ -162,8 +162,8 @@ module testUORam;
             CmdInValid <= 1;
             CmdIn <= cmd;
             AddrIn <= addr;
-            $display("Start Access %d: %s Block %d",
-                TestCount,
+            $display("[t = %d] Start Access %d: %s Block %d",
+                CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
                 addr);
             #(Cycle + Cycle / 2) CmdInValid <= 0;
@@ -172,7 +172,8 @@ module testUORam;
     
     task Check_Leaf;
        begin
-           $display("\t%s Block %d, \tLeaf %d --> %d", 
+           $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
+		   CycleCount, 
                    ORAM.BEnd_Cmd == 0 ? "Update" : ORAM.BEnd_Cmd == 1 ? "Append" : ORAM.BEnd_Cmd == 2 ? "Read" : "ReadRmv",
                    ORAM.BEnd_PAddr, ORAM.BEnd_Cmd == 1 ? -1 : ORAM.CurrentLeaf, ORAM.RemappedLeaf);
                
@@ -194,17 +195,17 @@ module testUORam;
            GlobalPosMap[ORAM.BEnd_PAddr] <= ORAM.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.RemappedLeaf};
        end 
     endtask    
-   
+  
+   integer i; 
    task Handle_ProgStore;
        begin
           #(Cycle);
-          DataInValid <= 1;
-          #(Cycle / 2)
-          for (integer i = 0; i < FEORAMBChunks; i = i + 1) begin
+          #(Cycle / 2) DataInValid <= 1;
+          for (i = 0; i < FEORAMBChunks; i = i + 1) begin
               while (!DataInReady)  #(Cycle);        
               #(Cycle);
           end
-          DataInValid <= 0;
+          //DataInValid <= 0;
        end
    endtask
     
@@ -223,17 +224,18 @@ module testUORam;
         ReturnDataReady <= 1;   
         AddrRand <= 0;
          
-        for (integer i = 0; i < TotalNumBlock; i=i+1) begin
+        for (i = 0; i < TotalNumBlock; i=i+1) begin
             GlobalPosMap[i][ORAML] <= 0;
-        end         
+        end 
    end
    
    wire WriteCmd;
    assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
    
    always @(posedge Clock) begin
-       if (CmdInReady) begin
+       if (!Reset && CmdInReady) begin
            if (TestCount < 1000) begin
+               #(Cycle * 10);       
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle);       
                AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;

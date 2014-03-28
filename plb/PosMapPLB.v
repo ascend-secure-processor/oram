@@ -159,8 +159,10 @@ module PosMapPLB
             if (PPPHit && LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
                 NewLeafOut <= NewLeafIn;
 		`ifdef SIMULATION
-                if (!NewLeafValid)
+                if (!NewLeafValid) begin
                     $display("Error: run out of random leaves.");
+		    $finish;
+		end
 		`endif
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin
