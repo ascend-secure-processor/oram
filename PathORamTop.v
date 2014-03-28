@@ -7,8 +7,8 @@
 
 //==============================================================================
 //	Module:		PathORAM
-//	Desc:		Frontend, Backend, Encryption, Integrity verification, & 
-//				DRAM interface
+//	Desc:		{Unified} x {Basic, REW} Path ORAM with encryption, integrity 
+//				verification, & a DRAM interface
 //==============================================================================
 module PathORamTop(
   	Clock, Reset,
@@ -25,7 +25,7 @@ module PathORamTop(
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
-);	
+	);	
 	
 	//--------------------------------------------------------------------------
 	//	Constants
@@ -97,15 +97,15 @@ module PathORamTop(
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 	
-    wire 	[DDRCWidth-1:0]							AES_DRAMCommand;
-    wire 	[DDRAWidth-1:0]							AES_DRAMAddress;
-    wire 	[DDRDWidth-1:0]							AES_DRAMWriteData, AES_DRAMReadData;
-    wire 	[DDRMWidth-1:0]							AES_DRAMWriteMask;
-    wire											AES_DRAMCommandValid, AES_DRAMCommandReady;
-    wire											AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
-    wire											AES_DRAMReadDataValid;
+    wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
+    wire 	[DDRMWidth-1:0]	AES_DRAMWriteMask;
+    wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
+    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
 	
-	wire											DRAMInitComplete;
+	wire					DRAMInitComplete;
+	
+	wire					PathBuffer_OutValid, PathBuffer_OutReady;
+	wire	[DDRDWidth-1:0]	PathBuffer_OutData;	
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -181,12 +181,15 @@ module PathORamTop(
 							.DRAMCommand(			DRAMCommand),
 							.DRAMCommandValid(		DRAMCommandValid),
 							.DRAMCommandReady(		DRAMCommandReady),			
+
 							.DRAMReadData(			AES_DRAMReadData),
-							.DRAMReadDataValid(		AES_DRAMReadDataValid),			
+							.DRAMReadDataValid(		AES_DRAMReadDataValid),
+							.DRAMReadDataReady(		AES_DRAMReadDataReady),
+							
 							.DRAMWriteData(			AES_DRAMWriteData),
 							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
-							.DRAMInitComplete(		DRAMInitComplete));
+							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
@@ -228,27 +231,59 @@ module PathORamTop(
 
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
-
+							.BackendRReady(			AES_DRAMReadDataReady),
+							
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWMask(			AES_DRAMWriteMask),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady),
 
-							.DRAMInitDone(			DRAMInitComplete));							
+							.DRAMInitDone(			DRAMInitComplete));
+
+	assign	PathBuffer_OutReady = 1'b1; // TODO remove when we take path buffer out of AES
+							
 	end else begin:NO_AES
 		assign	DRAMWriteData = 					AES_DRAMWriteData;
 		assign	DRAMWriteMask =						AES_DRAMWriteMask;
 		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
 		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
 	
-		assign	AES_DRAMReadData =					DRAMReadData;
-		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
+		assign	AES_DRAMReadData =					PathBuffer_OutData;
+		assign	AES_DRAMReadDataValid =				PathBuffer_OutValid;
+		assign	PathBuffer_OutReady = 				AES_DRAMReadDataReady;
 	end endgenerate
-
+	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
 	//--------------------------------------------------------------------------
 
+	generate if (Overclock) begin:INBUF_BRAM
+		wire				PathBuffer_Full, PathBuffer_Empty;
+
+		PathBuffer in_P_buf(.clk(					Clock),
+							.srst(					Reset), 
+							.din(					DRAMReadData), 
+							.wr_en(					DRAMReadDataValid), 
+							.rd_en(					PathBuffer_OutReady), 
+							.dout(					PathBuffer_OutData), 
+							.full(					PathBuffer_Full), 
+							.empty(					PathBuffer_Empty));
+							
+		assign	PathBuffer_InReady =				~PathBuffer_Full;
+		assign	PathBuffer_OutValid =				~PathBuffer_Empty;							
+	end else begin:INBUF_LUTRAM
+		FIFORAM	#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady), // debugging
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady));
+	end endgenerate
+	
 	//--------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------

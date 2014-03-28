@@ -92,7 +92,7 @@ module  PathORAMBackendAESTestbench;
     wire [DDRDWidth-1:0]                                AES_DRAM_WriteData, AES_DRAM_ReadData;
     wire [DDRMWidth-1:0]                                AES_DRAM_WriteMask;
     wire                                                AES_DRAM_WriteDataValid, AES_DRAM_WriteDataReady;
-    wire                                                AES_DRAM_ReadDataValid;
+    wire                                                AES_DRAM_ReadDataValid, AES_DRAM_ReadDataReady;
 
     wire [DDRCWidth-1:0]                                DRAM_Command;
     wire [DDRAWidth-1:0]                                DRAM_Address;
@@ -503,6 +503,7 @@ module  PathORAMBackendAESTestbench;
                         .DRAMCommandReady(              DRAM_CommandReady),
                         .DRAMReadData(                  AES_DRAM_ReadData),
                         .DRAMReadDataValid(             AES_DRAM_ReadDataValid),
+						.DRAMReadDataReady(				AES_DRAM_ReadDataReady),		
                         .DRAMWriteData(                 AES_DRAM_WriteData),
                         .DRAMWriteDataValid(    AES_DRAM_WriteDataValid),
                         .DRAMWriteDataReady(    AES_DRAM_WriteDataReady),
@@ -537,7 +538,7 @@ module  PathORAMBackendAESTestbench;
 
         .BackendRData(AES_DRAM_ReadData),
         .BackendRValid(AES_DRAM_ReadDataValid),
-
+		.BackendRReady(AES_DRAM_ReadDataReady),
         .BackendWData(AES_DRAM_WriteData),
         .BackendWMask(AES_DRAM_WriteMask),
         .BackendWValid(AES_DRAM_WriteDataValid),

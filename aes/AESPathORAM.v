@@ -8,85 +8,86 @@
 //      Module: AES
 //      Desc: AES
 //==============================================================================
-module AESPathORAM
-    (
-     Clock, Reset,
+module AESPathORAM(
+	Clock, Reset,
 
-     MIGOut,
-     MIGOutMask,
-     MIGOutValid,
-     MIGOutReady,
+	MIGOut,
+	MIGOutMask,
+	MIGOutValid,
+	MIGOutReady,
 
-     MIGIn,
-     MIGInValid,
+	MIGIn,
+	MIGInValid,
 
-     BackendRData,
-     BackendRValid,
+	BackendRData,
+	BackendRValid,
+	BackendRReady,
 
-     BackendWData,
-     BackendWMask,
-     BackendWValid,
-     BackendWReady,
+	BackendWData,
+	BackendWMask,
+	BackendWValid,
+	BackendWReady,
 
-     DRAMInitDone
-     );
+	DRAMInitDone
+	);
 
-    //------------------------------------------------------------------------------
-    //  Parameters & Constants
-    //------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------
+	//  Parameters & Constants
+	//------------------------------------------------------------------------------
 
 	`include "PathORAM.vh";
 	`include "DDR3SDRAM.vh";
 	`include "AES.vh";
-	
-    `include "DDR3SDRAMLocal.vh"
-    `include "BucketDRAMLocal.vh"
-    `include "BucketLocal.vh"
-	
-    localparam W = DDRDWidth / AESWidth;
-    localparam D = AESDelay;
 
-    localparam FIFO_D = D;
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+	`include "BucketLocal.vh"
 
-    localparam PATH_READ = 1;
-    localparam PATH_WRITE = 0;
+	localparam W = DDRDWidth / AESWidth;
+	localparam D = AESDelay;
 
-     //--------------------------------------------------------------------------
-     // System I/O
-     //--------------------------------------------------------------------------
+	localparam FIFO_D = D;
 
-     input                  Clock, Reset;
+	localparam PATH_READ = 1;
+	localparam PATH_WRITE = 0;
 
-     //--------------------------------------------------------------------------
-     // MIG <-> AES
-     //--------------------------------------------------------------------------
-	 
-	 // TODO don't push MIGAddr through AES module
-	 
-     output [DDRDWidth-1:0] MIGOut;
-     output [DDRMWidth-1:0] MIGOutMask;
-     output                 MIGOutValid;
-     input                  MIGOutReady;
+	//--------------------------------------------------------------------------
+	// System I/O
+	//--------------------------------------------------------------------------
 
-     //MIG -> AES
-     input [DDRDWidth-1:0]  MIGIn;
-     input                  MIGInValid;
+	input                  Clock, Reset;
 
-     //--------------------------------------------------------------------------
-     // AES <-> BackEnd
-     //--------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
+	// MIG <-> AES
+	//--------------------------------------------------------------------------
 
-     //AES -> Backend
-     output [DDRDWidth-1:0] BackendRData;
-     output                 BackendRValid;
+	// TODO don't push MIGAddr through AES module
 
-     //BackEnd -> AES
-     input [DDRDWidth-1:0]  BackendWData;
-     input [DDRMWidth-1:0]  BackendWMask;
-     input                  BackendWValid;
-     output                 BackendWReady;
+	output [DDRDWidth-1:0] MIGOut;
+	output [DDRMWidth-1:0] MIGOutMask;
+	output                 MIGOutValid;
+	input                  MIGOutReady;
 
-     input                  DRAMInitDone;
+	//MIG -> AES
+	input [DDRDWidth-1:0]  MIGIn;
+	input                  MIGInValid;
+
+	//--------------------------------------------------------------------------
+	// AES <-> BackEnd
+	//--------------------------------------------------------------------------
+
+	//AES -> Backend
+	output [DDRDWidth-1:0] BackendRData;
+	output                 BackendRValid;
+	input					BackendRReady;
+
+	//BackEnd -> AES
+	input [DDRDWidth-1:0]  BackendWData;
+	input [DDRMWidth-1:0]  BackendWMask;
+	input                  BackendWValid;
+	output                 BackendWReady;
+
+	input                  DRAMInitDone;
 
     //------------------------------------------------------------------------------
     //	Wires & Regs
@@ -524,7 +525,7 @@ module AESPathORAM
                                          XorRes[IVEntropyWidth-1:0];
 
     assign DataOutValid = AESDataOutValid & AESResDataOutValid;
-    assign DataOutReady = (RW == PATH_READ) | ((RW == PATH_WRITE) & MIGOutReady);
+    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) | ((RW == PATH_WRITE) & MIGOutReady);
 
     //------------------------------------------------------------------------------
     //  Path Counter

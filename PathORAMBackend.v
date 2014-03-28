@@ -672,7 +672,7 @@ module PathORAMBackend(
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
-	/* TODO
+	/* TODO make sure Albert hasn't already implemented this :-)
 	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
 		for (i = 0; i < ORAMZ; i++) begin

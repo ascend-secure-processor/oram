@@ -12,40 +12,40 @@ module PathORAMTopTestbench;
 	localparam RESET_PERIOD = 200000; //in pSec  
 	parameter CLKIN_PERIOD          = 5000;
 
-  //**************************************************************************//
-  // Wire Declarations
-  //**************************************************************************//
-  
-  reg                                sys_rst_n;
-  wire                               sys_rst;
+	//**************************************************************************//
+	// Wire Declarations
+	//**************************************************************************//
+
+	reg                                sys_rst_n;
+	wire                               sys_rst;
 
 
-  reg								sys_clk_i;
-  wire                               sys_clk_p;
-  wire                               sys_clk_n;
+	reg								sys_clk_i;
+	wire                               sys_clk_p;
+	wire                               sys_clk_n;
 
-  //**************************************************************************//
-  // Reset Generation
-  //**************************************************************************//
-  initial begin
-    sys_rst_n = 1'b0;
-    #RESET_PERIOD
-      sys_rst_n = 1'b1;
-   end
+	//**************************************************************************//
+	// Reset Generation
+	//**************************************************************************//
+	initial begin
+	sys_rst_n = 1'b0;
+	#RESET_PERIOD
+	  sys_rst_n = 1'b1;
+	end
 
-   assign sys_rst = ~sys_rst_n;
+	assign sys_rst = ~sys_rst_n;
 
-  //**************************************************************************//
-  // Clock Generation
-  //**************************************************************************//
+	//**************************************************************************//
+	// Clock Generation
+	//**************************************************************************//
 
-  initial
-    sys_clk_i = 1'b0;
-  always
-    sys_clk_i = #(CLKIN_PERIOD/2.0) ~sys_clk_i;
+	initial
+	sys_clk_i = 1'b0;
+	always
+	sys_clk_i = #(CLKIN_PERIOD/2.0) ~sys_clk_i;
 
-  assign sys_clk_p = sys_clk_i;
-  assign sys_clk_n = ~sys_clk_i;
+	assign sys_clk_p = sys_clk_i;
+	assign sys_clk_n = ~sys_clk_i;
 
 	//--------------------------------------------------------------------------
 	//	CUT
@@ -59,7 +59,7 @@ module PathORAMTopTestbench;
 							ORAME = 				5;
 
 	parameter				FEDWidth =				64,
-							BEDWidth =				512;
+							BEDWidth =				128;
 								
 	parameter				Overclock =				1;
 
