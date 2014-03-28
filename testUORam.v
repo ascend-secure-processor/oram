@@ -30,7 +30,7 @@ module testUORam;
     `include "BucketLocal.vh"
     `include "DDR3SDRAMLocal.vh"
 
-    reg Clock; 
+    wire Clock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
     wire CmdInReady, DataInReady, ReturnDataValid;
@@ -142,8 +142,9 @@ module testUORam;
   
     localparam   Freq =	100_000_000;
     localparam   Cycle = 1000000000/Freq;	
-    //ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
+/*
     initial begin
         Clock <= 0;    
         while (1) begin
@@ -151,7 +152,7 @@ module testUORam;
             Clock <= ~Clock;
          end
     end
-
+*/
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
     

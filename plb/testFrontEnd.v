@@ -1,6 +1,6 @@
 `include "Const.vh"
 
-// `timescale 1ns/1ns
+ `timescale 1ns/1ns
 
 module testFrontEnd;
 						
@@ -24,7 +24,7 @@ module testFrontEnd;
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh"
 
-    reg  Clock; 
+    wire  Clock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
     wire CmdInReady, DataInReady, ReturnDataValid;
@@ -95,8 +95,9 @@ module testFrontEnd;
   
     localparam   Freq =	100_000_000;
     localparam   Cycle = 1000000000/Freq;	
-//    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
+/*
     initial begin
         Clock <= 0;    
         while (1) begin
@@ -104,7 +105,7 @@ module testFrontEnd;
             Clock <= ~Clock;
          end
     end
-
+*/
     // tasks and check logic
 	
     reg [ORAML+1:0] GlobalPosMap [TotalNumBlock-1:0];
