@@ -28,76 +28,80 @@ module	PathORAMBackendTestbench;
 	//	Constants & overrides
 	//--------------------------------------------------------------------------
 
-	parameter					ORAMB =				512,
-								ORAMU =				32,
-								ORAML =				10,
-								ORAMZ =				5,
-								ORAMC =				10,
-								ORAME =				5;
+	parameter				ORAMB =				512,
+							ORAMU =				32,
+							ORAML =				10,
+							ORAMZ =				5,
+							ORAMC =				10,
+							ORAME =				5;
 
-	parameter					FEDWidth =			64,
-								BEDWidth =			512;
+	parameter				FEDWidth =			64,
+							BEDWidth =			512;
 
-	parameter					Overclock =			1;
-	parameter					EnableREW =			0; // don't change this for this testbench
+	parameter				Overclock =			1;
+	parameter				EnableREW =			0; // don't change this for this testbench
 	
-	parameter 					DDR_nCK_PER_CLK = 	4,
-								DDRDQWidth =		64,
-								DDRCWidth =			3,
-								DDRAWidth =			`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
+	parameter 				DDR_nCK_PER_CLK = 	4,
+							DDRDQWidth =		64,
+							DDRCWidth =			3,
+							DDRAWidth =			`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
 
-	parameter					IVEntropyWidth =	64;
+	parameter				IVEntropyWidth =	64;
 	
 	`include "StashLocal.vh"
 	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam					Freq =				100_000_000,
-								Cycle = 			1000000000/Freq;
+	localparam				Freq =				100_000_000,
+							Cycle = 			1000000000/Freq;
 	
-	localparam					UpdateINIT =		10000;
+	localparam				UpdateINIT =		10000;
 	
-	localparam					NumTests =			100;
+	localparam				NumTests =			100;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 	
-	wire 						Clock;
-	reg							Reset; 
+	wire 					Clock;
+	reg						Reset; 
 
-	reg							ResetDataCounter;
-	reg							AllowBlockNotFound;
-	reg							BoostStoreData;
+	reg						ResetDataCounter;
+	reg						AllowBlockNotFound;
+	reg						BoostStoreData;
 	
 	// Frontend interface
 	
-	reg		[BECMDWidth-1:0] 	Command;
-	reg		[ORAMU-1:0]			PAddr;
-	reg		[ORAML-1:0]			CurrentLeaf;
-	reg		[ORAML-1:0]			RemappedLeaf;
-	reg							CommandValid;
-	wire						CommandReady;
+	reg		[BECMDWidth-1:0] Command;
+	reg		[ORAMU-1:0]		PAddr;
+	reg		[ORAML-1:0]		CurrentLeaf;
+	reg		[ORAML-1:0]		RemappedLeaf;
+	reg						CommandValid;
+	wire					CommandReady;
 	
-	wire	[FEDWidth-1:0]		LoadData;
-	wire						LoadValid;
-	reg							LoadReady;
-	wire	[FEDWidth-1:0]		StoreData_Pre, StoreData;
-	reg 						StoreValid;
-	wire						StoreReady;
+	wire	[FEDWidth-1:0]	LoadData;
+	wire					LoadValid;
+	reg						LoadReady;
+	wire	[FEDWidth-1:0]	StoreData_Pre, StoreData;
+	reg 					StoreValid;
+	wire					StoreReady;
 	
 	// DRAM interface
 	
-	wire	[DDRCWidth-1:0]		DRAM_Command;
-	wire	[DDRAWidth-1:0]		DRAM_Address;
-	wire	[DDRDWidth-1:0]		DRAM_WriteData, DRAM_ReadData; 
-	wire	[DDRMWidth-1:0]		DRAM_WriteMask;
-	wire						DRAM_CommandValid, DRAM_CommandReady;
-	wire						DRAM_WriteDataValid, DRAM_WriteDataReady;
-	wire						DRAM_ReadDataValid;	
+	wire	[DDRCWidth-1:0]	DRAM_Command;
+	wire	[DDRAWidth-1:0]	DRAM_Address;
+	wire	[DDRDWidth-1:0]	DRAM_WriteData, DRAM_ReadData; 
+	wire	[DDRMWidth-1:0]	DRAM_WriteMask;
+	wire					DRAM_CommandValid, DRAM_CommandReady;
+	wire					DRAM_WriteDataValid, DRAM_WriteDataReady;
+	wire					DRAM_ReadDataValid;
 	
-	integer						TestID;
+	wire					PathBuffer_OutValid, PathBuffer_OutReady;
+	wire	[DDRDWidth-1:0]	PathBuffer_OutData;		
+	
+	integer					TestID;
 	
 	//--------------------------------------------------------------------------
 	//	Clock Source
@@ -493,8 +497,9 @@ module	PathORAMBackendTestbench;
 							.DRAMCommand(			DRAM_Command),
 							.DRAMCommandValid(		DRAM_CommandValid),
 							.DRAMCommandReady(		DRAM_CommandReady),			
-							.DRAMReadData(			DRAM_ReadData),
-							.DRAMReadDataValid(		DRAM_ReadDataValid),			
+							.DRAMReadData(			PathBuffer_OutData),
+							.DRAMReadDataValid(		PathBuffer_OutValid),
+							.DRAMReadDataReady(		PathBuffer_OutReady),							
 							.DRAMWriteData(			DRAM_WriteData),
 							.DRAMWriteDataValid(	DRAM_WriteDataValid),
 							.DRAMWriteDataReady(	DRAM_WriteDataReady));
@@ -536,8 +541,17 @@ module	PathORAMBackendTestbench;
 							.DataOutErrorCorrected(	),
 							.DataOutValid(			DRAM_ReadDataValid),
 							.DataOutReady(			1'b1));
-		
-	//--------------------------------------------------------------------------
 	
+		FIFORAM	#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAM_ReadData),
+							.InValid(				DRAM_ReadDataValid),
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady));	
+	
+	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

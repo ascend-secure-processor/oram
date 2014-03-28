@@ -28,7 +28,7 @@ module PathORAMBackend(
 	StoreValid, StoreReady,
 	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
-	DRAMReadData, DRAMReadDataValid,
+	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
 	DRAMInitComplete
@@ -103,6 +103,7 @@ module PathORAMBackend(
 	
 	input	[DDRDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
+	output					DRAMReadDataReady;
 	
 	output	[DDRDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
@@ -155,11 +156,6 @@ module PathORAMBackend(
 	wire					EvictGate, UpdateGate;
 	
 	// Read pipeline
-
-	wire					PathBuffer_InReady;
-
-	wire					PathBuffer_OutValid, PathBuffer_OutReady;
-	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
 		
 	(* mark_debug = "TRUE" *)	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
 	wire					DataDownShift_InValid, DataDownShift_InReady;
@@ -323,11 +319,6 @@ module PathORAMBackend(
 		
 			if (StashOverflow) begin
 				// This is checked in StashCore.v ...
-			end
-			
-			if (~PathBuffer_InReady & DRAMReadDataValid) begin
-				$display("[%m @ %t] ERROR: DRAM was sending data and we had no space", $time);
-				$stop;
 			end
 			
 			if (Stash_ReturnDataValid & ~Stash_ReturnDataReady) begin
@@ -613,39 +604,6 @@ module PathORAMBackend(
 	//------------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
 	//------------------------------------------------------------------------------
-		
-	// Buffers the whole incoming path
-	// NOTE: This buffer requires ~1% of the LUT/BLOCK RAM on the chip
-	// TODO: move this out of Backend (AES now has PathBuffer... what if EnableAES == 0?)
-	// Ling: I'll recommend that we still have a dummy AES module even if
-	// EnableAES == 0, so that the AES module always has Path Buffer
-	// Chris: Agreed!  Will move it out when we do the low-level Backend
-	generate if (Overclock) begin:INBUF_BRAM
-		wire				PathBuffer_Full, PathBuffer_Empty;
-
-		PathBuffer in_P_buf(.clk(					Clock),
-							.srst(					Reset), 
-							.din(					DRAMReadData), 
-							.wr_en(					DRAMReadDataValid), 
-							.rd_en(					PathBuffer_OutReady), 
-							.dout(					PathBuffer_OutData), 
-							.full(					PathBuffer_Full), 
-							.empty(					PathBuffer_Empty));
-							
-		assign	PathBuffer_InReady =				~PathBuffer_Full;
-		assign	PathBuffer_OutValid =				~PathBuffer_Empty;							
-	end else begin:INBUF_LUTRAM
-		FIFORAM	#(			.Width(					DDRDWidth),
-							.Buffering(				PathSize_DRBursts))
-				in_P_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady), // debugging
-							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid),
-							.OutReady(				PathBuffer_OutReady));
-	end endgenerate
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
 	Counter		#(			.Width(					BktBSTWidth))
@@ -653,24 +611,24 @@ module PathORAMBackend(
 							.Reset(					Reset | ReadBucketTransition),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathBuffer_OutValid & PathBuffer_OutReady),
+							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
 							.In(					{BktBSTWidth{1'bx}}),
 							.Count(					BucketReadCtr));
 	CountCompare #(			.Width(					BktBSTWidth),
 							.Compare(				BktSize_DRBursts - 1))
 				in_bkt_cmp(	.Count(					BucketReadCtr), 
 							.TerminalCount(			BucketReadCtr_Reset));
-	assign	ReadBucketTransition =					BucketReadCtr_Reset & PathBuffer_OutValid & PathBuffer_OutReady;
+	assign	ReadBucketTransition =					BucketReadCtr_Reset & DRAMReadDataValid & DRAMReadDataReady;
 	
 	// Per-bucket header/payload arbitration
 	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
-	assign	HeaderDownShift_InValid =				PathBuffer_OutValid & ReadProcessingHeader;
-	assign	DataDownShift_InValid =					PathBuffer_OutValid & ~ReadProcessingHeader;
-	assign	PathBuffer_OutReady =					(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
+	assign	HeaderDownShift_InValid =				DRAMReadDataValid & ReadProcessingHeader;
+	assign	DataDownShift_InValid =					DRAMReadDataValid & ~ReadProcessingHeader;
+	assign	DRAMReadDataReady =						(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
 	
-	assign	HeaderDownShift_ValidBits_Pre =			PathBuffer_OutData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
-	assign	HeaderDownShift_PAddrs =				PathBuffer_OutData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
-	assign	HeaderDownShift_Leaves =				PathBuffer_OutData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
+	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
+	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHULStart+ORAMZ*ORAMU-1:BktHULStart];
+	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHULStart+ORAMZ*(ORAMU+ORAML)-1:BktHULStart+ORAMZ*ORAMU];
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
@@ -697,7 +655,7 @@ module PathORAMBackend(
 							.Register(				1))
 				in_D_shft(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				PathBuffer_OutData),
+							.InData(				DRAMReadData),
 							.InValid(				DataDownShift_InValid),
 							.InAccept(				DataDownShift_InReady),
 							.OutData(				DataDownShift_OutData),
@@ -714,13 +672,13 @@ module PathORAMBackend(
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
-	// TODO
-	/*generate if (EnableREW) begin:
+	/* TODO
+	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
 		for (i = 0; i < ORAMZ; i++) begin
-		
+			
 		end
-	end else begin:*/
+	end else begin:BASIC_VALIDBITS */
 		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
 	//end endgenerate
 	

@@ -14,11 +14,13 @@
 //	Note: 		This module can be re-implemented as the F-bit scheme from the 
 //				ISCA paper
 //------------------------------------------------------------------------------
-module DRAMInitializer (
+module DRAMInitializer(
 	Clock, Reset, Done,
+	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
+
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
-);
+	);
 
 	//--------------------------------------------------------------------------
 	//	Constants
