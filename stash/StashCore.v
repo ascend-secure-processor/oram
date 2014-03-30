@@ -343,6 +343,8 @@ module StashCore(
 				$stop;
 			end
 			
+	`ifndef SIMULATION_ASIC
+	
 			if (MS_FinishedSync) begin
 				MS_pt = UsedListHead;
 				i = 0;
@@ -415,6 +417,7 @@ module StashCore(
 					end					
 				end
 			end
+	`endif // endif SIMULATION_ASIC
 			
 			if (CSPeaking & LastChunk_Read)
 				if (OutPAddr == DummyBlockAddress)

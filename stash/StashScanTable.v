@@ -7,6 +7,7 @@
 
 //------------------------------------------------------------------------------
 //	Module:		StashScanTable
+//	Desc:		O(1) stash scan logic
 //------------------------------------------------------------------------------
 module StashScanTable(
   	Clock, Reset, PerAccessReset, 
@@ -195,6 +196,7 @@ module StashScanTable(
 				$stop;				
 			end
 			
+	`ifndef SIMULATION_ASIC
 			if (~ResetDone_Delayed & ResetDone) begin
 				ind = 0;
 				while (ind != BlocksOnPath) begin
@@ -206,6 +208,7 @@ module StashScanTable(
 					ind = ind + 1;
 				end
 			end
+	`endif // endif SIMULATION_ASIC
 		end
 	`endif
 

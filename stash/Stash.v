@@ -319,6 +319,7 @@ module Stash(
 				if (StopOnBlockNotFound) $stop;
 			end
 			
+	`ifndef SIMULATION_ASIC	
 			if (LookForBlock & BlockWasFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
@@ -330,7 +331,8 @@ module Stash(
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
 				$stop;
 			end
-			
+	`endif
+	
 			if (StashOverflow) begin
 				$display("[%m] ERROR: stash overflowed");
 				$stop;
