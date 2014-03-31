@@ -177,6 +177,7 @@ module ascend_vc707(
 	//------------------------------------------------------------------------------
 	
 	HWTestHarness #(		.ORAMU(					ORAMU),
+							.FEDWidth(				FEDWidth),
 							.SlowClockFreq(			SlowClockFreq))
 				tester(		.SlowClock(				SlowClock),
 							.FastClock(				ORAMClock),
@@ -327,6 +328,20 @@ module ascend_vc707(
 	// present WriteCommands & WriteData out of sync with each other
 	// NOTE: this doesn't really impact writeback performance unless ...
 	
+	// This prevents us from having to complicate the hack ...
+	`ifdef SIMULATION
+		reg ResetPulsed = 1'b0;
+	
+		always @(posedge MemoryClock) begin
+			if (ORAMReset) ResetPulsed <= 1'b1;
+		
+			if (ResetPulsed & ^DDR3SDRAM_Command_MIG === 1'bx) begin
+				$display("[%m @ %t] ERROR: Command must always be fully specified", $time);
+				$stop;
+			end
+		end
+	`endif
+		
 	assign	MIGWriting =							DDR3SDRAM_Command_MIG == DDR3CMD_Write;
 	
 	assign	DDR3SDRAM_CommandValid_MIG =			DDR3SDRAM_CommandValid_MIG_Pre & 	((MIGWriting) ? DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG : 1'b1);

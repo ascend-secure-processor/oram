@@ -59,11 +59,14 @@ module AddrGen
 	assign Addr = (BktIdx * BktSize_DRBursts + BktCounter) * DDRBstLen;
 
 	always@(posedge Clock) begin
-		// accept inputs
-		if (Start && Ready) begin
+		if (Reset) begin
+			RW <= 1'b0;
+			BH <= 1'b0;
+		end
+		else if (Start && Ready) begin
 			RW <= RWIn;
 			BH <= BHIn;
-			BktCounter <= 0; 
+			BktCounter <= 0;
 		end
 
 		if (!Ready && CmdReady) begin
