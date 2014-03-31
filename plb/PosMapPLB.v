@@ -2,7 +2,7 @@
 
 module PosMapPLB
 (	Clock, Reset, CmdReady, CmdValid, Cmd, AddrIn, DInValid, DIn, 
-	OutReady, Valid, Hit, UnInit, OldLeafOut, NewLeafOut, Evict, AddrOut, EvictDataOutValid, EvictDataOut
+	OutReady, Valid, Hit, UnInit, OldLeafOut, NewLeafOut, Evict, AddrOut, RefillDataReady, EvictDataOutValid, EvictDataOut
 );
 	`include "UORAM.vh"; 
 	`include "PathORAM.vh"; 
@@ -28,7 +28,8 @@ module PosMapPLB
     output reg [ORAML-1:0] NewLeafOut;    
     output reg Evict;
     output reg [ORAMU-1:0] AddrOut;
-    // evict data
+    // evict and refill data
+    output RefillDataReady;
     output EvictDataOutValid;
     output [LeafWidth-1:0] EvictDataOut;
 
@@ -113,7 +114,8 @@ module PosMapPLB
                  
                 .OutValid(      PLBValid), 
                 .Hit(           PLBHit), 
-                .DOut(          PLBDOut), 
+                .DOut(          PLBDOut),
+                .RefillDataReady(   RefillDataReady),
                 .Evicting(      PLBEvict), 
                 .AddrOut(       PLBAddrOut), 
                 .ExtraTagOut(   PLBLeafOut)
@@ -162,8 +164,8 @@ module PosMapPLB
 		`ifdef SIMULATION
                 if (!NewLeafValid) begin
                     $display("Error: run out of random leaves.");
-		    $finish;
-		end
+					$finish;
+                end
 		`endif
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin

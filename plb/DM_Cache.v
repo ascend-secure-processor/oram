@@ -2,7 +2,7 @@
 
 module DM_Cache
 (	Clock, Reset, Ready, Enable, Cmd, AddrIn, DIn, ExtraTagIn, 
-	OutValid, Hit, DOut, Evicting, AddrOut, ExtraTagOut
+	OutValid, Hit, DOut, RefillDataReady, Evicting, AddrOut, ExtraTagOut
 );
  
 	parameter 	DataWidth = 32, 
@@ -25,6 +25,7 @@ module DM_Cache
     output OutValid;
     output Hit;  
     output [DataWidth-1:0] DOut;
+    output RefillDataReady;
     output Evicting;
     output [AddrWidth-1:0] AddrOut;
     output [ExtraTagWidth-1:0] ExtraTagOut;
@@ -44,7 +45,7 @@ module DM_Cache
         ExtraTagReg (Clock, Reset, 1'b0, Ready && Enable, ExtraTagIn, LastExtraTag);  
            
     // Cmd related states
-    wire RefillStart, Refilling, RefillFinish;
+    wire RefillStart, Refilling, RefillFinish, RefillWriting;
     wire IsLastWrite, IsLastRefilling;
     Register #(.Width(1))
         WriteReg (  .Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
@@ -53,13 +54,17 @@ module DM_Cache
         RefillReg ( .Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
                     .In(Refilling), .Out(IsLastRefilling)); 
     
-    wire [LogLineSize-1:0] RefillOffset;
-    Counter #(.Width(LogLineSize))
-        RefillCounter (Clock, Reset, 1'b0, 1'b0, Refilling, {LogLineSize{1'bx}}, RefillOffset); // load = set = 0, in= x  
+    wire [LogLineSize:0] RefillOffset;
+        // RefillOffset[LogLineSize:1] is the addr offset, the last bit is evict/refill
+    Counter #(.Width(LogLineSize+1))
+        RefillCounter (Clock, Reset, 1'b0, 1'b0, Refilling, {(LogLineSize+1){1'bx}}, RefillOffset); // load = set = 0, in= x  
 
     assign RefillStart = Enable && Ready && (Cmd == CacheRefill);
-    assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset == RefillLatency - 1);
+    assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset == (1 << LogLineSize) - 1);
     assign Refilling = RefillStart || (Enable && LastCmd == CacheRefill && RefillOffset > 0);
+    assign RefillWriting = Refilling && RefillOffset[0];
+    
+    assign RefillDataReady = RefillWriting;
     
     // initialization
     wire TagInit;   
@@ -78,7 +83,7 @@ module DM_Cache
     wire DataEnable, TagEnable, DataWrite, TagWrite;
     
     assign DataEnable = Enable || (IsLastWrite && Hit);
-    assign DataWrite = DataEnable && (IsLastWrite || Refilling);
+    assign DataWrite = DataEnable && (IsLastWrite || RefillWriting );
     assign TagEnable = TagInit || (Enable && (Ready || RefillFinish));
     assign TagWrite = TagInit || (TagEnable && RefillFinish);
     
@@ -90,7 +95,7 @@ module DM_Cache
     
     assign Addr = Ready ? AddrIn : LastAddr;
     assign TArrayAddr = TagInit ? InitTArrayAddr : ((Addr >> LogLineSize) % NumLines);
-    assign Offset = Addr[LogLineSize-1:0] + RefillOffset;
+    assign Offset = Addr[LogLineSize-1:0] + (RefillOffset >> 1);
     assign DArrayAddr = (TArrayAddr << LogLineSize) + Offset;  
      
     // IO for data and tag arrays
@@ -101,7 +106,7 @@ module DM_Cache
     assign DataIn = IsLastWrite ? LastDIn : DIn;
 
     // data and tag array
-    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth), .ASIC(0)) // not ready for ASIC, need 2 ports or serail r/w
+    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth), .ASIC(0 `ifdef ASIC +1 `endif)) // not ready for ASIC, need 2 ports or serail r/w
         DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
 
     RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth), .ASIC(0 `ifdef ASIC +1 `endif)) 
@@ -115,7 +120,9 @@ module DM_Cache
         OutValidReg (.Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), .In(Enable && Ready), .Out(OutValid));
     assign Hit = (LastCmd == CacheWrite || LastCmd == CacheRead) && LineValid
                     && LastAddr[AddrWidth-1:LogLineSize] == TagOut[TagWidth-1:0];  // valid && tag match
-    assign Evicting = IsLastRefilling && LineValid; // a valid line is there. danger: on refillFinish, cannot use new tag!
+    assign Evicting = IsLastRefilling && LineValid && RefillWriting; 
+            // a valid line is there, and we read in last cycle 
+            // danger: on refillFinish, cannot use new tag!
     assign AddrOut = TagOut[TagWidth-1:0] << LogLineSize;
     assign ExtraTagOut = TagOut[TagWidth+ExtraTagWidth-1:TagWidth];
      

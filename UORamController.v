@@ -128,7 +128,7 @@ module UORamController
     wire PPPRefill;
     wire [LeafWidth-1:0] PPPRefillData;  
     wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
-    wire PPPEvictDataValid, PPPRefillDataValid;
+    wire PPPEvictDataValid, PPPRefillDataValid, PPPRefillDataReady;
     wire [LeafWidth-1:0] PPPEvictData;
        
     PosMapPLB #(.ORAMU(             ORAMU), 
@@ -154,6 +154,7 @@ module UORamController
                 .NewLeafOut(        NewLeaf), 
                 .Evict(             PPPEvict), 
                 .AddrOut(           PPPAddrOut),
+                .RefillDataReady(   PPPRefillDataReady),
                 .EvictDataOutValid( PPPEvictDataValid), 
                 .EvictDataOut(      PPPEvictData));   
  
@@ -296,7 +297,7 @@ module UORamController
                         .PPPEvictDataReady(     ), 
                         .PPPEvictDataValid(     PPPEvictDataValid), 
                         .PPPEvictData(          PPPEvictData),
-                        .PPPRefillDataReady(    1'b1),                    // PLB refill is always ready
+                        .PPPRefillDataReady(    PPPRefillDataReady),
                         .PPPRefillDataValid(    PPPRefillDataValid), 
                         .PPPRefillData(         PPPRefillData),        
                         
