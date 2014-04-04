@@ -6,7 +6,7 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		PathORAM
+//	Module:		PathORAMTop
 //	Desc:		{Unified} x {Basic, REW} Path ORAM with encryption, integrity 
 //				verification, & a DRAM interface
 //==============================================================================
@@ -43,7 +43,7 @@ module PathORamTop(
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
-    	`include "PLBLocal.vh" 
+	`include "PLBLocal.vh"
 
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -89,6 +89,8 @@ module PathORamTop(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
+	// Frontend - Backend
+	
 	(* mark_debug = "TRUE" *)	wire					BEnd_CmdReady, BEnd_CmdValid;
 	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] BEnd_Cmd;
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		BEnd_PAddr;
@@ -96,17 +98,29 @@ module PathORamTop(
 
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
-	
+
+	// Backend - CC
+
+	wire 	[DDRDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
+	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
+	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
+
+	// CC - AES
+
     wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
     wire 	[DDRMWidth-1:0]	AES_DRAMWriteMask;
     wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
-    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
+    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 	
-	wire					DRAMInitComplete;
-	
+	// Path buffer
+
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;	
 	
+	// Integrity verification
+	
+	wire					DRAMInitComplete;
+		
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
@@ -182,15 +196,56 @@ module PathORamTop(
 							.DRAMCommandValid(		DRAMCommandValid),
 							.DRAMCommandReady(		DRAMCommandReady),			
 
-							.DRAMReadData(			AES_DRAMReadData),
-							.DRAMReadDataValid(		AES_DRAMReadDataValid),
-							.DRAMReadDataReady(		AES_DRAMReadDataReady),
+							.DRAMReadData(			BE_DRAMReadData),
+							.DRAMReadDataValid(		BE_DRAMReadDataValid),
+							.DRAMReadDataReady(		BE_DRAMReadDataReady),
 							
-							.DRAMWriteData(			AES_DRAMWriteData),
-							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
+							.DRAMWriteData(			BE_DRAMWriteData),
+							.DRAMWriteDataValid(	BE_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	BE_DRAMWriteDataReady),
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
+	//--------------------------------------------------------------------------
+	//	Coherence Controller
+	//--------------------------------------------------------------------------
+
+	CoherenceController #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth))
+				cc(			.Clock(					Clock),
+							.Reset(					Reset),
+
+							.AESDataIn(				AES_DRAMReadData), 
+							.AESDataInValid(		AES_DRAMReadDataValid), 
+							.AESDataInReady(		AES_DRAMReadDataReady),
+							
+							.AESDataOut(			AES_DRAMWriteData), 
+							.AESDataOutValid(		AES_DRAMWriteDataValid), 
+							.AESDataOutReady(		AES_DRAMWriteDataReady),
+	
+	// 	TODO for integrity verification
+	//	IVRODataOut, IVRODataRequest, IVRODataOutValid,
+	//	IVRODataIn, IVRODataInValid, IVRODataInReady,
+		
+	//	IVRDataOut, IVRDataRequest, IVRDataOutValid,
+	//	IVWDataOut, IVWDataRequest, IVWDataOutValid,
+
+	//	IVRODataIn, IVRODataInValid, IVRODataInReady,	
+	
+							.BEDataOut(				BE_DRAMReadData),
+							.BEDataOutValid(		BE_DRAMReadDataValid), 
+							.BEDataOutReady(		BE_DRAMReadDataReady),
+
+							.BEDataIn(				BE_DRAMWriteData), 
+							.BEDataInValid(			BE_DRAMWriteDataValid), 
+							.BEDataInReady(			BE_DRAMWriteDataReady));
+							
+	//--------------------------------------------------------------------------
+	//	Integrity Verification
+	//--------------------------------------------------------------------------
+	
+	
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------
@@ -227,7 +282,7 @@ module PathORamTop(
 							.MIGOutReady(			DRAMWriteDataReady),
 
 							.MIGIn(					DRAMReadData),
-							.MIGInValid(			DRAMReadDataValid),
+							.MIGInValid(			DRAMReadDataValid), // TODO put ready signal when we remove path buffer
 
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
@@ -254,7 +309,7 @@ module PathORamTop(
 	end endgenerate
 	
 	//--------------------------------------------------------------------------
-	//	DRAM Interface
+	//	DRAM Read Interface
 	//--------------------------------------------------------------------------
 
 	generate if (Overclock) begin:INBUF_BRAM
@@ -283,6 +338,12 @@ module PathORamTop(
 							.OutSend(				PathBuffer_OutValid),
 							.OutReady(				PathBuffer_OutReady));
 	end endgenerate
+
+	//--------------------------------------------------------------------------
+	//	DRAM Write Interface
+	//--------------------------------------------------------------------------
+
+	// TODO put write mask generation here
 	
 	//--------------------------------------------------------------------------
 endmodule

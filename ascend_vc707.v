@@ -66,9 +66,9 @@ module ascend_vc707(
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					10,
+							ORAML =					10, // set to 31 for production
 							ORAMZ =					5,
-							ORAMC =					10,
+							ORAMC =					10, // Stash capacity will always be 128 - 256
 							ORAME =					5;
 
 	parameter				FEDWidth =				64,
@@ -76,7 +76,7 @@ module ascend_vc707(
 								
 	parameter				Overclock =				1;
 	parameter				EnableAES =				1;
-	parameter				EnableREW =				1;
+	parameter				EnableREW =				0;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -90,7 +90,7 @@ module ascend_vc707(
 							MaxLogRecursion = 		4;
 	
     parameter				LeafWidth = 			32,
-							PLBCapacity = 			8192;
+							PLBCapacity = 			8192 << 3;
 	
 	`ifdef SIMULATION
 		initial begin

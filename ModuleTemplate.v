@@ -28,7 +28,7 @@
 //	Module:		
 //	Desc:		
 //==============================================================================
-module MyModule #(/* parameters; e.g., `include "PathORAM.vh" */) (
+module MyModule( // #(/* parameters; e.g., `include "PathORAM.vh" */) NOTE: we do not use the #( ... ) syntax because it doesn't work with the ASIC tools
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
