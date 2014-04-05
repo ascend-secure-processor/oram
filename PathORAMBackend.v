@@ -30,6 +30,8 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
+	ROPAddr, ROPAddrValid,
+	
 	DRAMInitComplete
 	);
 		
@@ -108,6 +110,13 @@ module PathORAMBackend(
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
+	//--------------------------------------------------------------------------
+	//	REW Interface
+	//--------------------------------------------------------------------------
+	
+	output	[ORAMU-1:0]		ROPAddr;
+	output					ROPAddrValid;
+	
 	//--------------------------------------------------------------------------
 	//	Status Interface
 	//--------------------------------------------------------------------------
@@ -221,7 +230,7 @@ module PathORAMBackend(
 	
 	// Stash
 	
-	wire					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
+	wire					Stash_StartScanOp, Stash_StartWritebackOp;
 	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
 	wire					Stash_StoreDataValid, Stash_StoreDataReady;
@@ -403,9 +412,10 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	//	Basic/REW split control logic
 	//--------------------------------------------------------------------------
-
+	
+	wire				RWAccess, StartRW, REWRoundComplete; // TODO
+	
 	generate if (EnableREW) begin:REW_CONTROL
-		wire				RWAccess, StartRW, REWRoundComplete;
 		
 		Counter	#(			.Width(					ORAML))
 				gentry_leaf(.Clock(					Clock),
@@ -436,7 +446,9 @@ module PathORAMBackend(
 		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
 
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
-		assign	Stash_SkipWritebackOp =				~RWAccess;
+		
+		assign	ROPAddr =							PAddr_Internal;
+		assign	ROPAddrValid =						~RWAccess;
 	end else begin:BASIC_CONTROL
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
@@ -444,7 +456,9 @@ module PathORAMBackend(
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 		
 		assign	AddrGen_HeaderWriteback =			1'b0;
-		assign	Stash_SkipWritebackOp =				1'b0;
+		
+		assign	ROPAddr =							{ORAMU{1'bx}};		
+		assign	ROPAddrValid =						1'b0;
 	end endgenerate
 
 	Register	#(			.Width(					1))
@@ -671,15 +685,15 @@ module PathORAMBackend(
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
-	/* TODO make sure Albert hasn't already implemented this :-)
+	// Invalidate RO blocks that we aren't interested in
 	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
-		for (i = 0; i < ORAMZ; i++) begin
-			
+		for (i = 0; i < ORAMZ; i = i + 1) begin
+			assign	HeaderDownShift_ValidBits[i] =	(RWAccess) ? HeaderDownShift_ValidBits_Pre[i] : PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i];
 		end
-	end else begin:BASIC_VALIDBITS */
+	end else begin:BASIC_VALIDBITS
 		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
-	//end endgenerate
+	end endgenerate
 	
 	// Use FIFOShiftRound to generate BlockPresent signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
@@ -751,7 +765,7 @@ module PathORAMBackend(
 							.AccessCommand(			Command_Internal),
 							
 							.StartScan(				Stash_StartScanOp),
-							.SkipWriteback(			Stash_SkipWritebackOp),
+							.SkipWriteback(			ROPAddrValid),
 							.StartWriteback(		Stash_StartWritebackOp),
 							
 							.ReturnData(			Stash_ReturnData),

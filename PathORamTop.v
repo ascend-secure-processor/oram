@@ -250,13 +250,6 @@ module PathORamTop(
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------
 	
-	// TODO don't comment this out entirely if EnableAES == 0
-	// (we still need path buffer, REW invalidations, data write mask generation)
-	
-	// TODO don't pass address lines through AES
-	
-	assign	AES_DRAMWriteMask =						{DDRMWidth{1'b0}}; // TODO: have LowLevelBackend.v choose what to do with this
-	
 	generate if (EnableAES) begin:AES
 							// TODO which of these params are really needed?
 		AESPathORAM #(		.ORAMB(					ORAMB),
@@ -282,8 +275,9 @@ module PathORamTop(
 							.MIGOutReady(			DRAMWriteDataReady),
 
 							.MIGIn(					DRAMReadData),
-							.MIGInValid(			DRAMReadDataValid), // TODO put ready signal when we remove path buffer
-
+							.MIGInValid(			DRAMReadDataValid),
+							.MIGInReady(			PathBuffer_OutReady),
+							
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
 							.BackendRReady(			AES_DRAMReadDataReady),
@@ -294,9 +288,6 @@ module PathORamTop(
 							.BackendWReady(			AES_DRAMWriteDataReady),
 
 							.DRAMInitDone(			DRAMInitComplete));
-
-	assign	PathBuffer_OutReady = 1'b1; // TODO remove when we take path buffer out of AES
-							
 	end else begin:NO_AES
 		assign	DRAMWriteData = 					AES_DRAMWriteData;
 		assign	DRAMWriteMask =						AES_DRAMWriteMask;
@@ -333,7 +324,7 @@ module PathORamTop(
 							.Reset(					Reset),
 							.InData(				DRAMReadData),
 							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady), // debugging
+							.InAccept(				PathBuffer_InReady),
 							.OutData(				PathBuffer_OutData),
 							.OutSend(				PathBuffer_OutValid),
 							.OutReady(				PathBuffer_OutReady));
@@ -344,6 +335,8 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 
 	// TODO put write mask generation here
+	
+	assign	AES_DRAMWriteMask =						{DDRMWidth{1'b0}}; // TODO: have LowLevelBackend.v choose what to do with this
 	
 	//--------------------------------------------------------------------------
 endmodule

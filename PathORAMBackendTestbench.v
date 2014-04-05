@@ -39,6 +39,7 @@ module	PathORAMBackendTestbench;
 							BEDWidth =			512;
 
 	parameter				Overclock =			1;
+	parameter				EnableAES =			1;
 	parameter				EnableREW =			0; // don't change this for this testbench
 	
 	parameter 				DDR_nCK_PER_CLK = 	4,
@@ -59,7 +60,7 @@ module	PathORAMBackendTestbench;
 	
 	localparam				UpdateINIT =		10000;
 	
-	localparam				NumTests =			100;
+	localparam				NumTests =			25; // Set to 100 for a long test
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -87,6 +88,14 @@ module	PathORAMBackendTestbench;
 	wire	[FEDWidth-1:0]	StoreData_Pre, StoreData;
 	reg 					StoreValid;
 	wire					StoreReady;
+	
+	// AES
+
+    wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
+    wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
+    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
+	
+	wire					DRAMInitComplete;
 	
 	// DRAM interface
 	
@@ -481,38 +490,105 @@ module	PathORAMBackendTestbench;
 							.IVEntropyWidth(		IVEntropyWidth))
 				CUT(		.Clock(					Clock),
 							.Reset(					Reset),			
+
 							.Command(				Command),
 							.PAddr(					PAddr),
 							.CurrentLeaf(			CurrentLeaf),
 							.RemappedLeaf(			RemappedLeaf),
 							.CommandValid(			CommandValid),
 							.CommandReady(			CommandReady),
+
 							.LoadData(				LoadData),
 							.LoadValid(				LoadValid),
 							.LoadReady(				LoadReady),
 							.StoreData(				StoreData),
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
+							
 							.DRAMCommandAddress(	DRAM_Address),
 							.DRAMCommand(			DRAM_Command),
 							.DRAMCommandValid(		DRAM_CommandValid),
 							.DRAMCommandReady(		DRAM_CommandReady),			
-							.DRAMReadData(			PathBuffer_OutData),
-							.DRAMReadDataValid(		PathBuffer_OutValid),
-							.DRAMReadDataReady(		PathBuffer_OutReady),							
-							.DRAMWriteData(			DRAM_WriteData),
-							.DRAMWriteDataValid(	DRAM_WriteDataValid),
-							.DRAMWriteDataReady(	DRAM_WriteDataReady));
+
+							.DRAMReadData(			AES_DRAMReadData),
+							.DRAMReadDataValid(		AES_DRAMReadDataValid),
+							.DRAMReadDataReady(		AES_DRAMReadDataReady),						
+
+							.DRAMWriteData(			AES_DRAMWriteData),
+							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
 							
-	assign	DRAM_WriteMask =						{DDRMWidth{1'b0}};
+							.DRAMInitComplete(		DRAMInitComplete));
 	
 	//--------------------------------------------------------------------------
+	// AES
+	//--------------------------------------------------------------------------
+	
+	generate if (EnableAES) begin:AES
+		AESPathORAM #(		.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.Overclock(				Overclock),
+							.EnableREW(				EnableREW),
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
+				aes(		.Clock(					Clock),
+							.Reset(					Reset),
 
+							.MIGOut(				DRAM_WriteData),
+							.MIGOutValid(			DRAM_WriteDataValid),
+							.MIGOutReady(			DRAM_WriteDataReady),
+
+							.MIGIn(					DRAM_ReadData),
+							.MIGInValid(			DRAM_ReadDataValid),
+							.MIGInReady(			PathBuffer_OutReady),
+							
+							.BackendRData(			AES_DRAMReadData),
+							.BackendRValid(			AES_DRAMReadDataValid),
+							.BackendRReady(			AES_DRAMReadDataReady),
+							
+							.BackendWData(			AES_DRAMWriteData),
+							.BackendWValid(			AES_DRAMWriteDataValid),
+							.BackendWReady(			AES_DRAMWriteDataReady),
+
+							.DRAMInitDone(			DRAMInitComplete));
+	end else begin:NO_AES
+		assign	DRAM_WriteData = 					AES_DRAMWriteData;
+		assign	DRAM_WriteDataValid =				AES_DRAMWriteDataValid;
+		assign	AES_DRAMWriteDataReady =			DRAM_WriteDataReady;
+	
+		assign	AES_DRAMReadData =					PathBuffer_OutData;
+		assign	AES_DRAMReadDataValid =				PathBuffer_OutValid;
+		assign	PathBuffer_OutReady = 				AES_DRAMReadDataReady;
+	end endgenerate
+	
+	assign	DRAM_WriteMask =						{DDRMWidth{1'b0}};
+
+	//--------------------------------------------------------------------------
+	//	Path Buffer
+	//--------------------------------------------------------------------------
+	
+	FIFORAM	#(				.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAM_ReadData),
+							.InValid(				DRAM_ReadDataValid),
+							.OutData(				PathBuffer_OutData),
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				PathBuffer_OutReady));	
+	
 	//--------------------------------------------------------------------------
 	//	DDR -> BRAM (to make simulation faster)
 	//--------------------------------------------------------------------------
 	
-	SynthesizedDRAM	#(		.UWidth(				8),
+	SynthesizedRandDRAM	#(	.InBufDepth(			36),
+							.UWidth(				8),
 							.AWidth(				DDRAWidth + 6),
 							.DWidth(				DDRDWidth),
 							.BurstLen(				1), // just for this module ...
@@ -540,17 +616,7 @@ module	PathORAMBackendTestbench;
 							.DataOutErrorChecked(	),
 							.DataOutErrorCorrected(	),
 							.DataOutValid(			DRAM_ReadDataValid),
-							.DataOutReady(			1'b1));
-	
-		FIFORAM	#(			.Width(					DDRDWidth),
-							.Buffering(				PathSize_DRBursts))
-				in_P_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAM_ReadData),
-							.InValid(				DRAM_ReadDataValid),
-							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid),
-							.OutReady(				PathBuffer_OutReady));	
+							.DataOutReady(			1'b1));	
 	
 	//--------------------------------------------------------------------------
 endmodule
