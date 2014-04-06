@@ -21,10 +21,10 @@ module TinyAESRV(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
-	parameter				NPorts =				1;
+	parameter				NPorts =				1,
+							AESWidth =				128;
 	
-	localparam				AESUWidth =				128,
-							AESLat =				21,
+	localparam				AESLat =				21,
 							DWidth =				NPorts * AESUWidth;
 	
 	//--------------------------------------------------------------------------
@@ -57,6 +57,29 @@ module TinyAESRV(
 	wire	[DWidth-1:0]	CoreDataIn, CoreDataOut;
 	
 	wire	[AESUWidth-1:0]	CoreKey;
+	
+	//--------------------------------------------------------------------------
+	//	Simulation Checks
+	//--------------------------------------------------------------------------
+		
+	`ifdef SIMULATION
+	
+		// TODO check for AES larger than 128
+	
+		initial begin
+			if (NPorts != 1) begin
+				$display("[%m @ %t] ERROR: NPorts != 1 not supported yet.", $time);
+				$stop;
+			end
+		end
+		
+		always @(posedge FastClock) begin
+			if (~DataOutFull & CoreDataOutValid) begin
+				$display("[%m @ %t] ERROR: AES out fifo overflow.", $time);
+				$stop;
+			end
+		end
+	`endif
 	
 	//--------------------------------------------------------------------------
 	//	Core
