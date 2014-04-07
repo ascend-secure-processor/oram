@@ -416,6 +416,11 @@ module PathORAMBackend(
 	wire				RWAccess, StartRW, REWRoundComplete; // TODO
 	
 	generate if (EnableREW) begin:REW_CONTROL
+	
+		initial begin
+			$display("[ERROR] Fix Backend FIFOReg buffering bug");
+			$stop;
+		end
 		
 		Counter	#(			.Width(					ORAML))
 				gentry_leaf(.Clock(					Clock),
