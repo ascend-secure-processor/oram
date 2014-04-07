@@ -49,20 +49,9 @@ module AESREWORAM(
 
 	parameter				NPorts =				1;
 	
-	localparam				ROHeader_AESChunks =	`divceil(BktHSize_ValidBits + ORAMZ * ORAMU, AESWidth), // # AES chunks per bucket for RO IV
-							RWBkt_AESChunks =		BktSize_DRBursts * `divceil(DDRDWidth, AESWidth) - ROHeader_AESChunks, // # AES chunks per bucket for Gentry IV
-							RWPath_AESChunks =		RWBkt_AESChunks * (ORAML + 1),
-							ROCIDWidth =			`log2(ROHeader_AESChunks),
-							RWCIDWidth =			`log2(RWBkt_AESChunks),
-							RWPIDWidth =			RWPath_AESChunks,
-							BIDWidth =				ORAML + 2, // Bucket ID width; matching AddrGen
-							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
+	localparam				RWPIDWidth =			RWPath_AESChunks,
+							;
 
-	localparam				RWMDepth =				PathSize_DRBursts * 2, // RW mask buffer depth; enough to store a R path and its W path
-							RWMWidth =				`log2(RWMDepth);
-	
-	localparam				AESLatency = 			21; // must match the AES core being used (e.g., TinyAES)
-		
 	localparam				ACMDWidth =				2,
 							CMD_RO =				2'd0, // ROHeader (valid bit or U)
 							CMD_RW_CriticalPath =	2'd1, // Bucket/block of interest on RO access
@@ -162,7 +151,7 @@ module AESREWORAM(
 							.InAccept(				), // TODO check to never go low
 							.OutData(				HIV),
 							.OutSend(				HSeedValid),
-							.OutReady(				HSeedTaken));							
+							.OutReady(				HSeedTaken));
 							
 	assign	ROBucketID =							0; // TODO add AddrGen
 							
@@ -340,29 +329,6 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	//	RW Mask storage
 	//--------------------------------------------------------------------------
-
-	// Shift for RO bucket of interest or RW masks
-	FIFOShiftRound #(		.IWidth(				),
-							.OWidth(				DDRDWidth))
-				rw_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				),
-							.InValid(				),
-							.InAccept(				),
-							.OutData(				OutMask),
-							.OutValid(				OutMaskValid),
-							.OutReady(				OutMaskReady));	
-	
-	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				RWMDepth))
-				mask_fifo(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				OutMask),
-							.InValid(				),
-							.InAccept(				), // check that never goes low
-							.OutData(				),
-							.OutSend(				RWMaskValid),
-							.OutReady(				RWMaskReady));
 
 	RWMaskValid
 	RWMaskReady
