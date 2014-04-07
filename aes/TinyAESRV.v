@@ -7,7 +7,9 @@
 
 //==============================================================================
 //	Module:		TinyAESRV
-//	Desc:		FIFO wrapper for Tiny AES
+//	Desc:		FIFO wrapper for Tiny AES.
+//				This module is meant to be clocked as fast as possible 
+//				(e.g., 300 Mhz).
 //==============================================================================
 module TinyAESRV(
 	SlowClock, FastClock, 
@@ -16,7 +18,7 @@ module TinyAESRV(
 	DataIn, DataInValid, DataInReady,
 	DataOut, DataOutValid, DataOutReady
 	);
-		
+
 	//--------------------------------------------------------------------------
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
