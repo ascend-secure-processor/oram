@@ -12,7 +12,8 @@ module testUORam;
 	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
 	parameter					ORAMC =				10; 
-								
+	parameter					ORAME =				5;
+	
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
@@ -25,6 +26,11 @@ module testUORam;
     parameter                   LeafWidth = 32;         // in bits       
     parameter                   PLBCapacity = 1024;     // in bits
 
+	parameter				Overclock = 		0; 
+	parameter				EnableAES =			0;
+	parameter				EnableREW =			1; 
+    parameter				EnableIV =          0;
+	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
     `include "BucketLocal.vh"
@@ -52,8 +58,12 @@ module testUORam;
                             .ORAMU(					ORAMU),
                             .ORAML(					ORAML),
                             .ORAMZ(					ORAMZ),
-                            .FEDWidth(				FEDWidth),
-                            .BEDWidth(				BEDWidth),							
+                            .ORAME(					ORAME),
+							.FEDWidth(				FEDWidth),
+                            .BEDWidth(				BEDWidth),
+							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
                             .NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 
                             .LeafWidth(             LeafWidth), 

@@ -421,7 +421,7 @@ module PathORAMBackend(
 	
 	generate if (EnableREW) begin:REW_CONTROL
 	
-		initial begin // TODO actually fix this !!!
+		initial begin // TODO actually fix this before going back to board !!!
 			$display("[ERROR] Fix Backend FIFOReg buffering bug");
 			//$stop;
 		end
