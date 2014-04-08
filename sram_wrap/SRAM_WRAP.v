@@ -15,7 +15,8 @@ module SRAM_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 	localparam NWORDS = AWidth <= 10 ? 1024 : 0;
 
 	localparam NWORDS_LOG = `log2(NWORDS);
-	localparam NBITS = DWidth <= 64 ? 64 : 0;
+	localparam NBITS = DWidth <= 144 ? 144 : 0;
+	// localparam NBITS = DWidth <= 64 ? 64 : 0;
 
 	// padding
 	wire [NWORDS_LOG-1:0] _Addr;
@@ -28,8 +29,9 @@ module SRAM_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 
 	// instantiate SRAM
 	generate if (NWORDS == 1024) begin
-        	if (NBITS == 64) begin
-			SRAM1DCSN01024X064D04_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn, _DOut);
+        	if (NBITS <= 144) begin
+		//	SRAM1DCSN01024X064D04_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn, _DOut);
+			SRAM1DFCMN01024X128D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn, _DOut);
         	end
 
 	end endgenerate

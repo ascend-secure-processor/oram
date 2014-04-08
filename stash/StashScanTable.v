@@ -370,9 +370,9 @@ module StashScanTable(
 							.AWidth(				STAWidth),
 							.NPorts(				2))
 				st_ram(		.Clock(					{2{Clock}}),
-							.Reset(					/* not connected */),
+							.Reset(					2'b00),
 							.Enable(				2'b11),
-							.Write(					{1'b0, 					ScanTable_WE}),
+							.Write(					{1'b0, 					1'b0}),
 							.Address(				{InDMAAddr, 			ScanTable_Address}),
 							.DIn(					{{SEAWidth{1'bx}}, 		ScanTable_DataIn}),
 							.DOut(					{DMAAddr_Internal, 		DummyWire}));

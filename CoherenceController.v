@@ -128,7 +128,7 @@ module CoherenceController(
         wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOut;
         
         genvar j;
-        for (j = 0; j < ORAMZ; j = j + 1) begin 
+        for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
             assign ValidBitsIn[j] = AESDataIn[IVEntropyWidth+j];
             assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == AESDataIn[BktHULStart + (j+1)*ORAMU - 1: BktHULStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
         end 

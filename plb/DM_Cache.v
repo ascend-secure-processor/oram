@@ -106,10 +106,10 @@ module DM_Cache
     assign DataIn = IsLastWrite ? LastDIn : DIn;
 
     // data and tag array
-    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth), .ASIC(0 `ifdef ASIC +1 `endif)) // not ready for ASIC, need 2 ports or serail r/w
+    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)  `ifdef ASIC , .ASIC(1) `endif ) 
         DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
 
-    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth), .ASIC(0 `ifdef ASIC +1 `endif)) 
+    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth) `ifdef ASIC , .ASIC(1) `endif ) 
         TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
  
     // output for cache outcome

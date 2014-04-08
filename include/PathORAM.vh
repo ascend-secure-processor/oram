@@ -14,6 +14,6 @@
 								
 					EnableAES =			0, // Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
 
-					EnableREW =			1, // Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
+					EnableREW =			0, // Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 
                     EnableIV =          0

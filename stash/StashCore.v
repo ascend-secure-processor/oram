@@ -617,7 +617,8 @@ module StashCore(
 		Stores data blocks.  This memory is indexed using {EntryID, EntryOffset}. 
 	*/
 	RAM			#(			.DWidth(				BEDWidth),
-							.AWidth(				SDAWidth))
+							.AWidth(				SDAWidth)
+							`ifdef ASIC , .ASIC(0) `endif)
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -652,7 +653,8 @@ module StashCore(
 		For each data block, store its program address / leaf label.
 	*/
 	RAM			#(			.DWidth(				SHDWidth),
-							.AWidth(				SEAWidth))
+							.AWidth(				SEAWidth) 
+							`ifdef ASIC , .ASIC(0) `endif)
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),

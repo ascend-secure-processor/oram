@@ -11,9 +11,9 @@ else:
 	exit()
 
 # generate SRAM name
-SRAM_name = "SRAM" \
-	+ ("1D" if NPorts == 1 else "2S") \
-	+ "PCHG"	# TODO: some configs less relevent to IO
+SRAM_name = "SRAM" 
+SRAM_name += "1D" if NPorts == 1 else "2S"
+SRAM_name += "FCMN"	# Must use F (latency = 1). TODO: other configs less relevent
 
 SRAM_name += "%05d" % NWords + "X%03d" % NBits + "D%02d" % NDec + "C%03d" % NCPBL
 

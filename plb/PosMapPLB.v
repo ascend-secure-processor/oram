@@ -62,7 +62,7 @@ module PosMapPLB
     wire [LogFinalPosMapEntry-1:0] PosMapAddr;
     wire [ORAML:0] PosMapIn, PosMapOut;
 
-    RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry), .ASIC(0 `ifdef ASIC_MODE +1 `endif)) 
+    RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry) `ifdef ASIC , .ASIC(1) `endif )
         PosMap (    .Clock(Clock), .Reset(Reset), 
                     .Enable(PosMapEnable), .Write(PosMapWrite), .Address(PosMapAddr), 
                     .DIn(PosMapIn), .DOut(PosMapOut)
