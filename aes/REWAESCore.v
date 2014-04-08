@@ -8,6 +8,12 @@
 //==============================================================================
 //	Module:		REWAESCore
 //	Desc:		Control wrapper for Tiny AES in an REW ORAM design.
+//				Input: RO/RW mask commands (in separate buffers).
+//				Output: RO/RW masks (in order and in separate buffers).
+//				
+//				We split the input buffers so RW commands don't head of line 
+//				block RO commands.  We split the output buffers because RW masks 
+//				are on a different datapath relative to RO headers.
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300 Mhz).
 //==============================================================================
@@ -25,14 +31,17 @@ module REWAESCore(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
+	`include "REWAES.vh";
+
+	`include "REWAESLocal.vh"
+	
 	parameter				ROWidth =				128, // Width of RO input/output interface
 							RWWidth =				512, // "" RW interface (should match DDRDWidth)
 							BIDWidth =				34, // BucketID field width
 							CIDWidth =				5, // ChunkID field width
 							AESWidth =				128;	
 	
-	localparam				AESLat =				21, // based on tiny_aes
-							DWidth =				NPorts * AESUWidth;
+	localparam				AESLat =				21; // based on tiny_aes + external buffer we add
 	
 	//--------------------------------------------------------------------------
 	//	System I/O

@@ -5,4 +5,4 @@
 							ROCIDWidth =			`log2(ROHeader_AESChunks),
 							RWCIDWidth =			`log2(RWBkt_AESChunks),
 							BIDWidth =				ORAML + 2, // Bucket ID width; matching AddrGen
-							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth
+							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
