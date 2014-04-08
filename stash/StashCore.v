@@ -21,6 +21,11 @@
 //				memory and must be followed by a Sync command.
 //		Sync - 	Reconstruct the stash pointer memory
 //
+//
+//	Major TODO: Change SYNC operation to either be faster for RO access, or 
+//				adopt the alternate implementation (below)
+//
+//
 //	Alternate implementation:
 //		Replace linked list with an ORAMC bit wide bitvector (similar to StashC).
 //		Pros: 
@@ -367,6 +372,8 @@ module StashCore(
 						$stop;
 					end
 				end
+				// If you want to get really verbose ...
+				/*
 				MS_pt = FreeListHead;
 				i = 0;
 	`ifdef SIMULATION_VERBOSE_STASH
@@ -383,6 +390,7 @@ module StashCore(
 						$stop;
 					end
 				end	
+				*/
 			end
 			
 			// Are the stash data structure / occupancy counts in Sync?

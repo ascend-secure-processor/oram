@@ -22,6 +22,8 @@ module Stash(
   	Clock, Reset,
 	ResetDone,
 
+	IsIdle,
+	
 	RemapLeaf, AccessLeaf, AccessPAddr,
 	AccessIsDummy, AccessCommand,
 	StartScan, SkipWriteback, StartWriteback,
@@ -81,6 +83,8 @@ module Stash(
 	//--------------------------------------------------------------------------
 	//	Commands
 	//--------------------------------------------------------------------------
+	
+	output					IsIdle;
 	
 	input	[ORAML-1:0]		RemapLeaf;
 	input	[ORAML-1:0]		AccessLeaf;
@@ -273,6 +277,12 @@ module Stash(
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
+	// TODO move
+	wire NormalWriteback, KillWriteback;
+	wire SkipWriteback_Primed, SkipWriteback_Pass, SkipWriteback_Set;
+	wire AccessSkipsWB;
+	wire CSCoreSyncWait;	
+	
 	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
 	
@@ -350,7 +360,7 @@ module Stash(
 				if (CSScan)
 					$display("[%m @ %t] Stash: start Scan", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: start PathRead (cmd = %d, leaf = %x, paddr = %x, dummy = %b)", $time, AccessCommand, AccessLeaf, AccessPAddr, AccessIsDummy);
+					$display("[%m @ %t] Stash: start PathRead (cmd = %d, leaf = %x, paddr = %x, dummy = %b, RO access = %b)", $time, AccessCommand, AccessLeaf, AccessPAddr, AccessIsDummy, AccessSkipsWB);
 				if (CSTurnaround1)
 					$display("[%m @ %t] Stash: start frontend operation", $time);
 				if (CSPathWriteback)
@@ -365,15 +375,11 @@ module Stash(
 	//--------------------------------------------------------------------------
 	//	State transitions & control logic
 	//--------------------------------------------------------------------------
-
-	// TODO move
-	wire NormalWriteback, KillWriteback;
-	wire SkipWriteback_Primed, SkipWriteback_Pass, SkipWriteback_Set;
-	wire AccessSkipsWB;
-	wire CSCoreSyncWait;
  	
 	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
 	assign	PerAccessReset =						(CSCoreSyncWait) ? Core_AccessComplete : Top_AccessComplete & Core_AccessComplete;
+	
+	assign	IsIdle =								CSIdle;
 	
 	assign	BlockUpdateComplete =					TurnoverUpdate & Core_CommandComplete;
 	

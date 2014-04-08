@@ -230,6 +230,8 @@ module PathORAMBackend(
 	
 	// Stash
 	
+	wire					Stash_IsIdle;
+	
 	wire					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
 	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
@@ -359,7 +361,7 @@ module PathORAMBackend(
 	assign	Stash_SkipWritebackOp =					CSStartRead & ROAccess;
 	assign	Stash_StartWritebackOp =				CSStartWriteback; // Note: this will go high even for RO accesses; this is intended
 	
-	assign	OperationComplete =						CSPathWriteback & PathWritebackComplete & AddrGen_InReady;
+	assign	OperationComplete =						CSPathWriteback & Stash_IsIdle & PathWritebackComplete & AddrGen_InReady;
 		
 	assign	Command_InternalReady =					AppendComplete | (OperationComplete & ~AccessIsDummy);
 
@@ -415,6 +417,7 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	
 	wire				RWAccess, StartRW, REWRoundComplete; // TODO
+	wire	[ORAML-1:0]	GentryLeaf_Pre;
 	
 	generate if (EnableREW) begin:REW_CONTROL
 	
@@ -765,6 +768,8 @@ module PathORAMBackend(
 			stash(			.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
+							
+							.IsIdle(				Stash_IsIdle),
 							
 							.RemapLeaf(				RemappedLeaf_Internal),
 							.AccessLeaf(			AddrGen_Leaf),
