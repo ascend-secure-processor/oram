@@ -345,7 +345,7 @@ module StashCore(
 			
 	`ifndef SIMULATION_ASIC
 	
-			if (MS_FinishedSync) begin
+			if (PerAccessReset) begin
 				MS_pt = UsedListHead;
 				i = 0;
 	`ifdef SIMULATION_VERBOSE_STASH

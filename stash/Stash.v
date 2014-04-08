@@ -68,7 +68,8 @@ module Stash(
 							ST_Evict =				4'd5,
 							ST_Turnaround1 =		4'd6,
 							ST_Turnaround2 =		4'd7,
-							ST_CoreSync =			4'd8;	
+							ST_CoreSync =			4'd8,
+							ST_CoreSyncWait =		4'd9;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -369,9 +370,10 @@ module Stash(
 	wire NormalWriteback, KillWriteback;
 	wire SkipWriteback_Primed, SkipWriteback_Pass, SkipWriteback_Set;
 	wire AccessSkipsWB;
+	wire CSCoreSyncWait;
  	
 	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
-	assign	PerAccessReset =						(Top_AccessComplete & Core_AccessComplete) | KillWriteback;
+	assign	PerAccessReset =						(CSCoreSyncWait) ? Core_AccessComplete : Top_AccessComplete & Core_AccessComplete;
 	
 	assign	BlockUpdateComplete =					TurnoverUpdate & Core_CommandComplete;
 	
@@ -403,11 +405,12 @@ module Stash(
 	assign	CSPathWriteback = 						CS == ST_PathWriteback;
 	assign	CSScan = 								CS == ST_Scan;
 	assign	CSEvict =								CS == ST_Evict;
+	assign	CSCoreSyncWait =						CS == ST_CoreSyncWait;
 	
 	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
 	
-	assign	NormalWriteback = 						CSTurnaround2 & Core_CommandComplete & ~AccessSkipsWB;
-	assign	KillWriteback = 						CSTurnaround2 & Core_CommandComplete & AccessSkipsWB;
+	assign	NormalWriteback = 						CSCoreSync & Core_CommandComplete & ~AccessSkipsWB;
+	assign	KillWriteback = 						CSCoreSync & Core_CommandComplete & AccessSkipsWB;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -436,18 +439,21 @@ module Stash(
 				if (Core_CommandComplete)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
-				if (NormalWriteback)
-					NS =							ST_CoreSync;
-				else if (KillWriteback)
-					NS =							ST_Idle;
-			ST_CoreSync :
 				if (Core_CommandComplete)
+					NS =							ST_CoreSync;
+			ST_CoreSync :
+				if (NormalWriteback)
 					NS =							ST_PathWriteback;
+				else if (KillWriteback)
+					NS =							ST_CoreSyncWait;					
 			ST_PathWriteback :
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
 				if (BlockEvictComplete)
+					NS =							ST_Idle;
+			ST_CoreSyncWait :
+				if (Core_AccessComplete)
 					NS =							ST_Idle;
 		endcase
 	end
