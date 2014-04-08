@@ -30,7 +30,7 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROPAddrValid,
+	ROPAddr, ROAccess, REWRoundDummy,
 	
 	DRAMInitComplete
 	);
@@ -115,7 +115,7 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	
 	output	[ORAMU-1:0]		ROPAddr;
-	output					ROPAddrValid;
+	output					ROAccess;
 	
 	//--------------------------------------------------------------------------
 	//	Status Interface
@@ -453,7 +453,8 @@ module PathORAMBackend(
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
 		
 		assign	ROPAddr =							PAddr_Internal;
-		assign	ROPAddrValid =						~RWAccess && DRAMInitComplete;
+		assign	ROAccess =							~RWAccess & DRAMInitComplete;
+		assign	REWRoundDummy =						AccessIsDummy;
 	end else begin:BASIC_CONTROL
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
@@ -463,7 +464,8 @@ module PathORAMBackend(
 		assign	AddrGen_HeaderWriteback =			1'b0;
 		
 		assign	ROPAddr =							{ORAMU{1'bx}};		
-		assign	ROPAddrValid =						1'b0;
+		assign	ROAccess =							1'b0;
+		assign	REWRoundDummy =						1'b0;
 	end endgenerate
 
 	Register	#(			.Width(					1))
@@ -694,7 +696,7 @@ module PathORAMBackend(
 	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
 		for (i = 0; i < ORAMZ; i = i + 1) begin
-			assign	HeaderDownShift_ValidBits[i] =	HeaderDownShift_ValidBits_Pre[i] & (RWAccess | PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i]);
+			assign	HeaderDownShift_ValidBits[i] =	HeaderDownShift_ValidBits_Pre[i] & (RWAccess | (~REWRoundDummy & PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i]));
 		end
 	end else begin:BASIC_VALIDBITS
 		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
@@ -770,7 +772,7 @@ module PathORAMBackend(
 							.AccessCommand(			Command_Internal),
 							
 							.StartScan(				Stash_StartScanOp),
-							.SkipWriteback(			ROPAddrValid),
+							.SkipWriteback(			ROAccess),
 							.StartWriteback(		Stash_StartWritebackOp),
 							
 							.ReturnData(			Stash_ReturnData),
@@ -962,7 +964,7 @@ module PathORAMBackend(
 							.In(					1'bx),
 							.Out(					PathWritebackComplete_Data));	
 	
-	assign	PathWritebackComplete =		ROPAddrValid	// do not need path writeback on read-only access
+	assign	PathWritebackComplete =		ROAccess	// do not need path writeback on read-only access
 	                                   | (PathWritebackComplete_Commands & PathWritebackComplete_Data);
 	
 	//------------------------------------------------------------------------------
