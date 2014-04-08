@@ -419,7 +419,7 @@ module PathORAMBackend(
 	
 		initial begin
 			$display("[ERROR] Fix Backend FIFOReg buffering bug");
-			$stop;
+			//$stop;
 		end
 		
 		Counter	#(			.Width(					ORAML))
@@ -694,7 +694,7 @@ module PathORAMBackend(
 	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
 		for (i = 0; i < ORAMZ; i = i + 1) begin
-			assign	HeaderDownShift_ValidBits[i] =	(RWAccess) ? HeaderDownShift_ValidBits_Pre[i] : PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i];
+			assign	HeaderDownShift_ValidBits[i] =	HeaderDownShift_ValidBits_Pre[i] & (RWAccess | PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i]);
 		end
 	end else begin:BASIC_VALIDBITS
 		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
