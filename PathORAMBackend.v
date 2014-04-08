@@ -224,8 +224,8 @@ module PathORAMBackend(
 							
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	
-	wire	[PthBSTWidth-1:0] PathWritebackCtr_Commands, PathWritebackCtr_Data;
-	wire					PathWritebackComplete_Commands_Pre, PathWritebackComplete_Data_Pre;
+	wire	[PthBSTWidth-1:0] PathWritebackCtr_Data;
+	wire					PathWritebackComplete_Commands_RW, PathWritebackComplete_Commands_RO, PathWritebackComplete_Data_Pre;
 	wire					PathWritebackComplete_Commands, PathWritebackComplete_Data;	
 	
 	// Stash
@@ -417,7 +417,7 @@ module PathORAMBackend(
 	
 	generate if (EnableREW) begin:REW_CONTROL
 	
-		initial begin
+		initial begin // TODO actually fix this !!!
 			$display("[ERROR] Fix Backend FIFOReg buffering bug");
 			//$stop;
 		end
@@ -916,24 +916,24 @@ module PathORAMBackend(
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
-	
-	// Count commands written back
-	Counter		#(			.Width(					PthBSTWidth))
-				out_C_cnt(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMCommandValid & DRAMCommandReady),
-							.In(					{PthBSTWidth{1'bx}}),
-							.Count(					PathWritebackCtr_Commands));	
-	CountCompare #(			.Width(					PthBSTWidth),
-							.Compare(				PathSize_DRBursts - 1))
-				out_C_cmp(	.Count(					PathWritebackCtr_Commands), 
-							.TerminalCount(			PathWritebackComplete_Commands_Pre));
+
+	// Count commands written back	
+	CountAlarm #(			.Threshold(				PathSize_DRBursts))
+				out_CRW_cnt(.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				CSPathWriteback & DRAMInitComplete & ~ROAccess & DRAMCommandValid & DRAMCommandReady),
+							.Done(					PathWritebackComplete_Commands_RW));
+	generate if (EnableREW) begin:RO_CMD_CNT
+		CountAlarm #(		.Threshold(				BktHSize_DRBursts * (ORAML + 1))) // header writeback
+				out_CRO_cnt(.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				CSPathWriteback & DRAMInitComplete & ROAccess & DRAMCommandValid & DRAMCommandReady),
+							.Done(					PathWritebackComplete_Commands_RO));
+	end endgenerate
 	Register	#(			.Width(					1))
 				out_C_hld(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
-							.Set(					PathWritebackComplete_Commands_Pre & DRAMCommandValid & DRAMCommandReady),
+							.Set(					(PathWritebackComplete_Commands_RO | PathWritebackComplete_Commands_RW) & DRAMCommandValid & DRAMCommandReady),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					PathWritebackComplete_Commands));
@@ -964,8 +964,8 @@ module PathORAMBackend(
 							.In(					1'bx),
 							.Out(					PathWritebackComplete_Data));	
 	
-	assign	PathWritebackComplete =		ROAccess	// do not need path writeback on read-only access
-	                                   | (PathWritebackComplete_Commands & PathWritebackComplete_Data);
+	assign	PathWritebackComplete =					(ROAccess) ? 	PathWritebackComplete_Commands : 
+																	PathWritebackComplete_Commands & PathWritebackComplete_Data;
 	
 	//------------------------------------------------------------------------------
 	//	DRAM interface multiplexing
