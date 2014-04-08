@@ -16,6 +16,11 @@
 //				are on a different datapath relative to RO headers.
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300 Mhz).
+//
+//	Notes on getting clock up:
+//		- No reset to any module
+//		- Size FIFOs smaller to use smaller data counts
+//		- Disable FIFO reset
 //==============================================================================
 module REWAESCore(
 	SlowClock, FastClock, 
@@ -24,7 +29,8 @@ module REWAESCore(
 	ROCommandIn, ROCommandInValid, ROCommandInReady,
 	RWCommandIn, RWCommandInValid, RWCommandInReady,
 	
-	DataOut, DataOutValid, DataOutReady
+	RODataOut, ROCommandOut, RODataOutValid, RODataOutReady,
+	RWDataOut, RWDataOutValid, RWDataOutReady
 	);
 
 	//--------------------------------------------------------------------------
@@ -67,6 +73,13 @@ module REWAESCore(
 	
 	wire	[AESUWidth-1:0]	CoreKey;
 	
+	// Output interfaces
+	
+	wire	[RWWidth-1:0]	MaskFIFODataIn;
+	wire					MaskFIFODataInValid, MaskFIFOFull;
+	
+	wire					ROFIFOFull;
+
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
 	//--------------------------------------------------------------------------
@@ -85,13 +98,26 @@ module REWAESCore(
 		end
 		
 		always @(posedge FastClock) begin
-			if (~DataOutFull & CoreDataOutValid) begin
-				$display("[%m @ %t] ERROR: AES out fifo overflow.", $time);
+			if (ROFIFOFull & CommandOutIsRO) begin
+				$display("[%m @ %t] ERROR: AES RO out fifo overflow.", $time);
 				$stop;
 			end
+			 
+			if (MaskFIFOFull & MaskFIFODataInValid) begin
+				$display("[%m @ %t] ERROR: AES RW out fifo overflow.", $time);
+				$stop;
+			end			
+
 		end
 	`endif
-
+	
+	//--------------------------------------------------------------------------
+	//	Key Management
+	//--------------------------------------------------------------------------
+	
+	// TODO: Set it to something dynamic [this is actually important to get correct area numbers ...]
+	assign	CoreKey =								{AESUWidth{1'b1}}; 
+	
 	//--------------------------------------------------------------------------
 	//	RO Input Interface
 	//--------------------------------------------------------------------------
@@ -143,7 +169,14 @@ module REWAESCore(
 	//	Tiny AES Core
 	//--------------------------------------------------------------------------
 	
-	assign	CoreKey =								{AESUWidth{1'b1}}; // TODO: Set it to something dynamic [this is actually important to get correct area numbers ...]
+	CoreCommandIn, CoreCommandOut
+	
+	CommandOutIsRO
+	CommandOutIsRW
+	
+	assign	CoreDataIn
+	assign	CoreDataInValid = 
+	assign	CoreCommandIn =
 	
 	aes_128 tiny_aes(		.clk(					FastClock),
 							.state(					CoreDataIn), 
@@ -151,43 +184,70 @@ module REWAESCore(
 							.out(					CoreDataOut));
 							
 	ShiftRegister #(		.PWidth(				AESLat),
-							.SWidth(				1),
+							.SWidth(				1 + ACCMDWidth),
 							.Initial(				{AESLat{1'b0}})
 				V_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
 							.Enable(				1'b1),
-							.SIn(					CoreDataInValid),
-							.SOut(					CoreDataOutValid));						
-							
+							.SIn(					{CoreDataInValid, 	CoreCommandIn}),
+							.SOut(					{CoreDataOutValid, 	CoreCommandOut}));						
+	
+	assign	CommandOutIsRW =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] == CMD_RWData[ACMDRWBit]; // not optimal given our encoding, but whatever it's 2 bits
+	assign	CommandOutIsRO =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] != CMD_RWData[ACMDRWBit];
+	
 	//--------------------------------------------------------------------------
 	//	RW Output Interface
 	//--------------------------------------------------------------------------
 	
+	// Note: we need to shift this in the fast clock domain or there is no point 
+	// in clocking this fast.
+	
+	CountAlarm #(			.Threshold(				BlkSize_AESChunks),
+							.Initial(				0))
+				rw_shft_cnt(.Clock(					FastClock), 
+							.Reset(					1'b0), 
+							.Enable(				CommandOutIsRW),
+							.Done(					MaskFIFODataInValid));	
+	
+	ShiftRegister #(		.PWidth(				RWWidth),
+							.SWidth(				AESWidth),
+							.Initial(				{RWWidth{1'b0}})
+				rw_shift(	.Clock(					FastClock), 
+							.Reset(					1'b0), 
+							.Load(					1'b0), 
+							.Enable(				CommandOutIsRW),
+							.SIn(					CoreDataOut),
+							.POut(					MaskFIFODataIn));
+	
 	REWMaskFIFO rw_O_fifo(	.rst(					SlowReset), 
 							.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
-							.din(					), 
-							.wr_en(					), 
-							.rd_en(					), 
-							.dout(					), 
-							.full(					), 
-							.empty(					), 
-							.valid(					))
+							.din(					MaskFIFODataIn), 
+							.wr_en(					MaskFIFODataInValid), 
+							.full(					MaskFIFOFull),
+							.dout(					RWDataOut),
+							.rd_en(					RWDataOutReady),
+							.valid(					RWDataOutValid))
 	
 	//--------------------------------------------------------------------------
 	//	RO Output Interface
 	//--------------------------------------------------------------------------
 	
-	AESFIFO 	ro_O_fifo(	.rst(					SlowReset),
-							.wr_clk(				SlowClock), 
-							.rd_clk(				FastClock), 
-							.din(					CoreDataOut), 
-							.wr_en(					),
-							.full(					), 							
-							.rd_en(					), 
-							.dout(					), 
-							.valid(					));
+	// Note: we use a single FIFO for all RO stuff (header masks, data of 
+	// interest) so save on the routing / area cost of a second FIFO.  Adding 
+	// the command bit here adds 0 additional logic since we just use the BRAM 
+	// ECC bits.
+
+	AESROFIFO 	ro_O_fifo(	.rst(					SlowReset),
+							.wr_clk(				FastClock), 
+							.rd_clk(				SlowClock), 
+							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
+							.wr_en(					CommandOutIsRO),
+							.full(					ROFIFOFull),
+							.dout(					{RODataOut,		ROCommandOut}),
+							.rd_en(					RODataOutReady),  
+							.valid(					RODataOutValid));
 
 	//--------------------------------------------------------------------------
 endmodule
