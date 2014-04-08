@@ -32,17 +32,11 @@
 //==============================================================================
 module CoherenceController(
 	Clock, Reset,
+	
+    ROPAddr, ROPAddrValid,
 
 	AESDataIn, AESDataInValid, AESDataInReady,
 	AESDataOut, AESDataOutValid, AESDataOutReady,
-	
-	IVRODataOut, IVRODataRequest, IVRODataOutValid,
-	IVRODataIn, IVRODataInValid, IVRODataInReady,
-	
-	IVRDataOut, IVRDataRequest, IVRDataOutValid,
-	IVWDataOut, IVWDataRequest, IVWDataOutValid,
-
-	IVWDataIn, IVWDataInValid, IVWDataInReady,	
 	
 	BEDataOut, BEDataOutValid, BEDataOutReady,
 	BEDataIn, BEDataInValid, BEDataInReady,	
@@ -52,15 +46,20 @@ module CoherenceController(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
+    `include "PathORAM.vh";
 	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
 	
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
   	input 					Clock, Reset;
+	input	[ORAMU-1:0]		ROPAddr;
+    input					ROPAddrValid;
 	
 	//--------------------------------------------------------------------------
 	//	AES Interface
@@ -80,34 +79,6 @@ module CoherenceController(
 	//	Integrity Interface
 	//--------------------------------------------------------------------------
 
-	// RO accesses
-	
-	// Send bucket of interest (including decrypted hash) to IV on a RO access
-	output	[DDRDWidth-1:0]	IVRODataOut;
-	input					IVRODataRequest;
-	output					IVRODataOutValid;
-	
-	// Receive the new hash for the RO bucket of interest
-	input	[DDRDWidth-1:0]	IVRODataIn;
-	input					IVRODataInValid;
-	output					IVRODataInReady;
-	
-	// RW (Gentry background accesses)
-	
-	// Send read path data (along with decrypted hashes) to IV
-	output	[DDRDWidth-1:0]	IVRDataOut;
-	input					IVRDataRequest;
-	output					IVRDataOutValid;
-	
-	// Send write path data (with no hashes) to IV
-	output	[DDRDWidth-1:0]	IVWDataOut;
-	input					IVWDataRequest;
-	output					IVWDataOutValid;
-
-	// Receive the new hash for the RO bucket of interest
-	input	[DDRDWidth-1:0]	IVWDataIn;
-	input					IVWDataInValid;
-	output					IVWDataInReady;
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -126,18 +97,65 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
+    wire HeaderInReady, HeaderInValid, HeaderOutReady, HeaderOutValid, ProcessingHeader; 
+    wire [DDRDWidth-1:0]	HeaderOut;
+    
+    assign HeaderInValid = ROPAddrValid && AESDataInValid && ProcessingHeader;
+    
+    generate if (EnableIV) begin: FULL_BUF
+        RAM xxxx(); // Use a RAM
+    end 
+    else begin: HEAD_BUF
+        
+        wire [DDRDWidth-1:0]	HeaderIn;
+        wire [ORAMZ-1:0]        ValidBits;
+        
+        genvar j;
+        for (j = 0; j < ORAMZ; j = j + 1) begin  // invalid the target block
+            assign ValidBits[j] = (ROPAddrValid && ROPAddr == AESDataIn[BktHULStart + (j+1)*ORAMU - 1: BktHULStart + j*ORAMU]) ? 0 : AESDataIn[IVEntropyWidth+j];                  
+        end 
+        
+        assign HeaderIn = {AESDataIn[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBits, AESDataIn[IVEntropyWidth-1:0]};
+          
+        FIFORAM	#(          .Width(					DDRDWidth),     
+                            .Buffering(				(ORAML+1) * BktHSize_DRBursts ))
+            in_hd_buf  (	.Clock(					Clock),
+                            .Reset(					Reset),
+                            .InData(				HeaderIn),
+                            .InValid(				HeaderInValid),
+                            .InAccept(				HeaderInReady),
+                            .OutData(				PathBuffer_OutData),
+                            .OutSend(				HeaderOutValid),
+                            .OutReady(				AESDataOutReady)
+                        );
+        
+        CountAlarm #(		.Threshold(				BktSize_DRBursts))
+            rew_rnd_ctr(    .Clock(					Clock), 
+                            .Reset(					Reset), 
+                            .Enable(				AESDataInValid && AESDataInReady),
+                            .Done(					ProcessingHeader));
+        
+        always @ (posedge Clock) begin
+            if (!Reset && HeaderInValid && !HeaderInReady) begin
+                $display("Error: Header Buffer Overflow!");
+                $finish;
+            end
+        end
+        
+    end endgenerate
+    
 
 	//--------------------------------------------------------------------------
 	//	Passthrough logic
 	//--------------------------------------------------------------------------
 
-	assign	BEDataOut =								AESDataIn;
-	assign	BEDataOutValid =						AESDataInValid; 
-	assign	AESDataInReady = 						BEDataOutReady;
+	assign	BEDataOut =					AESDataIn;
+	assign	BEDataOutValid =		    AESDataInValid; 
+	assign	AESDataInReady = 			BEDataOutReady;
 
-	assign	AESDataOut =							BEDataIn;
-	assign	AESDataOutValid =						BEDataInValid;
-	assign	BEDataInReady = 						AESDataOutReady;
+	assign	AESDataOut =			ROPAddrValid ? HeaderOut : BEDataIn;
+	assign	AESDataOutValid =		ROPAddrValid ? HeaderOutValid :	BEDataInValid;
+    assign	BEDataInReady =         AESDataOutReady;
 	
 	//--------------------------------------------------------------------------
 endmodule

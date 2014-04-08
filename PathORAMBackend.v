@@ -453,7 +453,7 @@ module PathORAMBackend(
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
 		
 		assign	ROPAddr =							PAddr_Internal;
-		assign	ROPAddrValid =						~RWAccess;
+		assign	ROPAddrValid =						~RWAccess && DRAMInitComplete;
 	end else begin:BASIC_CONTROL
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
@@ -962,7 +962,8 @@ module PathORAMBackend(
 							.In(					1'bx),
 							.Out(					PathWritebackComplete_Data));	
 	
-	assign	PathWritebackComplete =					PathWritebackComplete_Commands & PathWritebackComplete_Data;
+	assign	PathWritebackComplete =		ROPAddrValid	// do not need path writeback on read-only access
+	                                   | (PathWritebackComplete_Commands & PathWritebackComplete_Data);
 	
 	//------------------------------------------------------------------------------
 	//	DRAM interface multiplexing

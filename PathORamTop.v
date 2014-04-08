@@ -117,9 +117,12 @@ module PathORamTop(
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;	
 	
-	// Integrity verification
+	// REW
 	
-	wire					DRAMInitComplete;
+	wire    [ORAMU-1:0]		ROPAddr;
+	wire                    ROPAddrValid;
+	
+    wire                    DRAMInitComplete;
 		
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -203,6 +206,9 @@ module PathORamTop(
 							.DRAMWriteData(			BE_DRAMWriteData),
 							.DRAMWriteDataValid(	BE_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	BE_DRAMWriteDataReady),
+							
+                            .ROPAddr(               ROPAddr),
+                            .ROPAddrValid(          ROPAddrValid),
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------
@@ -215,7 +221,9 @@ module PathORamTop(
 							.DDRAWidth(				DDRAWidth))
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
-
+                            .ROPAddr(               ROPAddr),
+                            .ROPAddrValid(          ROPAddrValid),
+                            
 							.AESDataIn(				AES_DRAMReadData), 
 							.AESDataInValid(		AES_DRAMReadDataValid), 
 							.AESDataInReady(		AES_DRAMReadDataReady),
@@ -225,13 +233,6 @@ module PathORamTop(
 							.AESDataOutReady(		AES_DRAMWriteDataReady),
 	
 	// 	TODO for integrity verification
-	//	IVRODataOut, IVRODataRequest, IVRODataOutValid,
-	//	IVRODataIn, IVRODataInValid, IVRODataInReady,
-		
-	//	IVRDataOut, IVRDataRequest, IVRDataOutValid,
-	//	IVWDataOut, IVWDataRequest, IVWDataOutValid,
-
-	//	IVRODataIn, IVRODataInValid, IVRODataInReady,	
 	
 							.BEDataOut(				BE_DRAMReadData),
 							.BEDataOutValid(		BE_DRAMReadDataValid), 

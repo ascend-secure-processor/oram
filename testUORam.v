@@ -235,7 +235,7 @@ module testUORam;
    
    always @(posedge Clock) begin
        if (!Reset && CmdInReady) begin
-           if (TestCount < 1000) begin
+           if (TestCount < 100) begin
                #(Cycle * 10);       
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle);       

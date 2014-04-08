@@ -3,7 +3,10 @@
 //	Module:		Integrity Verifier
 //	Desc:		Use several SHA-3 units to verify buckets in Path ORAM
 //				A RAM interface with Coherence Controller
+//              h = Hash (v, u, l, block[0], block[1], ..., block[Z-1], BucketID, BucketCtr)
 //==============================================================================
+
+`include "Const.vh"
 
 module IntegrityVerifier (
 	Clock, Reset, 
@@ -11,106 +14,78 @@ module IntegrityVerifier (
 	// TODO: some states from CC
 );
 
-	parameter NUMSHA3 = 1;
+	parameter NUMSHA3 = 3;
 
-	`include "DDR3SDRAM.vh";	
+    `include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";	
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+
+    localparam  AWidth = PthBSTWidth;
 
 	input  Clock, Reset;
 	output Request, Write;
-	output [8:0] Address;		// TODO
+	output [AWidth-1:0] Address;
 	input  [DDRDWidth-1:0]  DataIn;
 	output [DDRDWidth-1:0]  DataOut;
 
-	// input size to hash
-	localparam ByteInLastChunk = 0;
-	localparam HashInChunkCount = 10;		
-	
-	// hash in and out data path
-	localparam  HashInWith = 64;
+	// hash IO internal variables
 	localparam  HashOutWidth = 512;
+	localparam HashByteCount = (BktPSize_RawBits + 0) / 8;    	
 	
-	wire FunnelInReady [NUMSHA3-1:0];
-	
-	wire HashInValid [NUMSHA3-1:0];
-	wire HashInReady [NUMSHA3-1:0];
-	wire [HashInWith-1:0] HashIn [NUMSHA3-1:0];
-	wire HashBufFull  [NUMSHA3-1:0];
-	wire LastChunk [NUMSHA3-1:0];
-	wire HashBusy  [NUMSHA3-1:0];
-	wire HashReset  [NUMSHA3-1:0];
-	
+	wire [DDRDWidth-1:0] HashData;
+	wire HashDataReady [NUMSHA3-1:0];
+	wire HashDataValid, HashInValid;
 	
 	wire HashOutValid [NUMSHA3-1:0];
-	wire [HashOutWith-1:0] HashOut [NUMSHA3-1:0]; 
+	wire [HashOutWidth-1:0] HashOut [NUMSHA3-1:0]; 
 	
 	// control logic: round robin scheduling for hash engines
-	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));
-		
-	wire DataInValid, FunnelInValid, ConsumeHash;	
-	Register #(.Width(1)) 	DInValid (Clock, 1'b0, 1'b0, 1'b1, 	Request && !Write, 	DataInValid);
-	assign FunnelInValid = DataInValid;
+	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
+	wire ReadData, ReadHash, ConsumeHash;
+	reg [LogNUMSHA3-1:0] InTurn, OutTurn;
+	
+	assign ReadData = Request && !Write && 1; // certain address
+	assign ReadHash = Request && !Write && 1; // certain address	
+	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	ReadData, 	HashDataValid);
+	Register #(.Width(1)) 	RdHash (Clock, Reset, 1'b0, 1'b1, 	ReadHash, 	HashInValid);
+	
+	assign HashData = DataIn;
+	
 	assign ConsumeHash = HashOutValid[OutTurn];
-	
-	wire [LogNUMSHA3-1:0] InTurn;
-	wire [LogNUMSHA3-1:0] OutTurn;
-	
-	Counter		#(			.Width(					LogNUMSHA3))
-		in_cnt	(			.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataInValid),
-							.In(					{LogNUMSHA3{1'bx}}),
-							.Count(					InTurn)); 
-	
-	Counter		#(			.Width(					LogNUMSHA3))
-		out_cnt	(			.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				ConsumeHash),
-							.In(					{LogNUMSHA3{1'bx}}),
-							.Count(					OutTurn)); 
-	
+
+	assign Request = !Reset && HashDataReady[InTurn] && !HashDataValid;
+	assign Write = 0;
+
+    always @(posedge Clock) begin
+        if (Reset) begin
+            InTurn <= 0;
+            OutTurn <= 0;
+        end
+        else begin
+            if (HashDataValid)
+                InTurn <= (InTurn + 1) % NUMSHA3;
+            if (ConsumeHash)
+                OutTurn <= (OutTurn + 1) % NUMSHA3;
+        end
+    end
+		
 	genvar k;
-	generate for (k = 0; k < NUMSHA3; k = k + 1) begin
+	generate for (k = 0; k < NUMSHA3; k = k + 1) begin: HashEngines
 		
-		FIFOShiftRound #(	.IWidth(				DDRDWidth),
-							.OWidth(				HashInWith))
-			HashInFunnel(	.Clock(					Clock),
-							.Reset(					Reset || LastChunk[k]),
-							.InData(				DataIn),
-							.InValid(				FunnelInValid && InTurn == k),
-							.InAccept(				FunnelInReady[k]),
-							.OutData(			    HashIn[k]),
-							.OutValid(				HashInValid[k]),
-							.OutReady(				HashInReady[k])
-						);
-		
-		CountAlarm #	(	.Threshold(HashInChunkCount))
-			ChunkCtr	(	.Clock(		Clock),
-							.Reset(		Reset),
-							.Enable(	HashInValid[k] && HashInReady[k]),
-							.Done(		LastChunk[k])
-						);
-		
-		keccak	
-			HashEngine	(	.clk(			Clock), 
-							.reset(			HashReset[k]), 
-							.in(			HashIn[k]), 
-							.in_ready(		HashInValid[k]), 
-							.is_last(		LastChunk[k]), 
-							.byte_num(		ByteInLastChunk), 
-							.buffer_full(	HashBufFull[k]), 
-							.out(			HashOut[k]), 
-							.out_ready(		HashOutValid[k])
-						);
-		
-		assign HashReset[k] = ConsumeHash && OutTurn == k;			
-		assign HashInReady[k] = !HashBufFull[k] && !HashBusy[k];		
-		Register #(.Width(1)) Hash (Clock, HashReset[k], LastChunk[k], 1'b0, 1'bx, HashBusy[k]);
-		
-	end
+        Keccak_WF #(        .IWidth(            DDRDWidth),
+                            .HashByteCount(     HashByteCount))                         
+            HashEngine (    .Clock(             Clock),         
+                            .Reset(             Reset),
+                            .DataInReady(       HashDataReady[k]),
+                            .DataInValid(       HashDataValid && InTurn == k),
+                            .DataIn(            HashData),
+                            .HashOutReady(      ConsumeHash && OutTurn == k),
+                            .HashOutValid(      HashOutValid[k]),
+                            .HashOut(           HashOut[k])
+                    );
+                    
+	end endgenerate
 endmodule
 	
