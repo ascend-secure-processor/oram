@@ -433,7 +433,7 @@ module PathORAMBackend(
 							.Count(					GentryLeaf_Pre));
 		
 		CountAlarm #(		.Threshold(				ORAME))
-				rew_rnd_ctr(.Clock(					Clock), 
+				rew_rnd_ctr(.Clock(					Clock | REWRoundComplete), 
 							.Reset(					Reset), 
 							.Enable(				OperationComplete),
 							.Done(					StartRW));
