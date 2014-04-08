@@ -230,7 +230,7 @@ module PathORAMBackend(
 	
 	// Stash
 	
-	wire					Stash_StartScanOp, Stash_StartWritebackOp;
+	wire					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
 	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
 	wire					Stash_StoreDataValid, Stash_StoreDataReady;
@@ -356,7 +356,8 @@ module PathORAMBackend(
 	assign	AllResetsDone =							Stash_ResetDone & DRAMInitComplete;
 
 	assign	Stash_StartScanOp =						CSStartRead;
-	assign	Stash_StartWritebackOp =				CSStartWriteback;
+	assign	Stash_SkipWritebackOp =					CSStartRead & ROAccess;
+	assign	Stash_StartWritebackOp =				CSStartWriteback; // Note: this will go high even for RO accesses; this is intended
 	
 	assign	OperationComplete =						CSPathWriteback & PathWritebackComplete & AddrGen_InReady;
 		
@@ -772,7 +773,7 @@ module PathORAMBackend(
 							.AccessCommand(			Command_Internal),
 							
 							.StartScan(				Stash_StartScanOp),
-							.SkipWriteback(			ROAccess),
+							.SkipWriteback(			Stash_SkipWritebackOp),
 							.StartWriteback(		Stash_StartWritebackOp),
 							
 							.ReturnData(			Stash_ReturnData),
