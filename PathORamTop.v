@@ -120,7 +120,7 @@ module PathORamTop(
 	// REW
 	
 	wire    [ORAMU-1:0]		ROPAddr;
-	wire                    ROPAddrValid;
+	wire                    ROAccess, REWRoundDummy;
 	
     wire                    DRAMInitComplete;
 		
@@ -208,7 +208,8 @@ module PathORamTop(
 							.DRAMWriteDataReady(	BE_DRAMWriteDataReady),
 							
                             .ROPAddr(               ROPAddr),
-                            .ROPAddrValid(          ROPAddrValid),
+                            .ROAccess(          	ROAccess),
+							.REWRoundDummy(			REWRoundDummy),
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------
@@ -221,8 +222,10 @@ module PathORamTop(
 							.DDRAWidth(				DDRAWidth))
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
+							
                             .ROPAddr(               ROPAddr),
-                            .ROPAddrValid(          ROPAddrValid),
+                            .ROAccess(          	ROAccess),
+							.REWRoundDummy(			REWRoundDummy),
                             
 							.AESDataIn(				AES_DRAMReadData), 
 							.AESDataInValid(		AES_DRAMReadDataValid), 

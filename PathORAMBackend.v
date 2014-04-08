@@ -115,7 +115,7 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	
 	output	[ORAMU-1:0]		ROPAddr;
-	output					ROAccess;
+	output					ROAccess, REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
 	//	Status Interface

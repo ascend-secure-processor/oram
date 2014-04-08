@@ -33,7 +33,7 @@
 module CoherenceController(
 	Clock, Reset,
 	
-    ROPAddr, ROPAddrValid,
+    ROPAddr, ROAccess, REWRoundDummy,
 
 	AESDataIn, AESDataInValid, AESDataInReady,
 	AESDataOut, AESDataOutValid, AESDataOutReady,
@@ -59,7 +59,7 @@ module CoherenceController(
 		
   	input 					Clock, Reset;
 	input	[ORAMU-1:0]		ROPAddr;
-    input					ROPAddrValid;
+    input					ROAccess, REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
 	//	AES Interface
@@ -97,26 +97,45 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
-    wire HeaderInReady, HeaderInValid, HeaderOutReady, HeaderOutValid, ProcessingHeader; 
+    wire HeaderInReady, HeaderInValid, HeaderOutReady, HeaderOutValid, ProcessingHeader;
     wire [DDRDWidth-1:0]	HeaderOut;
     
-    assign HeaderInValid = ROPAddrValid && AESDataInValid && ProcessingHeader;
-    
+    // distinguish headers from payloads
+    reg  [`log2(BktSize_DRBursts)-1:0] BlkCtr;    
+    assign ProcessingHeader = BlkCtr < BktHSize_DRBursts;
+    assign HeaderInValid = ROAccess && AESDataInValid && ProcessingHeader;
+         
+    always @ (posedge Clock) begin
+        if (Reset) begin
+            BlkCtr <= 0;
+        end
+        else if (AESDataInValid && AESDataInReady) begin
+            BlkCtr <= (BlkCtr + 1) % BktSize_DRBursts;
+            if (HeaderInValid && !HeaderInReady) begin
+                $display("Error: Header Buffer Overflow!");
+                $finish;
+            end
+        end
+    end
+
     generate if (EnableIV) begin: FULL_BUF
         RAM xxxx(); // Use a RAM
     end 
     else begin: HEAD_BUF
         
+        // invalidate bit for the target block       
         wire [DDRDWidth-1:0]	HeaderIn;
-        wire [ORAMZ-1:0]        ValidBits;
+        wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOut;
         
         genvar j;
-        for (j = 0; j < ORAMZ; j = j + 1) begin  // invalid the target block
-            assign ValidBits[j] = (ROPAddrValid && ROPAddr == AESDataIn[BktHULStart + (j+1)*ORAMU - 1: BktHULStart + j*ORAMU]) ? 0 : AESDataIn[IVEntropyWidth+j];                  
+        for (j = 0; j < ORAMZ; j = j + 1) begin 
+            assign ValidBitsIn[j] = AESDataIn[IVEntropyWidth+j];
+            assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == AESDataIn[BktHULStart + (j+1)*ORAMU - 1: BktHULStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
         end 
+             
+        assign HeaderIn = {AESDataIn[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, AESDataIn[IVEntropyWidth-1:0]};
         
-        assign HeaderIn = {AESDataIn[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBits, AESDataIn[IVEntropyWidth-1:0]};
-          
+        // save the headers and write them back later     
         FIFORAM	#(          .Width(					DDRDWidth),     
                             .Buffering(				(ORAML+1) * BktHSize_DRBursts ))
             in_hd_buf  (	.Clock(					Clock),
@@ -124,24 +143,10 @@ module CoherenceController(
                             .InData(				HeaderIn),
                             .InValid(				HeaderInValid),
                             .InAccept(				HeaderInReady),
-                            .OutData(				PathBuffer_OutData),
+                            .OutData(				HeaderOut),
                             .OutSend(				HeaderOutValid),
                             .OutReady(				AESDataOutReady)
-                        );
-        
-        CountAlarm #(		.Threshold(				BktSize_DRBursts))
-            rew_rnd_ctr(    .Clock(					Clock), 
-                            .Reset(					Reset), 
-                            .Enable(				AESDataInValid && AESDataInReady),
-                            .Done(					ProcessingHeader));
-        
-        always @ (posedge Clock) begin
-            if (!Reset && HeaderInValid && !HeaderInReady) begin
-                $display("Error: Header Buffer Overflow!");
-                $finish;
-            end
-        end
-        
+                        );     
     end endgenerate
     
 
@@ -153,9 +158,14 @@ module CoherenceController(
 	assign	BEDataOutValid =		    AESDataInValid; 
 	assign	AESDataInReady = 			BEDataOutReady;
 
-	assign	AESDataOut =			ROPAddrValid ? HeaderOut : BEDataIn;
-	assign	AESDataOutValid =		ROPAddrValid ? HeaderOutValid :	BEDataInValid;
-    assign	BEDataInReady =         AESDataOutReady;
+    //--------------------------------------------------------------------------
+	//	Path writeback or header write back?
+	//--------------------------------------------------------------------------
+
+	assign	AESDataOut =			ROAccess ? HeaderOut : BEDataIn;
+	assign	AESDataOutValid =		ROAccess ? HeaderOutValid :	BEDataInValid;
+	
+    assign	BEDataInReady =         !ROAccess && AESDataOutReady;
 	
 	//--------------------------------------------------------------------------
 endmodule
