@@ -626,7 +626,7 @@ module StashCore(
 	*/
 	RAM			#(			.DWidth(				BEDWidth),
 							.AWidth(				SDAWidth)
-							`ifdef ASIC , .ASIC(0) `endif)
+							`ifdef ASIC , .ASIC(1) `endif)
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -662,7 +662,7 @@ module StashCore(
 	*/
 	RAM			#(			.DWidth(				SHDWidth),
 							.AWidth(				SEAWidth) 
-							`ifdef ASIC , .ASIC(0) `endif)
+							`ifdef ASIC , .ASIC(1) `endif)
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),

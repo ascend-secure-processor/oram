@@ -690,7 +690,7 @@ module PathORAMBackend(
 	// Invalidate RO blocks that we aren't interested in
 	generate if (EnableREW) begin:REW_VALIDBITS
 		genvar i;
-		for (i = 0; i < ORAMZ; i = i + 1) begin
+		for (i = 0; i < ORAMZ; i = i + 1) begin:REW_VALIDBIT
 			assign	HeaderDownShift_ValidBits[i] =	HeaderDownShift_ValidBits_Pre[i] & (RWAccess | (~REWRoundDummy & PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i]));
 		end
 	end else begin:BASIC_VALIDBITS
