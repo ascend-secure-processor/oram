@@ -18,7 +18,8 @@ module IntegrityVerifier (
 
     `include "PathORAM.vh";
 	`include "DDR3SDRAM.vh";
-	`include "AES.vh";	
+	`include "AES.vh";
+	`include "SHA3Local.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 
@@ -31,7 +32,6 @@ module IntegrityVerifier (
 	output [DDRDWidth-1:0]  DataOut;
 
 	// hash IO internal variables
-	localparam  HashOutWidth = 512;
 	localparam HashByteCount = (BktPSize_RawBits + 0) / 8;    	
 	
 	wire [DDRDWidth-1:0] HashData;
@@ -39,7 +39,7 @@ module IntegrityVerifier (
 	wire HashDataValid, HashInValid;
 	
 	wire HashOutValid [NUMSHA3-1:0];
-	wire [HashOutWidth-1:0] HashOut [NUMSHA3-1:0]; 
+	wire [HashDigestWidth-1:0] HashOut [NUMSHA3-1:0]; 
 	
 	// control logic: round robin scheduling for hash engines
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	

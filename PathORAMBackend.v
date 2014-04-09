@@ -170,7 +170,6 @@ module PathORAMBackend(
 		
 	wire	[BktBSTWidth-1:0] BucketReadCtr;
 	wire					ReadProcessingHeader;	
-	wire					BucketReadCtr_Reset, ReadBucketTransition;	
 	
 	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits_Pre, HeaderDownShift_ValidBits;
 	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
@@ -220,7 +219,7 @@ module PathORAMBackend(
 							
 	wire					BucketWritebackValid;
 	wire	[BktBSTWidth-1:0] BucketWritebackCtr;
-	wire					BucketWritebackCtr_Reset, WritebackBucketTransition;
+	wire					WritebackBucketTransition;
 							
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	
@@ -630,19 +629,11 @@ module PathORAMBackend(
 	//------------------------------------------------------------------------------
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
-	Counter		#(			.Width(					BktBSTWidth))
-				in_bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset | ReadBucketTransition),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
-							.In(					{BktBSTWidth{1'bx}}),
-							.Count(					BucketReadCtr));
-	CountCompare #(			.Width(					BktBSTWidth),
-							.Compare(				BktSize_DRBursts - 1))
-				in_bkt_cmp(	.Count(					BucketReadCtr), 
-							.TerminalCount(			BucketReadCtr_Reset));
-	assign	ReadBucketTransition =					BucketReadCtr_Reset & DRAMReadDataValid & DRAMReadDataReady;
+	CountAlarm  #(  	.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+		in_bkt_cnt(		.Clock(					Clock),
+						.Reset(					Reset),
+						.Enable(				DRAMReadDataValid & DRAMReadDataReady),
+						.Count(					BucketReadCtr));
 	
 	// Per-bucket header/payload arbitration
 	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
@@ -904,21 +895,13 @@ module PathORAMBackend(
 
 	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
 													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
-
-	Counter		#(			.Width(					BktBSTWidth))
-				out_bkt_cnt(.Clock(					Clock),
-							.Reset(					Reset | WritebackBucketTransition),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
-							.In(					{BktBSTWidth{1'bx}}),
-							.Count(					BucketWritebackCtr));	
-	CountCompare #(			.Width(					BktBSTWidth),
-							.Compare(				BktSize_DRBursts - 1))
-				out_bkt_cmp(.Count(					BucketWritebackCtr), 
-							.TerminalCount(			BucketWritebackCtr_Reset));
-	assign	WritebackBucketTransition =				BucketWritebackCtr_Reset & BucketWritebackValid & DRAMWriteDataReady;
-	
+	// count the 
+	CountAlarm  #(  	.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+		out_bkt_cnt(	.Clock(					Clock),
+						.Reset(					Reset),
+						.Enable(				BucketWritebackValid & DRAMWriteDataReady),
+						.Count(					BucketWritebackCtr));
+													
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
