@@ -40,8 +40,7 @@ module REWAESCore(
 	
 	pass: EnableIV
 	
-	parameter				ROWidth =				128, // Width of RO input/output interface
-							RWWidth =				512, // "" RW interface (should match DDRDWidth)
+	parameter				MWidth =				512, // "" RW interface (should match DDRDWidth)
 							BIDWidth =				34, // BucketID field width
 							CIDWidth =				5, // ChunkID field width
 							AESWidth =				128;	
@@ -58,17 +57,64 @@ module REWAESCore(
 	//	Input Interfaces
 	//--------------------------------------------------------------------------
 
+	input	[IVEntropyWidth-1:0] ROIVIn; 
+	input	[BIDWidth-1:0]	ROBIDIn; 
+	input	[PCCMDWidth-1:0] ROCommandIn; 
+	input					ROCommandInValid;
+	output					ROCommandInReady;
+
+	input	[IVEntropyWidth-1:0] RWIVIn;
+	input	[BIDWidth-1:0]	RWBIDIn;
+	input					RWCommandInValid; 
+	output					RWCommandInReady;
+	
 	//--------------------------------------------------------------------------
 	//	Output Interfaces
 	//--------------------------------------------------------------------------
 
+	output	[AESWidth-1:0]	RODataOut; 
+	output	[PCCMDWidth-1:0] ROCommandOut;
+	output					RODataOutValid;
+	input					RODataOutReady;
+	
+	output	[MWidth-1:0]	RWDataOut;
+	output					RWDataOutValid;
+	input					RWDataOutReady;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 	
 	// RO input interface
 	
+	wire					ROCommandFull;
+	
+	wire	[IVEntropyWidth-1:0] ROIV_Fifo, ROIV; 
+	wire	[BIDWidth-1:0]	ROBID_Fifo, ROBID; 
+	wire	[PCCMDWidth-1:0] ROCommand_Fifo, ROCommand;
+	wire					ROValid_Fifo, ROReady_Fifo, ROValid, ROReady;
+	
+	wire	[CIDWidth-1:0]	ROCID;
+	
+	wire					ROSend;
+	wire					ROHeaderCID_Terminal, RODataCID_Terminal;
+	
+	wire	[AESWidth-1:0]	ROSeed;	
+	
 	// RW input interface
+	
+	wire					RWCommandFull;
+	
+	wire	[IVEntropyWidth-1:0] RWIV_Fifo, RWIV; 
+	wire	[BIDWidth-1:0]	RWBID_Fifo, RWBID; 
+	wire					RWValid_Fifo, RWReady_Fifo, RWValid, RWReady;
+		
+	wire	[CIDWidth-1:0]	RWCID;	
+		
+	wire					RWSend;
+	wire					RWDataCID_Terminal;	
+	
+	wire	[AESWidth-1:0]	RWSeed;
 	
 	// AES core
 	
@@ -83,7 +129,7 @@ module REWAESCore(
 	
 	wire					CommandOutIsRO, CommandOutIsRW;
 	
-	wire	[RWWidth-1:0]	MaskFIFODataIn;
+	wire	[MWidth-1:0]	MaskFIFODataIn;
 	wire					MaskFIFODataInValid, MaskFIFOFull;
 	
 	wire					ROFIFOFull;
@@ -109,7 +155,7 @@ module REWAESCore(
 				$stop;
 			end
 			
-			if (RWWidth != 512) begin
+			if (MWidth != 512) begin
 				$display("[%m @ %t] ERROR: you need to re-generate the REWMaskFIFO to change this width.", $time);
 				$stop;
 			end
@@ -164,7 +210,8 @@ module REWAESCore(
 							.OutData(				{ROIV, ROBID, ROCommand}),
 							.OutSend(				ROValid),
 							.OutReady(				ROReady));
-							
+					
+	assign	ROSend =								ROValid;
 	assign	ROReady =								(ROCommand == PCMD_ROHeader) ? ROHeaderCID_Terminal : RODataCID_Terminal;
 							
 	Counter		#(			.Width(					CIDWidth),
@@ -173,7 +220,7 @@ module REWAESCore(
 							.Reset(					ROReady),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				ROValid),
+							.Enable(				ROSend),
 							.In(					{CIDWidth{1'bx}}),
 							.Count(					ROCID));		
 	CountCompare #(			.Width(					CIDWidth),
@@ -196,37 +243,49 @@ module REWAESCore(
 	
 	//--------------------------------------------------------------------------
 	//	RW Input Interface
-	//--------------------------------------------------------------------------	
-	
-	RWSeed
-	
-	RWCommandFull
-	
-	RWValid
+	//--------------------------------------------------------------------------
 	
 	assign	RWCommandInReady =						~RWCommandFull;
 	AESSeedFIFO rw_I_fifo(	.rst(					SlowReset),
-							.wr_clk(				SlowClock), 
-							.rd_clk(				FastClock), 
+							.wr_clk(				SlowClock),
+							.rd_clk(				FastClock),
 							.din(					{RWIVIn, RWBIDIn}), 
 							.wr_en(					RWCommandInValid),
-							.full(					RWCommandFull), 						
-							.rd_en(					), 
-							.dout(					), 
-							.valid(					));							
+							.full(					RWCommandFull),
+							.dout(					{RWIV_Fifo, RWBID_Fifo}),
+							.rd_en(					RWReady_Fifo),
+							.valid(					RWValid_Fifo));
 	
-	Counter		#(			.Width(					)) Initial
-				rw_cid(		.Clock(					),
-							.Reset(					),
+	FIFORegister #(			.Width(					IVEntropyWidth + BIDWidth),
+							.Initial(				0),
+							.InitialValid(			0))
+				rw_state(	.Clock(					FastClock),
+							.Reset(					1'b0),
+							.InData(				{RWIV_Fifo, RWBID_Fifo}),
+							.InValid(				RWValid_Fifo),
+							.InAccept(				RWReady_Fifo),
+							.OutData(				{RWIV, RWBID}),
+							.OutSend(				RWValid),
+							.OutReady(				RWReady));	
+	
+	assign	RWSend =								~ROValid & RWValid;
+	assign	RWReady =								RWDataCID_Terminal;
+	
+	Counter		#(			.Width(					CIDWidth),
+							.Initial(				0))
+				rw_cid(		.Clock(					FastClock),
+							.Reset(					RWReady),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				),
-							.In(					{{1'bx}}),
-							.Count(					));
-	CountCompare #(			.Width(					),
-							.Compare(				))
-				rw_stop(	.Count(					),
-							.TerminalCount(			));
+							.Enable(				RWSend),
+							.In(					{CIDWidth{1'bx}}),
+							.Count(					RWCID));		
+	CountCompare #(			.Width(					CIDWidth),
+							.Compare(				RWBkt_AESChunks))
+				rw_stop(	.Count(					RWCID),
+							.TerminalCount(			RWDataCID_Terminal));
+	
+	assign	RWSeed =								{{SeedSpaceRemaining{1'b0}}, RWIV, RWBID, RWCID};	
 	
 	//--------------------------------------------------------------------------
 	//	Tiny AES Core
@@ -268,9 +327,9 @@ module REWAESCore(
 							.Enable(				CommandOutIsRW),
 							.Done(					MaskFIFODataInValid));	
 	
-	ShiftRegister #(		.PWidth(				RWWidth),
+	ShiftRegister #(		.PWidth(				MWidth),
 							.SWidth(				AESWidth),
-							.Initial(				{RWWidth{1'b0}})
+							.Initial(				{MWidth{1'b0}})
 				rw_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
