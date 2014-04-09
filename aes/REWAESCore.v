@@ -9,10 +9,17 @@
 //	Module:		REWAESCore
 //	Desc:		Control wrapper for Tiny AES in an REW ORAM design.
 //				Input: RO/RW mask commands (in separate buffers).
+//
+//				Input Notes:
+//					- RO will always decrypt _bucket_ of interest instead of 
+//					  just the block.  This simplifies the HW a bit and also we 
+//					  have some spare bandwidth, might as well use it.
+//
 //				Output: RO/RW masks (in order and in separate buffers).
 //				
-//				RW Output buffer: stores masks in DDRDWidth chunks; header masks 
-//				always come first
+//				Output Notes:
+//					- RW Output buffer: stores masks in DDRDWidth chunks; header 
+//					  masks always come first
 //
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300 Mhz).
@@ -231,20 +238,13 @@ module REWAESCore(
 							.In(					{CIDWidth{1'bx}}),
 							.Count(					ROCID));		
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				ROHeader_AESChunks))
+							.Compare(				ROHeader_AESChunks - 1))
 				ro_H_stop(	.Count(					ROCID),
 							.TerminalCount(			ROHeaderCID_Terminal));
-	generate if (EnableIV) begin:DECRYPT_BKT				// TODO bug: we need to decrypt the RW header (i.e., the Ls as well) ?  Well, only if we need to decrypt the whole bucket
-		CountCompare #(		.Width(					CIDWidth),
-							.Compare(				RWBkt_AESChunks))
+	CountCompare #(			.Width(					CIDWidth),
+							.Compare(				RWHeader_AESChunks + RWBkt_AESChunks - 1))
 				ro_D_stop(	.Count(					ROCID),
 							.TerminalCount(			RODataCID_Terminal));			
-	end else begin:DECRYPT_BLK
-		CountCompare #(		.Width(					CIDWidth),
-							.Compare(				RWBlk_AESChunks))
-				ro_D_stop(	.Count(					ROCID),
-							.TerminalCount(			RODataCID_Terminal));								
-	end endgenerate
 	
 	assign	ROSeed =								{{SeedSpaceRemaining{1'b0}}, ROIV, ROBID, ROCID};
 	
@@ -321,6 +321,25 @@ module REWAESCore(
 	assign	CommandOutIsRO =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] != CMD_RWData[ACMDRWBit];
 	
 	//--------------------------------------------------------------------------
+	//	RO Output Interface
+	//--------------------------------------------------------------------------
+	
+	// Note: we use a single FIFO for all RO stuff (header masks, data of 
+	// interest) so save on the routing / area cost of a second FIFO.  Adding 
+	// the command bit here adds 0 additional logic since we just use the BRAM 
+	// ECC bits.
+
+	AESROFIFO 	ro_O_fifo(	.rst(					SlowReset),
+							.wr_clk(				FastClock), 
+							.rd_clk(				SlowClock), 
+							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
+							.wr_en(					CommandOutIsRO),
+							.full(					ROFIFOFull),
+							.dout(					{RODataOut,		ROCommandOut}),
+							.rd_en(					RODataOutReady),  
+							.valid(					RODataOutValid));	
+	
+	//--------------------------------------------------------------------------
 	//	RW Output Interface
 	//--------------------------------------------------------------------------
 	
@@ -349,13 +368,13 @@ module REWAESCore(
 							.Count(					MaskShiftCount));
 	CountCompare #(			.Width(					BAWidth),
 							.Compare(				RWHeader_AESChunks))
-				rw_O_hdr(	.Count(					MaskShiftCount),
+				rw_H_stop(	.Count(					MaskShiftCount),
 							.TerminalCount(			MaskFIFOHeaderMaskValid));							
 	CountCompare #(			.Width(					BAWidth),
 							.Compare(				RWBlk_AESChunks))
-				rw_O_data(	.Count(					MaskShiftCount),
+				rw_D_stop(	.Count(					MaskShiftCount),
 							.TerminalCount(			MaskFIFODataMaskValid));
-	Register #(				.Width(					1),
+	Register #(				.Width(					1), // state machine to switch modes
 							.Initial(				0))
 				rw_hdr_chk(	.Clock(					FastClock),
 							.Reset(					RWBucketWritten),
@@ -385,25 +404,6 @@ module REWAESCore(
 							.dout(					RWDataOut),
 							.rd_en(					RWDataOutReady),
 							.valid(					RWDataOutValid));
-	
-	//--------------------------------------------------------------------------
-	//	RO Output Interface
-	//--------------------------------------------------------------------------
-	
-	// Note: we use a single FIFO for all RO stuff (header masks, data of 
-	// interest) so save on the routing / area cost of a second FIFO.  Adding 
-	// the command bit here adds 0 additional logic since we just use the BRAM 
-	// ECC bits.
-
-	AESROFIFO 	ro_O_fifo(	.rst(					SlowReset),
-							.wr_clk(				FastClock), 
-							.rd_clk(				SlowClock), 
-							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
-							.wr_en(					CommandOutIsRO),
-							.full(					ROFIFOFull),
-							.dout(					{RODataOut,		ROCommandOut}),
-							.rd_en(					RODataOutReady),  
-							.valid(					RODataOutValid));
 
 	//--------------------------------------------------------------------------
 endmodule
