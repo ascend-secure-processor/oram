@@ -1,9 +1,9 @@
 
 	localparam				ROHeader_AESChunks =	`divceil(BktHSize_ValidBits + ORAMZ * ORAMU, AESWidth), // # AES chunks per bucket for RO IV
-							RWBkt_AESChunks =		BktSize_DRBursts * `divceil(DDRDWidth, AESWidth) - ROHeader_AESChunks, // # AES chunks per bucket for Gentry IV
+							RWBlk_AESChunks =		`divceil(ORAMB, AESWidth),
+							RWBkt_AESChunks =		`divceil(BktSize_RndBits, AESWidth) - ROHeader_AESChunks, // # AES chunks per bucket for Gentry IV
 							RWPath_AESChunks =		RWBkt_AESChunks * (ORAML + 1),
-							ROCIDWidth =			`log2(ROHeader_AESChunks),
-							RWCIDWidth =			`log2(RWBkt_AESChunks),
+							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWBkt_AESChunks)),
 							BIDWidth =				ORAML + 2, // Bucket ID width; matching AddrGen
 							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
 							
@@ -15,6 +15,7 @@
 							PCMD_ROData =			1'b1;							
 			
 	// Inner command encodings.  Only REWAESCore needs these.
+	// NOTE: If you change the encoding, make sure to change ACMDROBit, ACMDRWBit as well!
 	localparam				ACCMDWidth =			2,
 							ACMDROBit =				0, // Bit position that distinguishes RO commands
 							ACMDRWBit =				1, // Bit position that distinguishes RO from RW accesses

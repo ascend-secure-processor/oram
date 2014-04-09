@@ -11,9 +11,6 @@
 //				Input: RO/RW mask commands (in separate buffers).
 //				Output: RO/RW masks (in order and in separate buffers).
 //				
-//				We split the input buffers so RW commands don't head of line 
-//				block RO commands.  We split the output buffers because RW masks 
-//				are on a different datapath relative to RO headers.
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300 Mhz).
 //
@@ -26,8 +23,8 @@ module REWAESCore(
 	SlowClock, FastClock, 
 	SlowReset,
 
-	ROCommandIn, ROCommandInValid, ROCommandInReady,
-	RWCommandIn, RWCommandInValid, RWCommandInReady,
+	ROIVIn, ROBIDIn, ROCommandIn, ROCommandInValid, ROCommandInReady,
+	RWIVIn, RWBIDIn, RWCommandInValid, RWCommandInReady,
 	
 	RODataOut, ROCommandOut, RODataOutValid, RODataOutReady,
 	RWDataOut, RWDataOutValid, RWDataOutReady
@@ -41,13 +38,15 @@ module REWAESCore(
 
 	`include "REWAESLocal.vh"
 	
+	pass: EnableIV
+	
 	parameter				ROWidth =				128, // Width of RO input/output interface
 							RWWidth =				512, // "" RW interface (should match DDRDWidth)
 							BIDWidth =				34, // BucketID field width
 							CIDWidth =				5, // ChunkID field width
 							AESWidth =				128;	
 	
-	localparam				AESLat =				21; // based on tiny_aes + external buffer we add
+	localparam				AESLatency =			21; // based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -56,24 +55,33 @@ module REWAESCore(
   	input 					SlowClock, FastClock, SlowReset;
 	
 	//--------------------------------------------------------------------------
-	//	Data Interfaces
+	//	Input Interfaces
 	//--------------------------------------------------------------------------
 
-
-	
+	//--------------------------------------------------------------------------
+	//	Output Interfaces
 	//--------------------------------------------------------------------------
 
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 	
-	wire					CoreDataInValid, CoreDataOutValid;
+	// RO input interface
 	
-	wire	[DWidth-1:0]	CoreDataIn, CoreDataOut;
+	// RW input interface
+	
+	// AES core
 	
 	wire	[AESUWidth-1:0]	CoreKey;
+		
+	wire	[DWidth-1:0]	CoreDataIn, CoreDataOut;
+	wire					CoreDataInValid, CoreDataOutValid;
+	
+	wire	[ACCMDWidth-1:0] CoreCommandIn, CoreCommandOut;
 	
 	// Output interfaces
+	
+	wire					CommandOutIsRO, CommandOutIsRW;
 	
 	wire	[RWWidth-1:0]	MaskFIFODataIn;
 	wire					MaskFIFODataInValid, MaskFIFOFull;
@@ -85,12 +93,22 @@ module REWAESCore(
 	//--------------------------------------------------------------------------
 		
 	`ifdef SIMULATION
-	
 		initial begin
+			if ((IVEntropyWidth + BIDWidth + PCCMDWidth) > 108) begin
+				$display("[%m @ %t] ERROR: Data is too wide for ro_I_fifo.", $time);
+				$stop;
+			end
+			
+			if ((AESWidth + PCCMDWidth) > 144) begin
+				$display("[%m @ %t] ERROR: Data is too wide for ro_O_fifo.", $time);
+				$stop;
+			end
+			
 			if (AESWidth != 128) begin
 				$display("[%m @ %t] ERROR: width not supported.", $time);
 				$stop;
 			end
+			
 			if (RWWidth != 512) begin
 				$display("[%m @ %t] ERROR: you need to re-generate the REWMaskFIFO to change this width.", $time);
 				$stop;
@@ -107,7 +125,6 @@ module REWAESCore(
 				$display("[%m @ %t] ERROR: AES RW out fifo overflow.", $time);
 				$stop;
 			end			
-
 		end
 	`endif
 	
@@ -122,37 +139,83 @@ module REWAESCore(
 	//	RO Input Interface
 	//--------------------------------------------------------------------------
 
-	ROCommandFull
+	// Note: We split the input buffers so RW commands don't head of line block
+	// RO commands.  
 	
 	assign	ROCommandInReady =						~ROCommandFull;
-	AESFIFO ro_I_fifo(		.rst(					SlowReset),
+	AESSeedFIFO ro_I_fifo(	.rst(					SlowReset),
 							.wr_clk(				SlowClock), 
 							.rd_clk(				FastClock), 
-							.din(					ROCommandIn), 
+							.din(					{ROIVIn, 	ROBIDIn, 	ROCommandIn}), 
 							.wr_en(					ROCommandInValid),
 							.full(					ROCommandFull), 							
-							.rd_en(					), 
-							.dout(					), 
-							.valid(					));
+							.dout(					{ROIV_Fifo, ROBID_Fifo, ROCommand_Fifo}), 
+							.rd_en(					ROReady_Fifo), 
+							.valid(					ROValid_Fifo));
 
+	FIFORegister #(			.Width(					IVEntropyWidth + BIDWidth + PCCMDWidth),
+							.Initial(				0),
+							.InitialValid(			0))
+				ro_state(	.Clock(					FastClock),
+							.Reset(					1'b0),
+							.InData(				{ROIV_Fifo, ROBID_Fifo, ROCommand_Fifo}),
+							.InValid(				ROValid_Fifo),
+							.InAccept(				ROReady_Fifo),
+							.OutData(				{ROIV, ROBID, ROCommand}),
+							.OutSend(				ROValid),
+							.OutReady(				ROReady));
+							
+	assign	ROReady =								(ROCommand == PCMD_ROHeader) ? ROHeaderCID_Terminal : RODataCID_Terminal;
+							
+	Counter		#(			.Width(					CIDWidth),
+							.Initial(				0))
+				ro_cid(		.Clock(					FastClock),
+							.Reset(					ROReady),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				ROValid),
+							.In(					{CIDWidth{1'bx}}),
+							.Count(					ROCID));		
+	CountCompare #(			.Width(					CIDWidth),
+							.Compare(				ROHeader_AESChunks))
+				ro_H_stop(	.Count(					ROCID),
+							.TerminalCount(			ROHeaderCID_Terminal));
+	generate if (EnableIV) begin:DECRYPT_BKT				
+		CountCompare #(		.Width(					CIDWidth),
+							.Compare(				RWBkt_AESChunks))
+				ro_D_stop(	.Count(					ROCID),
+							.TerminalCount(			RODataCID_Terminal));			
+	end else begin:DECRYPT_BLK
+		CountCompare #(		.Width(					CIDWidth),
+							.Compare(				RWBlk_AESChunks))
+				ro_D_stop(	.Count(					ROCID),
+							.TerminalCount(			RODataCID_Terminal));								
+	end endgenerate
+	
+	assign	ROSeed =								{{SeedSpaceRemaining{1'b0}}, ROIV, ROBID, ROCID};
+	
 	//--------------------------------------------------------------------------
 	//	RW Input Interface
-	//--------------------------------------------------------------------------
+	//--------------------------------------------------------------------------	
+	
+	RWSeed
 	
 	RWCommandFull
 	
+	RWValid
+	
 	assign	RWCommandInReady =						~RWCommandFull;
-	AESFIFO rw_I_fifo(		.rst(					SlowReset),
+	AESSeedFIFO rw_I_fifo(	.rst(					SlowReset),
 							.wr_clk(				SlowClock), 
 							.rd_clk(				FastClock), 
-							.din(					RWCommandIn), 
+							.din(					{RWIVIn, RWBIDIn}), 
 							.wr_en(					RWCommandInValid),
-							.full(					RWCommandFull), 							
+							.full(					RWCommandFull), 						
 							.rd_en(					), 
 							.dout(					), 
 							.valid(					));							
 	
-	Counter		#(			.Width(					))
+	Counter		#(			.Width(					)) Initial
 				rw_cid(		.Clock(					),
 							.Reset(					),
 							.Set(					1'b0),
@@ -169,23 +232,18 @@ module REWAESCore(
 	//	Tiny AES Core
 	//--------------------------------------------------------------------------
 	
-	CoreCommandIn, CoreCommandOut
-	
-	CommandOutIsRO
-	CommandOutIsRW
-	
-	assign	CoreDataIn
-	assign	CoreDataInValid = 
-	assign	CoreCommandIn =
+	assign	CoreDataIn =							(ROValid) ? ROSeed : RWSeed;
+	assign	CoreDataInValid = 						ROValid | RWValid;
+	assign	CoreCommandIn =							(ROValid) ? {1'b0, ROCommand} : CMD_RWData;
 	
 	aes_128 tiny_aes(		.clk(					FastClock),
 							.state(					CoreDataIn), 
 							.key(					CoreKey), 
 							.out(					CoreDataOut));
 							
-	ShiftRegister #(		.PWidth(				AESLat),
+	ShiftRegister #(		.PWidth(				AESLatency),
 							.SWidth(				1 + ACCMDWidth),
-							.Initial(				{AESLat{1'b0}})
+							.Initial(				{AESLatency{1'b0}})
 				V_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
@@ -193,7 +251,7 @@ module REWAESCore(
 							.SIn(					{CoreDataInValid, 	CoreCommandIn}),
 							.SOut(					{CoreDataOutValid, 	CoreCommandOut}));						
 	
-	assign	CommandOutIsRW =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] == CMD_RWData[ACMDRWBit]; // not optimal given our encoding, but whatever it's 2 bits
+	assign	CommandOutIsRW =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] == CMD_RWData[ACMDRWBit];
 	assign	CommandOutIsRO =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] != CMD_RWData[ACMDRWBit];
 	
 	//--------------------------------------------------------------------------
@@ -201,7 +259,7 @@ module REWAESCore(
 	//--------------------------------------------------------------------------
 	
 	// Note: we need to shift this in the fast clock domain or there is no point 
-	// in clocking this fast.
+	// in clocking this module fast.
 	
 	CountAlarm #(			.Threshold(				BlkSize_AESChunks),
 							.Initial(				0))
