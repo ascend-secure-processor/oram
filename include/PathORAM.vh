@@ -16,4 +16,4 @@
 
 					EnableREW =			0, // Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 
-                    EnableIV =          0
+                    EnableIV =          0 // TODO rename either EnableIV or IVEntropyWidth

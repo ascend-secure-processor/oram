@@ -38,14 +38,8 @@ module REWAESCore(
 
 	`include "REWAESLocal.vh"
 	
-	pass: EnableIV
-	
-	parameter				MWidth =				512, // "" RW interface (should match DDRDWidth)
-							BIDWidth =				34, // BucketID field width
-							CIDWidth =				5, // ChunkID field width
-							AESWidth =				128;	
-	
-	localparam				AESLatency =			21; // based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
+	// based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
+	localparam				AESLatency =			21;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -77,7 +71,7 @@ module REWAESCore(
 	output					RODataOutValid;
 	input					RODataOutReady;
 	
-	output	[MWidth-1:0]	RWDataOut;
+	output	[DDRDWidth-1:0]	RWDataOut;
 	output					RWDataOutValid;
 	input					RWDataOutReady;
 	
@@ -129,7 +123,7 @@ module REWAESCore(
 	
 	wire					CommandOutIsRO, CommandOutIsRW;
 	
-	wire	[MWidth-1:0]	MaskFIFODataIn;
+	wire	[DDRDWidth-1:0]	MaskFIFODataIn;
 	wire					MaskFIFODataInValid, MaskFIFOFull;
 	
 	wire					ROFIFOFull;
@@ -155,7 +149,7 @@ module REWAESCore(
 				$stop;
 			end
 			
-			if (MWidth != 512) begin
+			if (DDRDWidth != 512) begin
 				$display("[%m @ %t] ERROR: you need to re-generate the REWMaskFIFO to change this width.", $time);
 				$stop;
 			end
@@ -327,9 +321,9 @@ module REWAESCore(
 							.Enable(				CommandOutIsRW),
 							.Done(					MaskFIFODataInValid));	
 	
-	ShiftRegister #(		.PWidth(				MWidth),
+	ShiftRegister #(		.PWidth(				DDRDWidth),
 							.SWidth(				AESWidth),
-							.Initial(				{MWidth{1'b0}})
+							.Initial(				{DDRDWidth{1'b0}})
 				rw_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
