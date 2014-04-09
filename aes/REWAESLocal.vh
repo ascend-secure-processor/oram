@@ -1,7 +1,9 @@
 
 	localparam				ROHeader_AESChunks =	`divceil(BktHSize_ValidBits + ORAMZ * ORAMU, AESWidth), // # AES chunks per bucket for RO IV
+							RWHeader_AESChunks =	`divceil(ORAMZ * ORAML, AESWidth),
 							RWBlk_AESChunks =		`divceil(ORAMB, AESWidth),
-							RWBkt_AESChunks =		`divceil(BktSize_RndBits, AESWidth) - ROHeader_AESChunks, // # AES chunks per bucket for Gentry IV
+							RWBkt_AESChunks =		ORAMZ * RWBlk_AESChunks, // # AES chunks per bucket for Gentry IV
+							RWBkt_MaskChunks =		`divceil(RWBkt_AESChunks + RWHeader_AESChunks, RWBlk_AESChunks), // # mask FIFO commits per bucket
 							RWPath_AESChunks =		RWBkt_AESChunks * (ORAML + 1),
 							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWBkt_AESChunks)),
 							BIDWidth =				ORAML + 2, // Bucket ID width; matching AddrGen

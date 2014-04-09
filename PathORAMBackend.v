@@ -895,12 +895,12 @@ module PathORAMBackend(
 
 	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
 													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
-	// count the 
-	CountAlarm  #(  	.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
-		out_bkt_cnt(	.Clock(					Clock),
-						.Reset(					Reset),
-						.Enable(				BucketWritebackValid & DRAMWriteDataReady),
-						.Count(					BucketWritebackCtr));
+
+	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+			out_bkt_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
+							.Count(					BucketWritebackCtr));
 													
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete

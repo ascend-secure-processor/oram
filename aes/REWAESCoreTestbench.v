@@ -70,36 +70,31 @@ module	REWAESCoreTestbench;
 	//--------------------------------------------------------------------------
 	//	Tasks	
 	//--------------------------------------------------------------------------
-/*
-	task TASK_QueueROCommand;
 
+	task TASK_QueueRWCommand;
+		input		[IVEntropyWidth-1:0] RWIVIn_Param;
+		input		[BIDWidth-1:0] RWBIDIn_Param;
 		begin
-			if (Command == CMD_Push | Command == CMD_Overwrite)
-				InValid = 1'b1;
-			else
-				InValid = 1'b0;
-
-			InCommandValid = 1'b1;
-
-			InPAddr = PAddr;
-			InLeaf = Leaf;
-			InSAddr = SAddr;
-			InCommand = Command;
+			RWCommandInValid = 1'b1;
 		
-			while (~InCommandReady) #(Cycle);
+			RWIVIn = RWIVIn_Param;
+			RWBIDIn = RWBIDIn_Param;
+			
+			while (~RWCommandInReady) #(Cycle);
 			#(Cycle);
 
-			InValid = 1'b0;
-			InCommandValid = 1'b0;
+			RWCommandInValid = 1'b0;
 		end
 	endtask
-*/
 	
 	//--------------------------------------------------------------------------
-	//	Test Stimulus	
+	//	Test Stimulus
 	//--------------------------------------------------------------------------
 
 	initial begin
+		RODataOutReady = 1'b1;
+		RWDataOutReady = 1'b1;	
+	
 		Reset = 1'b1;
 	
 		ROCommandInValid = 1'b0;
@@ -112,8 +107,9 @@ module	REWAESCoreTestbench;
 		$display("\n[%m @ %t] Test 1\n", $time);
 		
 		// fill leaf bucket
-		//TASK_QueueCommand(32'hf0000000, 32'h0000ffff, 1'bx, CMD_Push);
-
+		TASK_QueueRWCommand(64'hba5eba11deadbeef, 1);
+		TASK_QueueRWCommand(64'heeeeeeeeffffffff, 0);
+		
 		#(Cycle*1000); // whatever
 	
 		$stop;

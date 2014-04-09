@@ -11,6 +11,9 @@
 //				Input: RO/RW mask commands (in separate buffers).
 //				Output: RO/RW masks (in order and in separate buffers).
 //				
+//				RW Output buffer: stores masks in DDRDWidth chunks; header masks 
+//				always come first
+//
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300 Mhz).
 //
@@ -44,6 +47,8 @@ module REWAESCore(
 	
 	// based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
 	localparam				AESLatency =			21;
+	
+	localparam				BAWidth =				`max(`log2(RWHeader_AESChunks), `log2(RWBlk_AESChunks)) + 1;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -126,6 +131,10 @@ module REWAESCore(
 	// Output interfaces
 	
 	wire					CommandOutIsRO, CommandOutIsRW;
+	
+	wire					RWHeaderWritten, RWBucketWritten;	
+	wire	[BAWidth-1:0]	MaskShiftCount;
+	wire 					MaskFIFODataMaskValid, MaskFIFOHeaderMaskValid;		
 	
 	wire	[DDRDWidth-1:0]	MaskFIFODataIn;
 	wire					MaskFIFODataInValid, MaskFIFOFull;
@@ -225,7 +234,7 @@ module REWAESCore(
 							.Compare(				ROHeader_AESChunks))
 				ro_H_stop(	.Count(					ROCID),
 							.TerminalCount(			ROHeaderCID_Terminal));
-	generate if (EnableIV) begin:DECRYPT_BKT				
+	generate if (EnableIV) begin:DECRYPT_BKT				// TODO bug: we need to decrypt the RW header (i.e., the Ls as well) ?  Well, only if we need to decrypt the whole bucket
 		CountCompare #(		.Width(					CIDWidth),
 							.Compare(				RWBkt_AESChunks))
 				ro_D_stop(	.Count(					ROCID),
@@ -279,7 +288,7 @@ module REWAESCore(
 							.In(					{CIDWidth{1'bx}}),
 							.Count(					RWCID));		
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				RWBkt_AESChunks))
+							.Compare(				RWHeader_AESChunks + RWBkt_AESChunks - 1))
 				rw_stop(	.Count(					RWCID),
 							.TerminalCount(			RWDataCID_Terminal));
 	
@@ -298,7 +307,7 @@ module REWAESCore(
 							.key(					CoreKey), 
 							.out(					CoreDataOut));
 							
-	ShiftRegister #(		.PWidth(				AESLatency),
+	ShiftRegister #(		.PWidth(				AESLatency * (1 + ACCMDWidth)),
 							.SWidth(				1 + ACCMDWidth),
 							.Initial(				{AESLatency{1'b0}}))
 				V_shift(	.Clock(					FastClock), 
@@ -318,12 +327,44 @@ module REWAESCore(
 	// Note: we need to shift this in the fast clock domain or there is no point 
 	// in clocking this module fast.
 	
-	CountAlarm #(			.Threshold(				BlkSize_AESChunks),
+	// This logic is more complicated because we need to shift H header chunks 
+	// in, and then shift Z*P (P > H) payload chunks in.  So the shift counting 
+	// is like 0 1 0 1 2 3 0 1 2 3, etc.
+	
+	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.Initial(				0))
-				rw_shft_cnt(.Clock(					FastClock), 
+				rw_bkt_done(.Clock(					FastClock), 
 							.Reset(					1'b0), 
+							.Enable(				MaskFIFODataInValid),
+							.Done(					RWBucketWritten));
+
+	Counter		#(			.Width(					BAWidth),
+							.Initial(				0))
+				rw_O_cnt(	.Clock(					FastClock),
+							.Reset(					MaskFIFODataInValid & ~CommandOutIsRW),
+							.Set(					1'b0),
+							.Load(					MaskFIFODataInValid & CommandOutIsRW),
 							.Enable(				CommandOutIsRW),
-							.Done(					MaskFIFODataInValid));	
+							.In(					{{BAWidth-1{1'b0}}, 1'b1}),
+							.Count(					MaskShiftCount));
+	CountCompare #(			.Width(					BAWidth),
+							.Compare(				RWHeader_AESChunks))
+				rw_O_hdr(	.Count(					MaskShiftCount),
+							.TerminalCount(			MaskFIFOHeaderMaskValid));							
+	CountCompare #(			.Width(					BAWidth),
+							.Compare(				RWBlk_AESChunks))
+				rw_O_data(	.Count(					MaskShiftCount),
+							.TerminalCount(			MaskFIFODataMaskValid));
+	Register #(				.Width(					1),
+							.Initial(				0))
+				rw_hdr_chk(	.Clock(					FastClock),
+							.Reset(					RWBucketWritten),
+							.Set(					MaskFIFOHeaderMaskValid),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					RWHeaderWritten));							
+
+	assign	MaskFIFODataInValid =					(~RWHeaderWritten & MaskFIFOHeaderMaskValid) | MaskFIFODataMaskValid;
 	
 	ShiftRegister #(		.PWidth(				DDRDWidth),
 							.SWidth(				AESWidth),
