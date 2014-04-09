@@ -35,7 +35,8 @@ module AESPathORAM(
 	localparam				W = 					DDRDWidth / AESWidth;
 	localparam 				D = 					AESDelay;
 
-	localparam 				FIFO_D = 				D;
+	localparam 				FIFO_D = 				D,
+							AESDelay =				12;
 
 	localparam 				PATH_READ = 			1;
 	localparam 				PATH_WRITE = 			0;

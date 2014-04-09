@@ -34,8 +34,12 @@ module REWAESCore(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
-	`include "REWAES.vh";
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
 
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
 	
 	// based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
@@ -112,9 +116,9 @@ module REWAESCore(
 	
 	// AES core
 	
-	wire	[AESUWidth-1:0]	CoreKey;
+	wire	[AESWidth-1:0]	CoreKey;
 		
-	wire	[DWidth-1:0]	CoreDataIn, CoreDataOut;
+	wire	[AESWidth-1:0]	CoreDataIn, CoreDataOut;
 	wire					CoreDataInValid, CoreDataOutValid;
 	
 	wire	[ACCMDWidth-1:0] CoreCommandIn, CoreCommandOut;
@@ -173,7 +177,7 @@ module REWAESCore(
 	//--------------------------------------------------------------------------
 	
 	// TODO: Set it to something dynamic [this is actually important to get correct area numbers ...]
-	assign	CoreKey =								{AESUWidth{1'b1}}; 
+	assign	CoreKey =								{AESWidth{1'b1}}; 
 	
 	//--------------------------------------------------------------------------
 	//	RO Input Interface
@@ -296,7 +300,7 @@ module REWAESCore(
 							
 	ShiftRegister #(		.PWidth(				AESLatency),
 							.SWidth(				1 + ACCMDWidth),
-							.Initial(				{AESLatency{1'b0}})
+							.Initial(				{AESLatency{1'b0}}))
 				V_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
@@ -323,7 +327,7 @@ module REWAESCore(
 	
 	ShiftRegister #(		.PWidth(				DDRDWidth),
 							.SWidth(				AESWidth),
-							.Initial(				{DDRDWidth{1'b0}})
+							.Initial(				{DDRDWidth{1'b0}}))
 				rw_shift(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
@@ -339,7 +343,7 @@ module REWAESCore(
 							.full(					MaskFIFOFull),
 							.dout(					RWDataOut),
 							.rd_en(					RWDataOutReady),
-							.valid(					RWDataOutValid))
+							.valid(					RWDataOutValid));
 	
 	//--------------------------------------------------------------------------
 	//	RO Output Interface

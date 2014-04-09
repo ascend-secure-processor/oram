@@ -23,10 +23,15 @@ module	REWAESCoreTestbench;
 	parameter				DDRDQWidth =				64;
 	parameter				IVEntropyWidth =			64;
 	parameter				AESWidth =					128;
+	parameter				EnableIV =					0;
 	
 	localparam				SlowFreq =					200_000_000,
-							FlowFreq =					300_000_000,
+							FastFreq =					300_000_000,
 							Cycle = 					1000000000/SlowFreq;	
+	
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+	`include "REWAESLocal.vh"
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -35,14 +40,14 @@ module	REWAESCoreTestbench;
 	wire 					Clock, FastClock;
 	reg						Reset;
 	
-	reg	[IVEntropyWidth-1:0] ROIVIn; 
-	reg	[BIDWidth-1:0]		ROBIDIn; 
-	reg	[PCCMDWidth-1:0]	ROCommandIn; 
+	reg		[IVEntropyWidth-1:0] ROIVIn; 
+	reg		[BIDWidth-1:0]	ROBIDIn; 
+	reg		[PCCMDWidth-1:0]ROCommandIn; 
 	reg						ROCommandInValid;
 	wire					ROCommandInReady;
 
-	reg	[IVEntropyWidth-1:0] RWIVIn;
-	reg	[BIDWidth-1:0]		RWBIDIn;
+	reg		[IVEntropyWidth-1:0] RWIVIn;
+	reg		[BIDWidth-1:0]	RWBIDIn;
 	reg						RWCommandInValid; 
 	wire					RWCommandInReady;
 
@@ -88,13 +93,14 @@ module	REWAESCoreTestbench;
 			InCommandValid = 1'b0;
 		end
 	endtask
-	*/
+*/
+	
 	//--------------------------------------------------------------------------
 	//	Test Stimulus	
 	//--------------------------------------------------------------------------
 
 	initial begin
-		SlowReset = 1'b1;
+		Reset = 1'b1;
 	
 		ROCommandInValid = 1'b0;
 		RWCommandInValid = 1'b0;
@@ -124,7 +130,7 @@ module	REWAESCoreTestbench;
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
 							.IVEntropyWidth(		IVEntropyWidth),
-							.AESWidth(				AESWidth))
+							.AESWidth(				AESWidth),
 							.EnableIV(				EnableIV))
 				CUT(		.SlowClock(				Clock),
 							.FastClock(				FastClock), 

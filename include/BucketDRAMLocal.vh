@@ -15,7 +15,7 @@
 	localparam					BktHSize_ValidBits =	`divceil(ORAMZ,8) * 8; // = 8 bits for Z < 9
 	localparam					BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ;
 	localparam					BktHULStart =			IVEntropyWidth + BktHSize_ValidBits; 	// at what position do the U/Ls start?
-	localparam					BktHSize_RawBits = 	BktHULStart + ORAMZ * (ORAMU + ORAML);		// valid bits, addresses, leaf labels	
+	localparam					BktHSize_RawBits = 		BktHULStart + ORAMZ * (ORAMU + ORAML);		// valid bits, addresses, leaf labels	
 	localparam					BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth);
 	localparam					BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth; 			// = 512 for all configs we care about
 	
