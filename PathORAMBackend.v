@@ -11,7 +11,6 @@
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //
 //	TODO
-//		- REW ORAM
 //		- Timing obfuscation
 //==============================================================================
 module PathORAMBackend(
@@ -140,6 +139,9 @@ module PathORAMBackend(
 	
 	wire					AppendComplete, PathReadComplete, PathWritebackComplete;
 	wire					OperationComplete;
+	
+	wire					RWAccess, StartRW, REWRoundComplete;
+	wire	[ORAML-1:0]		GentryLeaf_Pre;	
 	
 	wire	[ORAML-1:0]		DummyLeaf;
 	wire					DummyLeaf_Valid;
@@ -415,12 +417,9 @@ module PathORAMBackend(
 	//	Basic/REW split control logic
 	//--------------------------------------------------------------------------
 	
-	wire				RWAccess, StartRW, REWRoundComplete; // TODO
-	wire	[ORAML-1:0]	GentryLeaf_Pre;
-	
 	generate if (EnableREW) begin:REW_CONTROL
 	
-		initial begin // TODO actually fix this before going back to board !!!
+		initial begin // TODO actually fix this before going back   to board !!!
 			$display("[ERROR] Fix Backend FIFOReg buffering bug");
 			//$stop;
 		end
