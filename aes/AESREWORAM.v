@@ -32,7 +32,7 @@ module AESREWORAM(
 	Clock, FastClock, 
 	Reset,
 
-	ROPAddr, ROPAddrValid,
+	ROPAddr, ROAccess,
 	
 	BEDataOut, BEDataOutValid, BEDataOutReady,
 	BEDataIn, BEDataInValid, BEDataInReady,	
@@ -76,11 +76,30 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------	
 	
 	//--------------------------------------------------------------------------
-
-	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
+	// AES Core
+	
+	wire		[IVEntropyWidth-1:0] ROIVIn; 
+	wire		[BIDWidth-1:0] ROBIDIn; 
+	wire		[PCCMDWidth-1:0]ROCommandIn; 
+	wire					ROCommandInValid;
+	wire					ROCommandInReady;
+
+	wire		[IVEntropyWidth-1:0] RWIVIn;
+	wire		[BIDWidth-1:0] RWBIDIn;
+	wire					RWCommandInValid; 
+	wire					RWCommandInReady;
+
+	wire	[AESWidth-1:0]	RODataOut; 
+	wire	[PCCMDWidth-1:0] ROCommandOut;
+	wire					RODataOutValid;
+	wire					RODataOutReady;
+	
+	wire	[DDRDWidth-1:0]	RWDataOut;
+	wire					RWDataOutValid;
+	wire					RWDataOutReady;	
 	
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
@@ -172,142 +191,68 @@ module AESREWORAM(
 	assign	ROSeed =								{ {SeedSpaceRemaining{1'b0}}, ROIV, ROBucketID, ROChunkID };
 	
 	//--------------------------------------------------------------------------
-	//	RW Seed Generation
+	//	RW Seed/Command Generation
 	//--------------------------------------------------------------------------
 
-	BuildingWritePath
+	// TODO move
+	wire	BuildingWritePath, RWPathTransition;
+	wire	RWCommandTransfer;
 	
-	localparam				RWSTWidth =				2,
-							RWST_Idle =				2'd0, // 
-							RWST_ReadPath =			2'd1, // Generating R masks
-							RWST_WritePath =		2'd2; // Generating W masks
-							
-	StartMaskGeneration
+	Register	#(			.Width(					1))
+				rw_state(	.Clock(					Clock),
+							.Reset(					Reset | (BuildingWritePath & RWPathTransition)),
+							.Set(					~BuildingWritePath & RWPathTransition),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					BuildingWritePath));	
 	
-	RWIV
-	RWBucketID
-	RWChunkID
-
-	RWBucketTransition
-	RWPathTransition
-	
-	NSRW, CSRW
-	
-	always @(posedge Clock) begin
-		if (Reset) CSRW <= 							RWST_Idle;
-		else CSRW <= 								NSRW;
-	end
-	
-	always @( * ) begin
-		NSRW = 										CSRW;
-		case (CSRW)
-			RWST_Idle : 
-				if (StartMaskGeneration) 
-					NSRW =						 	RWST_ReadPath;
-			RWST_ReadPath :
-				if (RWPathTransition)
-					NSRW =						 	RWST_WritePath;
-			RWST_WritePath :
-				if (RWPathTransition)
-					NSRW =						 	RWST_Idle;			
-		endcase
-	end
-
-	RWSeedTransfer
-	RWMaskTransfer
-	MaskCount
-	
-	assign	RWSeedTransfer =						RWSeedValid & RWSeedReady;
-	
-	UDCounter	#(			.Width(					RWMWidth))
-				mask_count(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Up(					RWSeedTransfer),
-							.Down(					RWMaskTransfer),
-							.In(					{RWMWidth{1'bx}}),
-							.Count(					MaskCount));	
-	
-	CountAlarm #(			.Threshold(				ORAML + 1),
-							.IThreshold(			0))
+	CountAlarm #(			.Threshold(				ORAML + 1))
 				rw_lvl_cnt(	.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				RWBucketTransition),
+							.Enable(				RWCommandTransfer),
 							.Done(					RWPathTransition));
 	
-	assign	RWIV =									0; // TODO add Gentry seed calculation
+	assign	Core_RWIVIn =							0; // TODO add Gentry seed calculation
 	
-	assign	RWBucketID =							0; // TODO add AddrGen
+	assign	Core_RWBIDIn =							0; // TODO add AddrGen
 	
-	Counter		#(			.Width(					RWCIDWidth))
-				rw_cid(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				RWSeedTransfer),
-							.In(					{RWCIDWidth{1'bx}}),
-							.Count(					RWChunkID));
-	CountCompare #(			.Width(					RWCIDWidth),
-							.Compare(				ROHeader_AESChunks ... 1))
-				rw_stop(	.Count(					RWChunkID),
-							.TerminalCount(			RWBucketTransition));
-	
-	assign	RWSeed =								{ {SeedSpaceRemaining{1'b0}}, RWIV, RWBucketID, RWChunkID };
-	assign	RWSeedValid =							MaskCount < RWMDepth;
+	assign	RWCommandTransfer =						Core_RWCommandInValid & Core_RWCommandInReady
 	
 	//--------------------------------------------------------------------------
-	//	AES
+	//	AES Core
 	//--------------------------------------------------------------------------
 	
-	AESDataIn
-	AESDataInValid
-	AESDataInReady
-	
-	AESDataOut
-	AESDataOutValid
-	AESDataOutReady
-	
-	AESCommand
-	
-	ROSeedReady
-	RWSeedReady
-	
-	assign	ROSeedReady =							AESDataInReady;
-	assign	RWSeedReady =							~ROSeedValid & AESDataInReady;
-	
-	assign	AESDataIn =								(ROSeedValid) ? ROSeed : RWSeed;
-	assign	AESDataInValid =						ROSeedValid | RWSeedValid;
-	
-	assign	AESCommand =							(ROSeedValid) ? CMD_RO : CMD_RW;
-	
-	TinyAESRV 	#(			.NPorts(				1),
+	REWAESCore	#(			.ORAMZ(					ORAMZ),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMB(					ORAMB),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.IVEntropyWidth(		IVEntropyWidth),
 							.AESWidth(				AESWidth))
-				aes(		.SlowClock(				Clock), 		
-							.FastClock(				FastClock),
+				CUT(		.SlowClock(				Clock),
+							.FastClock(				FastClock), 
 							.SlowReset(				Reset),
 
-							.DataIn(				AESDataIn), 
-							.DataInValid(			AESDataInValid), 
-							.DataInReady(			AESDataInReady),
-							.DataOut(				AESDataOut), 
-							.DataOutValid(			AESDataOutValid), 
-							.DataOutReady(			AESDataOutReady));
+							.ROIVIn(				Core_ROIVIn), 
+							.ROBIDIn(				Core_ROBIDIn), 
+							.ROCommandIn(			Core_ROCommandIn), 
+							.ROCommandInValid(		Core_ROCommandInValid), 
+							.ROCommandInReady(		Core_ROCommandInReady),
 							
-	FIFORAM		#(			.Width(					ACMDWidth),
-							.Buffering(				))
-				cmd_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				),
-							.InValid(				AESDataInValid),
-							.InAccept(				),
-							.OutData(				),
-							.OutSend(				),
-							.OutReady(				));
-	
-	OutMask
-	OutMaskValid
-	OutMaskReady
+							.RWIVIn(				Core_RWIVIn), 
+							.RWBIDIn(				Core_RWBIDIn), 
+							.RWCommandInValid(		Core_RWCommandInValid), 
+							.RWCommandInReady(		Core_RWCommandInReady),
+							
+							.RODataOut(				Core_RODataOut), 
+							.ROCommandOut(			Core_ROCommandOut), 
+							.RODataOutValid(		Core_RODataOutValid), 
+							.RODataOutReady(		Core_RODataOutReady),
+							
+							.RWDataOut(				Core_RWDataOut), 
+							.RWDataOutValid(		Core_RWDataOutValid),
+							.RWDataOutReady(		Core_RWDataOutReady));
 	
 	//--------------------------------------------------------------------------
 	//	RO Data storage
@@ -324,21 +269,6 @@ module AESREWORAM(
 							.OutSend(				),
 							.OutReady(				));
 							
-	
-							
-	//--------------------------------------------------------------------------
-	//	RW Mask storage
-	//--------------------------------------------------------------------------
-
-	RWMaskValid
-	RWMaskReady
-	
-	assign	RWMaskTransfer =						RWMaskValid & RWMaskReady;
-	
-	RWDecrypted
-	
-	assign	RWDecrypted =							;
-	
 	//--------------------------------------------------------------------------
 	//	To Backend
 	//--------------------------------------------------------------------------
@@ -349,6 +279,7 @@ module AESREWORAM(
 	
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
+	
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

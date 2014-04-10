@@ -23,7 +23,7 @@ module PathORAMBackend(
 	LoadData, 
 	LoadValid, LoadReady,
 
-	StoreData, 
+	StoreData,
 	StoreValid, StoreReady,
 	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
@@ -933,6 +933,7 @@ module PathORAMBackend(
 	// read path won't be able to proceed until all writes are pushed to ORAM anyway.
 	
 	// Count data written back (identical logic as above)
+	// TODO convert to CountAlarm
 	Counter		#(			.Width(					PthBSTWidth))
 				out_D_cnt(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
