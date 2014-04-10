@@ -5,8 +5,10 @@
 	localparam					StashCapacity =		BlocksOnPath + ORAMC; // including the path ...
 	localparam					SNULL =				StashCapacity; // an invalid stash location
 	localparam					BASEDUMMY =			32'hdeadbeef;
-	localparam					DummyBlockAddress =	(ORAMU > 32) ? { {ORAMU{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAMU-1:0]; // TODO this was replaced by valid bits?
-
+	localparam					DummyBlockAddress =	(ORAMU > 32) ? { {ORAMU{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAMU-1:0];
+	localparam					DummyLeaf =			(ORAML > 32) ? { {ORAML{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAML-1:0];
+	localparam					DummyBlock =		{BEDWidth{1'b0}};
+	
 	localparam					NumChunks =			ORAMB / BEDWidth;
 	localparam					ChnkAWidth =		`log2(NumChunks);
 	localparam					SEAWidth =			`log2(StashCapacity); // Stash entry address width (into header-based memories)

@@ -208,6 +208,7 @@ module StashCore(
 	// Stash memories
 	
 	wire	[ORAMU-1:0]		OutPAddr_Pre;
+	wire	[ORAML-1:0]		OutLeaf_Pre;
 
 	wire	[SEAWidth-1:0] 	InSAddr_Reg, FreeList_Resolved_Reg;
 	wire	[SEAWidth-1:0] 	ScanAddress, PushAddress;
@@ -457,8 +458,6 @@ module StashCore(
 	assign	InCommandComplete =						(CSPushing | CSOverwriting) ? LastChunk_Transfer_Write :
 													(CSPeaking) ? LastChunk_Transfer_Read :
 													(CSHUpdate | CSStartSync);
-													
-	assign	OutData =								StashD_DataOut;
 			
 	assign	InReady =								CSPushing | CSOverwriting;
 	assign 	OutValid = 								CSPeaking;
@@ -634,7 +633,8 @@ module StashCore(
 							.Address(				StashD_Address),
 							.DIn(					InData),
 							.DOut(					StashD_DataOut));
-
+	assign	OutData =								(StashE_Address_Delayed == SNULL) ? DummyBlock : StashD_DataOut;
+		
 	/*
 		Since we always read/write blocks atomically, the offset is a simple 
 		counter.
@@ -669,9 +669,10 @@ module StashCore(
 							.Write(					StashH_WE),
 							.Address(				StashE_Address),
 							.DIn(					{InPAddr, 		InLeaf}),
-							.DOut(					{OutPAddr_Pre, 	OutLeaf}));
-	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress : OutPAddr_Pre;
-
+							.DOut(					{OutPAddr_Pre, 	OutLeaf_Pre}));
+	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress 	: OutPAddr_Pre;
+	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeaf 			: OutLeaf_Pre;
+	
 	//--------------------------------------------------------------------------
 	//	Management
 	//--------------------------------------------------------------------------
