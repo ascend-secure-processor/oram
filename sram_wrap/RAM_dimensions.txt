@@ -1,0 +1,42 @@
+
+Block RAM:
++------------+-------------------------------------------------------------+------------------------+---+---+------------------------+---+---+--------------+--------+--------+-------------------+
+|Module Name | RTL Object                                                  | PORT A (depth X width) | W | R | PORT B (depth X width) | W | R | OUT_REG      | RAMB18 | RAMB36 | Hierarchical Name | 
++------------+-------------------------------------------------------------+------------------------+---+---+------------------------+---+---+--------------+--------+--------+-------------------+
+|RAM         | PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg | 2 K X 32(READ_FIRST)   | W | R |                        |   |   | Port A       | 0      | 2      | RAM/extram__3     | PLB?
+|RAM         | PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg | 128 X 60(READ_FIRST)   | W | R |                        |   |   | Port A       | 2      | 0      | RAM/extram__4     | 
+|RAM         | PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg | 256 X 512(READ_FIRST)  | W | R |                        |   |   | Port A       | 15     | 0      | RAM/extram__7     | Stash data
+|RAM         | PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg | 256 X 63(READ_FIRST)   | W | R |                        |   |   | Port A       | 2      | 0      | RAM/extram__8     | Stash headers
+|RAM         | PORTS_WRITE[1].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg | 256 X 8(READ_FIRST)    | W | R | 256 X 8(READ_FIRST)    | W | R | Port A and B | 1      | 0      | RAM/extram__9     | Stash table output buffer
++------------+-------------------------------------------------------------+------------------------+---+---+------------------------+---+---+--------------+--------+--------+-------------------+
+
+I'd like to get 32nm technology SRAM cells. (I guess this means /u/ibm/ibm_32soi/)
+
+SRAM2SFCMN00256X008D08C128
+SRAM1DFCMN02048X032D04C128
+SRAM1DFCMN00256X064D04C128
+SRAM1DFCMN00256X128D04C128
+SRAM1DFCMN01024X128D04C128
+
+Distributed RAM: 
++-----------------+---------------------------------------------------------------------------------------------------+--------------------+----------------------+----------------------------+---------------------------------+
+|Module Name      | RTL Object                                                                                        | Inference Criteria | Size (depth X width) | Primitives                 | Hierarchical Name               | 
++-----------------+---------------------------------------------------------------------------------------------------+--------------------+----------------------+----------------------------+---------------------------------+
+|AESPathORAM__GC0 | mask_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                           | Implied            | 16 X 64              | RAM32M x 11                | ram__17                         | 
+|AESPathORAM__GC0 | iv_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                             | Implied            | 16 X 64              | RAM32M x 11                | ram__18                         | 
+|AESPathORAM__GC0 | ivdup_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                          | Implied            | 16 X 64              | RAM32M x 11                | ram__19                         | 
+|AESPathORAM__GC0 | data_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                           | Implied            | 16 X 512             | RAM32M x 86                | ram__20                         | 
+|AESPathORAM__GC0 | aesres_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                         | Implied            | 16 X 512             | RAM32M x 86                | ram__21                         | 
+|PathORamTop__GC0 | front_end/in_D_buf/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                  | Implied            | 8 X 64               | RAM32M x 11                | ram__22                         | 
+|PathORamTop__GC0 | front_end/PPP/LeafGen/AESOutBuffer/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg  | Implied            | 2 X 128              | RAM32M x 22                | ram__23                         | 
+|PathORamTop__GC0 | front_end/PPP/PosMap/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.MULTISYNC_READ.Mem_reg                  | Implied            | 4 X 32               | RAM16X1S x 32              | ram__24                         | 
+|PathORamTop__GC0 | front_end/DataScheduler/EvictBuffer/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg | Implied            | 16 X 32              | RAM32M x 6                 | ram__25                         | 
+|PRNG             | AESOutBuffer/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                        | Implied            | 2 X 128              | RAM32M x 22                | PathORAMBackend/PRNG/ram__26    | 
+|PathORAMBackend  | st_buf/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                              | Implied            | 2 X 512              | RAM32M x 86                | PathORAMBackend/ram__27         | was 1 x 512 (X)
+|PathORAMBackend  | ld_buf/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                              | Implied            | 2 X 512              | RAM32M x 86                | PathORAMBackend/ram__28         | was 1 x 512 (X)
+|Stash            | core/StashC/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                             | Implied            | 256 X 1              | RAM256X1S x 1              | PathORAMBackend/Stash/ram__29   | 
+|Stash            | scan_table/st_fifo/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                  | Implied            | 256 X 8              | RAM64X1D x 8  RAM64M x 8   | PathORAMBackend/Stash/ram__30   | 
+|Stash            | out_P_buf/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                           | Implied            | 4 X 512              | RAM32M x 86                | PathORAMBackend/Stash/ram__31   | 
+|Stash            | out_H_buf/RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                           | Implied            | 4 X 63               | RAM32M x 11                | PathORAMBackend/Stash/ram__32   | 
+|FIFORAM          | RAM/PORTS_WRITE[0].WRITABLE.SYNC_WRITE_1.ONESYNC_READ.Mem_reg                                     | Implied            | 8 X 512              | RAM32M x 86                | PathORAMBackend/FIFORAM/ram__33 | was 5 x 512 (X?)
++-----------------+---------------------------------------------------------------------------------------------------+--------------------+----------------------+----------------------------+---------------------------------+

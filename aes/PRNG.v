@@ -52,11 +52,12 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
             .DataOut(AESDataOut),
             .DataOutValid(AESDataOutValid)
             );
-  
+/*  
     wire  					BufferInReady;
     wire [AESWidth-1:0]     BufferOut;
     wire                    BufferOutReady, BufferOutValid;		
-            
+
+	
     FIFORAM #(.Width(AESWidth), .Buffering(2)) 
     AESOutBuffer (  .Clock(Clock), 
                     .Reset(Reset), 
@@ -78,8 +79,47 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
                     .OutValid(RandOutValid), 
                     .OutData(RandOut)
                 );
-    
-    assign SeedValid = BufferInReady && !AESDataOutValid;		
-    	// Generate new random bits if there's space in AESOutBuffer and (TODO) no bits are on the fly;
+				
+	assign SeedValid = BufferInReady && !AESDataOutValid;		
+    	// Generate new random bits if there's space in AESOutBuffer and no bits are on the fly;			
+				
+*/
+
+    wire  					FunnelInReady;
+    wire [RandWidth-1:0]    FunnelOut;
+    wire                    FunnelOutReady, FunnelOutValid;		
+
+	FIFOShiftRound #(.IWidth(AESWidth), .OWidth(RandWidth))
+    AESOutFunnel ( .Clock(			Clock), 
+                    .Reset(			Reset),  
+                    .InAccept(		FunnelInReady), 
+                    .InValid(		AESDataOutValid), 
+                    .InData(		AESDataOut),
+                    .OutReady(		FunnelOutReady), 
+                    .OutValid(		FunnelOutValid), 
+                    .OutData(		FunnelOut)
+                );
+
+
+    FIFORegister #(	.Width(			RandWidth)) 
+    RandOutReg (  	.Clock(			Clock), 
+                    .Reset(			Reset), 
+                    .InAccept(		FunnelOutReady), 
+                    .InValid(		FunnelOutValid), 
+                    .InData(		FunnelOut),                      
+                    .OutReady(		RandOutReady), 
+                    .OutSend(		RandOutValid), 
+                    .OutData(		RandOut)
+                ); 
+                    
+    assign SeedValid = FunnelInReady && !AESDataOutValid;	
+    	// Generate new random bits if there's space in AESOutFunnel and no bits are on the fly;
+		
+	always @(posedge Clock) begin
+		if (!Reset && RandOutReady && !RandOutValid) begin
+			$display("Error : Run out of random bits");
+			$stop;
+		end
+	end
 
 endmodule

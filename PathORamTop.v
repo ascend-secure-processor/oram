@@ -169,8 +169,12 @@ module PathORamTop(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
+							
 							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
+							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -219,31 +223,45 @@ module PathORamTop(
 	CoherenceController #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
 							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth))
+							.DDRAWidth(				DDRAWidth),
+							
+							.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
+							
+							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV))
+							
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
-							
+									
                             .ROPAddr(               ROPAddr),
                             .ROAccess(          	ROAccess),
 							.REWRoundDummy(			REWRoundDummy),
-                            
-							.AESDataIn(				AES_DRAMReadData), 
-							.AESDataInValid(		AES_DRAMReadDataValid), 
-							.AESDataInReady(		AES_DRAMReadDataReady),
+                            .DRAMInitComplete(		DRAMInitComplete),
 							
-							.AESDataOut(			AES_DRAMWriteData), 
-							.AESDataOutValid(		AES_DRAMWriteDataValid), 
-							.AESDataOutReady(		AES_DRAMWriteDataReady),
+							.FromDecData(			AES_DRAMReadData), 
+							.FromDecDataValid(		AES_DRAMReadDataValid), 
+							.FromDecDataReady(		AES_DRAMReadDataReady),
+							
+							.ToEncData(				AES_DRAMWriteData), 
+							.ToEncDataValid(		AES_DRAMWriteDataValid), 
+							.ToEncDataReady(		AES_DRAMWriteDataReady),
 	
 	// 	TODO for integrity verification
 	
-							.BEDataOut(				BE_DRAMReadData),
-							.BEDataOutValid(		BE_DRAMReadDataValid), 
-							.BEDataOutReady(		BE_DRAMReadDataReady),
+							.ToStashData(				BE_DRAMReadData),
+							.ToStashDataValid(			BE_DRAMReadDataValid), 
+							.ToStashDataReady(			BE_DRAMReadDataReady),
 
-							.BEDataIn(				BE_DRAMWriteData), 
-							.BEDataInValid(			BE_DRAMWriteDataValid), 
-							.BEDataInReady(			BE_DRAMWriteDataReady));
+							.FromStashData(			BE_DRAMWriteData), 
+							.FromStashDataValid(		BE_DRAMWriteDataValid), 
+							.FromStashDataReady(		BE_DRAMWriteDataReady));
 							
 	//--------------------------------------------------------------------------
 	//	Integrity Verification
