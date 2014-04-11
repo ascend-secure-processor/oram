@@ -157,15 +157,6 @@ module testUORam;
     localparam   Cycle = 1000000000/Freq;	
     ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
 
-/*
-    initial begin
-        Clock <= 0;    
-        while (1) begin
-            #(Cycle/2);
-            Clock <= ~Clock;
-         end
-    end
-*/
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
     

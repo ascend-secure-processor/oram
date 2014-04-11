@@ -1,8 +1,7 @@
 
 //==============================================================================
 //	Module:		Keccak_WF
-//	Desc:		W keccak units wrapped together
-//				Ready-valid interface on both input and output 
+//	Desc:		A Keccak unit wrapped with ready-valid interface on both input and output 			
 //				Input has a funnel. Hash input has a fixed amount of chunks
 //==============================================================================
 

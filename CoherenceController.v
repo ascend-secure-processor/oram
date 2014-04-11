@@ -33,7 +33,7 @@
 module CoherenceController(
 	Clock, Reset,
 	
-    ROPAddr, ROAccess, REWRoundDummy, DRAMInitComplete,
+    ROPAddr, ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback, DRAMInitComplete,
 
 	FromDecData, FromDecDataValid, FromDecDataReady,
 	ToEncData, ToEncDataValid, ToEncDataReady,
@@ -41,7 +41,7 @@ module CoherenceController(
 	ToStashData, ToStashDataValid, ToStashDataReady,
 	FromStashData, FromStashDataValid, FromStashDataReady,
 	
-	IVStart, IVDone, IVPathSelect,
+	IVStart, IVDone,
 	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV
 );
 		
@@ -54,6 +54,7 @@ module CoherenceController(
 	`include "AES.vh";
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
+	`include "SHA3Local.vh"
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -61,7 +62,7 @@ module CoherenceController(
 		
   	input 					Clock, Reset;
 	input	[ORAMU-1:0]		ROPAddr;
-    input					ROAccess, REWRoundDummy, DRAMInitComplete;
+    input					ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback, DRAMInitComplete;
 	
 	//--------------------------------------------------------------------------
 	//	AES Interface
@@ -97,9 +98,8 @@ module CoherenceController(
 
 	output						IVStart;
 	input						IVDone;
-	input 						IVPathSelect;		// which path are we verifying now? 0 input path, 1 output path
 	input 						IVRequest, IVWrite;
-	input 	[PthBSTWidth-1:0] 	IVAddress;
+	input 	[PathBufAWidth-1:0] 	IVAddress;
 	output 	[DDRDWidth-1:0]  	DataFromIV;
 	input 	[DDRDWidth-1:0]  	DataToIV;
 	
@@ -175,145 +175,100 @@ module CoherenceController(
 				$finish;
 			end
 		end
-
-	//------------------------------------------------------------------------------------
-	// input path buffer. port1 written by AES, read by CC; port2 read by IV
-	//------------------------------------------------------------------------------------
-		
-		wire 					IBufP1_Enable, IBufP2_Enable, IBufP1_Write, IBufP2_Write;
-		wire [PthBSTWidth-1:0] 	IBufP1_Address, IBufP2_Address;
-		wire [DDRDWidth-1:0] 	IBufP1_DIn, IBufP2_DIn, IBufP1_DOut, IBufP2_DOut;
-		
-		RAM		#(          .DWidth(				DDRDWidth),     
-                            .AWidth(				PthBSTWidth),
-							.NPorts(				2))
-							
-            in_path_buf  (	.Clock(					{2{Clock}}),
-                            .Reset(					{2{Reset}}),
-                            .Enable(				{IBufP1_Enable, IBufP2_Enable}),
-                            .Write(					{IBufP1_Write, IBufP2_Write}),
-                            .Address(				{IBufP1_Address, IBufP2_Address}),
-                            .DIn(					{IBufP1_DIn, IBufP2_DIn}),
-                            .DOut(					{IBufP1_DOut, IBufP2_DOut})
-                        );     
-		
-		//--------------------------------------------------------------------------
-		// Port1 : written by AES, read by CC
-		//-------------------------------------------------------------------------- 
-		
-		// AES dumps data to input path on a RW access
-		assign IBufP1_Enable = RWAccess && FromDecDataValid && FromDecDataReady;
-		assign IBufP1_Write = 1;
-		assign IBufP1_DIn = FromDecData;
-		
-		CountAlarm #(		.Threshold(				PathSize_DRBursts))
-		in_blk_ctr 	(		.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				IBufP1_Enable),
-							.Done(					IVStart),
-							.Count(					IBufP1_Address)
-					);
-					
-		//--------------------------------------------------------------------------
-		// Port2 : read only by IV
-		//-------------------------------------------------------------------------- 
-		assign  IBufP2_Enable = IVRequest && !IVPathSelect;
-		assign  IBufP2_Write = IVWrite;
-		assign  IBufP2_Address = IVAddress;
-		assign  IBufP2_DIn = DataFromIV;		
-		
-	//------------------------------------------------------------------------------------
-	//------------------------------------------------------------------------------------ 
-		
-	//------------------------------------------------------------------------------------
-	// output path buffer. port1 written by Stash, read by AES; port2 read and written by IV
-	//------------------------------------------------------------------------------------
-		reg  					OPathRW;
-		wire					OPathRW_Transition, OBufP1_Transfer, OBufP2_Transfer;
-		wire 					OBufP1_Enable, OBufP2_Enable, OBufP1_Write, OBufP2_Write;
-		wire [PthBSTWidth-1:0] 	OBufP1_Address, OBufP2_Address;
-		wire [DDRDWidth-1:0] 	OBufP1_DIn, OBufP2_DIn, OBufP1_DOut, OBufP2_DOut;
+	
+		//------------------------------------------------------------------------------------------------------
+		// in and out path buffer. 
+		// 		port1 written by Stash, read and written by AES
+		//		port2 read and written by integrity verifier
+		//------------------------------------------------------------------------------------------------------
+		wire 					BufP1_Enable, BufP2_Enable, BufP1_Write, BufP2_Write;
+		wire [PathBufAWidth-1:0] 	BufP1_Address, BufP2_Address;
+		wire [DDRDWidth-1:0] 	BufP1_DIn, BufP2_DIn, BufP1_DOut, BufP2_DOut;
 		
 		RAM		#(          .DWidth(				DDRDWidth),     
-                            .AWidth(				PthBSTWidth),
+                            .AWidth(				PathBufAWidth),
 							.NPorts(				2))
 							
             out_path_buf  (	.Clock(					{2{Clock}}),
                             .Reset(					{2{Reset}}),
-                            .Enable(				{OBufP1_Enable, OBufP2_Enable}),
-                            .Write(					{OBufP1_Write, OBufP2_Write}),
-                            .Address(				{OBufP1_Address, OBufP2_Address}),
-                            .DIn(					{OBufP1_DIn, OBufP2_DIn}),
-                            .DOut(					{OBufP1_DOut, OBufP2_DOut})
+                            .Enable(				{BufP1_Enable, BufP2_Enable}),
+                            .Write(					{BufP1_Write, BufP2_Write}),
+                            .Address(				{BufP1_Address, BufP2_Address}),
+                            .DIn(					{BufP1_DIn, BufP2_DIn}),
+                            .DOut(					{BufP1_DOut, BufP2_DOut})
                         );     
 		
 		//--------------------------------------------------------------------------
-		// Port1 : written by Stash, read by AES
+		// Port1 : written by Stash, read (through a FIFO) and written by AES
 		//-------------------------------------------------------------------------- 
-		wire [DDRDWidth-1:0] 	OBufP1Reg_DOut;
-		wire 					OBufP1Reg_InValid, OBufP1Reg_InReady, OBufP1Reg_OutValid, OBufP1Reg_OutReady;
-		wire [1:0]				OBufP1Reg_EmptyCount;
+		wire 					OPathRW_Transition;
+		
+		wire [DDRDWidth-1:0] 	BufP1Reg_DOut;
+		wire 					BufP1Reg_InValid, BufP1Reg_InReady, BufP1Reg_OutValid, BufP1Reg_OutReady;
+		wire [1:0]				BufP1Reg_EmptyCount;
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				2))
 			out_path_reg (	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				OBufP1_DOut),
-							.InValid(				OBufP1Reg_InValid),
-							.InAccept(				OBufP1Reg_InReady),
-							.InEmptyCount(			OBufP1Reg_EmptyCount),
-							.OutData(				OBufP1Reg_DOut),
-							.OutSend(				OBufP1Reg_OutValid),
-							.OutReady(				OBufP1Reg_OutReady));
+							.InData(				BufP1_DOut),
+							.InValid(				BufP1Reg_InValid),
+							.InAccept(				BufP1Reg_InReady),
+							.InEmptyCount(			BufP1Reg_EmptyCount),
+							.OutData(				BufP1Reg_DOut),
+							.OutSend(				BufP1Reg_OutValid),
+							.OutReady(				BufP1Reg_OutReady));
 		
-		
-		// Who has the port now. OPathRW == 0, Stash writing the path; OPathRW == 1, AES reading the path
-		always @(posedge Clock) begin
-			if (Reset)
-				OPathRW <= 1;
-			else if (OPathRW_Transition)
-				OPathRW = !OPathRW;
-		end
-		
-		// Stash dumps data to output path 
-		assign OBufP1_Enable = RWAccess && (OPathRW ? (FromStashDataValid && FromStashDataReady) : OBufP1Reg_EmptyCount > OBufP1Reg_InValid);
-		assign OBufP1_Write = OPathRW;
-		assign OBufP1_DIn = FromStashData;
-		
-		Register #(	.Width(1))
-			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	OBufP1_Enable && !OPathRW,	OBufP1Reg_InValid);
-		
-		assign OBufP1_Transfer = RWAccess && (OPathRW ? (FromStashDataValid && FromStashDataReady) : OBufP1_Enable);
-		
-		CountAlarm #(		.Threshold(				PathSize_DRBursts))
-		out_blk_ctr (		.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				OBufP1_Transfer),
-							.Count(					OBufP1_Address),
-							.Done(					OPathRW_Transition)
-					);
-		
+		CCPortArbiter # (	.DWidth(				DDRDWidth),
+							.PathSize_DRBursts(		PathSize_DRBursts)	)
+							
+			port_arbiter(	.Clock(					Clock),
+							.Reset(					Reset),
+							
+							.ROAccess(				ROAccess),
+							.RWAccess(				RWAccess),
+							.CSPathRead(			CSPathRead),
+							.CSPathWriteback(		CSPathWriteback),
+							
+							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
+							.FromStashDataTransfer(	FromStashDataValid && FromStashDataReady),				
+							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
+							
+							.FromDecData(			FromDecData),
+							.FromStashData(			FromStashData),
+							
+							.Enable(				BufP1_Enable),
+							.Write(					BufP1_Write),
+							.Address(				BufP1_Address),
+							.DIn(					BufP1_DIn),
+							
+							.BufReg_InValid(		BufP1Reg_InValid),
+							.OPathRW_Transition(	OPathRW_Transition)
+						);
+	
 		//	AES --> Stash Passthrough 	
 		assign	ToStashData =			FromDecData;
 		assign	ToStashDataValid =		FromDecDataValid; 
 		assign	FromDecDataReady = 		ToStashDataReady;
 
-		//	ROAccess: header write back CC --> AES. RWAccess: OBufP1 --> AES
-		assign	ToEncData =				RWAccess ? OBufP1Reg_DOut : ROAccess ? HeaderOut : FromStashData;
-		assign	ToEncDataValid =		RWAccess ? OBufP1Reg_OutValid && IVDone: ROAccess ? HeaderOutValid : FromStashDataValid;
-		assign  OBufP1Reg_OutReady = 	RWAccess && ToEncDataReady && IVDone;
+		//	ROAccess: header write back CC --> AES. RWAccess: BufP1 --> AES
+		assign	ToEncData =				RWAccess ? BufP1Reg_DOut : ROAccess ? HeaderOut : FromStashData;
+		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid && IVDone: ROAccess ? HeaderOutValid : FromStashDataValid;
+		assign  BufP1Reg_OutReady = 	RWAccess && ToEncDataReady && IVDone;
 		
-		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : !ROAccess;
+		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && CSPathWriteback;
 		
 		//--------------------------------------------------------------------------
-		// Port2 : written by Stash, read and written by IV
+		// Port2 : read and written by IV
 		//-------------------------------------------------------------------------- 
-		assign  OBufP2_Enable = IVRequest && IVPathSelect;
-		assign  OBufP2_Write = IVWrite;
-		assign  OBufP2_Address = IVAddress;
-		assign  OBufP2_DIn = DataFromIV;		
+		assign 	IVStart = RWAccess && CSPathRead && OPathRW_Transition;
 		
-		assign  DataToIV = IVPathSelect ? OBufP2_DOut : IBufP2_DOut;
+		assign  BufP2_Enable = IVRequest;
+		assign  BufP2_Write = IVWrite;
+		assign  BufP2_Address = IVAddress;
+		assign  BufP2_DIn = DataFromIV;		
+		
+		assign  DataToIV = BufP2_DOut;
 		
 	end else begin: NO_BUF
 	
@@ -330,8 +285,5 @@ module CoherenceController(
 
 	end endgenerate
 
-		
-
-	
 endmodule
 //------------------------------------------------------------------------------

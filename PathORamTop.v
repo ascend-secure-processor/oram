@@ -42,8 +42,10 @@ module PathORamTop(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
+	`include "SHA3Local.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh"
+	
 
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -121,13 +123,13 @@ module PathORamTop(
 	
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire                    ROAccess, REWRoundDummy;
-	
+	wire					CSPathRead, CSPathWriteback;
     wire                    DRAMInitComplete;
 	
 	// integrity verification
 	
-	wire 						IVStart, IVDone, IVPathSelect, IVRequest, IVWrite;
-	wire 	[PthBSTWidth-1:0] 	IVAddress;
+	wire 						IVStart, IVDone, IVRequest, IVWrite;
+	wire 	[PathBufAWidth-1:0] 	IVAddress;
 	wire 	[DDRDWidth-1:0]  	DataFromIV, DataToIV;
 	
 	//--------------------------------------------------------------------------
@@ -220,6 +222,8 @@ module PathORamTop(
                             .ROPAddr(               ROPAddr),
                             .ROAccess(          	ROAccess),
 							.REWRoundDummy(			REWRoundDummy),
+							.CSPathRead(			CSPathRead),
+							.CSPathWriteback(		CSPathWriteback),			
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------
@@ -249,6 +253,8 @@ module PathORamTop(
                             .ROPAddr(               ROPAddr),
                             .ROAccess(          	ROAccess),
 							.REWRoundDummy(			REWRoundDummy),
+							.CSPathRead(			CSPathRead),
+							.CSPathWriteback(		CSPathWriteback),
                             .DRAMInitComplete(		DRAMInitComplete),
 							
 							.FromDecData(			AES_DRAMReadData), 
@@ -269,7 +275,6 @@ module PathORamTop(
 							
 							.IVStart(				IVStart),
 							.IVDone(				IVDone),
-							.IVPathSelect(			IVPathSelect),
 							.IVRequest(				IVRequest),
 							.IVWrite(				IVWrite),
 							.IVAddress(				IVAddress),
@@ -296,13 +301,13 @@ module PathORamTop(
 		int_verifier	(	.Clock(					Clock),
 							.Reset(					Reset || IVStart),
 							
-							.Done(					IVDone),
-							.PathSelect(			IVPathSelect),
 							.Request(				IVRequest),
 							.Write(					IVWrite),
 							.Address(				IVAddress),
 							.DataIn(				DataToIV),
-							.DataOut(				DataFromIV)
+							.DataOut(				DataFromIV),
+							
+							.Done(					IVDone)
 						);			
 	
 	//--------------------------------------------------------------------------

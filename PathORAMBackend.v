@@ -29,7 +29,7 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROAccess, REWRoundDummy,
+	ROPAddr, ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback,
 	
 	DRAMInitComplete
 	);
@@ -116,6 +116,7 @@ module PathORAMBackend(
 	output	[ORAMU-1:0]		ROPAddr;
 	output					ROAccess, REWRoundDummy;
 	
+	output 					CSPathRead, CSPathWriteback;
 	//--------------------------------------------------------------------------
 	//	Status Interface
 	//--------------------------------------------------------------------------
@@ -131,7 +132,7 @@ module PathORAMBackend(
 	wire					AllResetsDone;
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, 
-							CSStartWriteback, CSPathRead, CSPathWriteback;
+							CSStartWriteback;// CSPathRead, CSPathWriteback;
 	wire					CSORAMAccess;
 
 	wire					SetDummy, ClearDummy;

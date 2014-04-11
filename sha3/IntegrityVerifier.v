@@ -10,7 +10,7 @@
 
 module IntegrityVerifier (
 	Clock, Reset, 
-	Done, PathSelect,
+	Done,
 	Request, Write, Address, DataIn, DataOut	// RAM interface
 	// TODO: some states from CC
 );
@@ -24,11 +24,10 @@ module IntegrityVerifier (
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
 
-    localparam  AWidth = PthBSTWidth;
+    localparam  AWidth = PathBufAWidth;
 
 	input  Clock, Reset;
 	output reg Done;
-	output reg PathSelect;		// which path are we verifying now?	
 	output Request, Write;
 	output [AWidth-1:0] Address;
 	input  [DDRDWidth-1:0]  DataIn;
@@ -75,7 +74,6 @@ module IntegrityVerifier (
 		if (Reset) begin
 			DoneBuckets <= 0;
 			DoneBlocks <= 0;
-			PathSelect <= 0;
 			Done <= 0;
 		end
 		else if (DataInValid && !Done) begin
@@ -83,14 +81,11 @@ module IntegrityVerifier (
 				DoneBlocks <= (DoneBlocks + 1) % BktSize_DRBursts;
 				
 				if (DoneBlocks == BktSize_DRBursts - 1) begin	// next set of buckets
-					if (DoneBuckets + NUMSHA3 < ORAML + 1) 
+					if (DoneBuckets + NUMSHA3 < (ORAML + 1) * 2) 
 						DoneBuckets <= DoneBuckets + NUMSHA3;	
 						
-					else begin	// entire path done
-						DoneBuckets <= 0;
-						PathSelect <= 1;
-						Done <= PathSelect;
-					end
+					else 	// entire in/out path done
+						Done <= 1;
 				end
 			end
 		end
@@ -132,7 +127,7 @@ module IntegrityVerifier (
 	end
 	
 	assign HashData = HeaderInValid ? {{TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:0]} : DataIn;
-		// TODO: does not work when there are more than 1 head flits
+		// TODO: does not work if there are more than 1 head flits
 	
 	//------------------------------------------------------------------------------------
 	// Check or fill in the hash
@@ -140,7 +135,7 @@ module IntegrityVerifier (
 	assign ConsumeHash = HashOutValid[OutTurn] && !DoneBlocks;	
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && !PathSelect &&	
+	assign Violation = ConsumeHash && (DoneBuckets - NUMSHA3 + OutTurn < ORAML + 1)  &&	
 		Headers[OutTurn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[OutTurn][DigestStart-1:DigestEnd];
 
 `ifdef SIMULATION		
@@ -157,10 +152,12 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = !Done && ConsumeHash && PathSelect && DoneBuckets;		
+	assign Write = !Done && ConsumeHash && DoneBuckets;		
 	assign DataOut = {HashOut[OutTurn][DigestStart-1:DigestEnd], Headers[OutTurn][BktHSize_RawBits-1:0]};
-
-		
+	
+	//------------------------------------------------------------------------------------
+	// NUMSHA3 hash engines
+	//------------------------------------------------------------------------------------ 	
 	genvar k;
 	generate for (k = 0; k < NUMSHA3; k = k + 1) begin: HashEngines
 		

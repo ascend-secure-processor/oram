@@ -5,3 +5,5 @@
 	
 	localparam	DigestStart = FullDigestWidth,
 				DigestEnd = FullDigestWidth - TrancateDigestWidth;
+				
+	localparam PathBufAWidth = `log2(PathSize_DRBursts * 2 + 2);
