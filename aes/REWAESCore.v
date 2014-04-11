@@ -348,7 +348,7 @@ module REWAESCore(
 	
 	// This logic is more complicated because we need to shift H header chunks 
 	// in, and then shift Z*P (P > H) payload chunks in.  So the shift counting 
-	// is like 0 1 0 1 2 3 0 1 2 3, etc.
+	// is like 0 1 0 1 2 3 0 1 2 3, etc.  Annoying ...
 	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.Initial(				0))

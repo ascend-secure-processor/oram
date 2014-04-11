@@ -35,7 +35,7 @@ module AESREWORAM(
 	Clock, FastClock, 
 	Reset,
 
-	ROPAddr, ROAccess,
+	ROPAddr, ROLeaf, ROAccess,
 	
 	BEDataOut, BEIVOut, BEDataOutValid, BEDataOutReady,
 	BEDataIn, BEDataInValid, BEDataInReady,	
@@ -48,6 +48,14 @@ module AESREWORAM(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
+	`include "PathORAM.vh";
+	`include "DDR3SDRAM.vh";
+	`include "AES.vh";
+
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+	`include "REWAESLocal.vh"
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -58,13 +66,34 @@ module AESREWORAM(
 	//	Command Interface
 	//--------------------------------------------------------------------------
 	
-	//--------------------------------------------------------------------------
-	//	DRAM Interface
-	//--------------------------------------------------------------------------
-
+	input	[ORAMU-1:0]		ROPAddr;
+	input	[ORAML-1:0]		ROLeaf;
+	input					ROAccess;
+	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
+	//--------------------------------------------------------------------------
+
+	output	[DDRDWidth-1:0] BEDataOut;
+	output	[IVEntropyWidth-1:0] BEIVOut; 
+	output					BEDataOutValid; 
+	input					BEDataOutReady;
+	
+	input	[DDRDWidth-1:0]	BEDataIn;
+	input					BEDataInValid;
+	output					BEDataInReady;	
+	
+	//--------------------------------------------------------------------------
+	//	DRAM Interface
 	//--------------------------------------------------------------------------	
+	
+	input	[DDRDWidth-1:0]	DRAMReadData;
+	input					DRAMReadDataValid; 
+	output					DRAMReadDataReady;
+	
+	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output					DRAMWriteDataValid; 
+	input					DRAMWriteDataReady;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -74,14 +103,14 @@ module AESREWORAM(
 	
 	// AES Core
 	
-	wire		[IVEntropyWidth-1:0] Core_ROIVIn; 
-	wire		[BIDWidth-1:0] Core_ROBIDIn; 
-	wire		[PCCMDWidth-1:0] Core_ROCommandIn; 
+	wire	[IVEntropyWidth-1:0] Core_ROIVIn; 
+	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
+	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
 	wire					Core_ROCommandInValid;
 	wire					Core_ROCommandInReady;
 
-	wire		[IVEntropyWidth-1:0] Core_RWIVIn;
-	wire		[BIDWidth-1:0] Core_RWBIDIn;
+	wire	[IVEntropyWidth-1:0] Core_RWIVIn;
+	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
 	wire					Core_RWCommandInValid; 
 	wire					Core_RWCommandInReady;
 
@@ -185,6 +214,8 @@ module AESREWORAM(
 	assign	ROSeed =								{ {SeedSpaceRemaining{1'b0}}, ROIV, ROBucketID, ROChunkID };
 	*/
 	
+	assign	Core_ROCommandInValid = 1'b1;
+	
 	//--------------------------------------------------------------------------
 	//	RW AES Input
 	//--------------------------------------------------------------------------
@@ -205,7 +236,7 @@ module AESREWORAM(
 	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWIVOut;
 
 	wire					RWIVInValid, RWIVInReady;
-	wire					RWIVOutValid, RWIVOutReady;		
+	wire					RWIVOutValid;		
 	
 	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
 	
@@ -298,7 +329,7 @@ module AESREWORAM(
 	// Store Gentry seeds for CC
 	// Invariant: Core_RWDataOutValid -> RWIVOutValid
 	FIFORAM		#(			.Width(					IVEntropyWidth),
-							.Buffering(				3 * (L + 1))) // we can let it run ahead
+							.Buffering(				3 * (ORAML + 1))) // we can let it run ahead
 				rw_M_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_RWIVIn),
@@ -348,6 +379,9 @@ module AESREWORAM(
 	//	RO AES Output
 	//--------------------------------------------------------------------------
 
+	// temp
+	assign	Core_RODataOutReady = 1'b1;
+	
 	//--------------------------------------------------------------------------
 	//	RW AES Output
 	//--------------------------------------------------------------------------
@@ -362,7 +396,7 @@ module AESREWORAM(
 	assign	BEIVOut =								(ROAccess) ? 0 : RWIVOut;
 	assign	BEDataOutValid =						(ROAccess) ? 0 : DRAMReadDataValid 	& Core_RWDataOutValid;
 
-	assign	DRAMReadDataReady =						(ROAccess) ? 0 : BEDataOutReady 		& Core_RWDataOutValid;
+	assign	DRAMReadDataReady =						(ROAccess) ? 0 : BEDataOutReady 	& Core_RWDataOutValid;
 
 	//--------------------------------------------------------------------------
 	//	To DRAM
@@ -371,7 +405,7 @@ module AESREWORAM(
 	assign	DRAMWriteData =							(ROAccess) ? 0 : BEDataIn ^ Core_RWDataOut;
 	assign	DRAMWriteDataValid = 					(ROAccess) ? 0 : BEDataInValid 		& Core_RWDataOutValid;
 
-	assign	BEDataInReady = 						(ROAccess) ? 0 : DRAMWriteDataReady 	& Core_RWDataOutValid;
+	assign	BEDataInReady = 						(ROAccess) ? 0 : DRAMWriteDataReady & Core_RWDataOutValid;
 	
 	//--------------------------------------------------------------------------
 endmodule
