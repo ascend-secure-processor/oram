@@ -581,7 +581,7 @@ module PathORAMBackend(
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
-			addr_gen(		.Clock(					Clock),
+				addr_gen(	.Clock(					Clock),
 							.Reset(					Reset | CSInitialize),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
@@ -591,7 +591,7 @@ module PathORAMBackend(
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), 
-							.Addr(					AddrGen_DRAMCommandAddress_Internal));		
+							.Addr(					AddrGen_DRAMCommandAddress_Internal));
 	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
 							.FWLatency(				Overclock))
 				addr_dly(	.Clock(					Clock),
