@@ -35,10 +35,10 @@ module Keccak_WF (
         // if a multiple of chunks, need to add one more empty chunk
 	
 	// hash in and out data path
-	wire HashInValid, HashInReady;
+	wire HashFunnelOutValid, HashFunnelOutReady, HashInValid, HashInReady;
 	wire [HashInWidth-1:0] HashIn; 
 	
-	wire LastChunk, HashBufFull, HashBusy, HashReset;
+	wire LastChunk, LastBut2Chunk, HashBufFull, HashBusy, HashReset;
 	
 	// Funnel --> HashEngine, controlled by a CounterAlarm
 	
@@ -50,8 +50,8 @@ module Keccak_WF (
 							.InValid(				DataInValid),
 							.InAccept(				DataInReady),
 							.OutData(			    HashIn),
-							.OutValid(				HashInValid),
-							.OutReady(				HashInReady)
+							.OutValid(				HashFunnelOutValid),
+							.OutReady(				HashFunnelOutReady)
 						);
 	
     keccak	
@@ -66,16 +66,20 @@ module Keccak_WF (
 							.out_ready(		HashOutValid)
 						);
 
-    CountAlarm #	(	    .Threshold(HashChunkCount))
-        ChunkCtr	(	    .Clock(		Clock),
-							.Reset(		Reset),
-							.Enable(	HashInValid && HashInReady),
-							.Done(		LastChunk)
+    CountAlarm #	(	    .Threshold(HashChunkCount),
+                            .IThreshold(HashChunkCount - 1))
+        ChunkCtr	(	    .Clock(		    Clock),
+							.Reset(		    Reset),
+							.Enable(	    HashInValid && HashInReady),
+							.Intermediate(  LastBut2Chunk),
+							.Done(		    LastChunk)
 						);
-
-	assign HashReset = Reset || (HashOutValid && HashOutReady);
+	assign HashInValid = HashFunnelOutValid || (LastBut2Chunk && !BytesInLastChunk);
 	assign HashInReady = !HashBusy && !HashBufFull;
+	assign HashFunnelOutReady = HashInReady && !(LastBut2Chunk && !BytesInLastChunk);	
+	
 	Register #(.Width(1)) Hash (Clock, HashReset, LastChunk, 1'b0, 1'bx, HashBusy);
+	assign HashReset = Reset || (HashOutValid && HashOutReady);
 	
 endmodule
 	

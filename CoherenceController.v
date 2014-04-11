@@ -39,7 +39,10 @@ module CoherenceController(
 	ToEncData, ToEncDataValid, ToEncDataReady,
 	
 	ToStashData, ToStashDataValid, ToStashDataReady,
-	FromStashData, FromStashDataValid, FromStashDataReady	
+	FromStashData, FromStashDataValid, FromStashDataReady,
+	
+	IVStart, IVDone, IVPathSelect,
+	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV
 );
 		
 	//--------------------------------------------------------------------------
@@ -73,12 +76,7 @@ module CoherenceController(
 	output	[DDRDWidth-1:0]	ToEncData;
 	output					ToEncDataValid;
 	input					ToEncDataReady;
-	
-	//--------------------------------------------------------------------------
-	//	Integrity Interface
-	//--------------------------------------------------------------------------
 
-	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
 	//--------------------------------------------------------------------------
@@ -92,6 +90,19 @@ module CoherenceController(
 	output	[DDRDWidth-1:0]	ToStashData;
 	output					ToStashDataValid;
 	input					ToStashDataReady;	
+		
+	//--------------------------------------------------------------------------
+	//	Integrity Interface
+	//--------------------------------------------------------------------------
+
+	output						IVStart;
+	input						IVDone;
+	input 						IVPathSelect;		// which path are we verifying now? 0 input path, 1 output path
+	input 						IVRequest, IVWrite;
+	input 	[PthBSTWidth-1:0] 	IVAddress;
+	output 	[DDRDWidth-1:0]  	DataFromIV;
+	input 	[DDRDWidth-1:0]  	DataToIV;
+	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -157,19 +168,24 @@ module CoherenceController(
 	// Integrity Verification needs two path buffers and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
     generate if (EnableIV) begin: FULL_BUF
-	
-		localparam  AWidth = PthBSTWidth;
 		
-		//--------------------------------------------------------------------------
-		// input path buffer. port1 written by AES, read by CC; port2 read by IV
-		//-------------------------------------------------------------------------- 
+		initial begin
+			if (!EnableREW) begin
+				$display("Integrity verification without REW ORAM? Not supported.");
+				$finish;
+			end
+		end
+
+	//------------------------------------------------------------------------------------
+	// input path buffer. port1 written by AES, read by CC; port2 read by IV
+	//------------------------------------------------------------------------------------
 		
 		wire 					IBufP1_Enable, IBufP2_Enable, IBufP1_Write, IBufP2_Write;
-		wire [AWidth-1:0] 		IBufP1_Address, IBufP2_Address;
+		wire [PthBSTWidth-1:0] 	IBufP1_Address, IBufP2_Address;
 		wire [DDRDWidth-1:0] 	IBufP1_DIn, IBufP2_DIn, IBufP1_DOut, IBufP2_DOut;
 		
 		RAM		#(          .DWidth(				DDRDWidth),     
-                            .AWidth(				AWidth),
+                            .AWidth(				PthBSTWidth),
 							.NPorts(				2))
 							
             in_path_buf  (	.Clock(					{2{Clock}}),
@@ -185,36 +201,41 @@ module CoherenceController(
 		// Port1 : written by AES, read by CC
 		//-------------------------------------------------------------------------- 
 		
-		// AES dumps data to input path 
-		assign IBufP1_Enable = FromDecDataValid && FromDecDataReady;
+		// AES dumps data to input path on a RW access
+		assign IBufP1_Enable = RWAccess && FromDecDataValid && FromDecDataReady;
 		assign IBufP1_Write = 1;
 		assign IBufP1_DIn = FromDecData;
 		
 		CountAlarm #(		.Threshold(				PathSize_DRBursts))
 		in_blk_ctr 	(		.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				FromDecDataValid && FromDecDataReady),
+							.Enable(				IBufP1_Enable),
+							.Done(					IVStart),
 							.Count(					IBufP1_Address)
 					);
 					
 		//--------------------------------------------------------------------------
 		// Port2 : read only by IV
 		//-------------------------------------------------------------------------- 
-		assign  IBufP2_Enable = 0;
+		assign  IBufP2_Enable = IVRequest && !IVPathSelect;
+		assign  IBufP2_Write = IVWrite;
+		assign  IBufP2_Address = IVAddress;
+		assign  IBufP2_DIn = DataFromIV;		
 		
-
+	//------------------------------------------------------------------------------------
+	//------------------------------------------------------------------------------------ 
 		
-		//--------------------------------------------------------------------------
-		// output path buffer. port1 written by Stash, read by AES; port2 read and written by IV
-		//-------------------------------------------------------------------------- 
+	//------------------------------------------------------------------------------------
+	// output path buffer. port1 written by Stash, read by AES; port2 read and written by IV
+	//------------------------------------------------------------------------------------
 		reg  					OPathRW;
 		wire					OPathRW_Transition, OBufP1_Transfer, OBufP2_Transfer;
 		wire 					OBufP1_Enable, OBufP2_Enable, OBufP1_Write, OBufP2_Write;
-		wire [AWidth-1:0] 		OBufP1_Address, OBufP2_Address;
+		wire [PthBSTWidth-1:0] 	OBufP1_Address, OBufP2_Address;
 		wire [DDRDWidth-1:0] 	OBufP1_DIn, OBufP2_DIn, OBufP1_DOut, OBufP2_DOut;
 		
 		RAM		#(          .DWidth(				DDRDWidth),     
-                            .AWidth(				AWidth),
+                            .AWidth(				PthBSTWidth),
 							.NPorts(				2))
 							
             out_path_buf  (	.Clock(					{2{Clock}}),
@@ -279,15 +300,20 @@ module CoherenceController(
 
 		//	ROAccess: header write back CC --> AES. RWAccess: OBufP1 --> AES
 		assign	ToEncData =				RWAccess ? OBufP1Reg_DOut : ROAccess ? HeaderOut : FromStashData;
-		assign	ToEncDataValid =		RWAccess ? OBufP1Reg_OutValid : ROAccess ? HeaderOutValid : FromStashDataValid;
-		assign  OBufP1Reg_OutReady = 	RWAccess && ToEncDataReady;
+		assign	ToEncDataValid =		RWAccess ? OBufP1Reg_OutValid && IVDone: ROAccess ? HeaderOutValid : FromStashDataValid;
+		assign  OBufP1Reg_OutReady = 	RWAccess && ToEncDataReady && IVDone;
 		
 		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : !ROAccess;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : written by Stash, read and written by IV
 		//-------------------------------------------------------------------------- 
-		assign  OBufP2_Enable = 0;
+		assign  OBufP2_Enable = IVRequest && IVPathSelect;
+		assign  OBufP2_Write = IVWrite;
+		assign  OBufP2_Address = IVAddress;
+		assign  OBufP2_DIn = DataFromIV;		
+		
+		assign  DataToIV = IVPathSelect ? OBufP2_DOut : IBufP2_DOut;
 		
 	end else begin: NO_BUF
 	

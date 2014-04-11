@@ -44,7 +44,7 @@ module AESPathORAM(
 	`include "BucketLocal.vh"
 
 	localparam W = DDRDWidth / AESWidth;
-	localparam D = AESDelay;
+	localparam D = 1; //AESDelay;
 
 	localparam FIFO_D = D;
 

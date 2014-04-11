@@ -123,7 +123,13 @@ module PathORamTop(
 	wire                    ROAccess, REWRoundDummy;
 	
     wire                    DRAMInitComplete;
-		
+	
+	// integrity verification
+	
+	wire 						IVStart, IVDone, IVPathSelect, IVRequest, IVWrite;
+	wire 	[PthBSTWidth-1:0] 	IVAddress;
+	wire 	[DDRDWidth-1:0]  	DataFromIV, DataToIV;
+	
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
@@ -252,21 +258,52 @@ module PathORamTop(
 							.ToEncData(				AES_DRAMWriteData), 
 							.ToEncDataValid(		AES_DRAMWriteDataValid), 
 							.ToEncDataReady(		AES_DRAMWriteDataReady),
-	
-	// 	TODO for integrity verification
-	
-							.ToStashData(				BE_DRAMReadData),
-							.ToStashDataValid(			BE_DRAMReadDataValid), 
-							.ToStashDataReady(			BE_DRAMReadDataReady),
+
+							.ToStashData(			BE_DRAMReadData),
+							.ToStashDataValid(		BE_DRAMReadDataValid), 
+							.ToStashDataReady(		BE_DRAMReadDataReady),
 
 							.FromStashData(			BE_DRAMWriteData), 
-							.FromStashDataValid(		BE_DRAMWriteDataValid), 
-							.FromStashDataReady(		BE_DRAMWriteDataReady));
+							.FromStashDataValid(	BE_DRAMWriteDataValid), 
+							.FromStashDataReady(	BE_DRAMWriteDataReady),
+							
+							.IVStart(				IVStart),
+							.IVDone(				IVDone),
+							.IVPathSelect(			IVPathSelect),
+							.IVRequest(				IVRequest),
+							.IVWrite(				IVWrite),
+							.IVAddress(				IVAddress),
+							.DataFromIV(			DataFromIV),
+							.DataToIV(				DataToIV)						
+					);
 							
 	//--------------------------------------------------------------------------
 	//	Integrity Verification
 	//--------------------------------------------------------------------------
 	
+	IntegrityVerifier #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							
+							.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
+							.ORAME(					ORAME))
+			
+		int_verifier	(	.Clock(					Clock),
+							.Reset(					Reset || IVStart),
+							
+							.Done(					IVDone),
+							.PathSelect(			IVPathSelect),
+							.Request(				IVRequest),
+							.Write(					IVWrite),
+							.Address(				IVAddress),
+							.DataIn(				DataToIV),
+							.DataOut(				DataFromIV)
+						);			
 	
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption

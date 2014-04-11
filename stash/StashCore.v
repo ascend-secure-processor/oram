@@ -671,7 +671,7 @@ module StashCore(
 							.DIn(					{InPAddr, 		InLeaf}),
 							.DOut(					{OutPAddr_Pre, 	OutLeaf_Pre}));
 	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress 	: OutPAddr_Pre;
-	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeaf 			: OutLeaf_Pre;
+	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeafLabel 			: OutLeaf_Pre;
 	
 	//--------------------------------------------------------------------------
 	//	Management

@@ -1,4 +1,7 @@
-`ifndef _SHA3LOCAL_H
-	`define _SHA3LOCAL_
-	localparam  HashDigestWidth = 512;
-`endif
+
+	localparam  FullDigestWidth = 512;
+	
+	localparam  TrancateDigestWidth = `min(BktHSize_RndBits - BktHSize_RawBits, FullDigestWidth);
+	
+	localparam	DigestStart = FullDigestWidth,
+				DigestEnd = FullDigestWidth - TrancateDigestWidth;
