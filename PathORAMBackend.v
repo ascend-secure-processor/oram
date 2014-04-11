@@ -29,7 +29,8 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback,
+	ROPAddr, ROLeaf, ROAccess, REWRoundDummy, 
+	CSPathRead, CSPathWriteback,
 	
 	DRAMInitComplete
 	);
@@ -114,9 +115,11 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	
 	output	[ORAMU-1:0]		ROPAddr;
+	output	[ORAML-1:0]		ROLeaf;
 	output					ROAccess, REWRoundDummy;
 	
 	output 					CSPathRead, CSPathWriteback;
+	
 	//--------------------------------------------------------------------------
 	//	Status Interface
 	//--------------------------------------------------------------------------
@@ -132,7 +135,7 @@ module PathORAMBackend(
 	wire					AllResetsDone;
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, 
-							CSStartWriteback;// CSPathRead, CSPathWriteback;
+							CSStartWriteback;
 	wire					CSORAMAccess;
 
 	wire					SetDummy, ClearDummy;
@@ -643,7 +646,7 @@ module PathORAMBackend(
 	
 	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
 	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+ORAMZ*ORAMU-1:BktHUStart];
-	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHUStart+ORAMZ*(ORAMU+ORAML)-1:BktHUStart+ORAMZ*ORAMU]; // TODO change to BktLStart
+	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHUStart+ORAMZ*ORAML-1:BktHLStart];
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
