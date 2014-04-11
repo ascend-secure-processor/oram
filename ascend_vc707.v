@@ -77,6 +77,7 @@ module ascend_vc707(
 	parameter				Overclock =				1;
 	parameter				EnableAES =				1;
 	parameter				EnableREW =				0;
+	parameter				EnableIV =				0;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -216,6 +217,7 @@ module ascend_vc707(
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
@@ -326,9 +328,10 @@ module ascend_vc707(
 	
 	// This is needed only because MIG is bugged and will drop write data if we 
 	// present WriteCommands & WriteData out of sync with each other
-	// NOTE: this doesn't really impact writeback performance unless ...
+	// NOTE: this doesn't impact writeback performance
 	
-	// This prevents us from having to complicate the hack ...
+	// Always fully specifying DDR3SDRAM_Command_MIG prevents us from having to 
+	// complicate the workaround ...
 	`ifdef SIMULATION
 		reg ResetPulsed = 1'b0;
 	

@@ -628,11 +628,11 @@ module PathORAMBackend(
 	//------------------------------------------------------------------------------
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
-	CountAlarm  #(  	.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
-		in_bkt_cnt(		.Clock(					Clock),
-						.Reset(					Reset),
-						.Enable(				DRAMReadDataValid & DRAMReadDataReady),
-						.Count(					BucketReadCtr));
+	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+				in_bkt_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
+							.Count(					BucketReadCtr));
 	
 	// Per-bucket header/payload arbitration
 	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
