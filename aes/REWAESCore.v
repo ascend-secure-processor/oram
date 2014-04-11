@@ -22,7 +22,7 @@
 //					  masks always come first
 //
 //				This module is meant to be clocked as fast as possible 
-//				(e.g., 300 Mhz).
+//				(e.g., 300+ Mhz).
 //
 //	Notes on getting clock up:
 //		- No reset to any module

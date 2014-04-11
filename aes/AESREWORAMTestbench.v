@@ -110,8 +110,9 @@ module	AESREWORAMTestbench;
 	//	Test Stimulus
 	//--------------------------------------------------------------------------
 
-	initial begin
+	integer i, Continue;
 	
+	initial begin
 		Reset = 1'b1;
 	
 		ROAccess = 1'b1;
@@ -128,9 +129,20 @@ module	AESREWORAMTestbench;
 		
 		// fill leaf bucket
 
-		#(Cycle*1000); // whatever
+		#(Cycle*10000); // whatever
 	
-		$stop;
+		ROAccess = 1'b0;
+		DRAMReadDataValid = 1'b1;
+		DRAMReadData = 0;
+		
+		Continue = 1;
+		i = 0;
+		while (Continue) begin
+			if (BEDataOutReady & BEDataOutValid) i = i + 1;
+			if (i == PathSize_DRBursts) Continue = 0;
+			#(Cycle);
+		end
+		#(Cycle);
 	end
 
 	//--------------------------------------------------------------------------

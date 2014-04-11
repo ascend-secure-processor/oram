@@ -145,7 +145,7 @@ module CoherenceController(
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
 		assign ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
-		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == FromDecData[BktHULStart + (j+1)*ORAMU - 1: BktHULStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
+		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
 	end 
 		 
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};

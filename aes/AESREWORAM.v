@@ -56,6 +56,8 @@ module AESREWORAM(
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
 	
+	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -120,15 +122,19 @@ module AESREWORAM(
 	wire					Core_RODataOutReady;
 	
 	wire	[DDRDWidth-1:0]	Core_RWDataOut;
-	wire					Core_RWDataOutValid;
-	wire					Core_RWDataOutReady;	
+	wire					Core_RWDataOutValid;	
 	
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
 	//--------------------------------------------------------------------------
 		
 	`ifdef SIMULATION
-
+		always @(posedge Clock) begin
+			if (RWMaskTransfer & ~RWIVOutValid) begin
+				$display("[%m @ %t] ERROR: Mask fifo didn't have data on a transfer.", $time);
+				$stop;
+			end
+		end
 	`endif
 
 	//--------------------------------------------------------------------------
@@ -214,20 +220,19 @@ module AESREWORAM(
 	assign	ROSeed =								{ {SeedSpaceRemaining{1'b0}}, ROIV, ROBucketID, ROChunkID };
 	*/
 	
-	assign	Core_ROCommandInValid = 1'b1;
+	assign	Core_ROCommandInValid = 1'b0;
 	
 	//--------------------------------------------------------------------------
 	//	RW AES Input
 	//--------------------------------------------------------------------------
 
-	localparam				RWSWidth =				3,
-							ST_RW_Idle =			3'd0,
-							ST_RW_StartRead =		3'd1,
-							ST_RW_Read =			3'd2,
-							ST_RW_StartWrite =		3'd3,
-							ST_RW_Write =			3'd4;
+	localparam				RWSWidth =				2,
+							ST_RW_StartRead =		2'd0,
+							ST_RW_Read =			2'd1,
+							ST_RW_StartWrite =		2'd2,
+							ST_RW_Write =			2'd3;
 	
-	reg	[RWSWidth-1:0] 		CS_RW, NS_RW;
+	reg		[RWSWidth-1:0] 	CS_RW, NS_RW;
 	wire					CSRWStartOp, CSRWWrite;
 	
 	wire					PathTransition;
@@ -235,26 +240,28 @@ module AESREWORAM(
 
 	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWIVOut;
 
+	wire	[ORAML-1:0]		GentryLeaf;
+
+	wire	[DDRDWidth-1:0]	RWMaskOut;
+	
 	wire					RWIVInValid, RWIVInReady;
 	wire					RWIVOutValid;		
 	
 	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
 	
-	wire	[ORAML-1:0]		GentryLeaf;	
+	wire					RWMaskIsHeader, RWMaskBucketTransition;
 	
 	assign	CSRWStartOp =							CS_RW == ST_RW_StartRead | CS_RW == ST_RW_StartWrite;
 	assign	CSRWWrite =								CS_RW == ST_RW_Write;
 	
 	always @(posedge Clock) begin
-		if (Reset) CS_RW <= 						ST_RW_Idle;
+		if (Reset) CS_RW <= 						ST_RW_StartRead;
 		else CS_RW <= 								NS_RW;
 	end
 	
 	always @( * ) begin
 		NS_RW = 									CS_RW;
 		case (CS_RW)
-			ST_RW_Idle : 
-				NS_RW =								ST_RW_StartRead;
 			ST_RW_StartRead :
 				if (RW_BIDInReady)
 					NS_RW =							ST_RW_Read;
@@ -266,7 +273,7 @@ module AESREWORAM(
 					NS_RW =							ST_RW_Write;
 			ST_RW_Write : 
 				if (PathTransition)
-					NS_RW =							ST_RW_Idle;
+					NS_RW =							ST_RW_StartRead;
 		endcase
 	end
 	
@@ -286,15 +293,17 @@ module AESREWORAM(
 							.Count(					GentryCounter));
 							
 	// RW seed generation scheme for bucket @ level L (L = 0...):
-	// decrypt(M >> L)
-	// encrypt((M >> L) + 1)
+	//	decrypt(GentryCounter >> L)
+	//	encrypt((GentryCounter >> L) + 1)
 	ShiftRegister #(		.PWidth(				IVEntropyWidth),
+							.Reverse(				1),
 							.SWidth(				1))
 				gentry_shft(.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Load(					CSRWStartOp),
 							.Enable(				RWCommandTransfer), 
 							.PIn(					GentryCounter),
+							.SIn(					1'b0),
 							.POut(					GentryCounterShifted));
 	assign	Core_RWIVIn =							(CSRWWrite) ? GentryCounterShifted + 1 : GentryCounterShifted;
 	
@@ -313,8 +322,8 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.Start(					CSRWStartOp), 
 							.Ready(					RW_BIDInReady),
-							.RWIn(					1'b0),
-							.BHIn(					1'b0),
+							.RWIn(					1'b0), // don't care
+							.BHIn(					1'b1), // only send one command per bucket
 							.leaf(					GentryLeaf),
 							.CmdValid(				RW_BIDOutValid),
 							.CmdReady(				RW_BIDOutReady),
@@ -329,15 +338,15 @@ module AESREWORAM(
 	// Store Gentry seeds for CC
 	// Invariant: Core_RWDataOutValid -> RWIVOutValid
 	FIFORAM		#(			.Width(					IVEntropyWidth),
-							.Buffering(				3 * (ORAML + 1))) // we can let it run ahead
+							.Buffering(				PathMaskBuffering * (ORAML + 1)))
 				rw_M_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_RWIVIn),
 							.InValid(				RWIVInValid),
 							.InAccept(				RWIVInReady),
 							.OutData(				RWIVOut),
-							.OutSend(				RWIVOutValid), // TODO add assertion to enforce invariant
-							.OutReady(				RWMaskTransfer));
+							.OutSend(				RWIVOutValid),
+							.OutReady(				RWMaskBucketTransition));
 	
 	//--------------------------------------------------------------------------
 	//	AES Core
@@ -351,7 +360,7 @@ module AESREWORAM(
 							.DDRDQWidth(			DDRDQWidth),
 							.IVEntropyWidth(		IVEntropyWidth),
 							.AESWidth(				AESWidth))
-				CUT(		.SlowClock(				Clock),
+				core(		.SlowClock(				Clock),
 							.FastClock(				FastClock), 
 							.SlowReset(				Reset),
 
@@ -373,18 +382,31 @@ module AESREWORAM(
 							
 							.RWDataOut(				Core_RWDataOut), 
 							.RWDataOutValid(		Core_RWDataOutValid),
-							.RWDataOutReady(		Core_RWDataOutReady));
+							.RWDataOutReady(		RWMaskTransfer));
 	
 	//--------------------------------------------------------------------------
 	//	RO AES Output
 	//--------------------------------------------------------------------------
 
-	// temp
+	// TODO temp
 	assign	Core_RODataOutReady = 1'b1;
 	
 	//--------------------------------------------------------------------------
 	//	RW AES Output
 	//--------------------------------------------------------------------------
+	
+	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
+							.IThreshold(			0))
+				rw_hdr_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				RWMaskTransfer),
+							.Intermediate(			RWMaskIsHeader),
+							.Done(					RWMaskBucketTransition));
+	
+	assign	RWMaskOut =								(RWMaskIsHeader) ? 	{	{DDRDWidth-RWHeader_RawBits-BktHLStart{1'b0}},
+																			Core_RWDataOut[RWHeader_RawBits-1:0],
+																			{BktHLStart{1'b0}}	} : 
+																		Core_RWDataOut;
 	
 	assign	RWMaskTransfer =						~ROAccess & ( (BEDataOutValid & DRAMReadDataReady) | (DRAMWriteDataValid & BEDataInReady) );
 	
@@ -392,7 +414,7 @@ module AESREWORAM(
 	//	To Backend
 	//--------------------------------------------------------------------------
 	
-	assign	BEDataOut =								(ROAccess) ? 0 : DRAMReadData ^ Core_RWDataOut;
+	assign	BEDataOut =								(ROAccess) ? 0 : DRAMReadData ^ RWMaskOut;
 	assign	BEIVOut =								(ROAccess) ? 0 : RWIVOut;
 	assign	BEDataOutValid =						(ROAccess) ? 0 : DRAMReadDataValid 	& Core_RWDataOutValid;
 
