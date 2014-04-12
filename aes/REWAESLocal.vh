@@ -1,5 +1,7 @@
 
-	localparam				ROHeader_RawBits =		BktHSize_ValidBits + ORAMZ * ORAMU,
+	localparam				ROHeader_VUBits =		BktHSize_ValidBits + ORAMZ * ORAMU,
+							//ROHeader_IVBits =		TODO add support for IV
+							ROHeader_RawBits =		ROHeader_VUBits,// + ROHeader_IVBits,
 							ROHeader_AESChunks =	`divceil(ROHeader_RawBits, AESWidth), // # AES chunks per bucket for RO IV
 							RWHeader_RawBits =		ORAMZ * ORAML,
 							RWHeader_AESChunks =	`divceil(RWHeader_RawBits, AESWidth),

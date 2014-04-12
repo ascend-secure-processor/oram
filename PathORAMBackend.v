@@ -30,7 +30,7 @@ module PathORAMBackend(
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
 	ROPAddr, ROLeaf, ROAccess, REWRoundDummy, 
-	CSPathRead, CSPathWriteback,
+	CSPathRead, CSPathWriteback, // TODO why do we need to send both of these?
 	
 	DRAMInitComplete
 	);

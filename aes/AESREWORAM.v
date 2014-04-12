@@ -36,14 +36,15 @@ module AESREWORAM(
 	Reset,
 
 	ROPAddr, ROLeaf, ROAccess,
+	CSPathRead,
 	
 	BEDataOut, BEBVOut, BEBIDOut, BEDataOutValid, BEDataOutReady,
-	BEDataIn, BEDataInValid, BEDataInReady,	
+	BEDataIn, BEDataInValid, BEDataInReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	);
-		
+
 	//--------------------------------------------------------------------------
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
@@ -77,6 +78,8 @@ module AESREWORAM(
 	input	[ORAMU-1:0]		ROPAddr;
 	input	[ORAML-1:0]		ROLeaf;
 	input					ROAccess;
+	
+	input					CSPathRead;	
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -114,7 +117,7 @@ module AESREWORAM(
 	wire					CSRWStartOp, CSRWWrite;
 	
 	wire					RWPathTransition;
-	wire					RWCommandTransfer, RWMaskTransfer;
+	wire					RWCommandTransfer, RMMaskReady, DataOutTransfer;
 
 	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
 
@@ -122,14 +125,14 @@ module AESREWORAM(
 	
 	wire	[ORAML-1:0]		GentryLeaf;
 
-	wire	[DDRDWidth-1:0]	RWMaskOut;
+	wire	[DDRDWidth-1:0]	RWMask;
 	
 	wire					RWAuxInValid, RWAuxInReady;
 	wire					RWAuxOutValid;		
 	
 	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
 	
-	wire					RWMaskIsHeader, RWMaskBucketTransition;	
+	wire					MaskIsHeader, DataOutBucketTransition;	
 	
 	// AES Core
 	
@@ -162,10 +165,20 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: The mask header FIFO is too shallow for the Mask data FIFO (sized @ 512x512).", $time);
 				$stop;
 			end
+		
+			if (BktHSize_DRBursts > 1) begin
+				$display("[%m @ %t] ERROR: Not supported yet.", $time);
+				$stop;
+			end		
+			
+			if (EnableIV) begin
+				$display("[%m @ %t] ERROR: Not supported yet.", $time);
+				$stop;
+			end
 		end
 		
 		always @(posedge Clock) begin
-			if (RWMaskTransfer & ~RWAuxOutValid) begin
+			if (DataOutTransfer & ~RWAuxOutValid) begin
 				$display("[%m @ %t] ERROR: Mask fifo didn't have data on a transfer.", $time);
 				$stop;
 			end
@@ -173,6 +186,11 @@ module AESREWORAM(
 			if (ROIntDataInValid & ~ROIntDataInReady) begin
 				$display("[%m @ %t] ERROR: ROInt FIFO overflow.", $time);
 				$stop;
+			end
+			
+			if (DataOutTransfer	& MaskIsHeader & |(ROHeaderMask & RWHeaderMask)) begin
+				$display("[%m @ %t] ERROR: RO and RW masks overlapped on header flit.", $time);
+				$stop;			
 			end
 		end
 	`endif
@@ -196,8 +214,12 @@ module AESREWORAM(
 	ROIntDataInValid
 	ROIntDataInReady
 	
-		ROBucketTransition
+	ROBucketTransition
 	ROPathTransition
+	
+	BufferedData
+	BufferedDataValid
+	BufferedDataReady	
 	
 	assign	DRAMReadTransfer =						DRAMReadDataValid & RO_DRAMReadDataReady;
 	
@@ -290,9 +312,9 @@ module AESREWORAM(
 							.InData(				DRAMReadData),
 							.InValid(				ROIntDataInValid),
 							.InAccept(				ROIntDataInReady),
-							.OutData(				),
-							.OutSend(				),
-							.OutReady(				));
+							.OutData(				BufferedData),
+							.OutSend(				BufferedDataValid),
+							.OutReady(				BufferedDataReady));
 	
 	//--------------------------------------------------------------------------
 	//	H AES Input
@@ -313,6 +335,8 @@ module AESREWORAM(
 	//	RW AES Input
 	//--------------------------------------------------------------------------
 
+	// This logic generates RW masks in the background
+	
 	assign	CSRWStartOp =							CS_RW == ST_RW_StartRead | CS_RW == ST_RW_StartWrite;
 	assign	CSRWWrite =								CS_RW == ST_RW_Write;
 	
@@ -408,7 +432,7 @@ module AESREWORAM(
 							.InAccept(				RWAuxInReady),
 							.OutData(				{RWBVOut, RWBIDOut),
 							.OutSend(				RWAuxOutValid),
-							.OutReady(				RWMaskBucketTransition));
+							.OutReady(				RWBucketTransition));
 	
 	//--------------------------------------------------------------------------
 	//	AES Core
@@ -444,80 +468,158 @@ module AESREWORAM(
 							
 							.RWDataOut(				Core_RWDataOut), 
 							.RWDataOutValid(		Core_RWDataOutValid),
-							.RWDataOutReady(		RWMaskTransfer));
-	
+							.RWDataOutReady(		RMMaskReady));
+
 	//--------------------------------------------------------------------------
-	//	RO AES Output
+	//	RO Mask Formation
 	//--------------------------------------------------------------------------
 
-	ROHeaderMask
-	ROHeaderMaskInValid
-	ROHeaderMaskOutValid
-	
-	ROHeaderMaskInReady
-	
-	assign	Core_RODataOutReady = 					ROHeaderMaskInReady;
-	
-	AESHWidth =	ROHeader_AESChunks * AESWidth
-	
-	assign	ROHeaderMaskInValid = 					Core_ROCommandOut == PCMD_ROHeader & Core_RODataOutValid;
+	ROHeaderMask 
 	
 	
+	ROHeaderMaskShiftInValid
+	ROHeaderMaskShiftInReady	
+	ROHeaderMaskShiftOutData
+	ROHeaderMaskShiftOutValid
+	ROHeaderMaskShiftOutReady
 	
-	Core_ROCommandOut
+	ROHeaderMaskBufOutData
+	ROHeaderMaskBufOutValid
+	ROHeaderMaskBufOutReady
+
+	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth;
+	
+	assign	Core_RODataOutReady = 					ROHeaderMaskShiftInReady;
+	
+	assign	ROHeaderMaskShiftInValid = 				Core_ROCommandOut == PCMD_ROHeader & Core_RODataOutValid;
 	
 	FIFOShiftRound #(		.IWidth(				AESWidth),
-							.OWidth(				AESHWidth))
-				ro_hdr_shft(.Clock(					Clock),
+							.OWidth(				AESHWidth)) // some of these bits should get pruned by the tools
+				ro_H_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_RODataOut),
-							.InValid(				ROHeaderMaskInValid),
-							.InAccept(				ROHeaderMaskInReady),
-							.OutData(				ROHeaderMask),
-							.OutValid(				ROHeaderMaskOutValid),
-							.OutReady(				));
+							.InValid(				ROHeaderMaskShiftInValid),
+							.InAccept(				ROHeaderMaskShiftInReady),
+							.OutData(				ROHeaderMaskShiftOutData),
+							.OutValid(				ROHeaderMaskShiftOutValid),
+							.OutReady(				ROHeaderMaskShiftOutReady));
+							
+	// NOTE: This is only here for throughput.  We need header writeback masks 
+	// to "pile up" on a RO header writeback.  We can generate this out if 
+	// needed.
+	FIFORAM		#(			.Width(					ROHeader_RawBits),
+							.Buffering(				ORAML + 1))
+				ro_HM_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				ROHeaderMaskShiftOutData),
+							.InValid(				ROHeaderMaskShiftOutValid),
+							.InAccept(				ROHeaderMaskShiftOutReady),
+							.OutData(				ROHeaderMaskBufOutData),
+							.OutSend(				ROHeaderMaskBufOutValid),
+							.OutReady(				ROHeaderMaskBufOutReady));
 	
-	assign	ROHeader
+	assign	ROHeaderMask =							{	{BktHSize_RndBits-ROHeader_VUBits-IVEntropyWidth{1'b0}},
+														ROHeaderMaskBufOutData, 
+														{IVEntropyWidth{1'b0}	};
+	
+	ROFoundBucket
+	
+	genvar 					i;
+	wire	[ORAMZ-1:0]		RO_UMatches;
+	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BUCKET_OF_INTEREST
+		assign	RO_UMatches[i] =	ROAccess & CSPathRead & DataOut[i+IVEntropyWidth] & (ROPAddr == DataOut[ORAMU*(i+1)+BktHUStart-1:ORAMU*i+BktHUStart]);
+		assign	ROFoundBucket =		|RO_UMatches;
+	end endgenerate
+	
+	Register	#(			.Width(					ROHeader_RawBits))
+				dummy_reg(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				{}),
+							.In(					1'bx),
+							.Out(					));
 	
 	//--------------------------------------------------------------------------
-	//	RW AES Output
+	//	RW Mask Formation
 	//--------------------------------------------------------------------------
+
+	RWHeaderMask
+	RWDataMask
+	
+	assign	RWHeaderMask =							{	{DDRDWidth-RWHeader_RawBits-BktHLStart{1'b0}},
+														Core_RWDataOut[RWHeader_RawBits-1:0],
+														{BktHLStart{1'b0}}	};
+
+	assign	RWDataMask =							Core_RWDataOut;
+	
+	//--------------------------------------------------------------------------
+	//	Mask / Data Mixing & Mask Source Arbitration
+	//--------------------------------------------------------------------------
+		
+	BufferedData
+	BufferedDataValid
+	BufferedDataReady
+	
+	BufferedDataValid_Needed
+	RMMaskValid_Needed
+	ROMaskValid_Needed
+	
+	DataOut
+	DataOutValid
+	DataOutReady
+	
+	Mask
+	
+	ROMask_Needed
+	RMMask_Needed
 	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.IThreshold(			0))
 				rw_hdr_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				RWMaskTransfer),
-							.Intermediate(			RWMaskIsHeader),
-							.Done(					RWMaskBucketTransition));
+							.Enable(				DataOutTransfer),
+							.Intermediate(			MaskIsHeader),
+							.Done(					DataOutBucketTransition));
+		
+	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
+	assign	DataOut =								BufferedData ^ DataOutMask;
+
+	assign	ROMask_Needed =							~ROAccess;
+	assign	RMMask_Needed =							MaskIsHeader;
+	assign	BufferedDataValid_Needed =				BufferedDataValid;
+	assign	RMMaskValid_Needed =					(RMMask_Needed) ? Core_RWDataOutValid : 1'b1;
+	assign	ROMaskValid_Needed =					(ROMask_Needed) ? ROHeaderMaskBufOutValid : 1'b1;
 	
-	assign	RWMaskOut =								(RWMaskIsHeader) ? 	{	{DDRDWidth-RWHeader_RawBits-BktHLStart{1'b0}},
-																			Core_RWDataOut[RWHeader_RawBits-1:0],
-																			{BktHLStart{1'b0}}	} : 
-																		Core_RWDataOut;
+	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
+	assign	DataOutValid =							 BufferedDataValid_Needed & ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	BufferedDataReady =						 DataOutReady & 			ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	RMMaskReady =							(DataOutReady & 			ROMaskValid_Needed & BufferedDataValid_Needed) & 	RMMask_Needed;
+	assign	ROHeaderMaskBufOutReady =				 DataOutReady & BufferedDataValid_Needed & RMMaskValid_Needed & 				ROMask_Needed;
 	
-	assign	RWMaskTransfer =						~ROAccess & ( (BEDataOutValid & DRAMReadDataReady) | (DRAMWriteDataValid & BEDataInReady) );
+	assign	DataOutReady =							(CSPathRead) ? BEDataOutReady : DRAMWriteDataReady;
+	assign	DataOutTransfer =						DataOutValid & DataOutReady;
+	
+	assign	RWBucketTransition =					ROMask_Needed & DataOutBucketTransition;		
 	
 	//--------------------------------------------------------------------------
-	//	To Backend
+	//	Path Read Interface
 	//--------------------------------------------------------------------------
 	
-	assign	BEDataOut =								(ROAccess) ? 0 : DRAMReadData ^ RWMaskOut;
+	assign	BEDataOut =								DataOut;
 	assign	BEBVOut =								(ROAccess) ? 0 : RWBVOut;
 	assign	BEBIDOut =								(ROAccess) ? 0 : RWBIDOut;
-	
-	assign	BEDataOutValid =						(ROAccess) ? 0 : DRAMReadDataValid 	& Core_RWDataOutValid;
+	assign	BEDataOutValid =						CSPathRead & DataOutValid;
 
-	assign	DRAMReadDataReady =						(ROAccess) ?  : BEDataOutReady 	& Core_RWDataOutValid;
+	assign	DRAMReadDataReady =						RO_DRAMReadDataReady;
 
 	//--------------------------------------------------------------------------
-	//	To DRAM
+	//	Path Writeback Interface
 	//--------------------------------------------------------------------------
 
-	assign	DRAMWriteData =							(ROAccess) ? 0 : BEDataIn ^ Core_RWDataOut;
-	assign	DRAMWriteDataValid = 					(ROAccess) ? 0 : BEDataInValid 		& Core_RWDataOutValid;
+	assign	DRAMWriteData =							DataOut;
+	assign	DRAMWriteDataValid = 					CSPathRead & DataOutValid;
 
-	assign	BEDataInReady = 						(ROAccess) ? 0 : DRAMWriteDataReady & Core_RWDataOutValid;
+	assign	BEDataInReady = 						1'b0;//(ROAccess) ? 0 : DRAMWriteDataReady & Core_RWDataOutValid;
 	
 	//--------------------------------------------------------------------------
 endmodule
