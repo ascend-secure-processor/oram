@@ -646,7 +646,7 @@ module PathORAMBackend(
 	
 	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
 	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+ORAMZ*ORAMU-1:BktHUStart];
-	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHUStart+ORAMZ*ORAML-1:BktHLStart];
+	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHLStart+ORAMZ*ORAML-1:BktHLStart];
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))

@@ -127,43 +127,22 @@ module CoherenceController(
 					);
 	
 	assign ProcessingHeader = BlkCtr < BktHSize_DRBursts;
-					
-	wire HeaderInReady, HeaderInValid, HeaderOutReady, HeaderOutValid;
+						
+	// invalidate the bit for the target block
+	wire HdOfInterest;
 	wire [DDRDWidth-1:0]	HeaderIn;
-	wire [DDRDWidth-1:0]	HeaderOut;
-	
-	assign HeaderInValid = ROAccess && FromDecDataValid && ProcessingHeader;	 
-	always @ (posedge Clock) begin		
-		if (!Reset && HeaderInValid && !HeaderInReady) begin
-			$display("Error: Header Buffer Overflow!");
-			$finish;
-		end
-	end
-	
-	// invalidate bit for the target block
 	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOut;
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
 		assign ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
 		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
 	end 
-		 
+	
+	assign HdOfInterest = ValidBitsIn != ValidBitsOut;
+	
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
 	
-	// save the headers and write them back later     
-	FIFORAM	#(          .Width(					DDRDWidth),     
-						.Buffering(				(ORAML+1) * BktHSize_DRBursts ))
-		in_hd_buf  (	.Clock(					Clock),
-						.Reset(					Reset),
-						.InData(				HeaderIn),
-						.InValid(				HeaderInValid),
-						.InAccept(				HeaderInReady),
-						.OutData(				HeaderOut),
-						.OutSend(				HeaderOutValid),
-						.OutReady(				ToEncDataReady)
-					);     
 	
-
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs two path buffers and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
@@ -201,7 +180,7 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read (through a FIFO) and written by AES
 		//-------------------------------------------------------------------------- 
-		wire 					OPathRW_Transition;
+		wire 					PthRW_Transition;
 		
 		wire [DDRDWidth-1:0] 	BufP1Reg_DOut;
 		wire 					BufP1Reg_InValid, BufP1Reg_InReady, BufP1Reg_OutValid, BufP1Reg_OutReady;
@@ -220,7 +199,8 @@ module CoherenceController(
 							.OutReady(				BufP1Reg_OutReady));
 		
 		CCPortArbiter # (	.DWidth(				DDRDWidth),
-							.PathSize_DRBursts(		PathSize_DRBursts)	)
+							.ORAML(					ORAML),
+							.BktSize_DRBursts(		BktSize_DRBursts)	)
 							
 			port_arbiter(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -230,12 +210,16 @@ module CoherenceController(
 							.CSPathRead(			CSPathRead),
 							.CSPathWriteback(		CSPathWriteback),
 							
-							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
-							.FromStashDataTransfer(	FromStashDataValid && FromStashDataReady),				
-							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
+							.ProcessingHeader(		ProcessingHeader),
+							.HdOfInterest(			HdOfInterest),
 							
+							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
+							.FromStashDataTransfer(	FromStashDataValid && FromStashDataReady),
+							.HeaderDataIn(			HeaderIn),
 							.FromDecData(			FromDecData),
 							.FromStashData(			FromStashData),
+							
+							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
 							
 							.Enable(				BufP1_Enable),
 							.Write(					BufP1_Write),
@@ -243,7 +227,7 @@ module CoherenceController(
 							.DIn(					BufP1_DIn),
 							
 							.BufReg_InValid(		BufP1Reg_InValid),
-							.OPathRW_Transition(	OPathRW_Transition)
+							.PthRW_Transition(		PthRW_Transition)
 						);
 	
 		//	AES --> Stash Passthrough 	
@@ -252,16 +236,24 @@ module CoherenceController(
 		assign	FromDecDataReady = 		ToStashDataReady;
 
 		//	ROAccess: header write back CC --> AES. RWAccess: BufP1 --> AES
-		assign	ToEncData =				RWAccess ? BufP1Reg_DOut : ROAccess ? HeaderOut : FromStashData;
-		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid && IVDone: ROAccess ? HeaderOutValid : FromStashDataValid;
-		assign  BufP1Reg_OutReady = 	RWAccess && ToEncDataReady && IVDone;
+		assign	ToEncData =				RWAccess ? BufP1Reg_DOut 
+										: ROAccess ? BufP1Reg_DOut
+										: FromStashData;
+										
+		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid && IVDone
+										: ROAccess ? BufP1Reg_OutValid
+										: FromStashDataValid;
+		
+		assign  BufP1Reg_OutReady = 	RWAccess ? ToEncDataReady && IVDone 
+										: ROAccess ? ToEncDataReady
+										: 0;
 		
 		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && CSPathWriteback;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//-------------------------------------------------------------------------- 
-		assign 	IVStart = RWAccess && CSPathRead && OPathRW_Transition;
+		assign 	IVStart = RWAccess && CSPathRead && PthRW_Transition;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
@@ -271,6 +263,31 @@ module CoherenceController(
 		assign  DataToIV = BufP2_DOut;
 		
 	end else begin: NO_BUF
+	
+		wire HeaderInReady, HeaderInValid, HeaderOutValid;
+		wire [DDRDWidth-1:0]	HeaderOut;
+		
+		assign HeaderInValid = ROAccess && FromDecDataValid && ProcessingHeader;	 
+		always @ (posedge Clock) begin		
+			if (!Reset && HeaderInValid && !HeaderInReady) begin
+				$display("Error: Header Buffer Overflow!");
+				$finish;
+			end
+		end
+	
+		// save the headers and write them back later     
+		FIFORAM	#(       .Width(					DDRDWidth),     
+						.Buffering(				(ORAML+1) * BktHSize_DRBursts ))
+		in_hd_buf  (	.Clock(					Clock),
+						.Reset(					Reset),
+						.InData(				HeaderIn),
+						.InValid(				HeaderInValid),
+						.InAccept(				HeaderInReady),
+						.OutData(				HeaderOut),
+						.OutSend(				HeaderOutValid),
+						.OutReady(				ToEncDataReady)
+					);     
+	
 	
 		//	AES --> Stash Passthrough 	
 		assign	ToStashData =			FromDecData;

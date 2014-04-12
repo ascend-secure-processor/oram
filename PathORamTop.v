@@ -285,31 +285,33 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 	//	Integrity Verification
 	//--------------------------------------------------------------------------
-	
-	IntegrityVerifier #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							
-							.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.ORAME(					ORAME))
-			
-		int_verifier	(	.Clock(					Clock),
-							.Reset(					Reset || IVStart),
-							
-							.Request(				IVRequest),
-							.Write(					IVWrite),
-							.Address(				IVAddress),
-							.DataIn(				DataToIV),
-							.DataOut(				DataFromIV),
-							
-							.Done(					IVDone)
-						);			
-	
+	generate if (EnableIV) begin: INTEGRITY
+		IntegrityVerifier #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+								.DDRDQWidth(			DDRDQWidth),
+								.DDRCWidth(				DDRCWidth),
+								.DDRAWidth(				DDRAWidth),
+								
+								.ORAMB(					ORAMB),
+								.ORAMU(					ORAMU),
+								.ORAML(					ORAML),
+								.ORAMZ(					ORAMZ),
+								.ORAMC(					ORAMC),
+								.ORAME(					ORAME))
+				
+			int_verifier	(	.Clock(					Clock),
+								.Reset(					Reset || IVStart),
+								
+								.Request(				IVRequest),
+								.Write(					IVWrite),
+								.Address(				IVAddress),
+								.DataIn(				DataToIV),
+								.DataOut(				DataFromIV),
+								
+								.Done(					IVDone)
+							);			
+	end	else begin: NO_INTEGRITY		
+		assign IVDone = 1;	
+	end endgenerate
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------

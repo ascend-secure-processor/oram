@@ -6,4 +6,4 @@
 	localparam	DigestStart = FullDigestWidth,
 				DigestEnd = FullDigestWidth - TrancateDigestWidth;
 				
-	localparam PathBufAWidth = `log2(PathSize_DRBursts * 2 + 2);
+	localparam PathBufAWidth = `log2(2 * PathSize_DRBursts + 2 * BktSize_DRBursts + BktHSize_DRBursts * (ORAML+1));

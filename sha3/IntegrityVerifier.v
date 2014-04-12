@@ -16,7 +16,8 @@ module IntegrityVerifier (
 );
 
 	parameter NUMSHA3 = 3;
-
+	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
+	
     `include "PathORAM.vh";
 	`include "DDR3SDRAM.vh";
 	`include "AES.vh";
@@ -25,9 +26,10 @@ module IntegrityVerifier (
 	`include "SHA3Local.vh"
 
     localparam  AWidth = PathBufAWidth;
+	localparam  BktAWidth = `log2(ORAML) + 1;
 
 	input  Clock, Reset;
-	output reg Done;
+	output Done;
 	output Request, Write;
 	output [AWidth-1:0] Address;
 	input  [DDRDWidth-1:0]  DataIn;
@@ -42,15 +44,13 @@ module IntegrityVerifier (
 	
 	wire HashOutValid [NUMSHA3-1:0];
 	wire [FullDigestWidth-1:0] HashOut [NUMSHA3-1:0]; 
+	wire ConsumeHash, Violation;
 	
 	//------------------------------------------------------------------------------------
-	// control logic: round robin scheduling for hash engines
+	// Round robin scheduling for hash engines
 	//------------------------------------------------------------------------------------ 
-	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
-	wire ReadData, ReadHeader;
-	wire ConsumeHash, Violation;
-	reg [LogNUMSHA3-1:0] InTurn, OutTurn;
-    
+		
+	reg [LogNUMSHA3-1:0] InTurn, OutTurn; 
 	always @(posedge Clock) begin
         if (Reset) begin
             InTurn <= 0;
@@ -67,61 +67,58 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------
 	// Request and address generation
 	//------------------------------------------------------------------------------------ 
-	reg [AWidth-1:0] DoneBuckets;
 	reg [`log2(BktSize_DRBursts):0] DoneBlocks;
 	
 	always @(posedge Clock) begin
 		if (Reset) begin
-			DoneBuckets <= 0;
 			DoneBlocks <= 0;
-			Done <= 0;
 		end
-		else if (DataInValid && !Done) begin
-			if (InTurn == NUMSHA3 - 1) begin	// next chunk in each bucket
+		else if (DataInValid && !Done) begin					
+			if (DoneBlocks == BktSize_DRBursts - 1) 	// all chunks for this bucket are streamed in
+				BucketStream[InTurn] <= 0;
+		
+			if (InTurn == NUMSHA3 - 1) 	// next chunk in each bucket
 				DoneBlocks <= (DoneBlocks + 1) % BktSize_DRBursts;
-				
-				if (DoneBlocks == BktSize_DRBursts - 1) begin	// next set of buckets
-					if (DoneBuckets + NUMSHA3 < (ORAML + 1) * 2) 
-						DoneBuckets <= DoneBuckets + NUMSHA3;	
-						
-					else 	// entire in/out path done
-						Done <= 1;
-				end
-			end
 		end
 	end
 	
 	assign Address = Write ? 
-		(DoneBuckets - NUMSHA3 + OutTurn) * BktSize_DRBursts : 		//	updating hash for the previous set of buckets
-		(DoneBuckets + InTurn) * BktSize_DRBursts + DoneBlocks;		//  reading data from the current set of buckets
+		BucketAddr[OutTurn] * BktSize_DRBursts : 		//	updating hash for the previous set of buckets
+		BucketAddr[InTurn] * BktSize_DRBursts + DoneBlocks;		//  reading data from the current set of buckets
 		
-	assign Request = !Reset && (Write || (HashDataReady[InTurn] && !DataInValid && !(!DoneBlocks && HeadersFull[InTurn]) ) );
+	assign Request = !Reset && (Write || (HashDataReady[InTurn] && !DataInValid && BucketStream[InTurn] ) );
 
 	//------------------------------------------------------------------------------------
 	// Pass data to hash engine (possibly modified) and save the headers 
 	//------------------------------------------------------------------------------------
-	assign ReadData = Request && !Write; 
-	assign ReadHeader = Request && !Write && (Address % BktSize_DRBursts == 0); // address of a header	
-	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	ReadData, 		DataInValid);
-	Register #(.Width(1)) 	RdHash (Clock, Reset, 1'b0, 1'b1, 	ReadHeader, 	HeaderInValid);
+
+	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 					DataInValid);
+	Register #(.Width(1)) 	RdHash (Clock, Reset, 1'b0, 1'b1, 	Request && !Write && !DoneBlocks, 	HeaderInValid);
+
+	reg 				BucketStream	[NUMSHA3-1:0];	
+	reg [DDRDWidth-1:0] BucketHeader 	[NUMSHA3-1:0];
+	reg [BktAWidth-1:0] BucketAddr		[NUMSHA3-1:0];
 	
-	reg [DDRDWidth-1:0] Headers [NUMSHA3-1:0];
-	reg HeadersFull [NUMSHA3-1:0];
+	reg [BktAWidth-1:0] BucketProgress;
 	integer hashid = 0;
 	
 	always @(posedge Clock) begin
 		if (Reset) begin
-			for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1)
-				HeadersFull[hashid] <= 0;
+			BucketProgress <= NUMSHA3;
+			for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1) begin
+				BucketAddr[hashid] <= hashid;
+				BucketStream[hashid] <= 1'b1;
+			end
 		end
 		
 		else begin
             if (HeaderInValid) begin
-                Headers[InTurn] <= DataIn;
-                HeadersFull[InTurn] <= 1;
+                BucketHeader[InTurn] <= DataIn;
             end            
             if (ConsumeHash) begin
-                HeadersFull[OutTurn] <= 0;
+				BucketAddr[OutTurn]	<= BucketProgress;
+				BucketProgress <= BucketProgress + 1;
+				BucketStream[OutTurn] <= 1'b1;				
             end
         end
 	end
@@ -135,14 +132,16 @@ module IntegrityVerifier (
 	assign ConsumeHash = HashOutValid[OutTurn] && !DoneBlocks;	
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && (DoneBuckets - NUMSHA3 + OutTurn < ORAML + 1)  &&	
-		Headers[OutTurn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[OutTurn][DigestStart-1:DigestEnd];
+	assign Violation = ConsumeHash && (BucketAddr[OutTurn] < ORAML + 1)  &&	
+		BucketHeader[OutTurn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[OutTurn][DigestStart-1:DigestEnd];
 
+	assign Done = BucketProgress >= 2 * (ORAML + 1);
+		
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
 		if (Violation === 1) begin
 			$display("Integrity violation!");
-			$stop;
+			//$stop;
 		end
 		
 		else if (Violation === 1'bx) begin
@@ -152,8 +151,8 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = !Done && ConsumeHash && DoneBuckets;		
-	assign DataOut = {HashOut[OutTurn][DigestStart-1:DigestEnd], Headers[OutTurn][BktHSize_RawBits-1:0]};
+	assign Write = !Done && ConsumeHash;		
+	assign DataOut = {HashOut[OutTurn][DigestStart-1:DigestEnd], BucketHeader[OutTurn][BktHSize_RawBits-1:0]};
 	
 	//------------------------------------------------------------------------------------
 	// NUMSHA3 hash engines
