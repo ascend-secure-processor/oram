@@ -52,9 +52,6 @@ module REWAESCore(
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
 	
-	// based on tiny_aes + external buffer we add; Note: the outer module can be oblivious to this
-	localparam				AESLatency =			21;
-	
 	localparam				BAWidth =				`max(`log2(RWHeader_AESChunks), `log2(RWBlk_AESChunks)) + 1;
 	
 	//--------------------------------------------------------------------------
@@ -329,6 +326,7 @@ module REWAESCore(
 	// the command bit here adds 0 additional logic since we just use the BRAM 
 	// ECC bits.
 
+	// Note: we don't do backpressure on this FIFO so it must be deep enough
 	AESROFIFO 	ro_O_fifo(	.rst(					SlowReset),
 							.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
@@ -395,6 +393,7 @@ module REWAESCore(
 							.SIn(					CoreDataOut),
 							.POut(					MaskFIFODataIn));
 	
+	// Note: we don't do backpressure on this FIFO so it must be deep enough
 	REWMaskFIFO rw_O_fifo(	.rst(					SlowReset), 
 							.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 

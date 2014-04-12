@@ -37,7 +37,7 @@ module AESREWORAM(
 
 	ROPAddr, ROLeaf, ROAccess,
 	
-	BEDataOut, BEIVOut, BEDataOutValid, BEDataOutReady,
+	BEDataOut, BEBVOut, BEBIDOut, BEDataOutValid, BEDataOutReady,
 	BEDataIn, BEDataInValid, BEDataInReady,	
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
@@ -58,6 +58,12 @@ module AESREWORAM(
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
+	localparam				RWSWidth =				2,
+							ST_RW_StartRead =		2'd0,
+							ST_RW_Read =			2'd1,
+							ST_RW_StartWrite =		2'd2,
+							ST_RW_Write =			2'd3;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -77,7 +83,8 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 
 	output	[DDRDWidth-1:0] BEDataOut;
-	output	[IVEntropyWidth-1:0] BEIVOut; 
+	output	[IVEntropyWidth-1:0] BEBVOut;
+	output	[BIDWidth-1:0]	BEBIDOut;
 	output					BEDataOutValid; 
 	input					BEDataOutReady;
 	
@@ -102,6 +109,27 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 
 	// RW related
+	
+	reg		[RWSWidth-1:0] 	CS_RW, NS_RW;
+	wire					CSRWStartOp, CSRWWrite;
+	
+	wire					RWPathTransition;
+	wire					RWCommandTransfer, RWMaskTransfer;
+
+	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
+
+	wire	[BIDWidth-1:0] 	RWBIDOut;
+	
+	wire	[ORAML-1:0]		GentryLeaf;
+
+	wire	[DDRDWidth-1:0]	RWMaskOut;
+	
+	wire					RWAuxInValid, RWAuxInReady;
+	wire					RWAuxOutValid;		
+	
+	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
+	
+	wire					RWMaskIsHeader, RWMaskBucketTransition;	
 	
 	// AES Core
 	
@@ -129,9 +157,21 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 		
 	`ifdef SIMULATION
+		initial begin	
+			if ((PathMaskBuffering * RWPath_MaskChunks) > 512) begin
+				$display("[%m @ %t] ERROR: The mask header FIFO is too shallow for the Mask data FIFO (sized @ 512x512).", $time);
+				$stop;
+			end
+		end
+		
 		always @(posedge Clock) begin
-			if (RWMaskTransfer & ~RWIVOutValid) begin
+			if (RWMaskTransfer & ~RWAuxOutValid) begin
 				$display("[%m @ %t] ERROR: Mask fifo didn't have data on a transfer.", $time);
+				$stop;
+			end
+			
+			if (ROIntDataInValid & ~ROIntDataInReady) begin
+				$display("[%m @ %t] ERROR: ROInt FIFO overflow.", $time);
 				$stop;
 			end
 		end
@@ -142,115 +182,137 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 
 	//--------------------------------------------------------------------------
-	//	RO,H Seed Generation
+	//	RO AES Input
+	//--------------------------------------------------------------------------
+
+	DRAMReadTransfer
+	RODRAMChunkIsHeader
+	
+	RO_BIDOutValid
+	RO_BIDOutReady
+	
+	RO_DRAMReadDataReady
+	
+	ROIntDataInValid
+	ROIntDataInReady
+	
+		ROBucketTransition
+	ROPathTransition
+	
+	assign	DRAMReadTransfer =						DRAMReadDataValid & RO_DRAMReadDataReady;
+	
+	localparam				RWSWidth =				2,
+							ST_RO_StartRead =		2'd0,
+							ST_RO_HeaderRead =		2'd1, // Masks for RO headers
+							ST_RO_PayloadRead =		2'd2, // Masks for bucket of interest
+							ST_RO_StartWrite =		3'd3, 
+							ST_RO_HeaderWrite =		2'd4; // Masks for header writebacks
+	
+	always @(posedge Clock) begin
+		if (Reset) CS_RO <= 						ST_RO_Idle;
+		else CS_RO <= 								NS_RO;
+	end
+	
+	CSROStartOp, CSROPayloadRead
+	RO_BIDInReady
+	
+	assign	CSROStartOp =							CS_RO == ST_RO_StartRead | CS_RO == ST_RO_StartWrite;
+	assign	CSROPayloadRead =						CS_RO == ST_RO_PayloadRead;
+	
+	always @( * ) begin
+		NS_RO = 									CS_RO;
+		case (CS_RO)
+			ST_RO_StartRead :
+				if (RO_BIDInReady)
+					NS_RO =							ST_RO_HeaderRead;
+			ST_RO_HeaderRead :
+				if (ROPathTransition)
+					NS_RO =							ST_RO_PayloadRead;
+			ST_RO_PayloadRead : 
+				if ()
+					NS_RO =							ST_RO_StartWrite;
+			ST_RO_StartWrite :
+				if (RO_BIDInReady)
+					NS_RO =							ST_RO_HeaderWrite;
+			ST_RO_HeaderWrite :
+				if ()
+					
+		endcase
+	end	
+	
+	CountAlarm 	#(			.Threshold(				BktSize_DRBursts),
+							.IThreshold(			0))
+				ro_hdr_cnt(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				DRAMReadTransfer),
+							.Intermediate(			RODRAMChunkIsHeader),
+							.Done(					ROBucketTransition));
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				ro_pth_cnt(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				ROBucketTransition),
+							.Done(					ROPathTransition));							
+	
+	assign	Core_ROIVIn =							;
+							
+    AddrGen #(				.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.DDRCWidth(				DDRCWidth),
+							.DDRAWidth(				DDRAWidth),
+							.IVEntropyWidth(		IVEntropyWidth))
+				ro_bid(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Start(					CSROStartOp),
+							.Ready(					RO_BIDInReady),
+							.RWIn(					1'b0), // don't care
+							.BHIn(					1'b1), // only send one command per bucket
+							.leaf(					ROLeaf),
+							.CmdValid(				RO_BIDOutValid),
+							.CmdReady(				RO_BIDOutReady),
+							.BktIdx(				Core_ROBIDIn));
+							
+	assign	Core_ROCommandIn =						(CSROPayloadRead) ? PCMD_ROData : PCMD_ROHeader;
+	
+	assign	Core_ROCommandInValid =					RODRAMChunkIsHeader & 	DRAMReadDataValid & RO_BIDOutValid & ROIntDataInReady;
+	assign	ROIntDataInValid =												DRAMReadDataValid & RO_BIDOutValid & Core_ROCommandInReady;
+	
+	assign	RO_BIDOutReady =						Core_ROCommandInReady & ROIntDataInReady & DRAMReadDataValid;
+	assign	RO_DRAMReadDataReady =					Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid;
+	
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				AESLatencyPlus))
+				ro_int_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				ROIntDataInValid),
+							.InAccept(				ROIntDataInReady),
+							.OutData(				),
+							.OutSend(				),
+							.OutReady(				));
+	
+	//--------------------------------------------------------------------------
+	//	H AES Input
 	//--------------------------------------------------------------------------
 	
-	/*
-	ServiceHeader
-	
-	ROIV
-	ROBucketID
-	ROChunkID
-	ROSeed
-
-	ReadTransfer
-
-	ROSeedValid
-	ROSeedTaken
-	
-	FlitIsHeader
-	HeaderTransfer
-	
-	HeaderIV
-	
-	assign	ReadTransfer =							DRAMReadDataValid & DRAMReadDataReady;
-	assign	HeaderTransfer =						ReadTransfer & FlitIsHeader;
-	
-	assign	HeaderIV = 								DRAMReadData[IVEntropyWidth-1:0];
-	
-	CountAlarm #(			.Threshold(				BktSize_DRBursts),
-							.IThreshold(			0))
-				bkt_cnt(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				ReadTransfer),
-							.Intermediate(			FlitIsHeader),
-							.Done(					BucketTransition));
-	
-	FIFORegister #(			.Width(					IVEntropyWidth))
-				ro_state(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderIV),
-							.InValid(				HeaderTransfer),
-							.InAccept(				), // TODO check to never go low
-							.OutData(				ROIV),
-							.OutSend(				ROSeedValid),
-							.OutReady(				ROSeedTaken));
-
-							HIV
-							HSeedValid
-							HSeedTaken
-							
-	FIFORAM		#(			.Width(					DDRDWidth),
+	FIFORAM		#(			.Width(					IVEntropyWidth),
 							.Buffering(				ORAML + 1))
-				ro_iv_rpeat(.Clock(					Clock),
+				ro_IVp_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				HeaderIV + BktSize_AESChunks),
-							.InValid(				HeaderTransfer),
-							.InAccept(				), // TODO check to never go low
-							.OutData(				HIV),
-							.OutSend(				HSeedValid),
-							.OutReady(				HSeedTaken));
-							
-	assign	ROBucketID =							0; // TODO add AddrGen
-							
-	Counter		#(			.Width(					))
-				ro_cid(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				ROSeedValid),
-							.In(					{{1'bx}}),
-							.Count(					ROChunkID));
-	CountCompare #(			.Width(					),
-							.Compare(				))
-				ro_stop(	.Count(					),
-							.TerminalCount(			));
-	assign	
-							
-	assign	ROSeed =								{ {SeedSpaceRemaining{1'b0}}, ROIV, ROBucketID, ROChunkID };
-	*/
-	
-	assign	Core_ROCommandInValid = 1'b0;
+							.InData(				),
+							.InValid(				),
+							.InAccept(				),
+							.OutData(				),
+							.OutSend(				),
+							.OutReady(				));
 	
 	//--------------------------------------------------------------------------
 	//	RW AES Input
 	//--------------------------------------------------------------------------
 
-	localparam				RWSWidth =				2,
-							ST_RW_StartRead =		2'd0,
-							ST_RW_Read =			2'd1,
-							ST_RW_StartWrite =		2'd2,
-							ST_RW_Write =			2'd3;
-	
-	reg		[RWSWidth-1:0] 	CS_RW, NS_RW;
-	wire					CSRWStartOp, CSRWWrite;
-	
-	wire					PathTransition;
-	wire					RWCommandTransfer, RWMaskTransfer;
-
-	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWIVOut;
-
-	wire	[ORAML-1:0]		GentryLeaf;
-
-	wire	[DDRDWidth-1:0]	RWMaskOut;
-	
-	wire					RWIVInValid, RWIVInReady;
-	wire					RWIVOutValid;		
-	
-	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
-	
-	wire					RWMaskIsHeader, RWMaskBucketTransition;
-	
 	assign	CSRWStartOp =							CS_RW == ST_RW_StartRead | CS_RW == ST_RW_StartWrite;
 	assign	CSRWWrite =								CS_RW == ST_RW_Write;
 	
@@ -266,13 +328,13 @@ module AESREWORAM(
 				if (RW_BIDInReady)
 					NS_RW =							ST_RW_Read;
 			ST_RW_Read : 
-				if (PathTransition)
+				if (RWPathTransition)
 					NS_RW =							ST_RW_StartWrite;
 			ST_RW_StartWrite : 
 				if (RW_BIDInReady)
 					NS_RW =							ST_RW_Write;
 			ST_RW_Write : 
-				if (PathTransition)
+				if (RWPathTransition)
 					NS_RW =							ST_RW_StartRead;
 		endcase
 	end
@@ -281,14 +343,14 @@ module AESREWORAM(
 				rw_lvl_cnt(	.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Enable(				RWCommandTransfer),
-							.Done(					PathTransition));	
+							.Done(					RWPathTransition));
 	
 	Counter		#(			.Width(					IVEntropyWidth))
 				gentry_leaf(.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				PathTransition & CSRWWrite),
+							.Enable(				RWPathTransition & CSRWWrite),
 							.In(					{IVEntropyWidth{1'bx}}),
 							.Count(					GentryCounter));
 							
@@ -329,23 +391,23 @@ module AESREWORAM(
 							.CmdReady(				RW_BIDOutReady),
 							.BktIdx(				Core_RWBIDIn));
 	
-	assign	Core_RWCommandInValid =					RW_BIDOutValid & 		RWIVInReady;
-	assign	RWIVInValid =							RW_BIDOutValid & 		Core_RWCommandInReady;
-	assign	RW_BIDOutReady =						RWIVInReady & 			Core_RWCommandInReady;
+	assign	Core_RWCommandInValid =					RW_BIDOutValid & 		RWAuxInReady;
+	assign	RWAuxInValid =							RW_BIDOutValid & 		Core_RWCommandInReady;
+	assign	RW_BIDOutReady =						RWAuxInReady & 			Core_RWCommandInReady;
 	
 	assign	RWCommandTransfer =						Core_RWCommandInValid & Core_RWCommandInReady;
 	
-	// Store Gentry seeds for CC
-	// Invariant: Core_RWDataOutValid -> RWIVOutValid
-	FIFORAM		#(			.Width(					IVEntropyWidth),
+	// Store Gentry seeds for CC/IV unit
+	// Invariant: Core_RWDataOutValid -> RWAuxOutValid
+	FIFORAM		#(			.Width(					IVEntropyWidth + BIDWidth),
 							.Buffering(				PathMaskBuffering * (ORAML + 1)))
-				rw_M_buf(	.Clock(					Clock),
+				rw_H_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				Core_RWIVIn),
-							.InValid(				RWIVInValid),
-							.InAccept(				RWIVInReady),
-							.OutData(				RWIVOut),
-							.OutSend(				RWIVOutValid),
+							.InData(				{Core_RWIVIn, Core_RWBIDIn}),
+							.InValid(				RWAuxInValid),
+							.InAccept(				RWAuxInReady),
+							.OutData(				{RWBVOut, RWBIDOut),
+							.OutSend(				RWAuxOutValid),
 							.OutReady(				RWMaskBucketTransition));
 	
 	//--------------------------------------------------------------------------
@@ -388,8 +450,34 @@ module AESREWORAM(
 	//	RO AES Output
 	//--------------------------------------------------------------------------
 
-	// TODO temp
-	assign	Core_RODataOutReady = 1'b1;
+	ROHeaderMask
+	ROHeaderMaskInValid
+	ROHeaderMaskOutValid
+	
+	ROHeaderMaskInReady
+	
+	assign	Core_RODataOutReady = 					ROHeaderMaskInReady;
+	
+	AESHWidth =	ROHeader_AESChunks * AESWidth
+	
+	assign	ROHeaderMaskInValid = 					Core_ROCommandOut == PCMD_ROHeader & Core_RODataOutValid;
+	
+	
+	
+	Core_ROCommandOut
+	
+	FIFOShiftRound #(		.IWidth(				AESWidth),
+							.OWidth(				AESHWidth))
+				ro_hdr_shft(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				Core_RODataOut),
+							.InValid(				ROHeaderMaskInValid),
+							.InAccept(				ROHeaderMaskInReady),
+							.OutData(				ROHeaderMask),
+							.OutValid(				ROHeaderMaskOutValid),
+							.OutReady(				));
+	
+	assign	ROHeader
 	
 	//--------------------------------------------------------------------------
 	//	RW AES Output
@@ -415,10 +503,12 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	assign	BEDataOut =								(ROAccess) ? 0 : DRAMReadData ^ RWMaskOut;
-	assign	BEIVOut =								(ROAccess) ? 0 : RWIVOut;
+	assign	BEBVOut =								(ROAccess) ? 0 : RWBVOut;
+	assign	BEBIDOut =								(ROAccess) ? 0 : RWBIDOut;
+	
 	assign	BEDataOutValid =						(ROAccess) ? 0 : DRAMReadDataValid 	& Core_RWDataOutValid;
 
-	assign	DRAMReadDataReady =						(ROAccess) ? 0 : BEDataOutReady 	& Core_RWDataOutValid;
+	assign	DRAMReadDataReady =						(ROAccess) ?  : BEDataOutReady 	& Core_RWDataOutValid;
 
 	//--------------------------------------------------------------------------
 	//	To DRAM
