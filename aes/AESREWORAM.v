@@ -199,6 +199,12 @@ module AESREWORAM(
 	//	Control logic
 	//--------------------------------------------------------------------------
 
+	reg	ROAccess_Delayed;
+	
+	always @(posedge Clock) begin
+		ROAccess_Delayed <=							ROAccess;
+	end
+	
 	//--------------------------------------------------------------------------
 	//	RO AES Input
 	//--------------------------------------------------------------------------
@@ -243,7 +249,8 @@ module AESREWORAM(
 	
 	ROCommandTransfer
 	
-	assign	CSROStartOp =							CS_RO == ST_RO_StartRead | CS_RO == ST_RO_StartWrite;
+	assign	CSROStartRead =							CS_RO == ST_RO_StartRead;
+	assign	CSROStartOp =							CSROStartRead | CS_RO == ST_RO_StartWrite;
 	assign	CSROHeaderRead =						CS_RO == ST_RO_HeaderRead;
 	assign	CSROStartPayloadRead =					CS_RO == ST_RO_StartPayloadRead;
 	assign	CSROPayloadRead =						CS_RO == ST_RO_PayloadRead;
@@ -295,32 +302,34 @@ module AESREWORAM(
 							.Enable(				CSROPayloadRead & ROIntDataInValid & ROIntDataInReady),
 							.Done(					ROIRebufferComplete));							
 	
-	/*
 	RO_GentryCounterShifted
-	ROLeafDirection
+	ROLeafNextDirection
 	
-	ShiftRegister #(		.PWidth(				IVEntropyWidth),
-							.Reverse(				1),
-							.SWidth(				1))
-				ro_G_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					),
-							.Enable(				),
-							.PIn(					GentryCounter),
-							.SIn(					1'b0),
-							.POut(					RO_GentryCounterShifted));
+	ROGentryLevelIncrement
+	ROGentryNext
+	
+	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
+	assign	ROGentryLevelIncrement =				ROVersion + ~ROLeafNextDirection;
+	assign	ROGentryNext = 							(CSROStartRead) ? GentryCounter_MemoryConsistant : {1'b0, ROGentryLevelIncrement[IVEntropyWidth-1:1]};
+	
+	Register	#(			.Width(					IVEntropyWidth))
+				ro_gentry(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				CSROStartRead | (CSROHeaderRead & DRAMReadTransfer),
+							.In(					ROGentryNext),
+							.Out(					ROVersion));
 	ShiftRegister #(		.PWidth(				ORAML),
 							.Reverse(				1),
 							.SWidth(				1))
-				ro_G_shft(	.Clock(					Clock), 
+				ro_L_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Load(					),
-							.Enable(				), 
+							.Load(					CSROStartRead),
+							.Enable(				CSROHeaderRead & DRAMReadTransfer), 
 							.PIn(					ROLeaf),
-							.SOut(					ROLeafDirection));							
-	*/
+							.SOut(					ROLeafNextDirection));
 	
-	assign	RO_IVOut =								0; // TODO
+	assign	RO_IVOut =								ROVersion;
 							
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -427,22 +436,31 @@ module AESREWORAM(
 		endcase
 	end
 	
-	// TODO: to keep GentryCounter in sync with the RO accesses, don't run ahead
-	
 	CountAlarm #(			.Threshold(				ORAML + 1))
 				rw_lvl_cnt(	.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Enable(				RWCommandTransfer),
 							.Done(					RWPathTransition));
 	
+	// Gentry counter used to generate RW masks (at as fast a rate as possible)
 	Counter		#(			.Width(					IVEntropyWidth))
-				gentry_leaf(.Clock(					Clock),
+				gentry_bg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				RWPathTransition & CSRWWrite),
 							.In(					{IVEntropyWidth{1'bx}}),
 							.Count(					GentryCounter));
+							
+	// Represents the actual gentry counter of blocks stored in memory
+	Counter		#(			.Width(					IVEntropyWidth))
+				gentry_mem(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				~ROAccess_Delayed & ROAccess),
+							.In(					{IVEntropyWidth{1'bx}}),
+							.Count(					GentryCounter_MemoryConsistant));							
 							
 	// RW seed generation scheme for bucket @ level L (L = 0...):
 	//	decrypt(GentryCounter >> L)
