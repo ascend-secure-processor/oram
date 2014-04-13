@@ -609,7 +609,13 @@ module PathORAMBackend(
 							.OutSend(				AddrGen_DRAMCommandValid),
 							.OutReady(				AddrGen_DRAMCommandReady));						
 							
-	DRAMInitializer #(		.ORAMB(					ORAMB),
+	generate if (EnableREW) begin:AUTO_INIT
+		assign	DRAMInitComplete =					1'b1;
+		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
+		assign	DRAMInit_DRAMCommand =				DDR3CMD_Write;
+		assign	DRAMInit_DRAMCommandValid =			1'b0;
+	end else begin:DRAM_INIT
+		DRAMInitializer #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -628,7 +634,8 @@ module PathORAMBackend(
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
 							.Done(					DRAMInitComplete));
-							
+	end endgenerate
+	
 	//------------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
 	//------------------------------------------------------------------------------

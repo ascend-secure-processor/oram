@@ -666,8 +666,6 @@ module AESREWORAM(
 							.In(					{BufferedIV, 	BufferedBID}),
 							.Out(					{ROI_IV, 		ROI_BID}));
 
-	// TODO must add leaf to this buffer!
-							
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				BktPSize_DRBursts))

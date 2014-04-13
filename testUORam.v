@@ -27,7 +27,7 @@ module testUORam;
     parameter                   PLBCapacity = 1024;     // in bits
 
 	parameter					Overclock = 		0;
-	parameter					EnableAES =			0;
+	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          0;
 	
