@@ -393,20 +393,23 @@ module AESREWORAM(
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));
 							
-	assign	Core_ROCommandIn =						(CSROPayloadRead) ? PCMD_ROData : PCMD_ROHeader;
+	wire RO_BIDOutValid_Needed;						// TODO
+							
+	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;				
+							
+	assign	Core_ROCommandIn =						(CSROPayloadRead) ? PCMD_ROData : 	PCMD_ROHeader;
+	assign	Core_ROIVIn =							(CSROPayloadRead) ? ROI_IV : 		RO_IVOut;
+	assign	Core_ROBIDIn =							(CSROPayloadRead) ? ROI_BID : 		RO_BIDOut;	
 	
 	assign	Core_ROCommandInValid =					(CSROStartPayloadRead) ? 	1'b1 : 
 													(CSROPayloadRead) ? 		1'b0 :	 			
-													DRAMReadDataValid & RO_BIDOutValid & ROIntDataInReady & RODRAMChunkIsHeader;
+													DRAMReadDataValid & RO_BIDOutValid & 		ROIntDataInReady & 	RODRAMChunkIsHeader;
 	assign	ROIntDataInValid =						(CSROStartPayloadRead) ? 	1'b0 : 
 													(CSROPayloadRead) ? 		ROIDataValid : 
-													DRAMReadDataValid &	RO_BIDOutValid & Core_ROCommandInReady;
-	
-	assign	Core_ROIVIn =							(CSROPayloadRead) ? ROI_IV : 	RO_IVOut;
-	assign	Core_ROBIDIn =							(CSROPayloadRead) ? ROI_BID : 	RO_BIDOut;
-	
-	assign	RO_BIDOutReady =						Core_ROCommandInReady & ROIntDataInReady & DRAMReadDataValid;
-	assign	DRAMReadDataReady =						Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid;
+													DRAMReadDataValid &	RO_BIDOutValid_Needed & Core_ROCommandInReady;
+
+	assign	RO_BIDOutReady =						Core_ROCommandInReady & ROIntDataInReady & DRAMReadDataValid & 	RODRAMChunkIsHeader;
+	assign	DRAMReadDataReady =						Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid_Needed;
 	
 	assign	ROCommandTransfer =						Core_ROCommandInValid & Core_ROCommandInReady;
 	
