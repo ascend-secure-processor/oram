@@ -50,9 +50,6 @@ module PathORAMBackend(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam				BigUWidth =				ORAMU * ORAMZ,
-							BigLWidth =				ORAML * ORAMZ;
-								
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
 	
 	localparam				STWidth =				3,
@@ -653,9 +650,9 @@ module PathORAMBackend(
 	assign	DataDownShift_InValid =					DRAMReadDataValid & ~ReadProcessingHeader;
 	assign	DRAMReadDataReady =						(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
 	
-	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[IVEntropyWidth+ORAMZ-1:IVEntropyWidth];
-	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+ORAMZ*ORAMU-1:BktHUStart];
-	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHLStart+ORAMZ*ORAML-1:BktHLStart];
+	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[BktHVStart+BigVWidth-1:BktHVStart];
+	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+BigUWidth-1:BktHUStart];
+	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHLStart+BigLWidth-1:BktHLStart];
 	
 	FIFOShiftRound #(		.IWidth(				BigUWidth),
 							.OWidth(				ORAMU))
