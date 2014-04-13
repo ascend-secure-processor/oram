@@ -42,7 +42,7 @@ module AESREWORAM(
 	BEDataIn, BEDataInValid, BEDataInReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
-	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
 	);
 
 	//--------------------------------------------------------------------------
@@ -59,7 +59,7 @@ module AESREWORAM(
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
-	localparam				RWSWidth =				3,
+	localparam				ROSWidth =				3,
 							ST_RO_Idle =			3'd0,
 							ST_RO_StartRead =		3'd1,
 							ST_RO_HeaderRead =		3'd2, // Masks for RO headers
@@ -124,10 +124,12 @@ module AESREWORAM(
 
 	// RO header mask & bucket of interest seed generation
 
-	wire					DRAMReadTransfer, ROCommandTransfer, RO_DRAMReadDataReady
+	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
+	
+	wire					DRAMReadTransfer, ROCommandTransfer, RO_DRAMReadDataReady;
 	
 	wire	[DDRDWidth-1:0]	ROIntDataIn;
-	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady
+	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
 	
 	wire					ROIntDataInValid, ROIntDataInReady;
 	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
@@ -190,16 +192,13 @@ module AESREWORAM(
 	wire	[IVEntropyWidth-1:0] ROI_IV;
 	wire	[BIDWidth-1:0]	ROI_BID;
 	
-	wire	[DDRDWidth-1:0]	ROIData
-	wire					ROIDataValid, ROIDataReady
+	wire	[DDRDWidth-1:0]	ROIData;
+	wire					ROIDataValid, ROIDataReady;
 	
 	wire					ROI_FoundBucket, ROI_BucketHasBeenFound;
 	wire					ROI_Rebuffer1Complete, ROI_Rebuffer2Complete;	
 	
 	// Output Data/Mask mixing
-	
-	wire	[DDRDWidth-1:0]	BufferedData;
-	wire					BufferedDataValid, BufferedDataReady;
 	
 	wire	[DDRDWidth-1:0]	ROHeaderMask;
 	wire	[DDRDWidth-1:0]	RWBGHeaderMask, RWBGDataMask;
@@ -361,7 +360,7 @@ module AESREWORAM(
 				ro_gentry(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				CSROStartRead | (CSROHeaderRead & DRAMReadTransfer),
+							.Enable(				CSROStartRead | (CSROHeaderRead & DRAMReadTransfer)),
 							.In(					RO_IVNext),
 							.Out(					RO_IVOut));
 	ShiftRegister #(		.PWidth(				ORAML),
@@ -555,7 +554,7 @@ module AESREWORAM(
 							.InData(				{Core_RWIVIn, Core_RWBIDIn}),
 							.InValid(				RWAuxInValid),
 							.InAccept(				RWAuxInReady),
-							.OutData(				{RWBVOut, RWBIDOut),
+							.OutData(				{RWBVOut, RWBIDOut}),
 							.OutSend(				RWAuxOutValid),
 							.OutReady(				RWBucketTransition));
 	
@@ -631,8 +630,8 @@ module AESREWORAM(
 							.OutReady(				ROMaskBufOutReady));
 	
 	assign	ROHeaderMask =							{	{BktHSize_RndBits-ROHeader_VUBits-IVEntropyWidth{1'b0}},
-														ROHeaderMaskBufOutData, 
-														{IVEntropyWidth{1'b0}	};
+														ROMaskBufOutData, 
+														{IVEntropyWidth{1'b0}}	};
 	
 	//--------------------------------------------------------------------------
 	//	RO Identify Bucket of Interest
@@ -667,6 +666,8 @@ module AESREWORAM(
 							.In(					{BufferedIV, 	BufferedBID}),
 							.Out(					{ROI_IV, 		ROI_BID}));
 
+	// TODO must add leaf to this buffer!
+							
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				BktPSize_DRBursts))
@@ -738,13 +739,13 @@ module AESREWORAM(
 	assign	RMMask_Needed =							~ROAccess;
 	assign	BDataValid_Needed =						BufferedDataValid;
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
-	assign	ROMaskValid_Needed =					(ROMask_Needed) ? ROHeaderMaskBufOutValid : 1'b1;
+	assign	ROMaskValid_Needed =					(ROMask_Needed) ? ROMaskBufOutValid : 1'b1;
 	
 	assign	RWHeaderMask =							(ROIMask_Needed) ? ROIHeaderMask :	 	RWBGHeaderMask;
 	assign	RWDataMask =							(ROIMask_Needed) ? ROIDataMask : 		RWBGDataMask;
 	
 	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
-	assign	DataOut =								BufferedData ^ DataOutMask;	
+	assign	DataOut =								BufferedData ^ Mask;	
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
 	assign	DataOutValid =							 BDataValid_Needed & 		ROMaskValid_Needed & RMMaskValid_Needed;

@@ -459,6 +459,7 @@ module PathORAMBackend(
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
 		
 		assign	ROPAddr =							PAddr_Internal;
+		assign	ROLeaf =							CurrentLeaf_Internal;
 		assign	ROAccess =							~RWAccess & DRAMInitComplete;
 		assign	REWRoundDummy =						AccessIsDummy;
 	end else begin:BASIC_CONTROL
@@ -469,7 +470,8 @@ module PathORAMBackend(
 		
 		assign	AddrGen_HeaderWriteback =			1'b0;
 		
-		assign	ROPAddr =							{ORAMU{1'bx}};		
+		assign	ROPAddr =							{ORAMU{1'bx}};
+		assign	ROLeaf =							{ORAML{1'bx}};
 		assign	ROAccess =							1'b0;
 		assign	REWRoundDummy =						1'b0;
 	end endgenerate

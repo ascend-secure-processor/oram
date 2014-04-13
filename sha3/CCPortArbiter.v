@@ -19,7 +19,7 @@ module CCPortArbiter (
 	DIn,
 	
 	PthRW_Transition, BlkOnPthCtr, 
-	HdOnPthCtr, BktOfI_Transition,
+	HdOnPthCtr, BktOfI_Transition
 );
 
 	parameter 	DWidth = 1,

@@ -26,17 +26,17 @@ module testUORam;
     parameter                   LeafWidth = 32;         // in bits       
     parameter                   PLBCapacity = 1024;     // in bits
 
-	parameter				Overclock = 		0; 
-	parameter				EnableAES =			0;
-	parameter				EnableREW =			1; 
-    parameter				EnableIV =          1;
+	parameter					Overclock = 		0;
+	parameter					EnableAES =			0;
+	parameter					EnableREW =			1;
+    parameter					EnableIV =          0;
 	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
     `include "BucketLocal.vh"
     `include "DDR3SDRAMLocal.vh"
 
-    wire Clock; 
+    wire Clock, FastClock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
     wire CmdInReady, DataInReady, ReturnDataValid;
@@ -73,6 +73,7 @@ module testUORam;
                             .PLBCapacity(           PLBCapacity))
                             
             ORAM    (		.Clock(					Clock),
+							.FastClock(				FastClock),
                             .Reset(					Reset),
                             
                             // interface with network			
@@ -153,9 +154,11 @@ module testUORam;
     assign Reset = CycleCount < 30;
     assign DataIn = 1;
   
-    localparam   Freq =	100_000_000;
+    localparam  Freq =	200_000_000,
+				FastFreq = 300_000_000;
     localparam   Cycle = 1000000000/Freq;	
-    ClockSource #(Freq) ClockF100Gen(1'b1, Clock);
+    ClockSource #(Freq) ClockF200Gen(1'b1, Clock);
+	ClockSource #(FastFreq) ClockF300Gen(1'b1, FastClock);
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;

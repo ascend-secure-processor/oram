@@ -11,7 +11,7 @@
 //				verification, & a DRAM interface
 //==============================================================================
 module PathORamTop(
-  	Clock, Reset,
+  	Clock, FastClock, Reset,
 	
 	Cmd, PAddr, 
 	CmdValid, CmdReady, 
@@ -45,13 +45,12 @@ module PathORamTop(
 	`include "SHA3Local.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh"
-	
 
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					Clock, Reset;
+  	input 					Clock, FastClock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	Interface to network
@@ -122,16 +121,17 @@ module PathORamTop(
 	// REW
 	
 	wire    [ORAMU-1:0]		ROPAddr;
+	wire	[ORAML-1:0]		ROLeaf;
 	wire                    ROAccess, REWRoundDummy;
 	wire					CSPathRead, CSPathWriteback;
     wire                    DRAMInitComplete;
 	
 	// integrity verification
 	
-	wire 						IVStart, IVDone, IVRequest, IVWrite;
-	wire 	[PathBufAWidth-1:0] 	IVAddress;
-	wire 	[DDRDWidth-1:0]  	DataFromIV, DataToIV;
-	wire  						IVReady_BktOfI, IVDone_BktOfI;
+	wire 					IVStart, IVDone, IVRequest, IVWrite;
+	wire 	[PathBufAWidth-1:0]	IVAddress;
+	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
+	wire  					IVReady_BktOfI, IVDone_BktOfI;
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -221,6 +221,7 @@ module PathORamTop(
 							.DRAMWriteDataReady(	BE_DRAMWriteDataReady),
 							
                             .ROPAddr(               ROPAddr),
+							.ROLeaf(				ROLeaf),
                             .ROAccess(          	ROAccess),
 							.REWRoundDummy(			REWRoundDummy),
 							.CSPathRead(			CSPathRead),
@@ -282,42 +283,41 @@ module PathORamTop(
 							.DataFromIV(			DataFromIV),
 							.DataToIV(				DataToIV),
 
-							.IVReady_BktOfI(	IVReady_BktOfI), 
-							.IVDone_BktOfI(			IVDone_BktOfI)							
-					);
+							.IVReady_BktOfI(		IVReady_BktOfI), 
+							.IVDone_BktOfI(			IVDone_BktOfI));
 							
 	//--------------------------------------------------------------------------
 	//	Integrity Verification
 	//--------------------------------------------------------------------------
-	generate if (EnableIV) begin: INTEGRITY
-		IntegrityVerifier #(	.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-								.DDRDQWidth(			DDRDQWidth),
-								.DDRCWidth(				DDRCWidth),
-								.DDRAWidth(				DDRAWidth),
+	
+	generate if (EnableIV) begin:INTEGRITY
+		IntegrityVerifier #(	.DDR_nCK_PER_CLK(	DDR_nCK_PER_CLK),
+								.DDRDQWidth(		DDRDQWidth),
+								.DDRCWidth(			DDRCWidth),
+								.DDRAWidth(			DDRAWidth),
 								
-								.ORAMB(					ORAMB),
-								.ORAMU(					ORAMU),
-								.ORAML(					ORAML),
-								.ORAMZ(					ORAMZ),
+								.ORAMB(				ORAMB),
+								.ORAMU(				ORAMU),
+								.ORAML(				ORAML),
+								.ORAMZ(				ORAMZ),
 								
-								.IVEntropyWidth(		IVEntropyWidth))
+								.IVEntropyWidth(	IVEntropyWidth))
 				
-			int_verifier	(	.Clock(					Clock),
-								.Reset(					Reset || IVStart),
+			int_verifier	(	.Clock(				Clock),
+								.Reset(				Reset || IVStart),
 								
-								.Request(				IVRequest),
-								.Write(					IVWrite),
-								.Address(				IVAddress),
-								.DataIn(				DataToIV),
-								.DataOut(				DataFromIV),
+								.Request(			IVRequest),
+								.Write(				IVWrite),
+								.Address(			IVAddress),
+								.DataIn(			DataToIV),
+								.DataOut(			DataFromIV),
 								
-								.Done(					IVDone),
-								.IVReady_BktOfI(		IVReady_BktOfI), 
-								.IVDone_BktOfI(			IVDone_BktOfI)
-							);			
+								.Done(				IVDone),
+								.IVReady_BktOfI(	IVReady_BktOfI), 
+								.IVDone_BktOfI(		IVDone_BktOfI));			
 	end	else begin: NO_INTEGRITY		
-		assign IVDone = 1'b1;
-		assign IVDone_BktOfI = 1'b1;
+		assign	IVDone = 							1'b1;
+		assign	IVDone_BktOfI = 					1'b1;
 	end endgenerate
 	
 	//--------------------------------------------------------------------------
@@ -325,8 +325,46 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 	
 	generate if (EnableAES) begin:AES
-							// TODO which of these params are really needed?
-		AESPathORAM #(		.ORAMB(					ORAMB),
+		if (EnableREW) begin:REW_AES
+			AESREWORAM	#(	.ORAMZ(					ORAMZ),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMB(					ORAMB),
+							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
+							.DDRDQWidth(			DDRDQWidth),
+							.IVEntropyWidth(		IVEntropyWidth),
+							.AESWidth(				AESWidth))
+							
+				aes(		.Clock(					Clock), 
+							.FastClock(				FastClock), 
+							.Reset(					Reset),
+
+							.ROPAddr(				ROPAddr),
+							.ROLeaf(				ROLeaf), 
+							.ROAccess(				ROAccess),
+							.CSPathRead(			CSPathRead),
+							
+							.BEDataOut(				AES_DRAMReadData), 
+							.BEBVOut(				), 
+							.BEBIDOut(				),
+							.BEDataOutValid(		AES_DRAMReadDataValid), 
+							.BEDataOutReady(		AES_DRAMReadDataReady),						
+
+							.BEDataIn(				AES_DRAMWriteData), 
+							.BEDataInValid(			AES_DRAMWriteDataValid), 
+							.BEDataInReady(			AES_DRAMWriteDataReady),	
+							
+							.DRAMReadData(			DRAMReadData), 
+							.DRAMReadDataValid(		DRAMReadDataValid), 
+							.DRAMReadDataReady(		PathBuffer_OutReady),
+							
+							.DRAMWriteData(			DRAMWriteData), 
+							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+							.DRAMWriteDataReady(	DRAMWriteDataReady));
+							
+			assign	DRAMWriteMask =					{DDRMWidth{1'b0}}; // TODO change this?
+		end else begin:BASIC_AES
+			AESPathORAM #(	.ORAMB(					ORAMB), // TODO which of these params are really needed?
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -362,6 +400,7 @@ module PathORamTop(
 							.BackendWReady(			AES_DRAMWriteDataReady),
 
 							.DRAMInitDone(			DRAMInitComplete));
+		end
 	end else begin:NO_AES
 		assign	DRAMWriteData = 					AES_DRAMWriteData;
 		assign	DRAMWriteMask =						AES_DRAMWriteMask;
