@@ -131,6 +131,7 @@ module PathORamTop(
 	wire 						IVStart, IVDone, IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0] 	IVAddress;
 	wire 	[DDRDWidth-1:0]  	DataFromIV, DataToIV;
+	wire  						IVReady_BktOfI, IVDone_BktOfI;
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -279,7 +280,10 @@ module PathORamTop(
 							.IVWrite(				IVWrite),
 							.IVAddress(				IVAddress),
 							.DataFromIV(			DataFromIV),
-							.DataToIV(				DataToIV)						
+							.DataToIV(				DataToIV),
+
+							.IVReady_BktOfI(	IVReady_BktOfI), 
+							.IVDone_BktOfI(			IVDone_BktOfI)							
 					);
 							
 	//--------------------------------------------------------------------------
@@ -295,8 +299,8 @@ module PathORamTop(
 								.ORAMU(					ORAMU),
 								.ORAML(					ORAML),
 								.ORAMZ(					ORAMZ),
-								.ORAMC(					ORAMC),
-								.ORAME(					ORAME))
+								
+								.IVEntropyWidth(		IVEntropyWidth))
 				
 			int_verifier	(	.Clock(					Clock),
 								.Reset(					Reset || IVStart),
@@ -307,11 +311,15 @@ module PathORamTop(
 								.DataIn(				DataToIV),
 								.DataOut(				DataFromIV),
 								
-								.Done(					IVDone)
+								.Done(					IVDone),
+								.IVReady_BktOfI(		IVReady_BktOfI), 
+								.IVDone_BktOfI(			IVDone_BktOfI)
 							);			
 	end	else begin: NO_INTEGRITY		
-		assign IVDone = 1;	
+		assign IVDone = 1'b1;
+		assign IVDone_BktOfI = 1'b1;
 	end endgenerate
+	
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------

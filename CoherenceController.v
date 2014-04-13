@@ -42,7 +42,9 @@ module CoherenceController(
 	FromStashData, FromStashDataValid, FromStashDataReady,
 	
 	IVStart, IVDone,
-	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV
+	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV,
+	
+	IVReady_BktOfI, IVDone_BktOfI
 );
 		
 	//--------------------------------------------------------------------------
@@ -55,6 +57,7 @@ module CoherenceController(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
+	`include "IVCCLocal.vh"
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -103,6 +106,8 @@ module CoherenceController(
 	output 	[DDRDWidth-1:0]  	DataFromIV;
 	input 	[DDRDWidth-1:0]  	DataToIV;
 	
+	output  					IVReady_BktOfI;
+	input						IVDone_BktOfI;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -116,7 +121,7 @@ module CoherenceController(
 	//-------------------------------------------------------------------------- 
               
 	// distinguish headers from payloads
-	wire ProcessingHeader;
+	wire HeaderInValid;
     wire  [`log2(BktSize_DRBursts)-1:0] BlkCtr;   
 	
 	CountAlarm #(		.Threshold(				BktSize_DRBursts))
@@ -125,24 +130,26 @@ module CoherenceController(
 						.Enable(				FromDecDataValid && FromDecDataReady),
 						.Count(					BlkCtr)
 					);
+		
+	assign HeaderInValid = ROAccess && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	 
 	
-	assign ProcessingHeader = BlkCtr < BktHSize_DRBursts;
-						
 	// invalidate the bit for the target block
 	wire HdOfInterest;
 	wire [DDRDWidth-1:0]	HeaderIn;
 	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOut;
+	
+	reg  [`log2(ORAML+1)-1:0]	BktOfInterest;
+	reg  [ORAMZ-1:0]			ValidBitsReg;
+	
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
 		assign ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
 		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
 	end 
 	
-	assign HdOfInterest = ValidBitsIn != ValidBitsOut;
-	
+	assign HdOfInterest = (ValidBitsIn != ValidBitsOut) && HeaderInValid;
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
-	
-	
+		
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs two path buffers and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
@@ -185,6 +192,7 @@ module CoherenceController(
 		wire [DDRDWidth-1:0] 	BufP1Reg_DOut;
 		wire 					BufP1Reg_InValid, BufP1Reg_InReady, BufP1Reg_OutValid, BufP1Reg_OutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
+		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr;
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				2))
@@ -210,7 +218,7 @@ module CoherenceController(
 							.CSPathRead(			CSPathRead),
 							.CSPathWriteback(		CSPathWriteback),
 							
-							.ProcessingHeader(		ProcessingHeader),
+							.HeaderInValid(			HeaderInValid),
 							.HdOfInterest(			HdOfInterest),
 							
 							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
@@ -219,6 +227,8 @@ module CoherenceController(
 							.FromDecData(			FromDecData),
 							.FromStashData(			FromStashData),
 							
+							.IVDone(				IVDone),
+							.IVDone_BktOfI(			IVDone_BktOfI),
 							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
 							
 							.Enable(				BufP1_Enable),
@@ -227,7 +237,9 @@ module CoherenceController(
 							.DIn(					BufP1_DIn),
 							
 							.BufReg_InValid(		BufP1Reg_InValid),
-							.PthRW_Transition(		PthRW_Transition)
+							.PthRW_Transition(		PthRW_Transition),
+							.HdOnPthCtr(			HdOnPthCtr),
+							.BktOfI_Transition(		IVReady_BktOfI)
 						);
 	
 		//	AES --> Stash Passthrough 	
@@ -240,12 +252,12 @@ module CoherenceController(
 										: ROAccess ? BufP1Reg_DOut
 										: FromStashData;
 										
-		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid && IVDone
-										: ROAccess ? BufP1Reg_OutValid
+		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid //&& IVDone
+										: ROAccess ? BufP1Reg_OutValid //&& IVDone_BktOfI
 										: FromStashDataValid;
 		
-		assign  BufP1Reg_OutReady = 	RWAccess ? ToEncDataReady && IVDone 
-										: ROAccess ? ToEncDataReady
+		assign  BufP1Reg_OutReady = 	RWAccess ? ToEncDataReady //&& IVDone 
+										: ROAccess ? ToEncDataReady //&& IVDone_BktOfI
 										: 0;
 		
 		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && CSPathWriteback;
@@ -253,21 +265,38 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//-------------------------------------------------------------------------- 
+		reg [1:0] 	HdOfIStat;
+		
 		assign 	IVStart = RWAccess && CSPathRead && PthRW_Transition;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = IVAddress;
+		assign  BufP2_Address = IVAddress != OBktOfIStartAddr ? IVAddress : (HdStartAddr + BktOfInterest);
 		assign  BufP2_DIn = DataFromIV;		
 		
-		assign  DataToIV = BufP2_DOut;
+		assign  DataToIV = HdOfIStat != 2 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
+		
+		always @(posedge Clock) begin
+		    if (Reset) begin
+		        HdOfIStat <= 0;
+		    end
+			if (HdOfInterest) begin
+				HdOfIStat <= 0;
+				BktOfInterest <=  HdOnPthCtr;
+				ValidBitsReg  <=  ValidBitsIn;
+			end
+			
+			else if (IVAddress == OBktOfIStartAddr && IVRequest && !IVWrite)
+				HdOfIStat <= HdOfIStat + 1;
+			else if (HdOfIStat == 2)
+				HdOfIStat <= HdOfIStat + 1;
+		end
 		
 	end else begin: NO_BUF
 	
 		wire HeaderInReady, HeaderInValid, HeaderOutValid;
 		wire [DDRDWidth-1:0]	HeaderOut;
-		
-		assign HeaderInValid = ROAccess && FromDecDataValid && ProcessingHeader;	 
+			 
 		always @ (posedge Clock) begin		
 			if (!Reset && HeaderInValid && !HeaderInReady) begin
 				$display("Error: Header Buffer Overflow!");
@@ -276,7 +305,7 @@ module CoherenceController(
 		end
 	
 		// save the headers and write them back later     
-		FIFORAM	#(       .Width(					DDRDWidth),     
+		FIFORAM	#(      .Width(					DDRDWidth),     
 						.Buffering(				(ORAML+1) * BktHSize_DRBursts ))
 		in_hd_buf  (	.Clock(					Clock),
 						.Reset(					Reset),

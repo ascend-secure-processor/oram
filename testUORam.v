@@ -29,7 +29,7 @@ module testUORam;
 	parameter				Overclock = 		0; 
 	parameter				EnableAES =			0;
 	parameter				EnableREW =			1; 
-    parameter				EnableIV =          0;
+    parameter				EnableIV =          1;
 	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 

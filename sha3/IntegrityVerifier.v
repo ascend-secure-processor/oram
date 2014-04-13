@@ -9,10 +9,10 @@
 `include "Const.vh"
 
 module IntegrityVerifier (
-	Clock, Reset, 
+	Clock, Reset,
 	Done,
-	Request, Write, Address, DataIn, DataOut	// RAM interface
-	// TODO: some states from CC
+	Request, Write, Address, DataIn, DataOut,	// RAM interface
+	IVReady_BktOfI, IVDone_BktOfI
 );
 
 	parameter NUMSHA3 = 3;
@@ -24,119 +24,77 @@ module IntegrityVerifier (
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
+	`include "IVCCLocal.vh"
 
     localparam  AWidth = PathBufAWidth;
 	localparam  BktAWidth = `log2(ORAML) + 1;
+	localparam	BlkAWidth = `log2(BktSize_DRBursts + 1);
+	
+	//------------------------------------------------------------------------------------
+	// variables
+	//------------------------------------------------------------------------------------ 	
+	input  	Clock, Reset;
+	output 	Done;
+	output 	Request, Write;
+	output 	[AWidth-1:0] Address;
+	input  	[DDRDWidth-1:0]  DataIn;
+	output 	[DDRDWidth-1:0]  DataOut;
+	
+	input  	IVReady_BktOfI;
+	output 	IVDone_BktOfI;
 
-	input  Clock, Reset;
-	output Done;
-	output Request, Write;
-	output [AWidth-1:0] Address;
-	input  [DDRDWidth-1:0]  DataIn;
-	output [DDRDWidth-1:0]  DataOut;
-
+	// status and meta dat for hash engines
+	reg [BktAWidth-1:0] 	BucketID		[0:NUMSHA3-1];	
+	reg [BlkAWidth-1:0] 	BucketOffset	[0:NUMSHA3-1];
+	reg [DDRDWidth-1:0] 	BucketHeader 	[0:NUMSHA3-1];
+	
 	// hash IO internal variables
 	localparam HashByteCount = (BktSize_RawBits + 0) / 8;    	
 	
 	wire [DDRDWidth-1:0] HashData;
-	wire HashDataReady [NUMSHA3-1:0];
+	wire HashDataReady [0:NUMSHA3-1];
 	wire DataInValid, HeaderInValid;
 	
-	wire HashOutValid [NUMSHA3-1:0];
-	wire [FullDigestWidth-1:0] HashOut [NUMSHA3-1:0]; 
-	wire ConsumeHash, Violation;
+	wire HashOutValid 	[0:NUMSHA3-1];
+	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
+	wire ConsumeHash, Violation, CheckHash; 
+	wire [0:NUMSHA3-1]   Idle;
 	
-	//------------------------------------------------------------------------------------
-	// Round robin scheduling for hash engines
-	//------------------------------------------------------------------------------------ 
-		
-	reg [LogNUMSHA3-1:0] InTurn, OutTurn; 
-	always @(posedge Clock) begin
-        if (Reset) begin
-            InTurn <= 0;
-            OutTurn <= 0;
-        end
-        else begin
-            if (DataInValid)
-                InTurn <= (InTurn + 1) % NUMSHA3;
-            if (ConsumeHash)
-                OutTurn <= (OutTurn + 1) % NUMSHA3;
-        end
-    end
+	// select one hash engine
+	reg  [LogNUMSHA3-1:0] Turn;
+	wire [LogNUMSHA3-1:0] LastTurn;
 	
 	//------------------------------------------------------------------------------------
 	// Request and address generation
 	//------------------------------------------------------------------------------------ 
-	reg [`log2(BktSize_DRBursts):0] DoneBlocks;
-	
-	always @(posedge Clock) begin
-		if (Reset) begin
-			DoneBlocks <= 0;
-		end
-		else if (DataInValid && !Done) begin					
-			if (DoneBlocks == BktSize_DRBursts - 1) 	// all chunks for this bucket are streamed in
-				BucketStream[InTurn] <= 0;
-		
-			if (InTurn == NUMSHA3 - 1) 	// next chunk in each bucket
-				DoneBlocks <= (DoneBlocks + 1) % BktSize_DRBursts;
-		end
-	end
-	
 	assign Address = Write ? 
-		BucketAddr[OutTurn] * BktSize_DRBursts : 		//	updating hash for the previous set of buckets
-		BucketAddr[InTurn] * BktSize_DRBursts + DoneBlocks;		//  reading data from the current set of buckets
+		BucketID[Turn] * BktSize_DRBursts : 						//	updating hash for the previous set of buckets
+		BucketID[Turn] * BktSize_DRBursts + BucketOffset[Turn];		//  reading data from the current set of buckets
 		
-	assign Request = !Reset && (Write || (HashDataReady[InTurn] && !DataInValid && BucketStream[InTurn] ) );
-
-	//------------------------------------------------------------------------------------
-	// Pass data to hash engine (possibly modified) and save the headers 
-	//------------------------------------------------------------------------------------
-
-	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 					DataInValid);
-	Register #(.Width(1)) 	RdHash (Clock, Reset, 1'b0, 1'b1, 	Request && !Write && !DoneBlocks, 	HeaderInValid);
-
-	reg 				BucketStream	[NUMSHA3-1:0];	
-	reg [DDRDWidth-1:0] BucketHeader 	[NUMSHA3-1:0];
-	reg [BktAWidth-1:0] BucketAddr		[NUMSHA3-1:0];
+	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts ));
 	
-	reg [BktAWidth-1:0] BucketProgress;
-	integer hashid = 0;
+	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 	DataInValid);
+	assign  HeaderInValid = DataInValid && BucketOffset[LastTurn] == 1;		// TODO: do not work for  header > 1
 	
+	// saving header
 	always @(posedge Clock) begin
-		if (Reset) begin
-			BucketProgress <= NUMSHA3;
-			for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1) begin
-				BucketAddr[hashid] <= hashid;
-				BucketStream[hashid] <= 1'b1;
-			end
-		end
-		
-		else begin
-            if (HeaderInValid) begin
-                BucketHeader[InTurn] <= DataIn;
-            end            
-            if (ConsumeHash) begin
-				BucketAddr[OutTurn]	<= BucketProgress;
-				BucketProgress <= BucketProgress + 1;
-				BucketStream[OutTurn] <= 1'b1;				
-            end
-        end
+		if (!Reset && HeaderInValid)
+			BucketHeader[LastTurn] <= DataIn;					
 	end
 	
+	// data passed to SHA engines
 	assign HashData = HeaderInValid ? {{TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:0]} : DataIn;
-		// TODO: does not work if there are more than 1 head flits
 	
 	//------------------------------------------------------------------------------------
-	// Check or fill in the hash
-	//------------------------------------------------------------------------------------ 
-	assign ConsumeHash = HashOutValid[OutTurn] && !DoneBlocks;	
+	// Checking or updating hash
+	//------------------------------------------------------------------------------------ 	
+	assign ConsumeHash = HashOutValid[Turn];
+	assign CheckHash = (BucketID[Turn] < TotalBucketD / 2) || (BucketID[Turn] == TotalBucketD && BktOfIStat == 1);
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && (BucketAddr[OutTurn] < ORAML + 1)  &&	
-		BucketHeader[OutTurn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[OutTurn][DigestStart-1:DigestEnd];
-
-	assign Done = BucketProgress >= 2 * (ORAML + 1);
-		
+	assign Violation = ConsumeHash && CheckHash &&	
+		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
+	
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
 		if (Violation === 1) begin
@@ -151,27 +109,90 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = !Done && ConsumeHash;		
-	assign DataOut = {HashOut[OutTurn][DigestStart-1:DigestEnd], BucketHeader[OutTurn][BktHSize_RawBits-1:0]};
+	assign Write = ConsumeHash && !CheckHash;		
+	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
+		
+	//------------------------------------------------------------------------------------
+	// Remaining work status
+	//------------------------------------------------------------------------------------ 	
+	reg [BktAWidth-1:0] BucketProgress;
+	reg [2:0]			BktOfIStat;
+	wire				PendingWork;
+	
+	assign Done = BucketProgress >= TotalBucketD && (& Idle);
+	
+	assign PendingWork = BucketProgress < TotalBucketD || BktOfIStat > 2;	
+	
+	assign IVDone_BktOfI = BktOfIStat == 0;
+	
+	//------------------------------------------------------------------------------------
+	// Round robin scheduling for hash engines
+	//------------------------------------------------------------------------------------ 	
+	integer hashid = 0;
+	always @(posedge Clock) begin
+        if (Reset) begin
+            Turn <= 0;
+			BucketProgress <= 0;
+			BktOfIStat <= 0;
+            for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1)
+                BucketOffset[hashid] <= BktSize_DRBursts + 1;			
+        end
+		else begin
+			Turn <= (Turn + 1) % NUMSHA3;
+			
+			// asking for more input				
+			if (Request && !Write) begin							
+				BucketOffset[Turn] <= BucketOffset[Turn] + 1;			
+			end
+			
+			// dispatch work if there's any
+			else if (PendingWork && (ConsumeHash || Idle[Turn])) begin	
+				BucketOffset[Turn] <= 0;
+				
+				if (BktOfIStat > 2) begin			// prioritize RO bucket of interest
+					BucketID[Turn] <= TotalBucketD;
+					BktOfIStat <= BktOfIStat - 1;
+				end
+				else begin	
+					BucketID[Turn] <= BucketProgress;
+					BucketProgress <= BucketProgress + 1;
+				end
+			end
+			
+			else if (ConsumeHash)									// mark idle
+				BucketOffset[Turn] <= BucketOffset[Turn] + 1;
+						
+			// bucket of interest done
+			if (IVReady_BktOfI)
+				BktOfIStat <= 4;				
+			else if (ConsumeHash && BucketID[Turn] == TotalBucketD)		
+				BktOfIStat <= BktOfIStat - 1;			
+		end
+    end
+	
+	assign LastTurn = (Turn + NUMSHA3 - 1) % NUMSHA3;
 	
 	//------------------------------------------------------------------------------------
 	// NUMSHA3 hash engines
 	//------------------------------------------------------------------------------------ 	
 	genvar k;
 	generate for (k = 0; k < NUMSHA3; k = k + 1) begin: HashEngines
+	
+		assign Idle[k] = BucketOffset[k] == BktSize_DRBursts + 1;
 		
         Keccak_WF #(        .IWidth(            DDRDWidth),
                             .HashByteCount(     HashByteCount))                         
             HashEngine (    .Clock(             Clock),         
                             .Reset(             Reset),
                             .DataInReady(       HashDataReady[k]),
-                            .DataInValid(       DataInValid && InTurn == k),
+                            .DataInValid(       DataInValid && LastTurn == k),
                             .DataIn(            HashData),
-                            .HashOutReady(      ConsumeHash && OutTurn == k),
+                            .HashOutReady(      ConsumeHash && Turn == k),
                             .HashOutValid(      HashOutValid[k]),
                             .HashOut(           HashOut[k])
                     );
                     
 	end endgenerate
+
 endmodule
 	
