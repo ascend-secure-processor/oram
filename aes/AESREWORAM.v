@@ -128,14 +128,15 @@ module AESREWORAM(
 	
 	wire					DRAMReadTransfer, ROCommandTransfer;
 	
-	wire	[DDRDWidth-1:0]	ROIntDataIn;
+	wire	[DDRDWidth-1:0]	BufferedDataIn;
+	wire					BufferedDataInValid, BufferedDataInReady;
+
+	wire	[DDRDWidth-1:0]	BufferedDataOut;
+	wire					BufferedDataOutValid, BufferedDataOutReady;
+	
 	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
-	
-	wire					ROIntDataInValid, ROIntDataInReady;
+
 	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
-	
-	wire	[DDRDWidth-1:0]	BufferedData;
-	wire					BufferedDataValid, BufferedDataReady;
 	
 	wire	[IVEntropyWidth-1:0] RO_IVOut, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
@@ -159,8 +160,6 @@ module AESREWORAM(
 	
 	wire	[ORAML-1:0]		GentryLeaf;
 
-	wire	[DDRDWidth-1:0]	RWMask;
-	
 	wire					RWAuxInValid, RWAuxInReady;
 	wire					RWAuxOutValid;		
 	
@@ -193,6 +192,7 @@ module AESREWORAM(
 	wire	[BIDWidth-1:0]	ROI_BID;
 	
 	wire	[DDRDWidth-1:0]	ROIData;
+	wire					ROIDataInValid, ROIDataInReady;	
 	wire					ROIDataValid, ROIDataReady;
 	
 	wire					ROI_FoundBucket, ROI_BucketHasBeenFound;
@@ -264,8 +264,8 @@ module AESREWORAM(
 				$stop;
 			end
 			
-			if (ROIntDataInValid & ~ROIntDataInReady) begin
-				$display("[%m @ %t] ERROR: ROInt FIFO overflow.", $time);
+			if (ROIDataInValid & ~ROIDataInReady) begin
+				$display("[%m @ %t] ERROR: Bucket of interest FIFO overflow.", $time);
 				$stop;
 			end
 			
@@ -294,17 +294,17 @@ module AESREWORAM(
 	
 	assign	DRAMReadTransfer =						DRAMReadDataValid & DRAMReadDataReady;
 	
-	always @(posedge Clock) begin
-		if (Reset) CS_RO <= 						ST_RO_Idle;
-		else CS_RO <= 								NS_RO;
-	end
-	
 	assign	CSROStartRead =							CS_RO == ST_RO_StartRead;
 	assign	CSROStartOp =							CSROStartRead | CS_RO == ST_RO_StartWrite;
 	assign	CSROHeaderRead =						CS_RO == ST_RO_HeaderRead;
 	assign	CSROStartPayloadRead =					CS_RO == ST_RO_StartPayloadRead;
 	assign	CSROPayloadRead =						CS_RO == ST_RO_PayloadRead;
 	
+	always @(posedge Clock) begin
+		if (Reset) CS_RO <= 						ST_RO_Idle;
+		else CS_RO <= 								NS_RO;
+	end
+
 	always @( * ) begin
 		NS_RO = 									CS_RO;
 		case (CS_RO)
@@ -348,7 +348,7 @@ module AESREWORAM(
 	CountAlarm 	#(			.Threshold(				BktPSize_DRBursts))
 				roi_rd(		.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				CSROPayloadRead & ROIntDataInValid & ROIntDataInReady),
+							.Enable(				CSROPayloadRead & BufferedDataInValid & BufferedDataInReady),
 							.Done(					ROI_Rebuffer2Complete));							
 
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
@@ -371,6 +371,7 @@ module AESREWORAM(
 							.Load(					CSROStartRead),
 							.Enable(				CSROHeaderRead & DRAMReadTransfer), 
 							.PIn(					ROLeaf),
+							.SIn(					1'b0),
 							.SOut(					RO_LeafNextDirection));
 							
     AddrGen #(				.ORAMB(					ORAMB),
@@ -402,14 +403,14 @@ module AESREWORAM(
 	assign	Core_ROBIDIn =							(CSROPayloadRead) ? ROI_BID : 		RO_BIDOut;	
 	
 	assign	Core_ROCommandInValid =					(CSROStartPayloadRead) ? 	1'b1 : 
-													(CSROPayloadRead) ? 		1'b0 :	 			
-													DRAMReadDataValid & RO_BIDOutValid & 		ROIntDataInReady & 	RODRAMChunkIsHeader;
-	assign	ROIntDataInValid =						(CSROStartPayloadRead) ? 	1'b0 : 
+													(CSROPayloadRead) ? 		1'b0 :		
+																				DRAMReadDataValid & RO_BIDOutValid & 		BufferedDataInReady & 	RODRAMChunkIsHeader;
+	assign	BufferedDataInValid =					(CSROStartPayloadRead) ? 	1'b0 : 
 													(CSROPayloadRead) ? 		ROIDataValid : 
-													DRAMReadDataValid &	RO_BIDOutValid_Needed & Core_ROCommandInReady;
+																				DRAMReadDataValid &	RO_BIDOutValid_Needed & Core_ROCommandInReady;
 
-	assign	RO_BIDOutReady =						Core_ROCommandInReady & ROIntDataInReady & DRAMReadDataValid & 	RODRAMChunkIsHeader;
-	assign	DRAMReadDataReady =						Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid_Needed;
+	assign	RO_BIDOutReady =						Core_ROCommandInReady & BufferedDataInReady & DRAMReadDataValid & 	RODRAMChunkIsHeader;
+	assign	DRAMReadDataReady =						Core_ROCommandInReady & BufferedDataInReady & RO_BIDOutValid_Needed;
 	
 	assign	ROCommandTransfer =						Core_ROCommandInValid & Core_ROCommandInReady;
 	
@@ -417,7 +418,7 @@ module AESREWORAM(
 	//	Intermediate data buffers
 	//--------------------------------------------------------------------------
 	
-	assign	ROIntDataIn =							(CSROHeaderRead) ?			{DRAMReadData, 	Core_ROIVIn, Core_ROBIDIn} : 
+	assign	BufferedDataIn =						(CSROHeaderRead) ?			{DRAMReadData, 	Core_ROIVIn, Core_ROBIDIn} : 
 													(CSROPayloadRead) ?			{ROIData,		ROI_IV, ROI_BID} : 
 													{DDRDWidth{1'bx}}; // TODO add support for header writebacks and RW writebacks
 	
@@ -426,12 +427,12 @@ module AESREWORAM(
 							.Buffering(				AESLatencyPlus))
 				ro_int_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				ROIntDataIn),
-							.InValid(				ROIntDataInValid),
-							.InAccept(				ROIntDataInReady),
-							.OutData(				{BufferedData, BufferedIV, 	BufferedBID}),
-							.OutSend(				BufferedDataValid),
-							.OutReady(				BufferedDataReady));	
+							.InData(				BufferedDataIn),
+							.InValid(				BufferedDataInValid),
+							.InAccept(				BufferedDataInReady),
+							.OutData(				{BufferedDataOut, BufferedIV, 	BufferedBID}),
+							.OutSend(				BufferedDataOutValid),
+							.OutReady(				BufferedDataOutReady));	
 	
 	/* TODO add support for header writebacks
 	FIFORAM		#(			.Width(					IVEntropyWidth),
@@ -668,20 +669,22 @@ module AESREWORAM(
 							.Enable(				ROI_FoundBucket),
 							.In(					{BufferedIV, 	BufferedBID}),
 							.Out(					{ROI_IV, 		ROI_BID}));
-
+						
+	assign	ROIDataInValid =						BufferedDataOutValid & ROI_BucketHasBeenFound;						
+							
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				BktPSize_DRBursts))
 				roi_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BufferedData),
-							.InValid(				BufferedDataValid & ROI_BucketHasBeenFound),
-							.InAccept(				BufferedDataReady), // TODO assertion to make sure this never overflows
+							.InData(				BufferedDataOut),
+							.InValid(				ROIDataInValid),
+							.InAccept(				ROIDataInReady),
 							.OutData(				ROIData),
 							.OutSend(				ROIDataValid),
 							.OutReady(				ROIDataReady));
 
-	assign	ROIDataReady =							CSROPayloadRead & ROIntDataInReady;	
+	assign	ROIDataReady =							CSROPayloadRead & BufferedDataInReady;	
 	
 	//--------------------------------------------------------------------------
 	//	RW Mask Formation
@@ -689,7 +692,7 @@ module AESREWORAM(
 	
 	FIFOShiftRound #(		.IWidth(				AESWidth),
 							.OWidth(				DDRDWidth))
-				ro_P_shft(	.Clock(					Clock),
+				roi_D_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_RODataOut),
 							.InValid(				ROIMaskShiftInValid),
@@ -738,7 +741,7 @@ module AESREWORAM(
 	assign	ROMask_Needed =							MaskIsHeader;
 	assign	ROIMask_Needed =						ServingROI;
 	assign	RMMask_Needed =							~ROAccess;
-	assign	BDataValid_Needed =						BufferedDataValid;
+	assign	BDataValid_Needed =						BufferedDataOutValid;
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
 	assign	ROMaskValid_Needed =					(ROMask_Needed) ? ROMaskBufOutValid : 1'b1;
 	
@@ -746,14 +749,14 @@ module AESREWORAM(
 	assign	RWDataMask =							(ROIMask_Needed) ? ROIDataMask : 		RWBGDataMask;
 	
 	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
-	assign	DataOut =								BufferedData ^ Mask;	
+	assign	DataOut =								BufferedDataOut ^ Mask;	
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
-	assign	DataOutValid =							 BDataValid_Needed & 		ROMaskValid_Needed & RMMaskValid_Needed;
-	assign	BufferedDataReady =						 DataOutReady & 			ROMaskValid_Needed & RMMaskValid_Needed;
-	assign	RMMaskReady =							(DataOutReady & 			ROMaskValid_Needed & BDataValid_Needed) & 	RMMask_Needed;
-	assign	ROIMaskShiftOutReady =					(DataOutReady & 			ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
-	assign	ROMaskBufOutReady =						 DataOutReady & 			RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
+	assign	DataOutValid =							 BDataValid_Needed & 	ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	BufferedDataOutReady =					 DataOutReady & 		ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	RMMaskReady =							(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	RMMask_Needed;
+	assign	ROIMaskShiftOutReady =					(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
+	assign	ROMaskBufOutReady =						 DataOutReady & 		RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
 	
 	assign	DataOutReady =							(CSPathRead) ? BEDataOutReady : DRAMWriteDataReady;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
