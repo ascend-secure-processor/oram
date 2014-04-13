@@ -137,6 +137,8 @@ module AESREWORAM(
 	
 	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
 
+	wire 					RO_BIDOutValid_Needed;	
+	
 	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
 	
 	wire	[IVEntropyWidth-1:0] RO_IVOut, BufferedIV;
@@ -186,6 +188,10 @@ module AESREWORAM(
 	genvar 					i;
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
+	wire					ProcessingLastHeader;	
+	wire					ROI_ProcessBucket, ROI_BucketWasFound;
+	wire 					ROI_FoundBucket, ROI_NotFoundBucket;
+	
 	wire	[BigVWidth-1:0] DataOutV;
 	wire	[BigUWidth-1:0] DataOutU;
 	
@@ -197,8 +203,7 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	ROIData;
 	wire					ROIDataInValid, ROIDataInReady;	
 	wire					ROIDataValid, ROIDataReady;
-	
-	wire					ROI_FoundBucket, ROI_BucketHasBeenFound;
+
 	wire					ROI_Rebuffer1Complete, ROI_Rebuffer2Complete;	
 	
 	// Output Data/Mask mixing
@@ -210,6 +215,8 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	Mask;
 	
 	wire					BDataValid_Needed, RMMaskValid_Needed, ROMaskValid_Needed;
+
+	wire	[BigVWidth-1:0]	RecomputedValidBits;		
 	
 	wire	[DDRDWidth-1:0]	DataOut_Pre, DataOut;
 	wire					DataOutValid, DataOutReady;
@@ -396,8 +403,6 @@ module AESREWORAM(
 							.CmdValid(				RO_BIDOutValid),
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));
-							
-	wire RO_BIDOutValid_Needed;						// TODO
 							
 	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;				
 							
@@ -650,40 +655,44 @@ module AESREWORAM(
 	
 	assign	DataOutV =								DataOut[BigVWidth+BktHVStart-1:BktHVStart];
 	assign	DataOutU =								DataOut[BigUWidth+BktHUStart-1:BktHUStart];
-
-	wire 	IsBucketOfInterest, BucketOfInterestNotFound; // TODO
-	
-	assign	BucketOfInterestNotFound =				ROIPathTransition & ~ROI_BucketHasBeenFound;
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BUCKET_OF_INTEREST
 		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
-		assign	ROI_FoundBucket =					BufferedDataOutValid & (ROAccess & MaskIsHeader & |ROI_UMatches | BucketOfInterestNotFound);
 	end endgenerate
 					
+	CountAlarm 	#(			.Threshold(				PathSize_DRBursts - BktSize_DRBursts + 1))
+				roi_dmy_cnt(.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				ROAccess & BufferedDataTransfer),
+							.Done(					ProcessingLastHeader));
+					
+	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & |ROI_UMatches);
+	assign	ROI_NotFoundBucket =					ROIPathTransition & ~ROI_BucketWasFound & ~ROI_FoundBucket;
+			
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
 							.Reset(					Reset |	ROI_Rebuffer1Complete),
-							.Set(					ROI_FoundBucket),
+							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					ROI_BucketHasBeenFound));
-	assign	IsBucketOfInterest =					ROI_FoundBucket | ROI_BucketHasBeenFound;
+							.Out(					ROI_BucketWasFound));
+	assign	ROI_ProcessBucket =						ROI_FoundBucket | ROI_NotFoundBucket | ROI_BucketWasFound;
 							
 	CountAlarm #(			.Threshold(				BktSize_DRBursts))
 				roi_wr(		.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				IsBucketOfInterest & BufferedDataTransfer),
+							.Enable(				ROIDataInValid),
 							.Done(					ROI_Rebuffer1Complete));
 	
 	Register	#(			.Width(					IVEntropyWidth + BIDWidth + BigUWidth + BigVWidth))
 				roi_info(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				ROI_FoundBucket),
+							.Enable(				ROI_FoundBucket | ROI_NotFoundBucket),
 							.In(					{BufferedIV, 	BufferedBID,	DataOutU, 	DataOutV}),
 							.Out(					{ROI_IV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
-	assign	ROIDataInValid =						BufferedDataOutValid & IsBucketOfInterest;						
+	assign	ROIDataInValid =						BufferedDataTransfer & ROI_ProcessBucket;						
 							
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth),
@@ -731,7 +740,7 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
-	
+
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
@@ -739,7 +748,7 @@ module AESREWORAM(
 							.Done(					ROIPathTransition));
 	Register #(				.Width(					1))
 				roi_payload(.Clock(					Clock),
-							.Reset(					Reset | DataOutBucketTransition),
+							.Reset(					Reset | (~ROIPathTransition & DataOutBucketTransition)),
 							.Set(					ROIPathTransition),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -762,8 +771,6 @@ module AESREWORAM(
 	
 	assign	RWHeaderMask =							(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
 	assign	RWDataMask =							(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
-	
-	wire	[BigVWidth-1:0]	RecomputedValidBits; // TODO
 	
 	// When we detect a read bucket has never been written, mark its valid bits as invalid
 	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIV == 0) ? {BigVWidth{1'b0}} : DataOut_Pre[BigVWidth+BktHVStart-1:BktHVStart]; 
