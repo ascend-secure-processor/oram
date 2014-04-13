@@ -126,7 +126,7 @@ module AESREWORAM(
 
 	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
 	
-	wire					DRAMReadTransfer, ROCommandTransfer, RO_DRAMReadDataReady;
+	wire					DRAMReadTransfer, ROCommandTransfer;
 	
 	wire	[DDRDWidth-1:0]	ROIntDataIn;
 	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
@@ -292,7 +292,7 @@ module AESREWORAM(
 
 	// Generate the masks for RO headers and ROI buckets of interest
 	
-	assign	DRAMReadTransfer =						DRAMReadDataValid & RO_DRAMReadDataReady;
+	assign	DRAMReadTransfer =						DRAMReadDataValid & DRAMReadDataReady;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS_RO <= 						ST_RO_Idle;
@@ -397,16 +397,16 @@ module AESREWORAM(
 	
 	assign	Core_ROCommandInValid =					(CSROStartPayloadRead) ? 	1'b1 : 
 													(CSROPayloadRead) ? 		1'b0 :	 			
-													RODRAMChunkIsHeader & 		DRAMReadDataValid & RO_BIDOutValid & ROIntDataInReady;
+													DRAMReadDataValid & RO_BIDOutValid & ROIntDataInReady & RODRAMChunkIsHeader;
 	assign	ROIntDataInValid =						(CSROStartPayloadRead) ? 	1'b0 : 
 													(CSROPayloadRead) ? 		ROIDataValid : 
-													DRAMReadDataValid &			RO_BIDOutValid & Core_ROCommandInReady;
+													DRAMReadDataValid &	RO_BIDOutValid & Core_ROCommandInReady;
 	
 	assign	Core_ROIVIn =							(CSROPayloadRead) ? ROI_IV : 	RO_IVOut;
 	assign	Core_ROBIDIn =							(CSROPayloadRead) ? ROI_BID : 	RO_BIDOut;
 	
 	assign	RO_BIDOutReady =						Core_ROCommandInReady & ROIntDataInReady & DRAMReadDataValid;
-	assign	RO_DRAMReadDataReady =					Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid;
+	assign	DRAMReadDataReady =						Core_ROCommandInReady & ROIntDataInReady & RO_BIDOutValid;
 	
 	assign	ROCommandTransfer =						Core_ROCommandInValid & Core_ROCommandInReady;
 	
@@ -765,9 +765,7 @@ module AESREWORAM(
 	assign	BEBVOut =								(ROAccess) ? 0 : RWBVOut;
 	assign	BEBIDOut =								(ROAccess) ? 0 : RWBIDOut;
 	assign	BEDataOutValid =						CSPathRead & DataOutValid;
-
-	assign	DRAMReadDataReady =						RO_DRAMReadDataReady;
-
+	
 	//--------------------------------------------------------------------------
 	//	Path Writeback Interface
 	//--------------------------------------------------------------------------

@@ -345,7 +345,7 @@ module PathORamTop(
 							.CSPathRead(			CSPathRead),
 							
 							.BEDataOut(				AES_DRAMReadData), 
-							.BEBVOut(				), 
+							.BEBVOut(				),
 							.BEBIDOut(				),
 							.BEDataOutValid(		AES_DRAMReadDataValid), 
 							.BEDataOutReady(		AES_DRAMReadDataReady),						
@@ -354,8 +354,8 @@ module PathORamTop(
 							.BEDataInValid(			AES_DRAMWriteDataValid), 
 							.BEDataInReady(			AES_DRAMWriteDataReady),	
 							
-							.DRAMReadData(			DRAMReadData), 
-							.DRAMReadDataValid(		DRAMReadDataValid), 
+							.DRAMReadData(			PathBuffer_OutData), 
+							.DRAMReadDataValid(		PathBuffer_OutValid), 
 							.DRAMReadDataReady(		PathBuffer_OutReady),
 							
 							.DRAMWriteData(			DRAMWriteData), 
@@ -386,8 +386,8 @@ module PathORamTop(
 							.MIGOutValid(			DRAMWriteDataValid),
 							.MIGOutReady(			DRAMWriteDataReady),
 
-							.MIGIn(					DRAMReadData),
-							.MIGInValid(			DRAMReadDataValid),
+							.MIGIn(					PathBuffer_OutData),
+							.MIGInValid(			PathBuffer_OutValid),
 							.MIGInReady(			PathBuffer_OutReady),
 							
 							.BackendRData(			AES_DRAMReadData),
@@ -418,7 +418,6 @@ module PathORamTop(
 
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full, PathBuffer_Empty;
-
 		PathBuffer in_P_buf(.clk(					Clock),
 							.srst(					Reset), 
 							.din(					DRAMReadData), 
