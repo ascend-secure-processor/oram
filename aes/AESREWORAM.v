@@ -396,7 +396,7 @@ module AESREWORAM(
 							.Done(					ROBucketTransition));
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				ro_pth_cnt(	.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					Reset | CSROStartOp), 
 							.Enable(				ROBucketTransition),
 							.Done(					ROPathTransition));
 	CountAlarm 	#(			.Threshold(				BktSize_DRBursts))
@@ -736,7 +736,7 @@ module AESREWORAM(
 					
 	CountAlarm 	#(			.Threshold(				PathSize_DRBursts - BktSize_DRBursts + 1))
 				roi_dmy_cnt(.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					Reset | FinishHWB), 
 							.Enable(				ROAccess & BufferedDataTransfer),
 							.Done(					ProcessingLastHeader));
 					
