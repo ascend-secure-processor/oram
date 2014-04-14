@@ -74,7 +74,8 @@ module AESREWORAM(
 							ST_RW_StartWrite =		2'd2,
 							ST_RW_Write =			2'd3;
 	
-	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth;
+	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
+							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -148,12 +149,12 @@ module AESREWORAM(
 	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
 	
 	wire					DRAMReadTransfer, ROCommandTransfer;
-	
-	wire	[DDRDWidth-1:0]	BufferedDataIn;
-	wire					BufferedDataInValid, BufferedDataInReady;
 
-	wire	[DDRDWidth-1:0]	BufferedDataOut;
+	wire	[BDWidth-1:0]	BufferedDataIn_Wide, BufferedDataOut_Wide;
+	wire					BufferedDataInValid, BufferedDataInReady;
 	wire					BufferedDataOutValid, BufferedDataOutReady;
+	
+	wire	[DDRDWidth-1:0]	BufferedDataOut;
 	wire					BufferedDataTransfer;
 	
 	wire	[IVEntropyWidth-1:0] BufferedROIVOutData;
@@ -387,7 +388,7 @@ module AESREWORAM(
 				roi_rd(		.Clock(					Clock),
 							.Reset(					Reset | CSROStartOp), 
 							.Enable(				CSROROIRead & BufferedDataInValid & BufferedDataInReady),
-							.Done(					ROI_Rebuffer2Complete));							
+							.Done(					ROI_Rebuffer2Complete));		
 							
 	// Writeback counters
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
@@ -473,22 +474,23 @@ module AESREWORAM(
 	//	Intermediate data buffers
 	//--------------------------------------------------------------------------
 	
-	assign	BufferedDataIn =						(CSRORead) ?			{DRAMReadData, 	Core_ROIVIn, 			Core_ROBIDIn} : 
+	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	Core_ROIVIn, 			Core_ROBIDIn} : 
 													(CSROROIRead) ?			{ROIData,		ROI_IV, 				ROI_BID} : 
 																			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
-	FIFORAM		#(			.Width(					DDRDWidth + IVEntropyWidth + BIDWidth),
+	FIFORAM		#(			.Width(					BDWidth),
 							.Buffering(				AESLatencyPlus))
 				data_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BufferedDataIn),
+							.InData(				BufferedDataIn_Wide),
 							.InValid(				BufferedDataInValid),
 							.InAccept(				BufferedDataInReady), // no backpressure
-							.OutData(				{BufferedDataOut, BufferedIV, 	BufferedBID}),
+							.OutData(				BufferedDataOut_Wide),
 							.OutSend(				BufferedDataOutValid),
 							.OutReady(				BufferedDataOutReady));	
 	
+	assign	{BufferedDataOut, BufferedIV, 	BufferedBID} = BufferedDataOut_Wide;
 	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
