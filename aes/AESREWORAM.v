@@ -671,7 +671,7 @@ module AESREWORAM(
 							.RWDataOutReady(		RMMaskReady));
 
 	//--------------------------------------------------------------------------
-	//	RO Mask Formation
+	//	RO Mask Assembly (Shifts and Buffers)
 	//--------------------------------------------------------------------------
 
 	// This is technically not correct (i.e., it should depend on Core_ROCommandOut) -- but should work
@@ -730,8 +730,8 @@ module AESREWORAM(
 							.Enable(				ROAccess & BufferedDataTransfer),
 							.Done(					ProcessingLastHeader));
 					
-	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					ProcessingLastHeader & ~ROI_BucketWasFound;
+	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~ServingHWB & |ROI_UMatches);
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
 			
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
