@@ -52,7 +52,7 @@ module REWAESCore(
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
 	
-	localparam				BAWidth =				`max(`log2(RWHeader_AESChunks), `log2(RWBlk_AESChunks)) + 1;
+	localparam				BAWidth =				`max(`log2(RWHeader_AESChunks), `log2(Blk_AESChunks)) + 1;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -225,6 +225,9 @@ module REWAESCore(
 	assign	ROSend =								ROValid;
 	assign	ROReady =								(ROCommand == PCMD_ROHeader) ? ROHeaderCID_Terminal : RODataCID_Terminal;
 							
+	// TODO design change: to simplfy things, add another 512-bit width FIFO to handle ROI data						
+	// Eh ... another FIFO like that is quite a big cost and will hurt routing ...
+	
 	Counter		#(			.Width(					CIDWidth),
 							.Initial(				0))
 				ro_cid(		.Clock(					FastClock),
@@ -239,7 +242,7 @@ module REWAESCore(
 				ro_H_stop(	.Count(					ROCID),
 							.TerminalCount(			ROHeaderCID_Terminal));
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				RWHeader_AESChunks + RWBkt_AESChunks - 1))
+							.Compare(				ROIHeader_AESChunks + RWPayload_AESChunks - 1))
 				ro_D_stop(	.Count(					ROCID),
 							.TerminalCount(			RODataCID_Terminal));			
 	
@@ -285,7 +288,7 @@ module REWAESCore(
 							.In(					{CIDWidth{1'bx}}),
 							.Count(					RWCID));		
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				RWHeader_AESChunks + RWBkt_AESChunks - 1))
+							.Compare(				RWHeader_AESChunks + RWPayload_AESChunks - 1))
 				rw_stop(	.Count(					RWCID),
 							.TerminalCount(			RWDataCID_Terminal));
 	
@@ -369,7 +372,7 @@ module REWAESCore(
 				rw_H_stop(	.Count(					MaskShiftCount),
 							.TerminalCount(			MaskFIFOHeaderMaskValid));							
 	CountCompare #(			.Width(					BAWidth),
-							.Compare(				RWBlk_AESChunks))
+							.Compare(				Blk_AESChunks))
 				rw_D_stop(	.Count(					MaskShiftCount),
 							.TerminalCount(			MaskFIFODataMaskValid));
 	Register #(				.Width(					1), // state machine to switch modes

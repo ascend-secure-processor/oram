@@ -122,6 +122,27 @@ module AESREWORAM(
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
+	// AES Core
+	
+	wire	[IVEntropyWidth-1:0] Core_ROIVIn; 
+	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
+	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
+	wire					Core_ROCommandInValid;
+	wire					Core_ROCommandInReady;
+
+	wire	[IVEntropyWidth-1:0] Core_RWIVIn;
+	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
+	wire					Core_RWCommandInValid; 
+	wire					Core_RWCommandInReady;
+
+	wire	[AESWidth-1:0]	Core_RODataOut; 
+	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
+	wire					Core_RODataOutValid;
+	wire					Core_RODataOutReady;
+	
+	wire	[DDRDWidth-1:0]	Core_RWDataOut;
+	wire					Core_RWDataOutValid;	
+	
 	// RO header mask & bucket of interest seed generation
 
 	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
@@ -216,35 +237,15 @@ module AESREWORAM(
 	
 	wire					BDataValid_Needed, RMMaskValid_Needed, ROMaskValid_Needed;
 
-	wire	[BigVWidth-1:0]	RecomputedValidBits;		
+	wire	[BktHSize_ValidBits-1:0] RecomputedValidBits;
+	wire	[BigUWidth+BktHSize_ValidBits-1:0] RecomputedVU;
 	
-	wire	[DDRDWidth-1:0]	DataOut_Pre, DataOut;
+	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Process1, DataOut_Process2, DataOut;
 	wire					DataOutValid, DataOutReady;
 	
 	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
 	
-	wire					ServingROI;	
-	
-	// AES Core
-	
-	wire	[IVEntropyWidth-1:0] Core_ROIVIn; 
-	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
-	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
-	wire					Core_ROCommandInValid;
-	wire					Core_ROCommandInReady;
-
-	wire	[IVEntropyWidth-1:0] Core_RWIVIn;
-	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
-	wire					Core_RWCommandInValid; 
-	wire					Core_RWCommandInReady;
-
-	wire	[AESWidth-1:0]	Core_RODataOut; 
-	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
-	wire					Core_RODataOutValid;
-	wire					Core_RODataOutReady;
-	
-	wire	[DDRDWidth-1:0]	Core_RWDataOut;
-	wire					Core_RWDataOutValid;	
+	wire					ServingROI;
 	
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
@@ -406,9 +407,9 @@ module AESREWORAM(
 							
 	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;				
 							
-	assign	Core_ROCommandIn =						(CSROROIRead) ? PCMD_ROData : 	PCMD_ROHeader;
-	assign	Core_ROIVIn =							(CSROROIRead) ? ROI_IV : 		RO_IVOut;
-	assign	Core_ROBIDIn =							(CSROROIRead) ? ROI_BID : 		RO_BIDOut;	
+	assign	Core_ROCommandIn =						(CSROStartROIRead) ? 	PCMD_ROData : 	PCMD_ROHeader;
+	assign	Core_ROIVIn =							(CSROROIRead) ? 		ROI_IV : 		RO_IVOut;
+	assign	Core_ROBIDIn =							(CSROROIRead) ? 		ROI_BID : 		RO_BIDOut;	
 	
 	assign	Core_ROCommandInValid =					(CSROStartROIRead) ? 	1'b1 : 
 													(CSROROIRead) ? 		1'b0 :		
@@ -515,7 +516,7 @@ module AESREWORAM(
 							.Count(					GentryCounter_MemoryConsistant));							
 							
 	// RW seed generation scheme for bucket @ level L (L = 0...):
-	//	decrypt(GentryCounter >> L)
+	//	decrypt( GentryCounter >> L)
 	//	encrypt((GentryCounter >> L) + 1)
 	ShiftRegister #(		.PWidth(				IVEntropyWidth),
 							.Reverse(				1),
@@ -653,8 +654,8 @@ module AESREWORAM(
 	// if it was in the stash), this logic will still rebuffer/decrypt something 
 	// to hide timing variations
 	
-	assign	DataOutV =								DataOut[BigVWidth+BktHVStart-1:BktHVStart];
-	assign	DataOutU =								DataOut[BigUWidth+BktHUStart-1:BktHUStart];
+	assign	DataOutV =								DataOut_Process1[BigVWidth+BktHVStart-1:BktHVStart];
+	assign	DataOutU =								DataOut_Process1[BigUWidth+BktHUStart-1:BktHUStart];
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BUCKET_OF_INTEREST
 		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
@@ -667,7 +668,7 @@ module AESREWORAM(
 							.Done(					ProcessingLastHeader));
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					ROIPathTransition & ~ROI_BucketWasFound & ~ROI_FoundBucket;
+	assign	ROI_NotFoundBucket =					ProcessingLastHeader & ~ROI_BucketWasFound;
 			
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
@@ -706,7 +707,7 @@ module AESREWORAM(
 							.OutSend(				ROIDataValid),
 							.OutReady(				ROIDataReady));
 
-	assign	ROIDataReady =							CSROROIRead & BufferedDataInReady;	
+	assign	ROIDataReady =							CSROROIRead & BufferedDataInReady;
 	
 	//--------------------------------------------------------------------------
 	//	RW Mask Formation
@@ -721,23 +722,39 @@ module AESREWORAM(
 							.InAccept(				ROIMaskShiftInReady),
 							.OutData(				ROIMaskShiftOutData),
 							.OutValid(				ROIMaskShiftOutValid),
-							.OutReady(				ROIMaskShiftOutReady));							
+							.OutReady(				ROIMaskShiftOutReady));
 							
 	// Masks for RW data that will only be consumed on a RW access
-	assign	RWBGHeaderMask =						{	{DDRDWidth-RWHeader_RawBits-BktHLStart{1'b0}},
-														Core_RWDataOut[RWHeader_RawBits-1:0],
+	assign	RWBGHeaderMask =						{	{DDRDWidth-BigLWidth-BktHLStart{1'b0}},
+														Core_RWDataOut[BigLWidth-1:0],
 														{BktHLStart{1'b0}}	};
 	assign	RWBGDataMask =							Core_RWDataOut;
 	
 	// Masks for the RO bucket of interest that will be consumed on RO accesses
-	assign	ROIHeaderMask =							{	{DDRDWidth-RWHeader_RawBits-BktHLStart{1'b0}},
-														ROIMaskShiftOutData[RWHeader_RawBits-1:0],
+	assign	ROIHeaderMask =							{	{DDRDWidth-BigLWidth-BktHLStart{1'b0}},
+														ROIMaskShiftOutData[BigLWidth-1:0],
 														{BktHLStart{1'b0}}	};
 	assign	ROIDataMask =							ROIMaskShiftOutData;
 	
 	//--------------------------------------------------------------------------
 	//	Mask / Data Mixing & Mask Source Arbitration
 	//--------------------------------------------------------------------------
+	
+	/* 	Mask chart
+	
+		RO path read:
+								RO header masks		RO payload masks	RW masks
+			Bucket headers: 	X
+			Bucket payloads:	
+			BOI header:								X (for leaves)
+			BOI payload:							X
+			* After BOI is read out, V & U are mixed back into header
+			
+		RW path read/writeback:
+								RO header masks		RO payload masks	RW masks
+			Bucket headers: 	X										X
+			Bucket payloads:											X
+	*/
 	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 
@@ -762,7 +779,7 @@ module AESREWORAM(
 							.Intermediate(			MaskIsHeader),
 							.Done(					DataOutBucketTransition));
 		
-	assign	ROMask_Needed =							MaskIsHeader;
+	assign	ROMask_Needed =							MaskIsHeader & ~ServingROI;
 	assign	ROIMask_Needed =						ServingROI;
 	assign	RMMask_Needed =							~ROAccess;
 	assign	BDataValid_Needed =						BufferedDataOutValid;
@@ -771,15 +788,35 @@ module AESREWORAM(
 	
 	assign	RWHeaderMask =							(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
 	assign	RWDataMask =							(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
+
+	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
+
+	assign	DataOut_Unmask =						BufferedDataOut ^ Mask;
+	
+	//--------------------------------------------------------------------------
+	//	Output Arbitration
+	//--------------------------------------------------------------------------	
 	
 	// When we detect a read bucket has never been written, mark its valid bits as invalid
-	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIV == 0) ? {BigVWidth{1'b0}} : DataOut_Pre[BigVWidth+BktHVStart-1:BktHVStart]; 
-	
-	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
-	assign	DataOut_Pre =							BufferedDataOut ^ Mask;
-	assign	DataOut =								{	DataOut_Pre[DDRDWidth-1:BktHUStart],
-														{BktHSize_ValidBits{1'b0}}, RecomputedValidBits,
-														DataOut_Pre[BktHVStart-1:0]	};
+	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIV == 0) ? {{BktHWaste_ValidBits{1'b0}}, {BigVWidth{1'b0}}} : DataOut_Unmask[BktHUStart-1:BktHVStart]; 
+	assign	DataOut_Process1 =						{	
+														DataOut_Unmask[DDRDWidth-1:BktHUStart],
+														RecomputedValidBits,
+														DataOut_Unmask[BktHVStart-1:0]	
+													};
+
+	// To keep the interface "clean", and to make the CoherenceController 
+	// simpler, we give a completely decrypted header for the bucket of 
+	// interest
+	assign	RecomputedVU =							(MaskIsHeader & ServingROI) ? {ROI_U, {BktHWaste_ValidBits{1'b0}}, ROI_V} :	DataOut_Process1[BktHLStart-1:BktHVStart];
+	assign	DataOut_Process2 =						{	
+														DataOut_Process1[DDRDWidth-1:BktHLStart],
+														RecomputedVU,
+														DataOut_Unmask[BktHVStart-1:0]
+													};
+
+	// Finally, we're done
+	assign	DataOut =								DataOut_Process2;
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
 	assign	DataOutValid =							 BDataValid_Needed & 	ROMaskValid_Needed & RMMaskValid_Needed & 	(RMMask_Needed | ROIMask_Needed | ROMask_Needed);

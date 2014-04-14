@@ -1,16 +1,19 @@
 
-	localparam				ROHeader_VUBits =		BktHSize_ValidBits + ORAMZ * ORAMU,
+	localparam				ROHeader_VUBits =		BktHSize_ValidBits + BigUWidth,
 							//ROHeader_IVBits =		TODO add support for IV
 							ROHeader_RawBits =		ROHeader_VUBits,// + ROHeader_IVBits,
+							
 							ROHeader_AESChunks =	`divceil(ROHeader_RawBits, AESWidth), // # AES chunks per bucket for RO IV
-							RWHeader_RawBits =		ORAMZ * ORAML,
-							RWHeader_AESChunks =	`divceil(RWHeader_RawBits, AESWidth),
-							RWBlk_AESChunks =		`divceil(ORAMB, AESWidth),
-							RWBkt_AESChunks =		ORAMZ * RWBlk_AESChunks, // # AES chunks per bucket for Gentry IV
-							RWBkt_MaskChunks =		`divceil(RWBkt_AESChunks + RWHeader_AESChunks, RWBlk_AESChunks), // # mask out FIFO commits per bucket
-							RWPath_AESChunks =		RWBkt_AESChunks * (ORAML + 1),
+							RWHeader_AESChunks =	`divceil(BigLWidth, AESWidth),
+							ROIHeader_AESChunks =	`divceil(RWHeader_AESChunks, DDRDWidth) * `divceil(DDRDWidth, AESWidth), // round up to nearest DDRDWidth / AESWidth
+							
+							Blk_AESChunks =			`divceil(ORAMB, AESWidth),
+							RWPayload_AESChunks =	ORAMZ * Blk_AESChunks, // # AES chunks per bucket for Gentry IV
+							RWBkt_MaskChunks =		`divceil(RWPayload_AESChunks + RWHeader_AESChunks, Blk_AESChunks), // # mask out FIFO commits per bucket
+							RWPath_AESChunks =		RWPayload_AESChunks * (ORAML + 1),
 							RWPath_MaskChunks =		RWBkt_MaskChunks * (ORAML + 1),
-							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWBkt_AESChunks)),
+							
+							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWPayload_AESChunks)),
 							BIDWidth =				ORAML + 2, // Bucket ID width; ORAML + 2 to account for wasted space in subtree scheme (TODO: add this param to addr gen as well)
 							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
 						
