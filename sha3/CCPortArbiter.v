@@ -57,7 +57,7 @@ module CCPortArbiter (
 	reg  PthRW, HdRW;
 	wire PthCtrEnable, HdCtrEnable;
 	wire BufReg_InValid_Pre;
-	wire HdRW_Transition, BktOfInterest;// BktOfI_Transition;	
+	wire HdRW_Transition, BktOfInterest;	
 	wire [`log2(BktSize_DRBursts)-1:0]	BktOfInterestCtr;
 	
 	Register #(	.Width(1))
@@ -82,17 +82,19 @@ module CCPortArbiter (
 						.Count(					HdOnPthCtr),
 						.Done(					HdRW_Transition)
 				);
-	
+/*	
 	Register #(.Width(1))
 		bkt_of_interest (Clock, Reset || BktOfI_Transition, FromDecDataTransfer && HdOfInterest, 1'b0, 1'bx, BktOfInterest);
-	
-	CountAlarm #(		.Threshold(				BktSize_DRBursts - 1))
+*/	
+	CountAlarm #(		.Threshold(				BktSize_DRBursts))
 		bkt_of_i_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				FromDecDataTransfer && BktOfInterest),
 						.Count(					BktOfInterestCtr),
 						.Done(					BktOfI_Transition)
 			);
+
+	assign BktOfInterest = ROAccess && CSPathRead && !HdRW;
 	
 	// 1 means read from DRAM, write to buffer; 0 means write to DRAM and read from buffer
 	always @(posedge Clock) begin

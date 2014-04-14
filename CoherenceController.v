@@ -290,11 +290,11 @@ module CoherenceController(
 		//	ROAccess: header write back CC --> AES. RWAccess: BufP1 --> AES
 		assign	ToEncData =				RWAccess ? BufP1Reg_DOut 
 										: ROAccess ? BufP1Reg_DOut
-										: FromStashData;
+										: {DDRDWidth{1'bx}};
 										
 		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid //&& IVDone
 										: ROAccess ? BufP1Reg_OutValid //&& IVDone_BktOfI
-										: FromStashDataValid;
+										: 0;
 		
 		assign  BufP1Reg_OutReady = 	RWAccess ? ToEncDataReady //&& IVDone 
 										: ROAccess ? ToEncDataReady //&& IVDone_BktOfI
