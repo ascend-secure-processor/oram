@@ -172,7 +172,9 @@ module AESREWORAM(
 	wire					RO_LeafNextDirection;
 	wire	[IVEntropyWidth-1:0] RO_IVIncrement, RO_IVNext;
 		
-	wire					CSROStartRead, CSROStartOp, CSRORead, CSROStartROIRead, CSROROIRead, CSROHWrite;
+	wire					CSROIdle, CSROStartRead, CSROStartOp, CSRORead, CSROStartROIRead, CSROROIRead, CSROHWrite;
+	
+	wire					WBPathTransition, HWBPathTransition;
 	
 	// RW background seed generation
 	
@@ -326,12 +328,15 @@ module AESREWORAM(
 	
 	assign	DRAMReadTransfer =						DRAMReadDataValid & DRAMReadDataReady;
 	
+	assign	CSROIdle =								CS_RO == ST_RO_Idle;
 	assign	CSROStartRead =							CS_RO == ST_RO_StartRead;
 	assign	CSROStartOp =							CSROStartRead | CS_RO == ST_RO_StartWrite;
 	assign	CSRORead =								CS_RO == ST_RO_HeaderRead;
 	assign	CSROStartROIRead =						CS_RO == ST_RO_StartROIRead;
 	assign	CSROROIRead =							CS_RO == ST_RO_ROIRead;
 	assign	CSROHWrite =							CS_RO == ST_RO_HeaderWrite;
+	
+	assign	WBPathTransition =						(ROAccess) ? HWBPathTransition : ROPathTransition;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS_RO <= 						ST_RO_Idle;
@@ -350,7 +355,7 @@ module AESREWORAM(
 			ST_RO_HeaderRead :
 				if (ROPathTransition & ROAccess)
 					NS_RO =							ST_RO_StartROIRead;
-				if (ROPathTransition & ~ROAccess)
+				else if (ROPathTransition & ~ROAccess)
 					NS_RO =							ST_RO_StartWrite;
 			ST_RO_StartROIRead : 
 				if (ROCommandTransfer)
@@ -362,15 +367,15 @@ module AESREWORAM(
 				if (RO_BIDInReady)
 					NS_RO =							ST_RO_HeaderWrite;
 			ST_RO_HeaderWrite :
-				if (ROPathTransition) // TODO wrong!
+				if (WBPathTransition)
 					NS_RO =							ST_RO_Idle;
 		endcase
 	end	
-
+	
 	CountAlarm 	#(			.Threshold(				BktSize_DRBursts),
 							.IThreshold(			0))
-				ro_hdr_cnt(	.Clock(					Clock), 
-							.Reset(					Reset), 
+				ro_hdr_cnt(	.Clock(					Clock),
+							.Reset(					Reset | CSROStartOp), 
 							.Enable(				DRAMReadTransfer),
 							.Intermediate(			RODRAMChunkIsHeader),
 							.Done(					ROBucketTransition));
@@ -380,9 +385,15 @@ module AESREWORAM(
 							.Enable(				ROBucketTransition),
 							.Done(					ROPathTransition));
 							
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				hwb_cnt(	.Clock(					Clock), 
+							.Reset(					Reset | CSROStartOp), 
+							.Enable(				BEDataInReady & BEDataInValid),
+							.Done(					HWBPathTransition));					
+							
 	CountAlarm 	#(			.Threshold(				BktSize_DRBursts))
-				roi_rd(		.Clock(					Clock), 
-							.Reset(					Reset), 
+				roi_rd(		.Clock(					Clock),
+							.Reset(					Reset | CSROStartOp), 
 							.Enable(				CSROROIRead & BufferedDataInValid & BufferedDataInReady),
 							.Done(					ROI_Rebuffer2Complete));
 
@@ -459,13 +470,12 @@ module AESREWORAM(
 	
 	assign	BufferedDataIn =						(CSRORead) ?			{DRAMReadData, 	Core_ROIVIn, 			Core_ROBIDIn} : 
 													(CSROROIRead) ?			{ROIData,		ROI_IV, 				ROI_BID} : 
-													(CSROHWrite) ? 			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut} : 
-													{DDRDWidth{1'bx}}; // TODO do we need this statement?
+																			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth + IVEntropyWidth + BIDWidth),
 							.Buffering(				AESLatencyPlus))
-				ro_int_buf(	.Clock(					Clock),
+				data_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				BufferedDataIn),
 							.InValid(				BufferedDataInValid),
@@ -478,7 +488,7 @@ module AESREWORAM(
 	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
 							.Buffering(				ORAML + 1))
-				ro_IVp_buf(	.Clock(					Clock),
+				hwb_iv_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_ROIVIn),
 							.InValid(				BufferedROIVInValid),
@@ -834,7 +844,8 @@ module AESREWORAM(
 	//	Output Arbitration
 	//--------------------------------------------------------------------------	
 	
-	// When we detect a read bucket has never been written, mark its valid bits as invalid
+	// When we detect a read bucket has never been written, mark its valid bits 
+	// as invalid
 	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIV == 0) ? {{BktHWaste_ValidBits{1'b0}}, {BigVWidth{1'b0}}} : DataOut_Unmask[BktHUStart-1:BktHVStart]; 
 	assign	DataOut_Process1 =						{	
 														DataOut_Unmask[DDRDWidth-1:BktHUStart],
