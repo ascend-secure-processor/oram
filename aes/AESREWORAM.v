@@ -196,7 +196,7 @@ module AESREWORAM(
 	
 	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
 	
-	wire					MaskIsHeader, DataOutBucketTransition;	
+	wire					MaskIsHeader, BufferedDataBucketTransition;	
 	
 	// RO mask shifting/buffering
 	
@@ -252,8 +252,9 @@ module AESREWORAM(
 	
 	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
 	
-	wire					ServingROI;
-	
+	wire					StartROI, ServingROI, FinishROI;
+	wire					ServingHWB, FinishHWB;
+		
 	// Derived signals
 	
 	reg						ROAccess_Delayed;
@@ -812,28 +813,43 @@ module AESREWORAM(
 	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 
+	// TODO replace registers with typical FSM logic?
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				ROAccess & DataOutBucketTransition),
-							.Done(					ROIPathTransition));
+							.Enable(				ROAccess & BufferedDataBucketTransition),
+							.Done(					StartROI));
 	Register #(				.Width(					1))
-				roi_payload(.Clock(					Clock),
-							.Reset(					Reset | (~ROIPathTransition & DataOutBucketTransition)),
-							.Set(					ROIPathTransition),
+				roi_state(	.Clock(					Clock),
+							.Reset(					Reset | FinishROI),
+							.Set(					StartROI),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ServingROI));
-							
+	assign	FinishROI =								~StartROI & ServingROI & BufferedDataBucketTransition; // after one more bucket
+	
+	Register #(				.Width(					1))
+				hwb_state(	.Clock(					Clock),
+							.Reset(					Reset | FinishHWB),
+							.Set(					FinishROI),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ServingHWB));
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				hwb_out_cnt(.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				ServingHWB & BufferedDataTransfer),
+							.Done(					FinishHWB));
+	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.IThreshold(			0))
 				rw_hdr_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				BufferedDataTransfer),
 							.Intermediate(			MaskIsHeader),
-							.Done(					DataOutBucketTransition));
+							.Done(					BufferedDataBucketTransition));
 		
-	assign	ROMask_Needed =							MaskIsHeader & ~ServingROI;
+	assign	ROMask_Needed =							(ROAccess) ? (MaskIsHeader & ~ServingROI) | ServingHWB : MaskIsHeader;
 	assign	ROIMask_Needed =						ServingROI;
 	assign	RMMask_Needed =							~ROAccess;
 	assign	BDataValid_Needed =						BufferedDataOutValid;
@@ -883,7 +899,7 @@ module AESREWORAM(
 	assign	DataOutReady =							(CSPathRead) ? BEDataOutReady : DRAMWriteDataReady;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
 	
-	assign	RWBucketTransition =					ROMask_Needed & DataOutBucketTransition;		
+	assign	RWBucketTransition =					ROMask_Needed & BufferedDataBucketTransition;		
 	
 	//--------------------------------------------------------------------------
 	//	Path Read Interface
