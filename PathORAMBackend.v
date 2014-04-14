@@ -138,7 +138,7 @@ module PathORAMBackend(
 	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy;
 	
-	wire					AppendComplete, PathReadComplete, PathWritebackComplete;
+	wire					AppendComplete, FullPathReadComplete, ROPathReadComplete, PathReadComplete, PathWritebackComplete;
 	wire					OperationComplete;
 	
 	wire					RWAccess, StartRW, REWRoundComplete;
@@ -606,6 +606,8 @@ module PathORAMBackend(
 							.OutSend(				AddrGen_DRAMCommandValid),
 							.OutReady(				AddrGen_DRAMCommandReady));						
 							
+	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.  REW ORAM 
+	// uses gentry bucket version #s to determine whether a bucket is valid.
 	generate if (EnableREW) begin:AUTO_INIT
 		assign	DRAMInitComplete =					1'b1;
 		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
@@ -738,6 +740,8 @@ module PathORAMBackend(
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
 	
+	// TODO use CountAlarm
+	
 	Counter		#(			.Width(					PBEDWidth))
 				in_path_cnt(.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
@@ -746,11 +750,22 @@ module PathORAMBackend(
 							.Enable(				DataDownShift_Transfer & ~PathReadComplete),
 							.In(					{PBEDWidth{1'bx}}),
 							.Count(					PathReadCtr));
+		
 	CountCompare #(			.Width(					PBEDWidth),
 							.Compare(				PathSize_BEDChunks))
 				in_path_cmp(.Count(					PathReadCtr), 
-							.TerminalCount(			PathReadComplete));
-	
+							.TerminalCount(			FullPathReadComplete));
+		
+	generate if (EnableREW) begin:RO_PATH_SUPPORT
+		CountCompare #(		.Width(					PBEDWidth),
+							.Compare(				BktSize_BEDChunks))
+				in_bkt_cmp(	.Count(					PathReadCtr), 
+							.TerminalCount(			ROPathReadComplete));
+		assign	PathReadComplete =					(ROAccess) ? ROPathReadComplete : FullPathReadComplete;	
+	end else begin:FULL_PATH
+		assign	PathReadComplete =					FullPathReadComplete;
+	end endgenerate
+
 	//------------------------------------------------------------------------------
 	//	Stash
 	//------------------------------------------------------------------------------
