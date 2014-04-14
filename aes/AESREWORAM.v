@@ -174,7 +174,7 @@ module AESREWORAM(
 		
 	wire					CSROIdle, CSROStartRead, CSROStartOp, CSRORead, CSROStartROIRead, CSROROIRead, CSROHWrite;
 	
-	wire					WBPathTransition, HWBPathTransition;
+	wire					WBPathTransition, HWBPathTransition, RWWBPathTransition;
 	
 	// RW background seed generation
 	
@@ -290,7 +290,7 @@ module AESREWORAM(
 				$stop;
 			end
 			
-			if (BufferedDataOutValid & MaskIsHeader & ^DataOutV === 1'bx) begin
+			if (~CSROHWrite & BufferedDataOutValid & MaskIsHeader & ^DataOutV === 1'bx) begin // TODO use better signal than CSROHWrite
 				$display("[%m @ %t] ERROR: Valid bit was X.", $time);
 				$stop;	
 			end
@@ -331,12 +331,10 @@ module AESREWORAM(
 	assign	CSROIdle =								CS_RO == ST_RO_Idle;
 	assign	CSROStartRead =							CS_RO == ST_RO_StartRead;
 	assign	CSROStartOp =							CSROStartRead | CS_RO == ST_RO_StartWrite;
-	assign	CSRORead =								CS_RO == ST_RO_HeaderRead;
+	assign	CSRORead =								CS_RO == ST_RO_HeaderRead; // TODO make name more general
 	assign	CSROStartROIRead =						CS_RO == ST_RO_StartROIRead;
 	assign	CSROROIRead =							CS_RO == ST_RO_ROIRead;
-	assign	CSROHWrite =							CS_RO == ST_RO_HeaderWrite;
-	
-	assign	WBPathTransition =						(ROAccess) ? HWBPathTransition : ROPathTransition;
+	assign	CSROHWrite =							CS_RO == ST_RO_HeaderWrite; // TODO make name more general
 	
 	always @(posedge Clock) begin
 		if (Reset) CS_RO <= 						ST_RO_Idle;
@@ -372,6 +370,7 @@ module AESREWORAM(
 		endcase
 	end	
 	
+	// Read counters
 	CountAlarm 	#(			.Threshold(				BktSize_DRBursts),
 							.IThreshold(			0))
 				ro_hdr_cnt(	.Clock(					Clock),
@@ -384,18 +383,24 @@ module AESREWORAM(
 							.Reset(					Reset), 
 							.Enable(				ROBucketTransition),
 							.Done(					ROPathTransition));
-							
-	CountAlarm 	#(			.Threshold(				ORAML + 1))
-				hwb_cnt(	.Clock(					Clock), 
-							.Reset(					Reset | CSROStartOp), 
-							.Enable(				BEDataInReady & BEDataInValid),
-							.Done(					HWBPathTransition));					
-							
 	CountAlarm 	#(			.Threshold(				BktSize_DRBursts))
 				roi_rd(		.Clock(					Clock),
 							.Reset(					Reset | CSROStartOp), 
 							.Enable(				CSROROIRead & BufferedDataInValid & BufferedDataInReady),
-							.Done(					ROI_Rebuffer2Complete));
+							.Done(					ROI_Rebuffer2Complete));							
+							
+	// Writeback counters
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				hwb_cnt(	.Clock(					Clock), 
+							.Reset(					Reset | CSROStartOp), 
+							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.Done(					HWBPathTransition));
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				rwwb_cnt(	.Clock(					Clock), 
+							.Reset(					Reset | CSROStartOp), 
+							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.Done(					RWWBPathTransition));							
+	assign	WBPathTransition =						(ROAccess) ? HWBPathTransition : RWWBPathTransition;
 
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
 	assign	RO_IVIncrement =						RO_IVOut + {{IVEntropyWidth-1{1'b0}}, ~RO_LeafNextDirection};
@@ -892,7 +897,7 @@ module AESREWORAM(
 	//	Path Writeback Interface
 	//--------------------------------------------------------------------------
 
-	assign	DRAMWriteData =							DataOut;
+	assign	DRAMWriteData =							DataOut_Unmask; // TODO cleanup
 	assign	DRAMWriteDataValid = 					~CSPathRead & DataOutValid;
 
 	assign	BEDataInReady = 						CSROHWrite & BufferedDataInReady;
