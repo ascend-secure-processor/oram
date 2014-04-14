@@ -863,7 +863,7 @@ module AESREWORAM(
 	
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					Reset | FinishHWB), 
 							.Enable(				ROAccess & BufferedDataBucketTransition),
 							.Done(					StartROI));
 							
@@ -871,14 +871,14 @@ module AESREWORAM(
 	
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				hwb_out_cnt(.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					Reset | FinishHWB), 
 							.Enable(				CSCOHWB & BufferedDataTransfer),
 							.Done(					FinishHWB));
 	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.IThreshold(			0))
 				rw_hdr_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					Reset | FinishHWB),
 							.Enable(				BufferedDataTransfer),
 							.Intermediate(			MaskIsHeader),
 							.Done(					BufferedDataBucketTransition));
