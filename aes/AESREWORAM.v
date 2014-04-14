@@ -73,6 +73,12 @@ module AESREWORAM(
 							ST_RW_Read =			2'd1,
 							ST_RW_StartWrite =		2'd2,
 							ST_RW_Write =			2'd3;
+
+	localparam				COSWidth =				2,
+							ST_CO_ReadPath =		2'd0,
+							ST_CO_ROI =				2'd1,
+							ST_CO_HWB =				2'd2,
+							ST_CO_WritePath =		2'd3;	
 	
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
 							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth + 1;
@@ -238,6 +244,13 @@ module AESREWORAM(
 
 	wire					ROI_Rebuffer1Complete, ROI_Rebuffer2Complete;	
 	
+	// Output control
+
+	reg		[COSWidth-1:0]	CS_CO, NS_CO;
+		
+	wire					CSCOHWB, CSCOROI;
+	wire					StartROI, FinishROI, FinishHWB;
+
 	// Output Data/Mask mixing
 	
 	wire	[DDRDWidth-1:0]	ROHeaderMask;
@@ -256,9 +269,6 @@ module AESREWORAM(
 	
 	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
 	
-	wire					StartROI, ServingROI, FinishROI;
-	wire					ServingHWB, FinishHWB;
-		
 	// Derived signals
 	
 	reg						ROAccess_Delayed;
@@ -730,7 +740,7 @@ module AESREWORAM(
 							.Enable(				ROAccess & BufferedDataTransfer),
 							.Done(					ProcessingLastHeader));
 					
-	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~ServingHWB & |ROI_UMatches);
+	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOHWB & |ROI_UMatches);
 	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
 			
 	Register	#(			.Width(					1))
@@ -800,7 +810,7 @@ module AESREWORAM(
 	assign	ROIDataMask =							ROIMaskShiftOutData;
 	
 	//--------------------------------------------------------------------------
-	//	Mask / Data Mixing & Mask Source Arbitration
+	//	Output Data Arbitration
 	//--------------------------------------------------------------------------
 	
 	/* 	Mask chart
@@ -825,32 +835,44 @@ module AESREWORAM(
 	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 
-	// TODO replace registers with typical FSM logic?
+	assign	CSCOROI =								CS_CO == ST_CO_ROI;	
+	assign	CSCOHWB =								CS_CO == ST_CO_HWB;
+		
+	always @(posedge Clock) begin
+		if (Reset) CS_CO <= 						ST_CO_ReadPath;
+		else CS_CO <= 								NS_CO;
+	end
+	
+	always @( * ) begin
+		NS_CO = 									CS_CO;
+		case (CS_CO)
+			ST_CO_ReadPath :
+				if (StartROI & ROAccess)
+					NS_CO =							ST_CO_ROI;
+				else if (StartROI & ~ROAccess)
+					NS_CO =							ST_CO_WritePath;
+			ST_CO_ROI :
+				if (FinishROI)
+					NS_CO =							ST_CO_HWB;
+			ST_CO_HWB :
+				if (FinishHWB)
+					NS_CO =							ST_CO_ReadPath;
+			// TODO ST_CO_WritePath
+		endcase
+	end
+	
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
 							.Enable(				ROAccess & BufferedDataBucketTransition),
 							.Done(					StartROI));
-	Register #(				.Width(					1))
-				roi_state(	.Clock(					Clock),
-							.Reset(					Reset | FinishROI),
-							.Set(					StartROI),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ServingROI));
-	assign	FinishROI =								~StartROI & ServingROI & BufferedDataBucketTransition; // after one more bucket
+							
+	assign	FinishROI =								~StartROI & CSCOROI & BufferedDataBucketTransition; // after one more bucket
 	
-	Register #(				.Width(					1))
-				hwb_state(	.Clock(					Clock),
-							.Reset(					Reset | FinishHWB),
-							.Set(					FinishROI),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ServingHWB));
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				hwb_out_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				ServingHWB & BufferedDataTransfer),
+							.Enable(				CSCOHWB & BufferedDataTransfer),
 							.Done(					FinishHWB));
 	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
@@ -861,13 +883,17 @@ module AESREWORAM(
 							.Intermediate(			MaskIsHeader),
 							.Done(					BufferedDataBucketTransition));
 		
-	assign	ROMask_Needed =							(ROAccess) ? (MaskIsHeader & ~ServingROI) | ServingHWB : MaskIsHeader;
-	assign	ROIMask_Needed =						ServingROI;
+	//--------------------------------------------------------------------------
+	//	Data/Mask Mixing
+	//--------------------------------------------------------------------------	
+	
+	assign	ROMask_Needed =							(ROAccess) ? (MaskIsHeader & ~CSCOROI) | CSCOHWB : MaskIsHeader;
+	assign	ROIMask_Needed =						CSCOROI;
 	assign	RMMask_Needed =							~ROAccess;
 	assign	BDataValid_Needed =						BufferedDataOutValid;
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? 	Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
 	assign	ROMaskValid_Needed =					(ROMask_Needed) ? 	ROMaskBufOutValid : 1'b1;
-	
+		
 	assign	RWHeaderMask =							(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
 	assign	RWDataMask =							(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
 
@@ -891,7 +917,7 @@ module AESREWORAM(
 	// To keep the interface "clean", and to make the CoherenceController 
 	// simpler, we give a completely decrypted header for the bucket of 
 	// interest
-	assign	RecomputedVU =							(MaskIsHeader & ServingROI) ? {ROI_U, {BktHWaste_ValidBits{1'b0}}, ROI_V} :	DataOut_Process1[BktHLStart-1:BktHVStart];
+	assign	RecomputedVU =							(MaskIsHeader & CSCOROI) ? {ROI_U, {BktHWaste_ValidBits{1'b0}}, ROI_V} :	DataOut_Process1[BktHLStart-1:BktHVStart];
 	assign	DataOut_Process2 =						{	
 														DataOut_Process1[DDRDWidth-1:BktHLStart],
 														RecomputedVU,
