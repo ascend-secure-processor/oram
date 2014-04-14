@@ -335,7 +335,7 @@ module CoherenceController(
 		
 	end else begin: NO_BUF
 	
-		wire HeaderInReady, HeaderOutValid;
+		wire HeaderInReady, HeaderOutValid, HeaderOutReady;
 		wire [DDRDWidth-1:0]	HeaderOut;
 			 
 		always @ (posedge Clock) begin		
@@ -355,20 +355,21 @@ module CoherenceController(
 						.InAccept(				HeaderInReady),
 						.OutData(				HeaderOut),
 						.OutSend(				HeaderOutValid),
-						.OutReady(				ToEncDataReady)
+						.OutReady(				HeaderOutReady)
 					);     
 	
 	
 		//	AES --> Stash Passthrough 	
 		assign	ToStashData =			FromDecData;
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
-											: FromDecDataValid && CSPathRead && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+											: CSPathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
 		//	ROAccess: header write back CC --> AES. RWAccess: Stash --> AES
-		assign	ToEncData =				ROAccess ? HeaderOut : FromStashData;
-		assign	ToEncDataValid =		ROAccess ? HeaderOutValid :	FromStashDataValid;
+		assign	ToEncData =				ROAccess ? HeaderOut: FromStashData;
+		assign	ToEncDataValid =		ROAccess ? HeaderOutValid  && CSPathWriteback:	FromStashDataValid;
+		assign  HeaderOutReady = 		ROAccess && CSPathWriteback && ToEncDataReady;
 		
 		assign	FromStashDataReady = 	!ROAccess && ToEncDataReady;
 
