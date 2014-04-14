@@ -75,7 +75,7 @@ module AESREWORAM(
 							ST_RW_Write =			2'd3;
 	
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
-							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth;
+							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth + 1;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -156,6 +156,8 @@ module AESREWORAM(
 	
 	wire	[DDRDWidth-1:0]	BufferedDataOut;
 	wire					BufferedDataTransfer;
+	
+	wire					BucketNotWritten, BufferedIVNotValid;
 	
 	wire	[IVEntropyWidth-1:0] BufferedROIVOutData;
 	wire					BufferedROIVInValid, BufferedROIVInReady;
@@ -450,7 +452,7 @@ module AESREWORAM(
 	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;				
 							
 	assign	Core_ROCommandIn =						(CSROStartROIRead) ? 	PCMD_ROData : 	PCMD_ROHeader;
-	assign	Core_ROIVIn =							(CSRORead) ?			RO_IVOut :
+	assign	Core_ROIVIn =							(CSRORead) ?			DRAMReadData[IVEntropyWidth-1:0] :
 													(CSROROIRead) ? 		ROI_IV :
 																			BufferedROIVOutData;
 	assign	Core_ROBIDIn =							(CSROROIRead) ? 		ROI_BID : 		RO_BIDOut;
@@ -475,9 +477,13 @@ module AESREWORAM(
 	//	Intermediate data buffers
 	//--------------------------------------------------------------------------
 	
-	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	Core_ROIVIn, 			Core_ROBIDIn} : 
-													(CSROROIRead) ?			{ROIData,		ROI_IV, 				ROI_BID} : 
-																			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut}; // header WB + RW writeback
+	// Use the Gentry version # to determine if we have ever written to this 
+	// bucket before.  If not, treat the whole bucket as invalid.
+	assign	BucketNotWritten =						RO_IVOut == 0;
+	
+	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	RO_IVOut, 				Core_ROBIDIn,	BucketNotWritten} : 
+													(CSROROIRead) ?			{ROIData,		ROI_IV, 				ROI_BID,		BucketNotWritten} : 
+																			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					BDWidth),
@@ -491,7 +497,7 @@ module AESREWORAM(
 							.OutSend(				BufferedDataOutValid),
 							.OutReady(				BufferedDataOutReady));	
 	
-	assign	{BufferedDataOut, BufferedIV, 	BufferedBID} = BufferedDataOut_Wide;
+	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
 	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
@@ -869,7 +875,7 @@ module AESREWORAM(
 	
 	// When we detect a read bucket has never been written, mark its valid bits 
 	// as invalid
-	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIV == 0) ? {{BktHWaste_ValidBits{1'b0}}, {BigVWidth{1'b0}}} : DataOut_Unmask[BktHUStart-1:BktHVStart]; 
+	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIVNotValid) ? {BktHSize_ValidBits{1'b0}} : DataOut_Unmask[BktHUStart-1:BktHVStart]; 
 	assign	DataOut_Process1 =						{	
 														DataOut_Unmask[DDRDWidth-1:BktHUStart],
 														RecomputedValidBits,
@@ -906,8 +912,8 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	assign	BEDataOut =								DataOut;
-	assign	BEBVOut =								(ROAccess) ? 0 : RWBVOut;
-	assign	BEBIDOut =								(ROAccess) ? 0 : RWBIDOut;
+	assign	BEBVOut =								(ROAccess) ? BufferedIV : 	RWBVOut;
+	assign	BEBIDOut =								(ROAccess) ? BufferedBID : 	RWBIDOut;
 	
 	assign	BEDataOutValid =						CSPathRead & DataOutValid;
 	
