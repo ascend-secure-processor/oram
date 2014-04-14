@@ -33,7 +33,7 @@
 module CoherenceController(
 	Clock, Reset,
 	
-    ROPAddr, ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback, DRAMInitComplete,
+    ROPAddr, REWRoundDummy, DRAMInitComplete,
 
 	FromDecData, FromDecDataValid, FromDecDataReady,
 	ToEncData, ToEncDataValid, ToEncDataReady,
@@ -57,7 +57,6 @@ module CoherenceController(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
-	`include "IVCCLocal.vh"
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -65,7 +64,7 @@ module CoherenceController(
 		
   	input 					Clock, Reset;
 	input	[ORAMU-1:0]		ROPAddr;
-    input					ROAccess, REWRoundDummy, CSPathRead, CSPathWriteback, DRAMInitComplete;
+    input					REWRoundDummy, DRAMInitComplete;
 	
 	//--------------------------------------------------------------------------
 	//	AES Interface
@@ -109,20 +108,57 @@ module CoherenceController(
 	output  					IVReady_BktOfI;
 	input						IVDone_BktOfI;
 	
+	wire 	ROAccess, RWAccess, CSPathRead, CSPathWriteback;
+	
+	
 	//--------------------------------------------------------------------------
-	//	Wires & Regs
+	// CC status control logic
 	//-------------------------------------------------------------------------- 
-    wire RWAccess;
-    
-    assign RWAccess = DRAMInitComplete && !ROAccess;
-    
-		//--------------------------------------------------------------------------
+	localparam	RW_R_Chunk = PathSize_DRBursts,
+				RW_W_Chunk = PathSize_DRBursts,
+				RO_R_Chunk = (ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
+				RO_W_Chunk = (ORAML+1) * BktHSize_DRBursts;
+	
+	wire	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
+	wire	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
+	wire	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
+	wire	[`log2(RO_W_Chunk)-1:0]				RO_W_Ctr;
+	
+	
+	REWStatCtr	#(			.ORAME(					ORAME),
+							.RW_R_Chunk(			RW_R_Chunk),
+							.RW_W_Chunk(			RW_W_Chunk),
+							.RO_R_Chunk(			RO_R_Chunk),
+							.RO_W_Chunk(			RO_W_Chunk))
+							
+			rw_stat		(	.Clock(					Clock),
+							.Reset(					Reset | !DRAMInitComplete),
+							
+							.RW_R_Transfer(			FromDecDataValid && FromDecDataReady),
+							.RW_W_Transfer(			ToEncDataValid && ToEncDataReady),
+							.RO_R_Transfer(			FromDecDataValid && FromDecDataReady),
+							.RO_W_Transfer(			ToEncDataValid && ToEncDataReady),
+							
+							.ROAccess(				ROAccess),
+							.RWAccess(				RWAccess),
+							.Read(					CSPathRead),
+							.Writeback(				CSPathWriteback),
+							
+							.RW_R_Ctr(				RW_R_Ctr),
+							.RW_W_Ctr(				RW_W_Ctr),
+							.RO_R_Ctr(				RO_R_Ctr),
+							.RO_W_Ctr(				RO_W_Ctr)													
+						);
+	
+	
+	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 
               
 	// distinguish headers from payloads
 	wire HeaderInValid;
-    wire  [`log2(BktSize_DRBursts)-1:0] BlkCtr;   
+    /*
+	wire  [`log2(BktSize_DRBursts)-1:0] BlkCtr;   
 	
 	CountAlarm #(		.Threshold(				BktSize_DRBursts))
 		blk_ctr 	(	.Clock(					Clock), 
@@ -130,8 +166,9 @@ module CoherenceController(
 						.Enable(				FromDecDataValid && FromDecDataReady),
 						.Count(					BlkCtr)
 					);
-		
-	assign HeaderInValid = ROAccess && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	 
+	*/	
+	// assign HeaderInValid = ROAccess && CSPathRead && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	
+	assign HeaderInValid = ROAccess && CSPathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
 	
 	// invalidate the bit for the target block
 	wire HdOfInterest;
@@ -149,9 +186,10 @@ module CoherenceController(
 	
 	assign HdOfInterest = (ValidBitsIn != ValidBitsOut) && HeaderInValid;
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
-		
+	
+	
 	//--------------------------------------------------------------------------
-	// Integrity Verification needs two path buffers and requires delaying path and header write back
+	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
     generate if (EnableIV) begin: FULL_BUF
 		
@@ -162,6 +200,8 @@ module CoherenceController(
 			end
 		end
 	
+		`include "IVCCLocal.vh"
+		
 		//------------------------------------------------------------------------------------------------------
 		// in and out path buffer. 
 		// 		port1 written by Stash, read and written by AES
@@ -205,7 +245,7 @@ module CoherenceController(
 							.OutData(				BufP1Reg_DOut),
 							.OutSend(				BufP1Reg_OutValid),
 							.OutReady(				BufP1Reg_OutReady));
-		
+				
 		CCPortArbiter # (	.DWidth(				DDRDWidth),
 							.ORAML(					ORAML),
 							.BktSize_DRBursts(		BktSize_DRBursts)	)
@@ -276,6 +316,7 @@ module CoherenceController(
 		
 		assign  DataToIV = HdOfIStat != 2 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
 		
+		// hacky solution to pass the two versions of bucket of interest to IV
 		always @(posedge Clock) begin
 		    if (Reset) begin
 		        HdOfIStat <= 0;
@@ -294,7 +335,7 @@ module CoherenceController(
 		
 	end else begin: NO_BUF
 	
-		wire HeaderInReady, HeaderInValid, HeaderOutValid;
+		wire HeaderInReady, HeaderOutValid;
 		wire [DDRDWidth-1:0]	HeaderOut;
 			 
 		always @ (posedge Clock) begin		
@@ -320,7 +361,9 @@ module CoherenceController(
 	
 		//	AES --> Stash Passthrough 	
 		assign	ToStashData =			FromDecData;
-		assign	ToStashDataValid =		FromDecDataValid; 
+		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
+											: FromDecDataValid && CSPathRead && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
 		//	ROAccess: header write back CC --> AES. RWAccess: Stash --> AES

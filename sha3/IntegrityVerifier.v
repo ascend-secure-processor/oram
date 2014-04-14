@@ -99,7 +99,7 @@ module IntegrityVerifier (
 	always @(posedge Clock) begin
 		if (Violation === 1) begin
 			$display("Integrity violation!");
-			//$stop;
+			$stop;
 		end
 		
 		else if (Violation === 1'bx) begin
@@ -124,6 +124,7 @@ module IntegrityVerifier (
 	assign PendingWork = BucketProgress < TotalBucketD || BktOfIStat > 2;	
 	
 	assign IVDone_BktOfI = BktOfIStat == 0;
+		// hacky solution to dispatch the task of verifying the two versions of bucket of interest
 	
 	//------------------------------------------------------------------------------------
 	// Round robin scheduling for hash engines

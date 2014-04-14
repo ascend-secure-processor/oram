@@ -253,10 +253,7 @@ module PathORamTop(
 							.Reset(					Reset),
 									
                             .ROPAddr(               ROPAddr),
-                            .ROAccess(          	ROAccess),
 							.REWRoundDummy(			REWRoundDummy),
-							.CSPathRead(			CSPathRead),
-							.CSPathWriteback(		CSPathWriteback),
                             .DRAMInitComplete(		DRAMInitComplete),
 							
 							.FromDecData(			AES_DRAMReadData), 
