@@ -169,9 +169,11 @@ module AESREWORAM(
 	
 	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
 	
-	wire	[IVEntropyWidth-1:0] RO_IVOut, BufferedIV;
+	wire	[IVEntropyWidth-1:0] RO_GentryIV, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
-		
+	
+	wire	[IVEntropyWidth-1:0] RO_ExternalIV, RO_UpdatedExternalIV;
+	
 	wire					RO_LeafNextDirection;
 	wire	[IVEntropyWidth-1:0] RO_IVIncrement, RO_IVNext;
 		
@@ -225,7 +227,7 @@ module AESREWORAM(
 	wire	[BigVWidth-1:0] DataOutV;
 	wire	[BigUWidth-1:0] DataOutU;
 	
-	wire	[IVEntropyWidth-1:0] ROI_IV;
+	wire	[IVEntropyWidth-1:0] ROI_GentryIV;
 	wire	[BIDWidth-1:0]	ROI_BID;
 	wire	[BigUWidth-1:0]	ROI_U;
 	wire	[BigVWidth-1:0]	ROI_V;
@@ -406,8 +408,10 @@ module AESREWORAM(
 							.Done(					RWWBPathTransition));							
 	assign	WBPathTransition =						(ROAccess) ? HWBPathTransition : RWWBPathTransition;
 
+	assign	RO_ExternalIV = 						DRAMReadData[IVEntropyWidth-1:0];
+	
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
-	assign	RO_IVIncrement =						RO_IVOut + {{IVEntropyWidth-1{1'b0}}, ~RO_LeafNextDirection};
+	assign	RO_IVIncrement =						RO_GentryIV + {{IVEntropyWidth-1{1'b0}}, ~RO_LeafNextDirection};
 	assign	RO_IVNext = 							(CSROStartRead) ? 	GentryCounter_MemoryConsistant : 
 																		{1'b0, RO_IVIncrement[IVEntropyWidth-1:1]};
 	
@@ -417,7 +421,7 @@ module AESREWORAM(
 							.Set(					1'b0),
 							.Enable(				CSROStartRead | (CSRORead & ROCommandTransfer)),
 							.In(					RO_IVNext),
-							.Out(					RO_IVOut));
+							.Out(					RO_GentryIV));
 	ShiftRegister #(		.PWidth(				ORAML),
 							.Reverse(				1),
 							.SWidth(				1))
@@ -449,11 +453,11 @@ module AESREWORAM(
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));
 							
-	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;				
+	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;
 							
 	assign	Core_ROCommandIn =						(CSROStartROIRead) ? 	PCMD_ROData : 	PCMD_ROHeader;
-	assign	Core_ROIVIn =							(CSRORead) ?			DRAMReadData[IVEntropyWidth-1:0] :
-													(CSROROIRead) ? 		ROI_IV :
+	assign	Core_ROIVIn =							(CSRORead) ?			RO_ExternalIV :
+													(CSROROIRead) ? 		ROI_GentryIV :
 																			BufferedROIVOutData;
 	assign	Core_ROBIDIn =							(CSROROIRead) ? 		ROI_BID : 		RO_BIDOut;
 	
@@ -479,10 +483,10 @@ module AESREWORAM(
 	
 	// Use the Gentry version # to determine if we have ever written to this 
 	// bucket before.  If not, treat the whole bucket as invalid.
-	assign	BucketNotWritten =						RO_IVOut == 0;
+	assign	BucketNotWritten =						RO_GentryIV == 0;
 	
-	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	RO_IVOut, 				Core_ROBIDIn,	BucketNotWritten} : 
-													(CSROROIRead) ?			{ROIData,		ROI_IV, 				ROI_BID,		BucketNotWritten} : 
+	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	RO_GentryIV, 			Core_ROBIDIn,	BucketNotWritten} : 
+													(CSROROIRead) ?			{ROIData,		ROI_GentryIV, 			ROI_BID,		BucketNotWritten} : 
 																			{BEDataIn,		{IVEntropyWidth{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
@@ -500,11 +504,13 @@ module AESREWORAM(
 	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
 	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
+	assign	RO_UpdatedExternalIV =					RO_ExternalIV + ROHeader_AESChunks;
+	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
 							.Buffering(				ORAML + 1))
 				hwb_iv_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				Core_ROIVIn),
+							.InData(				RO_UpdatedExternalIV),
 							.InValid(				BufferedROIVInValid),
 							.InAccept(				BufferedROIVInReady),
 							.OutData(				BufferedROIVOutData),
@@ -747,8 +753,8 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Enable(				ROI_FoundBucket | ROI_NotFoundBucket),
-							.In(					{BufferedIV, 	BufferedBID,	DataOutU, 	DataOutV}),
-							.Out(					{ROI_IV, 		ROI_BID,		ROI_U,		ROI_V}));
+							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
+							.Out(					{ROI_GentryIV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
 	assign	ROIDataInValid =						BufferedDataTransfer & ROI_ProcessBucket;						
 							
