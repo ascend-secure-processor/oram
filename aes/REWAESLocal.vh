@@ -18,7 +18,7 @@
 							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
 						
 	localparam				AESLatency =			21;	// based on tiny_aes + extra stages we add
-	localparam				AESLatencyPlus =		AESLatency + 20; // The expected _total_ latency through REWAESCore (factoring in cross clock FIFOs/etc) 
+	localparam				AESLatencyPlus =		32; // The expected _total_ latency through REWAESCore (factoring in cross clock FIFOs/etc).  We prefer 32deep because this best packs LUTRAMs.
 						
 	localparam				BlkSize_AESChunks =		`divceil(ORAMB, AESWidth);						
 							

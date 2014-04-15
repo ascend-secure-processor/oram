@@ -134,6 +134,18 @@ module PathORamTop(
 	wire  					IVReady_BktOfI, IVDone_BktOfI;
 	
 	//--------------------------------------------------------------------------
+	//	Simulation checks
+	//-------------------------------------------------------------------------- 		
+	
+	`ifdef SIMULATION
+		initial begin	
+			if (ORAML + 1 > 32) begin
+				$display("[%m @ %t] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.", $time);
+			end
+		end
+	`endif
+	
+	//--------------------------------------------------------------------------
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	

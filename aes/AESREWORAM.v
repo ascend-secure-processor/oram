@@ -77,8 +77,7 @@ module AESREWORAM(
 	localparam				COSWidth =				2,
 							ST_CO_Read =			2'd0,
 							ST_CO_ROI =				2'd1,
-							ST_CO_HWB =				2'd2,
-							ST_CO_Write =			2'd3;	
+							ST_CO_Write =			2'd2;	
 	
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
 							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth + 1;
@@ -169,6 +168,9 @@ module AESREWORAM(
 	wire					BufferedROIVInValid, BufferedROIVInReady;
 	wire					BufferedROIVOutValid, BufferedROIVOutReady;	
 	
+	wire	[IVEntropyWidth-1:0] WritebackROIVOutData;
+	wire					WritebackROIVInReady, WritebackROIVOutValid, WritebackROIVOutReady;
+	
 	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
 
 	wire 					RO_BIDOutValid_Needed;	
@@ -195,7 +197,7 @@ module AESREWORAM(
 	wire					RWPathTransition;
 	wire					RWCommandTransfer, RMMaskReady, DataOutTransfer;
 
-	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
+	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounter_MemoryConsistant, GentryCounterShifted, RWBVOut;
 
 	wire	[BIDWidth-1:0] 	RWBIDOut;
 	
@@ -227,7 +229,7 @@ module AESREWORAM(
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
 	wire					ProcessingLastHeader;	
-	wire					ROI_ProcessBucket, ROI_BucketWasFound, ROI_BucketWasEverFound;
+	wire					ROI_ProcessBucket, ROI_BucketWasFound;
 	wire 					ROI_FoundBucket, ROI_NotFoundBucket;
 	
 	wire	[BigVWidth-1:0] DataOutV;
@@ -248,7 +250,7 @@ module AESREWORAM(
 
 	reg		[COSWidth-1:0]	CS_CO, NS_CO;
 		
-	wire					CSCOWB, CSCOROI;
+	wire					CSCOWrite, CSCOROI;
 	wire					StartROI, FinishROI, FinishWBOut;
 
 	wire					HWBPathTransitionOut, RWWBPathTransitionOut;
@@ -265,8 +267,9 @@ module AESREWORAM(
 
 	wire	[BktHSize_ValidBits-1:0] RecomputedValidBits;
 	wire	[BigUWidth+BktHSize_ValidBits-1:0] RecomputedVU;
+	wire	[IVEntropyWidth-1:0] UpdatedExternalIV;
 	
-	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Process1, DataOut_Process2, DataOut;
+	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Read1, DataOut_Read, DataOut_Write;
 	wire					DataOutValid, DataOutReady;
 	
 	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
@@ -298,6 +301,10 @@ module AESREWORAM(
 		end
 		
 		always @(posedge Clock) begin
+			if (BufferedDataInValid & ~BufferedDataInReady) begin
+				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
+			end
+		
 			if (DataOutTransfer & ~RWAuxOutValid) begin
 				$display("[%m @ %t] ERROR: Mask fifo didn't have data on a transfer.", $time);
 				$stop;
@@ -312,14 +319,9 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: Valid bit was X.", $time);
 				$stop;	
 			end
-			
+
 			if (ROIDataInValid & ~ROIDataInReady) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO overflow.", $time);
-				$stop;
-			end
-			
-			if (BufferedROIVInValid & ~BufferedROIVInReady) begin
-				$display("[%m @ %t] ERROR: IV FIFO for header writebacks overflowed.", $time);
 				$stop;
 			end
 			
@@ -327,6 +329,19 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: RO and RW masks overlapped on header flit.", $time);
 				$stop;			
 			end
+			
+			if (BufferedROIVInValid & ~BufferedROIVInReady) begin
+				$display("[%m @ %t] ERROR: IV FIFO for header writebacks overflowed.", $time);
+				$stop;
+			end
+			if (BufferedROIVInValid & ~WritebackROIVInReady) begin
+				$display("[%m @ %t] ERROR: External IV FIFO writebacks overflowed.", $time);
+				$stop;
+			end
+			if (WritebackROIVOutReady & ~WritebackROIVOutValid) begin
+				$display("[%m @ %t] ERROR: External IV FIFO didn't have data on a transfer.", $time);
+				$stop;
+			end			
 		end
 	`endif
 
@@ -516,11 +531,13 @@ module AESREWORAM(
 	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
 	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
+	// If BucketNotYetWritten, RO_UpdatedExternalIV is XX so to make thing 
+	// simple, we always just increment it by the same amount
 	assign	RO_UpdatedExternalIV =					RO_ExternalIV + ROHeader_AESChunks;
 	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
 							.Buffering(				ORAML + 1))
-				hwb_iv_buf(	.Clock(					Clock),
+				hwb_ivc_buf(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				RO_UpdatedExternalIV),
 							.InValid(				BufferedROIVInValid),
@@ -530,6 +547,27 @@ module AESREWORAM(
 							.OutReady(				BufferedROIVOutReady));
 	
 	assign	BufferedROIVOutReady =					CSROWrite & ROCommandTransfer;
+	
+	/* This is a "lazy" design -- we could have made hwb_ivc_buf a RAM and gone 
+	   through it twice.  Two comments:
+	   1.) This is very cheap: 32dx64w bits of LUT RAM.  Who cares?
+	   2.) The RAM alternative may actually add some cycles to the critical path 
+	       when IV == 0.  Added delay = time in between AESCore generating the 
+		   first mask & hwb_ivc_buf writing the last command (= about 10 cycles 
+		   when L = 32). 
+	   NOTE 2: [ASIC] we should implement as RAM for ASIC ... */
+	FIFORAM		#(			.Width(					IVEntropyWidth),
+							.Buffering(				ORAML + 1))
+				hwb_ivo_buf(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				BufferedROIVOutData),
+							.InValid(				BufferedROIVOutValid & BufferedROIVOutReady),
+							.InAccept(				WritebackROIVInReady),
+							.OutData(				WritebackROIVOutData),
+							.OutSend(				WritebackROIVOutValid),
+							.OutReady(				WritebackROIVOutReady));
+
+	assign	WritebackROIVOutReady =					CSCOWrite & MaskIsHeader & DataOutTransfer;
 	
 	//--------------------------------------------------------------------------
 	//	RW AES Input
@@ -775,7 +813,7 @@ module AESREWORAM(
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 
 	assign	CSCOROI =								CS_CO == ST_CO_ROI;	
-	assign	CSCOWB =								CS_CO == ST_CO_HWB;
+	assign	CSCOWrite =								CS_CO == ST_CO_Write;
 		
 	always @(posedge Clock) begin
 		if (Reset) CS_CO <= 						ST_CO_Read;
@@ -792,8 +830,8 @@ module AESREWORAM(
 					NS_CO =							ST_CO_Write;
 			ST_CO_ROI :
 				if (FinishROI)
-					NS_CO =							ST_CO_HWB;
-			ST_CO_HWB :
+					NS_CO =							ST_CO_Write;
+			ST_CO_Write :
 				if (FinishWBOut)
 					NS_CO =							ST_CO_Read;
 		endcase
@@ -808,7 +846,7 @@ module AESREWORAM(
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
 							.Reset(					Reset | FinishWBOut), 
-							.Enable(				ROAccess & BufferedDataBucketTransition),
+							.Enable(				BufferedDataBucketTransition),
 							.Done(					StartROI));
 							
 	assign	FinishROI =								~StartROI & CSCOROI & BufferedDataBucketTransition; // after one more bucket
@@ -816,12 +854,12 @@ module AESREWORAM(
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				hwb_cnt_O(	.Clock(					Clock), 
 							.Reset(					Reset | FinishWBOut), 
-							.Enable(				CSCOWB & BufferedDataTransfer),
+							.Enable(				CSCOWrite & BufferedDataTransfer),
 							.Done(					HWBPathTransitionOut));
 	CountAlarm 	#(			.Threshold(				PathSize_DRBursts))
 				rwwb_cnt_O(	.Clock(					Clock), 
 							.Reset(					Reset | FinishWBOut), 
-							.Enable(				CSCOWB & BufferedDataTransfer),
+							.Enable(				CSCOWrite & BufferedDataTransfer),
 							.Done(					RWWBPathTransitionOut));					
 							
 	assign	FinishWBOut =							(ROAccess) ? HWBPathTransitionOut : RWWBPathTransitionOut;
@@ -831,8 +869,9 @@ module AESREWORAM(
 				rw_hdr_cnt(	.Clock(					Clock),
 							.Reset(					Reset | FinishWBOut),
 							.Enable(				BufferedDataTransfer),
-							.Intermediate(			MaskIsHeader),
+							.Intermediate(			MaskIsHeader_Pre),
 							.Done(					BufferedDataBucketTransition));
+	assign	MaskIsHeader =							(ROAccess) ? MaskIsHeader_Pre | CSCOWrite : MaskIsHeader_Pre;	
 		
 	//--------------------------------------------------------------------------
 	//	RO Identify Bucket of Interest
@@ -842,24 +881,16 @@ module AESREWORAM(
 	// if it was in the stash), this logic will still rebuffer/decrypt something 
 	// to hide timing variations
 	
-	assign	DataOutV =								DataOut_Process1[BigVWidth+BktHVStart-1:BktHVStart];
-	assign	DataOutU =								DataOut_Process1[BigUWidth+BktHUStart-1:BktHUStart];
+	assign	DataOutV =								DataOut_Read1[BigVWidth+BktHVStart-1:BktHVStart];
+	assign	DataOutU =								DataOut_Read1[BigUWidth+BktHUStart-1:BktHUStart];
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BUCKET_OF_INTEREST
 		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
 	end endgenerate
 					
-	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWB & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasEverFound);
-
-	Register	#(			.Width(					1))
-			roi_everfound(	.Clock(					Clock),
-							.Reset(					Reset |	StartROI),						
-							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ROI_BucketWasEverFound));
-			
+	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches);
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
+	
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
 							.Reset(					Reset |	ROI_Rebuffer1Complete),						
@@ -903,7 +934,7 @@ module AESREWORAM(
 	//	Data/Mask Mixing
 	//--------------------------------------------------------------------------	
 	
-	assign	ROMask_Needed =							(ROAccess) ? (MaskIsHeader & ~CSCOROI) | CSCOWB : MaskIsHeader;
+	assign	ROMask_Needed =							(ROAccess) ? (MaskIsHeader & ~CSCOROI) | CSCOWrite : MaskIsHeader; // TODO | CSCOWrite is redundant
 	assign	ROIMask_Needed =						CSCOROI;
 	assign	RMMask_Needed =							~ROAccess;
 	assign	BDataValid_Needed =						BufferedDataOutValid;
@@ -924,7 +955,7 @@ module AESREWORAM(
 	// When we detect a read bucket has never been written, mark its valid bits 
 	// as invalid
 	assign	RecomputedValidBits =					(MaskIsHeader & BufferedIVNotValid) ? {BktHSize_ValidBits{1'b0}} : DataOut_Unmask[BktHUStart-1:BktHVStart]; 
-	assign	DataOut_Process1 =						{	
+	assign	DataOut_Read1 =							{	
 														DataOut_Unmask[DDRDWidth-1:BktHUStart],
 														RecomputedValidBits,
 														DataOut_Unmask[BktHVStart-1:0]	
@@ -933,15 +964,20 @@ module AESREWORAM(
 	// To keep the interface "clean", and to make the CoherenceController 
 	// simpler, we give a completely decrypted header for the bucket of 
 	// interest
-	assign	RecomputedVU =							(MaskIsHeader & CSCOROI) ? {ROI_U, {BktHWaste_ValidBits{1'b0}}, ROI_V} :	DataOut_Process1[BktHLStart-1:BktHVStart];
-	assign	DataOut_Process2 =						{	
-														DataOut_Process1[DDRDWidth-1:BktHLStart],
+	assign	RecomputedVU =							(MaskIsHeader & CSCOROI) ? {ROI_U, {BktHWaste_ValidBits{1'b0}}, ROI_V} : DataOut_Read1[BktHLStart-1:BktHVStart];
+	assign	DataOut_Read =							{	
+														DataOut_Read1[DDRDWidth-1:BktHLStart],
 														RecomputedVU,
-														DataOut_Unmask[BktHVStart-1:0]
+														DataOut_Unmask[IVEntropyWidth-1:0]
 													};
-
-	// Finally, we're done
-	assign	DataOut =								DataOut_Process2;
+	
+	// Writeback the IVs that we used to generate the new ROHeaderMasks to 
+	// memory
+	assign	UpdatedExternalIV =						(MaskIsHeader) ? WritebackROIVOutData : DataOut_Unmask[IVEntropyWidth-1:0]; 
+	assign	DataOut_Write =							{
+														DataOut_Unmask[DDRDWidth-1:BktHVStart],
+														UpdatedExternalIV
+													};
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
 	assign	DataOutValid =							 BDataValid_Needed & 	ROMaskValid_Needed & RMMaskValid_Needed & 	(RMMask_Needed | ROIMask_Needed | ROMask_Needed);
@@ -959,7 +995,7 @@ module AESREWORAM(
 	//	Path Read Interface
 	//--------------------------------------------------------------------------
 	
-	assign	BEDataOut =								DataOut;
+	assign	BEDataOut =								DataOut_Read;
 	assign	BEBVOut =								(ROAccess) ? BufferedIV : 	RWBVOut;
 	assign	BEBIDOut =								(ROAccess) ? BufferedBID : 	RWBIDOut;
 	
@@ -969,7 +1005,7 @@ module AESREWORAM(
 	//	Path Writeback Interface
 	//--------------------------------------------------------------------------
 
-	assign	DRAMWriteData =							DataOut_Unmask; // TODO cleanup
+	assign	DRAMWriteData =							DataOut_Write;
 	assign	DRAMWriteDataValid = 					~CSPathRead & DataOutValid;
 
 	assign	BEDataInReady = 						CSROWrite & BufferedDataInReady;
