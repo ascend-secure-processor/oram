@@ -260,7 +260,7 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	ROHeaderMask;
 	wire	[DDRDWidth-1:0]	RWBGHeaderMask, RWBGDataMask;
 	wire	[DDRDWidth-1:0]	ROIHeaderMask, ROIDataMask;
-	wire	[DDRDWidth-1:0]	RWHeaderMask, RWDataMask;
+	wire	[DDRDWidth-1:0]	GentryHeaderMask, GentryDataMask;
 	wire	[DDRDWidth-1:0]	Mask;
 	
 	wire					BDataValid_Needed, RMMaskValid_Needed, ROMaskValid_Needed;
@@ -483,9 +483,9 @@ module AESREWORAM(
 							
 	assign	Core_ROCommandIn =						(CSROStartROIRead) ? 	PCMD_ROData : 	PCMD_ROHeader;
 	assign	Core_ROIVIn =							(CSRORead) ?			RO_ExternalIV :
-													(CSROROIRead) ? 		ROI_GentryIV :
+													(CSROStartROIRead) ? 	ROI_GentryIV :
 																			BufferedROIVOutData;
-	assign	Core_ROBIDIn =							(CSROROIRead) ? 		ROI_BID : 		RO_BIDOut;
+	assign	Core_ROBIDIn =							(CSROStartROIRead) ? 	ROI_BID : 		RO_BIDOut;
 	
 	assign	Core_ROCommandInValid =					(CSROStartROIRead) ? 	1'b1 : 
 													(CSROROIRead) ? 		1'b0 :
@@ -550,8 +550,8 @@ module AESREWORAM(
 	assign	BufferedROIVOutReady =					CSROWrite & ROCommandTransfer;
 	
 	/* This is a "lazy" design -- we could have made hwb_ivc_buf a RAM and gone 
-	   through it twice.  Two comments:
-	   1.) This is very cheap: 32dx64w bits of LUT RAM.  Who cares?
+	   through it twice.  Two comments to make us not care:
+	   1.) This second FIFO is very cheap: 32dx64w bits of LUT RAM.
 	   2.) The RAM alternative may actually add some cycles to the critical path 
 	       when IV == 0.  Added delay = time in between AESCore generating the 
 		   first mask & hwb_ivc_buf writing the last command (= about 10 cycles 
@@ -951,12 +951,12 @@ module AESREWORAM(
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? 	Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
 	assign	ROMaskValid_Needed =					(ROMask_Needed) ? 	ROMaskBufOutValid : 1'b1;
 		
-	assign	RWHeaderMask =							(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
-	assign	RWDataMask =							(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
+	assign	GentryHeaderMask =						(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
+	assign	GentryDataMask =						(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
 
-	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
+	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | GentryHeaderMask : GentryDataMask;
 
-	assign	DataOut_Unmask =						BufferedDataOut;// ^ Mask;	// TODO: 
+	assign	DataOut_Unmask =						BufferedDataOut ^ Mask; 
 	
 	//--------------------------------------------------------------------------
 	//	Output Arbitration
