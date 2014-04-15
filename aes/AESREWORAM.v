@@ -229,7 +229,7 @@ module AESREWORAM(
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
 	wire					ProcessingLastHeader;	
-	wire					ROI_ProcessBucket, ROI_BucketWasFound;
+	wire					ROI_BufferBucket, ROI_BucketWasFound, ROI_BucketLoad;
 	wire 					ROI_FoundBucket, ROI_NotFoundBucket;
 	
 	wire	[BigVWidth-1:0] DataOutV;
@@ -439,8 +439,7 @@ module AESREWORAM(
 	
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
 	assign	RO_IVIncrement =						RO_GentryIV + {{IVEntropyWidth-1{1'b0}}, ~RO_LeafNextDirection};
-	assign	RO_IVNext = 							(CSROStartRead) ? 	GentryCounter_MemoryConsistant : 
-																		{1'b0, RO_IVIncrement[IVEntropyWidth-1:1]};
+	assign	RO_IVNext = 							(CSROStartRead) ? GentryCounter_MemoryConsistant : {1'b0, RO_IVIncrement[IVEntropyWidth-1:1]};
 	
 	Register	#(			.Width(					IVEntropyWidth))
 				ro_gentry(	.Clock(					Clock),
@@ -892,18 +891,25 @@ module AESREWORAM(
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches);
 	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
-	
+
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
+							.Reset(					Reset |	FinishWBOut),				
+							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ROI_BucketWasFound));	
+	Register	#(			.Width(					1))
+				roi_load(	.Clock(					Clock),
 							.Reset(					Reset |	ROI_Rebuffer1Complete),						
 							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					ROI_BucketWasFound));
-	assign	ROI_ProcessBucket =						ROI_FoundBucket | ROI_NotFoundBucket | ROI_BucketWasFound;
+							.Out(					ROI_BucketLoad));
+	assign	ROI_BufferBucket =						ROI_FoundBucket | ROI_NotFoundBucket | ROI_BucketLoad;
 							
 	CountAlarm #(			.Threshold(				BktSize_DRBursts))
-				roi_wr(		.Clock(					Clock), 
+				roi_load_cnt(.Clock(				Clock), 
 							.Reset(					Reset), 
 							.Enable(				ROIDataInValid),
 							.Done(					ROI_Rebuffer1Complete));
@@ -916,7 +922,7 @@ module AESREWORAM(
 							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
 							.Out(					{ROI_GentryIV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
-	assign	ROIDataInValid =						BufferedDataTransfer & ROI_ProcessBucket;						
+	assign	ROIDataInValid =						BufferedDataTransfer & ROI_BufferBucket;						
 							
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM		#(			.Width(					DDRDWidth),
