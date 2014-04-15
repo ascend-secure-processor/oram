@@ -456,7 +456,7 @@ module PathORAMBackend(
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
 		
 		assign	ROPAddr =							PAddr_Internal;
-		assign	ROLeaf =							CurrentLeaf_Internal;
+		assign	ROLeaf =							(~RWAccess) ? DummyLeaf : CurrentLeaf_Internal;
 		assign	ROAccess =							~RWAccess & DRAMInitComplete;
 		assign	REWRoundDummy =						AccessIsDummy;
 	end else begin:BASIC_CONTROL
