@@ -227,7 +227,7 @@ module AESREWORAM(
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
 	wire					ProcessingLastHeader;	
-	wire					ROI_ProcessBucket, ROI_BucketWasFound;
+	wire					ROI_ProcessBucket, ROI_BucketWasFound, ROI_BucketWasEverFound;
 	wire 					ROI_FoundBucket, ROI_NotFoundBucket;
 	
 	wire	[BigVWidth-1:0] DataOutV;
@@ -850,11 +850,19 @@ module AESREWORAM(
 	end endgenerate
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWB & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasEverFound);
+
+	Register	#(			.Width(					1))
+			roi_everfound(	.Clock(					Clock),
+							.Reset(					Reset |	StartROI),						
+							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ROI_BucketWasEverFound));
 			
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
-							.Reset(					Reset |	ROI_Rebuffer1Complete),
+							.Reset(					Reset |	ROI_Rebuffer1Complete),						
 							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -907,7 +915,7 @@ module AESREWORAM(
 
 	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | RWHeaderMask : RWDataMask;
 
-	assign	DataOut_Unmask =						BufferedDataOut ^ Mask;
+	assign	DataOut_Unmask =						BufferedDataOut;// ^ Mask;	// TODO: 
 	
 	//--------------------------------------------------------------------------
 	//	Output Arbitration
