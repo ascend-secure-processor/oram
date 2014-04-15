@@ -204,7 +204,7 @@ module AESREWORAM(
 	wire	[ORAML-1:0]		GentryLeaf;
 
 	wire					RWAuxInValid, RWAuxInReady;
-	wire					RWAuxOutValid;		
+	wire					RWAuxOutValid, RWAuxOutReady;
 	
 	wire					RW_BIDInReady, RW_BIDOutValid, RW_BIDOutReady;	
 	
@@ -305,7 +305,7 @@ module AESREWORAM(
 				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
 			end
 		
-			if (DataOutTransfer & ~RWAuxOutValid) begin
+			if (RWAuxOutReady & ~RWAuxOutValid) begin
 				$display("[%m @ %t] ERROR: Mask fifo didn't have data on a transfer.", $time);
 				$stop;
 			end
@@ -683,7 +683,9 @@ module AESREWORAM(
 							.InAccept(				RWAuxInReady),
 							.OutData(				{RWBVOut, RWBIDOut}),
 							.OutSend(				RWAuxOutValid),
-							.OutReady(				RWBucketTransition));
+							.OutReady(				RWAuxOutReady));
+							
+	assign	RWAuxOutReady =							~ROAccess & MaskIsHeader & BufferedDataTransfer;	
 	
 	//--------------------------------------------------------------------------
 	//	AES Core
@@ -996,8 +998,6 @@ module AESREWORAM(
 	
 	assign	DataOutReady =							(CSPathRead) ? BEDataOutReady : DRAMWriteDataReady;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
-	
-	assign	RWBucketTransition =					ROMask_Needed & BufferedDataBucketTransition;		
 	
 	//--------------------------------------------------------------------------
 	//	Path Read Interface
