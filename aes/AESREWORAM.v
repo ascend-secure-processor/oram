@@ -180,7 +180,7 @@ module AESREWORAM(
 	wire	[IVEntropyWidth-1:0] RO_GentryIV, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
 	
-	wire	[IVEntropyWidth-1:0] RO_ExternalIV, RO_UpdatedExternalIV;
+	wire	[IVEntropyWidth-1:0] RO_ExternalIV, RO_UpdatedExternalIV, RW_UpdatedExternalIV;
 	
 	wire					RO_LeafNextDirection;
 	wire	[IVEntropyWidth-1:0] RO_IVIncrement, RO_IVNext;
@@ -531,15 +531,17 @@ module AESREWORAM(
 	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
 	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
-	// If BucketNotYetWritten, RO_UpdatedExternalIV is XX so to make thing 
-	// simple, we always just increment it by the same amount
+	// If BucketNotYetWritten, RO_UpdatedExternalIV is XX on ROAccess so to make 
+	// thing simple, we always just increment it by the same amount.  On A 
+	// RWAccess, we must set to something ...
 	assign	RO_UpdatedExternalIV =					RO_ExternalIV + ROHeader_AESChunks;
+	assign	RW_UpdatedExternalIV =					(~ROAccess & BucketNotYetWritten) ? {IVEntropyWidth{1'b0}} : RO_UpdatedExternalIV;
 	
 	FIFORAM		#(			.Width(					IVEntropyWidth),
 							.Buffering(				ORAML + 1))
 				hwb_ivc_buf(.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				RO_UpdatedExternalIV),
+							.InData(				RW_UpdatedExternalIV),
 							.InValid(				BufferedROIVInValid),
 							.InAccept(				BufferedROIVInReady),
 							.OutData(				BufferedROIVOutData),
