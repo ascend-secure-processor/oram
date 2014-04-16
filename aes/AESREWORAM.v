@@ -37,6 +37,8 @@ module AESREWORAM(
 
 	ROPAddr, ROLeaf, ROAccess,
 	CSPathRead,
+
+	ROIBVOut, ROIBIDOut,
 	
 	BEDataOut, BEBVOut, BEBIDOut, BEDataOutValid, BEDataOutReady,
 	BEDataIn, BEDataInValid, BEDataInReady,
@@ -102,11 +104,18 @@ module AESREWORAM(
 	//	Backend Interface
 	//--------------------------------------------------------------------------
 
-	output	[DDRDWidth-1:0] BEDataOut;
-	output	[IVEntropyWidth-1:0] BEBVOut;
-	output	[BIDWidth-1:0]	BEBIDOut;
+	// These signals will be valid from when the bucket of interest is found to 
+	// the end of the header writeback
+	output	[IVEntropyWidth-1:0] ROIBVOut;
+	output	[BIDWidth-1:0]	ROIBIDOut;
+	
+	output	[DDRDWidth-1:0] BEDataOut;	
 	output					BEDataOutValid; 
 	input					BEDataOutReady;
+
+	// TODO remove
+	output	[IVEntropyWidth-1:0] BEBVOut;
+	output	[BIDWidth-1:0]	BEBIDOut;
 	
 	input	[DDRDWidth-1:0]	BEDataIn;
 	input					BEDataInValid;
@@ -975,7 +984,7 @@ module AESREWORAM(
 
 	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | GentryHeaderMask : GentryDataMask;
 
-	assign	DataOut_Unmask =						BufferedDataOut;// TODO ^ Mask; 
+	assign	DataOut_Unmask =						BufferedDataOut ^ Mask; 
 	
 	//--------------------------------------------------------------------------
 	//	Output Arbitration
@@ -1023,6 +1032,11 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	assign	BEDataOut =								DataOut_Read;
+
+	assign	ROIBVOut =								ROI_GentryIV;
+	assign	ROIBIDOut =								ROI_BID;
+
+	// TODO remove this when we get rid of the BV/BID FIFO on the RW side
 	assign	BEBVOut =								(ROAccess) ? BufferedIV : 	RWBVOut;
 	assign	BEBIDOut =								(ROAccess) ? BufferedBID : 	RWBIDOut;
 	
