@@ -26,10 +26,10 @@ module testUORam;
     parameter                   LeafWidth = 32;         // in bits       
     parameter                   PLBCapacity = 1024;     // in bits
 
-	parameter					Overclock = 		0;
+	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
-    parameter					EnableIV =          1;
+    parameter					EnableIV =          0;
 	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
