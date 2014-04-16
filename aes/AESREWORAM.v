@@ -311,21 +311,21 @@ module AESREWORAM(
 		
 		always @(posedge Clock) begin
 			if (BEDataOutValid & BEDataOutReady) begin
-				$display("[%m @ %t] Sending Backend: %x (BEBV: %d, %d) ", $time, BEDataOut, BEBVOut, BEBIDOut);
+				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b, BEBV: %d, BID: %d) ", $time, BEDataOut, ROAccess, CSCOROI, BEBVOut, BEBIDOut);
 			end
 			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
-				$display("[%m @ %t] Writing DRAM:    %x (ROAccess = %b) ", $time, DRAMWriteData, ROAccess);
+				$display("[%m @ %t] Writing DRAM:    %x (RO: %b) ", $time, DRAMWriteData, ROAccess);
 			end
 			
 			/*
 			if (DRAMReadDataValid & DRAMReadDataReady) begin
 				$display("[%m @ %t] Reading DRAM:    %x (ROAccess = %b) ", $time, DRAMReadData, ROAccess);
 			end
-			
+			*/
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end
-			*/
+			
 		end
 		
 		always @(posedge Clock) begin

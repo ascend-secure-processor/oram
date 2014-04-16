@@ -100,6 +100,8 @@ module ascend_vc707(
 				$stop;
 			end
 			
+			// More notes for the board test:
+			// 1.) Make sure to run a long enough simulation to test the gentry counter[ORAML-1:0] rollover case
 			$display("[%m @ %t] ERROR: Remember do simulate with L = 31 (from AES's perspective) ... somehow", $time);
 			$stop;
 		end

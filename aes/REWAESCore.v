@@ -293,7 +293,7 @@ module REWAESCore(
 							.OutReady(				RWReady));	
 	
 	assign	RWSend =								~ROValid & RWValid;
-	assign	RWReady =								RWDataCID_Terminal;
+	assign	RWReady =								~ROValid & RWDataCID_Terminal;
 	
 	Counter		#(			.Width(					CIDWidth),
 							.Initial(				0))
