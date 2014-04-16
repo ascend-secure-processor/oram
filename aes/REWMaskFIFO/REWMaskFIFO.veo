@@ -55,7 +55,6 @@
 
 //----------- Begin Cut here for INSTANTIATION Template ---// INST_TAG
 REWMaskFIFO your_instance_name (
-  .rst(rst),        // input wire rst
   .wr_clk(wr_clk),  // input wire wr_clk
   .rd_clk(rd_clk),  // input wire rd_clk
   .din(din),        // input wire [511 : 0] din

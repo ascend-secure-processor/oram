@@ -202,8 +202,7 @@ module REWAESCore(
 	// RO commands.  
 	
 	assign	ROCommandInReady =						~ROCommandFull;
-	AESSeedFIFO ro_I_fifo(	.rst(					SlowReset),
-							.wr_clk(				SlowClock), 
+	AESSeedFIFO ro_I_fifo(	.wr_clk(				SlowClock), 
 							.rd_clk(				FastClock), 
 							.din(					{ROIVIn, 	ROBIDIn, 	ROCommandIn}), 
 							.wr_en(					ROCommandInValid),
@@ -270,8 +269,7 @@ module REWAESCore(
 	//--------------------------------------------------------------------------
 	
 	assign	RWCommandInReady =						~RWCommandFull;
-	AESSeedFIFO rw_I_fifo(	.rst(					SlowReset),
-							.wr_clk(				SlowClock),
+	AESSeedFIFO rw_I_fifo(	.wr_clk(				SlowClock),
 							.rd_clk(				FastClock),
 							.din(					{RWIVIn, RWBIDIn}), 
 							.wr_en(					RWCommandInValid),
@@ -347,8 +345,7 @@ module REWAESCore(
 	// ECC bits.
 
 	// Note: we don't do backpressure on this FIFO so it must be deep enough
-	AESROFIFO 	ro_O_fifo(	.rst(					SlowReset),
-							.wr_clk(				FastClock), 
+	AESROFIFO 	ro_O_fifo(	.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
 							.wr_en(					CommandOutIsRO),
@@ -414,8 +411,7 @@ module REWAESCore(
 							.POut(					MaskFIFODataIn));
 	
 	// Note: we don't do backpressure on this FIFO so it must be deep enough
-	REWMaskFIFO rw_O_fifo(	.rst(					SlowReset), 
-							.wr_clk(				FastClock), 
+	REWMaskFIFO rw_O_fifo(	.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					MaskFIFODataIn), 
 							.wr_en(					MaskFIFODataInValid), 

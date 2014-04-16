@@ -54,7 +54,6 @@
 
 (* DowngradeIPIdentifiedWarnings = "yes" *)
 module REWMaskFIFO (
-  rst,
   wr_clk,
   rd_clk,
   din,
@@ -66,7 +65,6 @@ module REWMaskFIFO (
   valid
 );
 
-input wire rst;
 input wire wr_clk;
 input wire rd_clk;
 (* X_INTERFACE_INFO = "xilinx.com:interface:fifo_write:1.0 FIFO_WRITE WR_DATA" *)
@@ -93,7 +91,7 @@ output wire valid;
     .C_DOUT_WIDTH(512),
     .C_ENABLE_RLOCS(0),
     .C_FAMILY("virtex7"),
-    .C_FULL_FLAGS_RST_VAL(1),
+    .C_FULL_FLAGS_RST_VAL(0),
     .C_HAS_ALMOST_EMPTY(0),
     .C_HAS_ALMOST_FULL(0),
     .C_HAS_BACKUP(0),
@@ -103,7 +101,7 @@ output wire valid;
     .C_HAS_OVERFLOW(0),
     .C_HAS_RD_DATA_COUNT(0),
     .C_HAS_RD_RST(0),
-    .C_HAS_RST(1),
+    .C_HAS_RST(0),
     .C_HAS_SRST(0),
     .C_HAS_UNDERFLOW(0),
     .C_HAS_VALID(1),
@@ -130,7 +128,7 @@ output wire valid;
     .C_RD_FREQ(1),
     .C_RD_PNTR_WIDTH(9),
     .C_UNDERFLOW_LOW(0),
-    .C_USE_DOUT_RST(1),
+    .C_USE_DOUT_RST(0),
     .C_USE_ECC(0),
     .C_USE_EMBEDDED_REG(0),
     .C_USE_FIFO16_FLAGS(0),
@@ -286,7 +284,7 @@ output wire valid;
     .backup(1'B0),
     .backup_marker(1'B0),
     .clk(1'B0),
-    .rst(rst),
+    .rst(1'B0),
     .srst(1'B0),
     .wr_clk(wr_clk),
     .wr_rst(1'B0),

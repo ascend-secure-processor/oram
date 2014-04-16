@@ -50,10 +50,6 @@
 #                         Native FIFO Constraints                              #
 #------------------------------------------------------------------------------#
 
-set_false_path -through [get_ports rst] -to [get_pins -hierarchical -filter {NAME =~ *rstblk*/*PRE}]  
-# Set false path on the reset synchronizers
-set_false_path -from [get_cells -hierarchical -filter {NAME =~ *rstblk*/*rst_reg_reg[*]}]
-set_false_path -from [get_cells -hierarchical -filter {NAME =~ *rstblk*/*rst_reg_reg[*]}]
 
 
 ################################################################################
