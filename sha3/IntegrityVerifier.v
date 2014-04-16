@@ -89,7 +89,7 @@ module IntegrityVerifier (
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
 	assign ConsumeHash = HashOutValid[Turn];
-	assign CheckHash = (BucketID[Turn] < TotalBucketD / 2) || (BucketID[Turn] == TotalBucketD && BktOfIStat == 1);
+	assign CheckHash = (BucketID[Turn] < TotalBucketD / 2) || (BucketID[Turn] == TotalBucketD && BktOfIStat == 2);
 	
 	// checking hash for the input path
 	assign Violation = ConsumeHash && CheckHash &&	

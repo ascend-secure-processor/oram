@@ -333,6 +333,13 @@ module PathORamTop(
 		//assign	IVDone_BktOfI = 					1'b1;		
 								
 	end	else begin: NO_INTEGRITY		
+	
+		assign	IVRequest = 1'b0;
+		assign 	IVWrite = 1'b0;
+		assign 	IVAddress = 0;
+		assign	DataFromIV = 0;
+	
+		// only the following two are important
 		assign	IVDone = 							1'b1;
 		assign	IVDone_BktOfI = 					1'b1;
 	end endgenerate

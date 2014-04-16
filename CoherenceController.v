@@ -102,8 +102,8 @@ module CoherenceController(
 	input						IVDone;
 	input 						IVRequest, IVWrite;
 	input 	[PathBufAWidth-1:0] 	IVAddress;
-	output 	[DDRDWidth-1:0]  	DataFromIV;
-	input 	[DDRDWidth-1:0]  	DataToIV;
+	input 	[DDRDWidth-1:0]  	DataFromIV;
+	output 	[DDRDWidth-1:0]  	DataToIV;
 	
 	output  					IVReady_BktOfI;
 	input						IVDone_BktOfI;
@@ -313,7 +313,7 @@ module CoherenceController(
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = IVAddress == OBktOfIStartAddr && IVWrite ? (HdStartAddr + BktOfInterest) : IVAddress;
+		assign  BufP2_Address = (IVAddress == OBktOfIStartAddr && IVWrite) ? (HdStartAddr + BktOfInterest) : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
 		assign  DataToIV = HdOfIStat != 2 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
