@@ -59,12 +59,13 @@ module PathORAMTopTestbench;
 							ORAME = 				5;
 
 	parameter				FEDWidth =				64,
-							BEDWidth =				128;
+							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
-
+	
 	parameter				EnableAES =				1,
-							EnableREW =				0;
+							EnableREW =				1,
+							EnableIV =				0;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
@@ -79,7 +80,7 @@ module PathORAMTopTestbench;
 	
     parameter				LeafWidth = 			32,
 							PLBCapacity = 			8192;
-		
+	
 	parameter				SlowDownORAMClock = 	0;
 	parameter				SlowClockFreq =			100_000_000;
 	
@@ -160,7 +161,7 @@ module PathORAMTopTestbench;
 		if (RecvDataValid)
 			$display("[%m @ %t] Received data = %x", $time, RecvData);
 	end
-
+	
 	ascend_vc707 #(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -170,6 +171,7 @@ module PathORAMTopTestbench;
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),							
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),

@@ -55,7 +55,7 @@ module ascend_vc707(
 		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
 							ChipScope signals & meet timing */
 	parameter				UseMIG =				1; // NOTE: leave default to 1
-	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
+	parameter				SlowDownORAMClock =		0; // NOTE: set to 0 for performance run
 	
 	// ORAM related
 	
@@ -75,17 +75,18 @@ module ascend_vc707(
 							BEDWidth =				512;
 								
 	parameter				Overclock =				1;
+	
 	parameter				EnableAES =				1;
-	parameter				EnableREW =				0;
+	parameter				EnableREW =				1;
 	parameter				EnableIV =				0;
+	
+	parameter				IVEntropyWidth =		64;
 	
 	parameter 				DDR_nCK_PER_CLK = 		4,
 							DDRDQWidth =			64,
 							DDRCWidth =				3,
 							DDRAWidth =				28;
 								
-	parameter				IVEntropyWidth =		64;	
-
     parameter				NumValidBlock = 		1024,
 							Recursion = 			3,
 							MaxLogRecursion = 		4;
@@ -103,7 +104,7 @@ module ascend_vc707(
 			// More notes for the board test:
 			// 1.) Make sure to run a long enough simulation to test the gentry counter[ORAML-1:0] rollover case
 			$display("[%m @ %t] ERROR: Remember do simulate with L = 31 (from AES's perspective) ... somehow", $time);
-			$stop;
+			//$stop;
 		end
 	`endif
 	
@@ -111,15 +112,20 @@ module ascend_vc707(
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
 	
-	wire					MemoryClock;
+	// Clocking
+	
+	wire					MemoryClock; // always 200 Mhz (matches MIG)
 	wire					MemoryReset;
 	
-	wire					ORAMClock;
+	wire					ORAMClock; // Configurable (typically >= 100 Mhz, <= 200 Mhz)
 	wire					ORAMReset;
+	
+	wire					AESClock; // As fast as possible (~300 Mhz)
 	
 	wire					SlowClock;
 	wire					MMCMF100Locked, SlowReset;
-		
+	wire					MMCMF300Locked;
+	
 	// ORAM
 	
 	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] PathORAM_Command;
@@ -169,6 +175,11 @@ module ascend_vc707(
 							.locked(				MMCMF100Locked));
 	assign	SlowReset =								~MMCMF100Locked;
 
+	aes_clock	ultra( 		.clk_in1(				MemoryClock),
+							.clk_out1(				AESClock),
+							.reset(					MemoryReset),
+							.locked(				MMCMF300Locked));
+	
 	//------------------------------------------------------------------------------
 	// 	GPIO
 	//------------------------------------------------------------------------------
@@ -236,6 +247,7 @@ module ascend_vc707(
 							.LeafWidth(             LeafWidth), 
 							.PLBCapacity(           PLBCapacity))
                 oram(		.Clock(					ORAMClock),
+							.FastClock(				AESClock),
 							.Reset(					ORAMReset),
 		
 							.Cmd(				    PathORAM_Command),
