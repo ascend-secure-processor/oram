@@ -9,6 +9,8 @@
 module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 
 	parameter RandWidth = 32;
+	parameter SecretKey = 128'h0; 
+	
 	`include "AES.vh";
 	
 	input  Clock, Reset;
@@ -28,8 +30,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
     wire                                           AESKeyValid;
     wire                                           AESKeyReady;
 
-    assign AESKey = 128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73;
-    //assign AESKey = {(AESWidth){1'b1}};		
+    assign AESKey = SecretKey;
         // We should renew the key on every reset, but currently not doing it.
     assign AESKeyValid = 1; 
 

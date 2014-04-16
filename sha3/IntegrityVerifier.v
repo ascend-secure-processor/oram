@@ -109,7 +109,7 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = ConsumeHash && !CheckHash;		
+	assign Write = 0;//ConsumeHash && !CheckHash;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
 		
 	//------------------------------------------------------------------------------------

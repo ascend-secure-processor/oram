@@ -49,7 +49,8 @@ module PosMapPLB
 	wire [LeafWidth-1:0] NewLeafIn_Pre;
     wire [ORAML-1:0] NewLeafIn;
     wire NewLeafValid, NewLeafAccept;
-    PRNG #(.RandWidth(LeafWidth))
+    PRNG #(	.RandWidth(	LeafWidth),
+			.SecretKey(	128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73))
         LeafGen (   Clock, Reset,
                     NewLeafAccept,
                     NewLeafValid,

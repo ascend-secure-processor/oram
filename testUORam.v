@@ -29,7 +29,7 @@ module testUORam;
 	parameter					Overclock = 		0;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
-    parameter					EnableIV =          0;
+    parameter					EnableIV =          1;
 	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
@@ -246,7 +246,7 @@ module testUORam;
                #(Cycle * 10);       
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle);       
-               AddrRand <= ($random % (NumValidBlock / 2)) + NumValidBlock / 2;
+               AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
                TestCount <= TestCount + 1;
            end
            else begin

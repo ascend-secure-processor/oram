@@ -296,7 +296,7 @@ module AESREWORAM(
 			
 			if (EnableIV) begin
 				$display("[%m @ %t] ERROR: Not supported yet.", $time);
-				$stop;
+				//$stop;
 			end
 		end
 		

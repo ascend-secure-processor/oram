@@ -282,9 +282,11 @@ module CoherenceController(
 							.BktOfI_Transition(		IVReady_BktOfI)
 						);
 	
-		//	AES --> Stash Passthrough 	
+		//	AES --> Stash  	
 		assign	ToStashData =			FromDecData;
-		assign	ToStashDataValid =		FromDecDataValid; 
+		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
+											: CSPathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
 		//	ROAccess: header write back CC --> AES. RWAccess: BufP1 --> AES
@@ -359,7 +361,7 @@ module CoherenceController(
 					);     
 	
 	
-		//	AES --> Stash Passthrough 	
+		//	AES --> Stash 	
 		assign	ToStashData =			FromDecData;
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
 											: CSPathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;

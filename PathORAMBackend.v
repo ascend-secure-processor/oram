@@ -481,7 +481,8 @@ module PathORAMBackend(
 							.In(					1'bx),
 							.Out(					AccessIsDummy));
 	
-	PRNG 		#(			.RandWidth(				PRNGLWidth))
+	PRNG 		#(			.RandWidth(				PRNGLWidth),	
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00))
 				leaf_gen(	.Clock(					Clock), 
 							.Reset(					Reset),
 							.RandOutReady(			OperationComplete),
