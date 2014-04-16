@@ -234,10 +234,10 @@ module PathORamTop(
 							
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
-                            .ROAccess(          	ROAccess),
+                            .ROAccess(          	ROAccess), // TODO get rid of this
 							.REWRoundDummy(			REWRoundDummy),
-							.CSPathRead(			CSPathRead),
-							.CSPathWriteback(		CSPathWriteback),			
+							.CSPathRead(			CSPathRead), // TODO get rid of this
+							.CSPathWriteback(		CSPathWriteback), // TODO get rid of this
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------
@@ -347,6 +347,7 @@ module PathORamTop(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMB(					ORAMB),
+							.ORAME(					ORAME),
 							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
 							.DDRDQWidth(			DDRDQWidth),
 							.IVEntropyWidth(		IVEntropyWidth),
@@ -362,8 +363,6 @@ module PathORamTop(
 
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
-							.ROAccess(				ROAccess),
-							.CSPathRead(			CSPathRead),
 							
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEBVOut(				),

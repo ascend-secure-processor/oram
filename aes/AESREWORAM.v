@@ -35,8 +35,7 @@ module AESREWORAM(
 	Clock, FastClock, 
 	Reset,
 
-	ROPAddr, ROLeaf, ROAccess,
-	CSPathRead,
+	ROPAddr, ROLeaf,
 
 	ROIBVOut, ROIBIDOut,
 	
@@ -61,6 +60,11 @@ module AESREWORAM(
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
+	localparam				RW_R_Chunk = 			PathSize_DRBursts,
+							RW_W_Chunk = 			PathSize_DRBursts,
+							RO_R_Chunk = 			(ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
+							RO_W_Chunk = 			(ORAML+1) * BktHSize_DRBursts;
+		
 	localparam				ROSWidth =				3,
 							ST_RO_Idle =			3'd0,
 							ST_RO_StartRead =		3'd1,
@@ -96,9 +100,6 @@ module AESREWORAM(
 	
 	input	[ORAMU-1:0]		ROPAddr;
 	input	[ORAML-1:0]		ROLeaf;
-	input					ROAccess;
-	
-	input					CSPathRead;	
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -137,6 +138,10 @@ module AESREWORAM(
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
+	// Global control
+	
+	wire					PathRead, ROAccess, RWAccess, PathWriteback;	
+	
 	// AES Core
 	
 	wire	[IVEntropyWidth-1:0] Core_ROIVIn; 
@@ -285,7 +290,7 @@ module AESREWORAM(
 	
 	// Derived signals
 	
-	reg						ROAccess_Delayed;
+	reg						RWAccess_Delayed;
 	
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
@@ -317,11 +322,11 @@ module AESREWORAM(
 				$display("[%m @ %t] Writing DRAM:    %x (RO: %b) ", $time, DRAMWriteData, ROAccess);
 			end
 			
-			/*
+			
 			if (DRAMReadDataValid & DRAMReadDataReady) begin
 				$display("[%m @ %t] Reading DRAM:    %x (ROAccess = %b) ", $time, DRAMReadData, ROAccess);
 			end
-			*/
+			
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end
@@ -378,8 +383,37 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 
 	always @(posedge Clock) begin
-		ROAccess_Delayed <=							ROAccess;
+		RWAccess_Delayed <=							RWAccess;
 	end
+	
+	//--------------------------------------------------------------------------
+	//	System Control Logic
+	//--------------------------------------------------------------------------
+
+	// TODO merge some of the other count alarms in with this module
+	
+	REWStatCtr	#(			.ORAME(					ORAME),
+							.RW_R_Chunk(			RW_R_Chunk),
+							.RW_W_Chunk(			RW_W_Chunk),
+							.RO_R_Chunk(			RO_R_Chunk),
+							.RO_W_Chunk(			RO_W_Chunk))
+				rw_stat(	.Clock(					Clock),
+							.Reset(					Reset),
+							
+							.RW_R_Transfer(			RWAccess & PathRead & 		BEDataOutValid & 		BEDataOutReady),
+							.RW_W_Transfer(			RWAccess & PathWriteback & 	DRAMWriteDataValid & 	DRAMWriteDataReady),
+							.RO_R_Transfer(			ROAccess & PathRead & 		BEDataOutValid & 		BEDataOutReady),
+							.RO_W_Transfer(			ROAccess & PathWriteback & 	DRAMWriteDataValid & 	DRAMWriteDataReady),
+							
+							.ROAccess(				ROAccess),
+							.RWAccess(				RWAccess),
+							.Read(					PathRead),
+							.Writeback(				PathWriteback),
+							
+							.RW_R_Ctr(				RW_R_Ctr),
+							.RW_W_Ctr(				RW_W_Ctr),
+							.RO_R_Ctr(				RO_R_Ctr),
+							.RO_W_Ctr(				RO_W_Ctr));
 	
 	//--------------------------------------------------------------------------
 	//	RO AES Input
@@ -653,7 +687,7 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				~ROAccess_Delayed & ROAccess),
+							.Enable(				RWAccess_Delayed & ROAccess),
 							.In(					{IVEntropyWidth{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));							
 							
@@ -1024,7 +1058,7 @@ module AESREWORAM(
 	assign	ROIMaskShiftOutReady =					(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
 	assign	ROMaskBufOutReady =						 DataOutReady & 		RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
 	
-	assign	DataOutReady =							(CSPathRead) ? BEDataOutReady : DRAMWriteDataReady;
+	assign	DataOutReady =							(PathRead) ? BEDataOutReady : DRAMWriteDataReady;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
 	
 	//--------------------------------------------------------------------------
@@ -1040,14 +1074,14 @@ module AESREWORAM(
 	assign	BEBVOut =								(ROAccess) ? BufferedIV : 	RWBVOut;
 	assign	BEBIDOut =								(ROAccess) ? BufferedBID : 	RWBIDOut;
 	
-	assign	BEDataOutValid =						CSPathRead & DataOutValid;
+	assign	BEDataOutValid =						PathRead & DataOutValid;
 	
 	//--------------------------------------------------------------------------
 	//	Path Writeback Interface
 	//--------------------------------------------------------------------------
 
 	assign	DRAMWriteData =							DataOut_Write;
-	assign	DRAMWriteDataValid = 					~CSPathRead & DataOutValid;
+	assign	DRAMWriteDataValid = 					PathWriteback & DataOutValid;
 
 	assign	BEDataInReady = 						CSROWrite & BufferedDataInReady;
 	
