@@ -301,10 +301,14 @@ module AESREWORAM(
 		end
 		
 		always @(posedge Clock) begin
+			if (BEDataOutValid & BEDataOutReady) begin
+				$display("[%m @ %t] Sending Backend: %x (BEBV: %d, %d) ", $time, BEDataOut, BEBVOut, BEBIDOut);
+			end
 			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
 				$display("[%m @ %t] Writing DRAM:    %x (ROAccess = %b) ", $time, DRAMWriteData, ROAccess);
 			end
 			
+			/*
 			if (DRAMReadDataValid & DRAMReadDataReady) begin
 				$display("[%m @ %t] Reading DRAM:    %x (ROAccess = %b) ", $time, DRAMReadData, ROAccess);
 			end
@@ -312,7 +316,10 @@ module AESREWORAM(
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end
-			
+			*/
+		end
+		
+		always @(posedge Clock) begin
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
 				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
 			end
@@ -968,7 +975,7 @@ module AESREWORAM(
 
 	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | GentryHeaderMask : GentryDataMask;
 
-	assign	DataOut_Unmask =						BufferedDataOut ^ Mask; 
+	assign	DataOut_Unmask =						BufferedDataOut;// TODO ^ Mask; 
 	
 	//--------------------------------------------------------------------------
 	//	Output Arbitration

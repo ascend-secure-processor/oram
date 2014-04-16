@@ -246,6 +246,8 @@ module REWAESCore(
 				ro_D_stop(	.Count(					ROCID),
 							.TerminalCount(			RODataCID_Terminal));			
 	
+	// We need to add a few AES chunks of padding to the output to correctly 
+	// align the ROI masks with the RW masks
 	CountAlarm #(			.Threshold(				ROIWaitSteps),
 							.Initial(				0))
 				roi_waste(	.Clock(					FastClock), 
