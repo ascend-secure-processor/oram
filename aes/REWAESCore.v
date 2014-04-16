@@ -106,6 +106,8 @@ module REWAESCore(
 	wire					ROSend;
 	wire					ROHeaderCID_Terminal, RODataCID_Terminal;
 	
+	wire					ROCommandIsHeader, RODataRestart, RODataRestarted;
+	
 	wire	[AESWidth-1:0]	ROSeed;	
 	
 	// RW input interface
@@ -222,29 +224,42 @@ module REWAESCore(
 							.OutSend(				ROValid),
 							.OutReady(				ROReady));
 					
+	assign	ROCommandIsHeader =						ROCommand == PCMD_ROHeader;
 	assign	ROSend =								ROValid;
-	assign	ROReady =								(ROCommand == PCMD_ROHeader) ? ROHeaderCID_Terminal : RODataCID_Terminal;
-							
-	// TODO design change: to simplfy things, add another 512-bit width FIFO to handle ROI data						
-	// Eh ... another FIFO like that is quite a big cost and will hurt routing ...
+	assign	ROReady =								(ROCommandIsHeader) ? ROHeaderCID_Terminal : RODataCID_Terminal;
 	
 	Counter		#(			.Width(					CIDWidth),
 							.Initial(				0))
 				ro_cid(		.Clock(					FastClock),
-							.Reset(					ROReady),
+							.Reset(					ROReady | (RODataRestart & ~RODataRestarted)),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				ROSend),
 							.In(					{CIDWidth{1'bx}}),
-							.Count(					ROCID));		
+							.Count(					ROCID));
 	CountCompare #(			.Width(					CIDWidth),
 							.Compare(				ROHeader_AESChunks - 1))
 				ro_H_stop(	.Count(					ROCID),
 							.TerminalCount(			ROHeaderCID_Terminal));
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				ROIHeader_AESChunks + RWPayload_AESChunks - 1))
+							.Compare(				RWBkt_AESChunks - 1))
 				ro_D_stop(	.Count(					ROCID),
 							.TerminalCount(			RODataCID_Terminal));			
+	
+	CountAlarm #(			.Threshold(				ROIWaitSteps),
+							.Initial(				0))
+				roi_waste(	.Clock(					FastClock), 
+							.Reset(					1'b0), 
+							.Enable(				~ROCommandIsHeader & ROSend),
+							.Done(					RODataRestart));
+	Register #(				.Width(					1), // state machine to switch modes
+							.Initial(				0))
+				roi_hdr_chk(.Clock(					FastClock),
+							.Reset(					ROReady),
+							.Set(					~ROCommandIsHeader & RODataRestart),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					RODataRestarted));							
 	
 	assign	ROSeed =								{{SeedSpaceRemaining{1'b0}}, ROIV, ROBID, ROCID};
 	
@@ -288,7 +303,7 @@ module REWAESCore(
 							.In(					{CIDWidth{1'bx}}),
 							.Count(					RWCID));		
 	CountCompare #(			.Width(					CIDWidth),
-							.Compare(				RWHeader_AESChunks + RWPayload_AESChunks - 1))
+							.Compare(				RWBkt_AESChunks - 1))
 				rw_stop(	.Count(					RWCID),
 							.TerminalCount(			RWDataCID_Terminal));
 	

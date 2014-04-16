@@ -99,6 +99,9 @@ module ascend_vc707(
 				$display("[%m @ %t] ERROR: you are about to crash your computer", $time);
 				$stop;
 			end
+			
+			$display("[%m @ %t] ERROR: Remember do simulate with L = 31 (from AES's perspective) ... somehow", $time);
+			$stop;
 		end
 	`endif
 	

@@ -301,6 +301,18 @@ module AESREWORAM(
 		end
 		
 		always @(posedge Clock) begin
+			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
+				$display("[%m @ %t] Writing DRAM:    %x (ROAccess = %b) ", $time, DRAMWriteData, ROAccess);
+			end
+			
+			if (DRAMReadDataValid & DRAMReadDataReady) begin
+				$display("[%m @ %t] Reading DRAM:    %x (ROAccess = %b) ", $time, DRAMReadData, ROAccess);
+			end
+			
+			if (DataOutTransfer) begin
+				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
+			end
+			
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
 				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
 			end
