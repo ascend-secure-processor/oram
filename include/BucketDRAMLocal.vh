@@ -23,7 +23,7 @@
 	localparam				BktHVStart =			IVEntropyWidth;
 	localparam				BktHUStart =			BktHVStart + BktHSize_ValidBits; // at what position do the U's start?
 	localparam				BktHLStart =			BktHUStart + BigUWidth; // at what position do the U's start?
-	localparam				BktHSize_RawBits = 		BktHLStart + ORAMZ * BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
+	localparam				BktHSize_RawBits = 		BktHLStart + BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
 	localparam				BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth);
 	localparam				BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth; 			// = 512 for all configs we care about
 	

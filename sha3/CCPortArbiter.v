@@ -7,7 +7,7 @@
 
 module CCPortArbiter (
 	Clock, Reset,
-	ROAccess, RWAccess, CSPathRead, CSPathWriteback,
+	ROAccess, RWAccess, PathRead, PathWriteback,
 	HeaderInValid, HdOfInterest,
 	FromDecDataTransfer, FromStashDataTransfer, 
 	FromDecData, HeaderDataIn, FromStashData,
@@ -35,7 +35,7 @@ module CCPortArbiter (
 	input 	Clock, Reset;
 	
 	input	ROAccess, RWAccess;
-	input 	CSPathRead, CSPathWriteback;
+	input 	PathRead, PathWriteback;
 	input	HeaderInValid, HdOfInterest;
 	input 	FromDecDataTransfer, FromStashDataTransfer;
 	input	[1:0] BufReg_EmptyCount;
@@ -74,7 +74,7 @@ module CCPortArbiter (
 						.Done(					PthRW_Transition)
 				);
 	
-	assign HdCtrEnable = ROAccess && Enable;
+	assign HdCtrEnable = ROAccess && Enable && !BktOfInterest;
 	CountAlarm #(		.Threshold(				ORAML + 1))
 		hd_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
@@ -94,16 +94,16 @@ module CCPortArbiter (
 						.Done(					BktOfI_Transition)
 			);
 
-	assign BktOfInterest = ROAccess && CSPathRead && !HdRW;
+	assign BktOfInterest = ROAccess && PathRead && !HdRW;
 	
-	// 1 means read from DRAM, write to buffer; 0 means write to DRAM and read from buffer
+	// 1 means read from DRAM,  write to buffer; 0 means write to DRAM, read from buffer
 	always @(posedge Clock) begin
 		if (Reset) begin
 			PthRW <= 1'b1;
 			HdRW <= 1'b1;
 		end
 		else begin 
-			if (RWAccess && CSPathWriteback && PthRW_Transition) 
+			if (RWAccess && PathWriteback && PthRW_Transition) 
 				PthRW = !PthRW;				
 			else if (ROAccess && HdRW_Transition) 
 				HdRW <= !HdRW;			
@@ -111,27 +111,27 @@ module CCPortArbiter (
 	end
 		
 	assign Enable = RWAccess ? 
-								(	CSPathRead ? FromDecDataTransfer
+								(	PathRead ? FromDecDataTransfer
 									: PthRW ? FromStashDataTransfer 
-									: !PthRW && IVDone && BufReg_EmptyCount > BufReg_InValid)			// Send data to AES							
+											: IVDone && BufReg_EmptyCount > BufReg_InValid)			// Send data to AES							
 					: ROAccess ? 
-								(	CSPathRead ? HeaderInValid 								// header from Dec
-									: !HdRW && IVDone_BktOfI && BufReg_EmptyCount > BufReg_InValid)			// Send headers to AES
+								(	PathRead ? FromDecDataTransfer 									// header and BktOfI from Dec
+									: !HdRW && IVDone_BktOfI && BufReg_EmptyCount > BufReg_InValid)		// Send headers to AES
 					: 0;							
 		
-	assign Write = 	RWAccess ? 	(	CSPathRead ? 1'b1 : PthRW )
-					: ROAccess ? (	CSPathRead ? 1'b1 : HdRW )
+	assign Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )
+					: ROAccess ? (	PathRead ? 1'b1 : HdRW )
 					: 0;
 					
-	assign Address = RWAccess ?  (	CSPathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
-					: ROAccess ? (	CSPathRead ? 
+	assign Address = RWAccess ?  (	PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
+					: ROAccess ? (	PathRead ? 
 										(	BktOfInterest ? OBktOfIStartAddr + BktOfInterestCtr	// payload of interest										     										  																								 		
-											: HdStartAddr + HdOnPthCtr)	// save header										
-									: HdStartAddr + HdOnPthCtr)			// header write back								
+											: HdStartAddr + HdOnPthCtr)		// save header										
+									: HdStartAddr + HdOnPthCtr)				// header write back								
 					: 0;
 							
-	assign DIn = 	RWAccess ? 	(	CSPathRead ? FromDecData : FromStashData)							
-					: ROAccess ? 	(	HeaderDataIn) 
+	assign DIn = 	RWAccess ? 	(	PathRead ? FromDecData : FromStashData)							
+					: ROAccess ? 	(	BktOfInterest ? FromStashData : HeaderDataIn) 
 					: 0;	
 							
 endmodule

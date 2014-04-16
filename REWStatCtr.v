@@ -37,7 +37,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RW_R_Chunk))
 		rw_r_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RWAccess && Read && RW_R_Transfer),
+						.Enable(				RW_R_Transfer),
 						.Count(					RW_R_Ctr),
 						.Done(					RW_R_Done)
 			);
@@ -45,7 +45,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RW_W_Chunk))
 		rw_w_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RWAccess && Writeback && RW_W_Transfer),
+						.Enable(				RW_W_Transfer),
 						.Count(					RW_W_Ctr),
 						.Done(					RW_W_Done)
 			);		
@@ -53,7 +53,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RO_R_Chunk))
 		ro_r_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				ROAccess && Read && RO_R_Transfer),
+						.Enable(				RO_R_Transfer),
 						.Count(					RO_R_Ctr),
 						.Done(					RO_R_Done)
 			);
@@ -61,7 +61,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RO_W_Chunk))
 		ro_w_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				ROAccess && Writeback && RO_W_Transfer),
+						.Enable(				RO_W_Transfer),
 						.Count(					RO_W_Ctr),
 						.Done(					RO_W_Done)
 			);		

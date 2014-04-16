@@ -99,7 +99,7 @@ module IntegrityVerifier (
 	always @(posedge Clock) begin
 		if (Violation === 1) begin
 			$display("Integrity violation!");
-			$stop;
+		//	$stop;
 		end
 		
 		else if (Violation === 1'bx) begin
@@ -109,7 +109,7 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = 0;//ConsumeHash && !CheckHash;		
+	assign Write = ConsumeHash && !CheckHash;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
 		
 	//------------------------------------------------------------------------------------

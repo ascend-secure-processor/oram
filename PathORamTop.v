@@ -321,17 +321,16 @@ module PathORamTop(
 								.DataIn(			DataToIV),
 								.DataOut(			DataFromIV),
 								
-								//.Done(				IVDone),
-								//.IVDone_BktOfI(		IVDone_BktOfI),
+								.Done(				IVDone),
+								.IVDone_BktOfI(		IVDone_BktOfI),
 								
 								.IVReady_BktOfI(	IVReady_BktOfI)
 								
 								);
 								
 		// TODO: debugging now
-		
-		assign	IVDone = 							1'b1;
-		assign	IVDone_BktOfI = 					1'b1;		
+
+		//assign	IVDone_BktOfI = 					1'b1;		
 								
 	end	else begin: NO_INTEGRITY		
 		assign	IVDone = 							1'b1;

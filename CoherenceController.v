@@ -108,7 +108,7 @@ module CoherenceController(
 	output  					IVReady_BktOfI;
 	input						IVDone_BktOfI;
 	
-	wire 	ROAccess, RWAccess, CSPathRead, CSPathWriteback;
+	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
 	
 	
 	//--------------------------------------------------------------------------
@@ -122,7 +122,7 @@ module CoherenceController(
 	wire	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
 	wire	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
 	wire	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
-	wire	[`log2(RO_W_Chunk)-1:0]				RO_W_Ctr;
+	wire	[`log2(RO_W_Chunk)-1:0]		RO_W_Ctr;
 	
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
@@ -134,15 +134,15 @@ module CoherenceController(
 			rw_stat		(	.Clock(					Clock),
 							.Reset(					Reset | !DRAMInitComplete),
 							
-							.RW_R_Transfer(			FromDecDataValid && FromDecDataReady),
-							.RW_W_Transfer(			ToEncDataValid && ToEncDataReady),
-							.RO_R_Transfer(			FromDecDataValid && FromDecDataReady),
-							.RO_W_Transfer(			ToEncDataValid && ToEncDataReady),
+							.RW_R_Transfer(			RWAccess && PathRead && FromDecDataValid && FromDecDataReady),
+							.RW_W_Transfer(			RWAccess && PathWriteback && ToEncDataValid && ToEncDataReady),
+							.RO_R_Transfer(			ROAccess && PathRead && FromDecDataValid && FromDecDataReady),
+							.RO_W_Transfer(			ROAccess && PathWriteback && ToEncDataValid && ToEncDataReady),
 							
 							.ROAccess(				ROAccess),
 							.RWAccess(				RWAccess),
-							.Read(					CSPathRead),
-							.Writeback(				CSPathWriteback),
+							.Read(					PathRead),
+							.Writeback(				PathWriteback),
 							
 							.RW_R_Ctr(				RW_R_Ctr),
 							.RW_W_Ctr(				RW_W_Ctr),
@@ -167,8 +167,8 @@ module CoherenceController(
 						.Count(					BlkCtr)
 					);
 	*/	
-	// assign HeaderInValid = ROAccess && CSPathRead && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	
-	assign HeaderInValid = ROAccess && CSPathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
+	// assign HeaderInValid = ROAccess && PathRead && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	
+	assign HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
 	
 	// invalidate the bit for the target block
 	wire HdOfInterest;
@@ -255,8 +255,8 @@ module CoherenceController(
 							
 							.ROAccess(				ROAccess),
 							.RWAccess(				RWAccess),
-							.CSPathRead(			CSPathRead),
-							.CSPathWriteback(		CSPathWriteback),
+							.PathRead(			    PathRead),
+							.PathWriteback(		    PathWriteback),
 							
 							.HeaderInValid(			HeaderInValid),
 							.HdOfInterest(			HdOfInterest),
@@ -285,7 +285,7 @@ module CoherenceController(
 		//	AES --> Stash  	
 		assign	ToStashData =			FromDecData;
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
-											: CSPathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
@@ -302,18 +302,18 @@ module CoherenceController(
 										: ROAccess ? ToEncDataReady //&& IVDone_BktOfI
 										: 0;
 		
-		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && CSPathWriteback;
+		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && PathWriteback;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//-------------------------------------------------------------------------- 
 		reg [1:0] 	HdOfIStat;
 		
-		assign 	IVStart = RWAccess && CSPathRead && PthRW_Transition;
+		assign 	IVStart = RWAccess && PathRead && PthRW_Transition;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = IVAddress != OBktOfIStartAddr ? IVAddress : (HdStartAddr + BktOfInterest);
+		assign  BufP2_Address = IVAddress == OBktOfIStartAddr && IVWrite ? (HdStartAddr + BktOfInterest) : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
 		assign  DataToIV = HdOfIStat != 2 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
@@ -364,14 +364,14 @@ module CoherenceController(
 		//	AES --> Stash 	
 		assign	ToStashData =			FromDecData;
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
-											: CSPathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
 		//	ROAccess: header write back CC --> AES. RWAccess: Stash --> AES
 		assign	ToEncData =				ROAccess ? HeaderOut: FromStashData;
-		assign	ToEncDataValid =		ROAccess ? HeaderOutValid  && CSPathWriteback:	FromStashDataValid;
-		assign  HeaderOutReady = 		ROAccess && CSPathWriteback && ToEncDataReady;
+		assign	ToEncDataValid =		ROAccess ? HeaderOutValid  && PathWriteback:	FromStashDataValid;
+		assign  HeaderOutReady = 		ROAccess && PathWriteback && ToEncDataReady;
 		
 		assign	FromStashDataReady = 	!ROAccess && ToEncDataReady;
 
