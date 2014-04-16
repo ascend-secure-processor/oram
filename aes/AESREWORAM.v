@@ -243,8 +243,8 @@ module AESREWORAM(
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
 	wire					ProcessingLastHeader;	
-	wire					ROI_BufferBucket, ROI_BucketWasFound, ROI_BucketLoad;
-	wire 					ROI_FoundBucket, ROI_NotFoundBucket;
+	wire					ROI_BufferBucket, ROI_HeaderValid, ROI_BucketLoad;
+	wire 					ROI_FoundBucket, ROI_NotFoundBucket, ROI_HeaderLoad;
 	
 	wire	[BigVWidth-1:0] DataOutV;
 	wire	[BigUWidth-1:0] DataOutU;
@@ -316,7 +316,7 @@ module AESREWORAM(
 		
 		always @(posedge Clock) begin
 			if (BEDataOutValid & BEDataOutReady) begin
-				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b, BEBV: %d, BID: %d) ", $time, BEDataOut, ROAccess, CSCOROI, BEBVOut, BEBIDOut);
+				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b, BEBV: %d, BID: %d) ", $time, BEDataOut, ROAccess, CSCOROI, (MaskIsHeader) ? BEBVOut : -1, (MaskIsHeader) ? BEBIDOut : -1);
 			end
 			if (DRAMWriteDataValid & DRAMWriteDataReady) begin
 				$display("[%m @ %t] Writing DRAM:    %x (RO: %b) ", $time, DRAMWriteData, ROAccess);
@@ -549,7 +549,7 @@ module AESREWORAM(
 																			BufferedROIVOutData;
 	assign	Core_ROBIDIn =							(CSROStartROIRead) ? 	ROI_BID : 		RO_BIDOut;
 	
-	assign	Core_ROCommandInValid =					(CSROStartROIRead) ? 	1'b1 : 
+	assign	Core_ROCommandInValid =					(CSROStartROIRead) ? 	ROI_HeaderValid : 
 													(CSROROIRead) ? 		1'b0 :
 													(CSROWrite) ? 			RO_BIDOutValid :
 																			DRAMReadDataValid & RO_BIDOutValid & 		BufferedDataInReady & 	RODRAMChunkIsHeader;
@@ -954,23 +954,25 @@ module AESREWORAM(
 	end endgenerate
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_BucketWasFound);
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_HeaderValid);
 
+	assign	ROI_HeaderLoad =						ROI_FoundBucket | ROI_NotFoundBucket;
+	
 	Register	#(			.Width(					1))
 				roi_found(	.Clock(					Clock),
 							.Reset(					Reset |	FinishWBOut),				
-							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
+							.Set(					ROI_HeaderLoad),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					ROI_BucketWasFound));	
+							.Out(					ROI_HeaderValid));	
 	Register	#(			.Width(					1))
 				roi_load(	.Clock(					Clock),
 							.Reset(					Reset |	ROI_Rebuffer1Complete),						
-							.Set(					ROI_FoundBucket | ROI_NotFoundBucket),
+							.Set(					ROI_HeaderLoad),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ROI_BucketLoad));
-	assign	ROI_BufferBucket =						ROI_FoundBucket | ROI_NotFoundBucket | ROI_BucketLoad;
+	assign	ROI_BufferBucket =						ROI_HeaderLoad | ROI_BucketLoad;
 							
 	CountAlarm #(			.Threshold(				BktSize_DRBursts))
 				roi_load_cnt(.Clock(				Clock), 
@@ -982,7 +984,7 @@ module AESREWORAM(
 				roi_info(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				ROI_FoundBucket | ROI_NotFoundBucket),
+							.Enable(				ROI_HeaderLoad),
 							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
 							.Out(					{ROI_GentryIV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
