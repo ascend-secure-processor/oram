@@ -12,8 +12,9 @@
 //
 //				Input Notes:
 //					- RO will always decrypt _bucket_ of interest instead of 
-//					  just the block.  This simplifies the HW a bit and also we 
-//					  have some spare bandwidth, might as well use it.
+//					  just the block, regardless of EnableIV.  This simplifies 
+//					  the HW a bit and also we have some spare bandwidth, might 
+//					  as well use it.
 //
 //				Output: RO/RW masks (in order and in separate buffers).
 //				
@@ -24,14 +25,16 @@
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300+ Mhz).
 //
+//	TODO: Nix Initial -- we default the correct way now
+//
 //	Notes on getting clock up:
 //		- No reset to any module
-//		- Size FIFOs smaller to use smaller data counts
+//		- Size FIFOs smaller to use smaller data counts (not implemented)
 //		- Disable FIFO reset
+//		- No backpressure
 //==============================================================================
 module REWAESCore(
-	SlowClock, FastClock, 
-	SlowReset,
+	SlowClock, FastClock,
 
 	ROIVIn, ROBIDIn, ROCommandIn, ROCommandInValid, ROCommandInReady,
 	RWIVIn, RWBIDIn, RWCommandInValid, RWCommandInReady,
@@ -58,7 +61,7 @@ module REWAESCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					SlowClock, FastClock, SlowReset;
+  	input 					SlowClock, FastClock;
 	
 	//--------------------------------------------------------------------------
 	//	Input Interfaces
