@@ -229,23 +229,26 @@ module CoherenceController(
 		//-------------------------------------------------------------------------- 
 		wire 					PthRW_Transition, BktOfI_Transition;
 		
-		wire [DDRDWidth-1:0] 	BufP1Reg_DOut;
-		wire 					BufP1Reg_InValid, BufP1Reg_InReady, BufP1Reg_OutValid, BufP1Reg_OutReady;
+		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
+		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
 		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr;
 
+		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && (HdOnPthCtr == (BktOfInterest + 1) % (ORAML+1));
+		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash[DigestStart-1:DigestEnd], BufP1_DOut[BktHSize_RawBits-1:0]}
+									: BufP1_DOut;
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				2))
 			out_path_reg (	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BufP1_DOut),
-							.InValid(				BufP1Reg_InValid),
-							.InAccept(				BufP1Reg_InReady),
+							.InData(				BufP1Reg_DIn),
+							.InValid(				BufP1Reg_DInValid),
+							.InAccept(				BufP1Reg_DInReady),
 							.InEmptyCount(			BufP1Reg_EmptyCount),
 							.OutData(				BufP1Reg_DOut),
-							.OutSend(				BufP1Reg_OutValid),
-							.OutReady(				BufP1Reg_OutReady));
+							.OutSend(				BufP1Reg_DOutValid),
+							.OutReady(				BufP1Reg_DOutReady));
 				
 		CCPortArbiter # (	.DWidth(				DDRDWidth),
 							.ORAML(					ORAML),
@@ -277,7 +280,7 @@ module CoherenceController(
 							.Address(				BufP1_Address),
 							.DIn(					BufP1_DIn),
 							
-							.BufReg_InValid(		BufP1Reg_InValid),
+							.BufReg_InValid(		BufP1Reg_DInValid),
 							.PthRW_Transition(		PthRW_Transition),
 							.HdOnPthCtr(			HdOnPthCtr),
 							.BktOfI_Transition(		BktOfI_Transition)
@@ -295,11 +298,11 @@ module CoherenceController(
 										: ROAccess ? BufP1Reg_DOut
 										: {DDRDWidth{1'bx}};
 										
-		assign	ToEncDataValid =		RWAccess ? BufP1Reg_OutValid //&& IVDone
-										: ROAccess ? BufP1Reg_OutValid //&& IVDone_BktOfI
+		assign	ToEncDataValid =		RWAccess ? BufP1Reg_DOutValid //&& IVDone
+										: ROAccess ? BufP1Reg_DOutValid //&& IVDone_BktOfI
 										: 0;
 		
-		assign  BufP1Reg_OutReady = 	RWAccess ? ToEncDataReady //&& IVDone 
+		assign  BufP1Reg_DOutReady = 	RWAccess ? ToEncDataReady //&& IVDone 
 										: ROAccess ? ToEncDataReady //&& IVDone_BktOfI
 										: 0;
 		
@@ -309,30 +312,40 @@ module CoherenceController(
 		// Port2 : read and written by IV
 		//-------------------------------------------------------------------------- 
 		reg [1:0] 	HdOfIStat;
+		reg [TrancateDigestWidth-1:0] BktOfINewHash;
 		
 		assign 	IVStart = RWAccess && PathRead && PthRW_Transition;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = (IVAddress == OBktOfIStartAddr && IVWrite && HdOfIStat == 2) ? (HdStartAddr + BktOfInterest) : IVAddress;
+		assign  BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
 		assign  DataToIV = HdOfIStat != 1 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
-		
+			
 		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin
 		    if (Reset) begin
 		        HdOfIStat <= 0;
 		    end
+						
 			if (HdOfInterest) begin
 				HdOfIStat <= 0;
 				BktOfInterest <=  HdOnPthCtr;//(HdOnPthCtr + ORAML) % (ORAML+1);		// effectively HdOnPthCtr - 1 because read latency = 1
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
 			
-			else if (IVAddress == OBktOfIStartAddr && IVRequest && HdOfIStat < 3)	// there should be 2 reads and 1 write
-				HdOfIStat <= HdOfIStat + 1;
-				// 0 - found; 1 - have read once; 2 - have read twice; 3 - have written back, all set.
+			// there should be 2 reads and 1 write
+			// 0 - found; 1 - have read once; 2 - have read twice; 3 - all set.		
+			else if (IVRequest && IVAddress == OBktOfIStartAddr) begin	
+				if (!IVWrite)
+					HdOfIStat <= HdOfIStat + 1;
+				else
+					BktOfINewHash <= DataFromIV[DigestStart-1:DigestEnd];			
+			end
+			
+			else if (HdOfIStat == 2 && PathRead)
+				HdOfIStat <= 3;
 		end
 		
 		assign 	IVReady_BktOfI = HdOfIStat == 0 && BktOfI_Transition;
