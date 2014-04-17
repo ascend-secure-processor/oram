@@ -122,8 +122,7 @@ module PathORamTop(
 	
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
-	wire                    ROAccess, REWRoundDummy;
-	wire					CSPathRead, CSPathWriteback;
+	wire                    REWRoundDummy;
     wire                    DRAMInitComplete;
 	
 	// integrity verification
@@ -234,10 +233,7 @@ module PathORamTop(
 							
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
-                            .ROAccess(          	ROAccess), // TODO get rid of this
 							.REWRoundDummy(			REWRoundDummy),
-							.CSPathRead(			CSPathRead), // TODO get rid of this
-							.CSPathWriteback(		CSPathWriteback), // TODO get rid of this
 							.DRAMInitComplete(		DRAMInitComplete));							
 							
 	//--------------------------------------------------------------------------

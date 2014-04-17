@@ -584,7 +584,7 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.InData(				BufferedDataIn_Wide),
 							.InValid(				BufferedDataInValid),
-							.InAccept(				BufferedDataInReady), // no backpressure
+							.InAccept(				BufferedDataInReady),
 							.OutData(				BufferedDataOut_Wide),
 							.OutSend(				BufferedDataOutValid),
 							.OutReady(				BufferedDataOutReady));	

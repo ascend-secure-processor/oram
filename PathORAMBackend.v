@@ -29,8 +29,7 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, ROAccess, REWRoundDummy, 
-	CSPathRead, CSPathWriteback, // TODO why do we need to send both of these?
+	ROPAddr, ROLeaf, REWRoundDummy, 
 	
 	DRAMInitComplete
 	);
@@ -111,11 +110,9 @@ module PathORAMBackend(
 	//	REW Interface
 	//--------------------------------------------------------------------------
 	
-	output	[ORAMU-1:0]		ROPAddr;
-	output	[ORAML-1:0]		ROLeaf;
-	output					ROAccess, REWRoundDummy;
-	
-	output 					CSPathRead, CSPathWriteback;
+	output reg [ORAMU-1:0]	ROPAddr;
+	output reg [ORAML-1:0]	ROLeaf;
+	output reg				REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
 	//	Status Interface
@@ -131,7 +128,7 @@ module PathORAMBackend(
 	
 	wire					AllResetsDone;
 	reg		[STWidth-1:0]	CS, NS;
-	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, 
+	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, CSPathRead, CSPathWriteback, 
 							CSStartWriteback;
 	wire					CSORAMAccess;
 
@@ -139,9 +136,9 @@ module PathORAMBackend(
 	wire					AccessIsDummy;
 	
 	wire					AppendComplete, FullPathReadComplete, ROPathReadComplete, PathReadComplete, PathWritebackComplete;
-	wire					OperationComplete;
+	wire					OperationComplete_Pre, OperationComplete;
 	
-	wire					RWAccess, StartRW, REWRoundComplete;
+	wire					ROAccess, RWAccess, StartRW, REWRoundComplete;
 	wire	[ORAML-1:0]		GentryLeaf_Pre;	
 	
 	wire	[ORAML-1:0]		DummyLeaf;
@@ -222,7 +219,6 @@ module PathORAMBackend(
 							
 	wire					BucketWritebackValid;
 	wire	[BktBSTWidth-1:0] BucketWritebackCtr;
-	wire					WritebackBucketTransition;
 							
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	
@@ -363,8 +359,21 @@ module PathORAMBackend(
 	assign	Stash_SkipWritebackOp =					CSStartRead & ROAccess;
 	assign	Stash_StartWritebackOp =				CSStartWriteback; // Note: this will go high even for RO accesses; this is intended
 	
-	assign	OperationComplete =						CSPathWriteback & Stash_IsIdle & PathWritebackComplete & AddrGen_InReady;
+	assign	OperationComplete_Pre =					CSPathWriteback & Stash_IsIdle & PathWritebackComplete & AddrGen_InReady;
 		
+	generate if (Overclock) begin
+		Register #(			.Width(					1),
+							.Initial(				0))
+				oc_dly(		.Clock(					Clock),
+							.Reset(					OperationComplete),
+							.Set(					1'b0),
+							.Enable(				1'b1),
+							.In(					OperationComplete_Pre),
+							.Out(					OperationComplete));		
+	end else begin
+		assign	OperationComplete =					OperationComplete_Pre;
+	end endgenerate
+	
 	assign	Command_InternalReady =					AppendComplete | (OperationComplete & ~AccessIsDummy);
 
 	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
@@ -419,11 +428,9 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	
 	generate if (EnableREW) begin:REW_CONTROL
-	
-		initial begin // TODO actually fix this before going back   to board !!!
-			$display("[ERROR] Fix Backend FIFOReg buffering bug");
-			//$stop;
-		end
+		wire [ORAMU-1:0]	ROPAddr_Pre;
+		wire [ORAML-1:0]	ROLeaf_Pre;
+		wire				REWRoundDummy_Pre;	
 		
 		Counter	#(			.Width(					ORAML))
 				gentry_leaf(.Clock(					Clock),
@@ -454,11 +461,25 @@ module PathORAMBackend(
 		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
 
 		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
+		assign	ROAccess =							~RWAccess;
 		
-		assign	ROPAddr =							PAddr_Internal;
-		assign	ROLeaf =							(REWRoundDummy) ? DummyLeaf : CurrentLeaf_Internal;
-		assign	ROAccess =							~RWAccess & DRAMInitComplete; // TODO remove DRAMInit in REW mode
-		assign	REWRoundDummy =						AccessIsDummy;
+		assign	ROPAddr_Pre =						PAddr_Internal;
+		assign	ROLeaf_Pre =						(REWRoundDummy) ? DummyLeaf : CurrentLeaf_Internal;
+		assign	REWRoundDummy_Pre =					AccessIsDummy;
+		
+		if (Overclock) begin
+			always @(posedge Clock) begin
+				ROPAddr <=							ROPAddr_Pre;
+				ROLeaf <=							ROLeaf_Pre;
+				REWRoundDummy <=					REWRoundDummy_Pre;
+			end
+		end else begin
+			always @( * ) begin
+				ROPAddr =							ROPAddr_Pre;
+				ROLeaf =							ROLeaf_Pre;
+				REWRoundDummy =						REWRoundDummy_Pre;
+			end		
+		end
 	end else begin:BASIC_CONTROL
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
@@ -466,11 +487,13 @@ module PathORAMBackend(
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 		
 		assign	AddrGen_HeaderWriteback =			1'b0;
-		
-		assign	ROPAddr =							{ORAMU{1'bx}};
-		assign	ROLeaf =							{ORAML{1'bx}};
 		assign	ROAccess =							1'b0;
-		assign	REWRoundDummy =						1'b0;
+		
+		always @( * ) begin
+			ROPAddr =								{ORAMU{1'bx}};
+			ROLeaf =								{ORAML{1'bx}};
+			REWRoundDummy =							1'b0;
+		end
 	end endgenerate
 
 	Register	#(			.Width(					1))
@@ -482,7 +505,7 @@ module PathORAMBackend(
 							.Out(					AccessIsDummy));
 	
 	PRNG 		#(			.RandWidth(				PRNGLWidth),	
-							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00))
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
 				leaf_gen(	.Clock(					Clock), 
 							.Reset(					Reset),
 							.RandOutReady(			OperationComplete),
@@ -614,6 +637,9 @@ module PathORAMBackend(
 		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
 		assign	DRAMInit_DRAMCommand =				DDR3CMD_Write;
 		assign	DRAMInit_DRAMCommandValid =			1'b0;
+		
+		assign	DRAMInit_DRAMWriteData =			{DDRDWidth{1'bx}};
+		assign	DRAMInit_DRAMWriteDataValid =		1'b0;
 	end else begin:DRAM_INIT
 		DRAMInitializer #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

@@ -116,11 +116,13 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
     assign SeedValid = FunnelInReady && !AESDataOutValid;	
     	// Generate new random bits if there's space in AESOutFunnel and no bits are on the fly;
 		
-	always @(posedge Clock) begin
-		if (!Reset && RandOutReady && !RandOutValid) begin
-			$display("Error : Run out of random bits");
-			$stop;
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (!Reset && RandOutReady && !RandOutValid) begin
+				$display("Error : Run out of random bits");
+				$stop;
+			end
 		end
-	end
+	`endif
 
 endmodule
