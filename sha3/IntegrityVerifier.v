@@ -83,13 +83,19 @@ module IntegrityVerifier (
 	end
 	
 	// data passed to SHA engines
-	assign HashData = HeaderInValid ? {{TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:0]} : DataIn;
+	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:IVEntropyWidth], {IVEntropyWidth{1'b0}}  } 
+						: DataIn;
+		// cannot include digest itself, nor header IV (since they change for every bucket on RO access).
+		// should replace them with BktCtr and BktID. Currently just zero.
 	
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
 	assign ConsumeHash = HashOutValid[Turn];
-	assign CheckHash = (BucketID[Turn] < TotalBucketD / 2) || (BucketID[Turn] == TotalBucketD && BktOfIStat == 2);
+	assign CheckHash = ConsumeHash && (
+							(BucketID[Turn] < TotalBucketD / 2) || 
+							(BucketID[Turn] == TotalBucketD && BktOfIStat == 1)		// first task is to update the hash, second is to check against the old hash
+						);	
 	
 	// checking hash for the input path
 	assign Violation = ConsumeHash && CheckHash &&	
@@ -97,14 +103,26 @@ module IntegrityVerifier (
 	
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
-		if (Violation === 1) begin
-			$display("Integrity violation!");
-		//	$stop;
+		if (ConsumeHash && CheckHash) begin
+			$display("Integrity verification results on Bucket %d", BucketID[Turn]);
+			if (Violation === 0) begin
+				$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
+			end
+		
+			else if (Violation === 1) begin
+				$display("\tViolation : %x != %x", BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits], HashOut[Turn][DigestStart-1:DigestEnd]);
+				$stop;
+			end
+			
+			else if (Violation === 1'bx) begin
+				$display("\tX bits in hash");
+			end	
 		end
 		
-		else if (Violation === 1'bx) begin
-			$display("X bits in hash");
+		if (Write) begin
+			$display("Updating Bucket %d hash to %x", BucketID[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
 		end
+				
 	end
 `endif
 	

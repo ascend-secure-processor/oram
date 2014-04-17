@@ -8,7 +8,7 @@
 module CCPortArbiter (
 	Clock, Reset,
 	ROAccess, RWAccess, PathRead, PathWriteback,
-	HeaderInValid, HdOfInterest,
+//	HeaderInValid, HdOfInterest,
 	FromDecDataTransfer, FromStashDataTransfer, 
 	FromDecData, HeaderDataIn, FromStashData,
 	
@@ -36,7 +36,7 @@ module CCPortArbiter (
 	
 	input	ROAccess, RWAccess;
 	input 	PathRead, PathWriteback;
-	input	HeaderInValid, HdOfInterest;
+//	input	HeaderInValid, HdOfInterest;
 	input 	FromDecDataTransfer, FromStashDataTransfer;
 	input	[1:0] BufReg_EmptyCount;
 	input	IVDone, IVDone_BktOfI;
@@ -82,10 +82,7 @@ module CCPortArbiter (
 						.Count(					HdOnPthCtr),
 						.Done(					HdRW_Transition)
 				);
-/*	
-	Register #(.Width(1))
-		bkt_of_interest (Clock, Reset || BktOfI_Transition, FromDecDataTransfer && HdOfInterest, 1'b0, 1'bx, BktOfInterest);
-*/	
+	
 	CountAlarm #(		.Threshold(				BktSize_DRBursts))
 		bkt_of_i_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
@@ -131,7 +128,7 @@ module CCPortArbiter (
 					: 0;
 							
 	assign DIn = 	RWAccess ? 	(	PathRead ? FromDecData : FromStashData)							
-					: ROAccess ? 	(	BktOfInterest ? FromStashData : HeaderDataIn) 
+					: ROAccess ? 	(	BktOfInterest ? FromDecData : HeaderDataIn) 
 					: 0;	
 							
 endmodule

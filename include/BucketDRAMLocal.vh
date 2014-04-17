@@ -7,7 +7,7 @@
 
 	
 	`ifdef SIMULATION
-	localparam				IVINITValue =			{{IVEntropyWidth-32{1'b0}}, 32'hdeadbeef};
+	localparam				IVINITValue =			{32'hdeadbeef, {IVEntropyWidth-32{1'b0}}};
 	`else
 	localparam				IVINITValue =			{IVEntropyWidth{1'bx}};
 	`endif

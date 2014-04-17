@@ -181,10 +181,10 @@ module CoherenceController(
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
 		assign ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
-		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && !REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ? 0 : ValidBitsIn[j];                  
+		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ) ? 0 : ValidBitsIn[j];                  
 	end 
 	
-	assign HdOfInterest = (ValidBitsIn != ValidBitsOut) && HeaderInValid;
+	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (ValidBitsIn != ValidBitsOut);
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
 	
 	
@@ -227,12 +227,13 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read (through a FIFO) and written by AES
 		//-------------------------------------------------------------------------- 
-		wire 					PthRW_Transition;
+		wire 					PthRW_Transition, BktOfI_Transition;
 		
 		wire [DDRDWidth-1:0] 	BufP1Reg_DOut;
 		wire 					BufP1Reg_InValid, BufP1Reg_InReady, BufP1Reg_OutValid, BufP1Reg_OutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
 		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr;
+
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				2))
@@ -258,8 +259,8 @@ module CoherenceController(
 							.PathRead(			    PathRead),
 							.PathWriteback(		    PathWriteback),
 							
-							.HeaderInValid(			HeaderInValid),
-							.HdOfInterest(			HdOfInterest),
+						//	.HeaderInValid(			HeaderInValid),
+						//	.HdOfInterest(			HdOfInterest),
 							
 							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
 							.FromStashDataTransfer(	FromStashDataValid && FromStashDataReady),
@@ -279,7 +280,7 @@ module CoherenceController(
 							.BufReg_InValid(		BufP1Reg_InValid),
 							.PthRW_Transition(		PthRW_Transition),
 							.HdOnPthCtr(			HdOnPthCtr),
-							.BktOfI_Transition(		IVReady_BktOfI)
+							.BktOfI_Transition(		BktOfI_Transition)
 						);
 	
 		//	AES --> Stash  	
@@ -313,27 +314,28 @@ module CoherenceController(
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = (IVAddress == OBktOfIStartAddr && IVWrite) ? (HdStartAddr + BktOfInterest) : IVAddress;
+		assign  BufP2_Address = (IVAddress == OBktOfIStartAddr && IVWrite && HdOfIStat == 2) ? (HdStartAddr + BktOfInterest) : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		assign  DataToIV = HdOfIStat != 2 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
+		assign  DataToIV = HdOfIStat != 1 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
 		
-		// hacky solution to pass the two versions of bucket of interest to IV
+		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin
 		    if (Reset) begin
 		        HdOfIStat <= 0;
 		    end
 			if (HdOfInterest) begin
 				HdOfIStat <= 0;
-				BktOfInterest <=  HdOnPthCtr;
-				ValidBitsReg  <=  ValidBitsIn;
+				BktOfInterest <=  HdOnPthCtr;//(HdOnPthCtr + ORAML) % (ORAML+1);		// effectively HdOnPthCtr - 1 because read latency = 1
+				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
 			
-			else if (IVAddress == OBktOfIStartAddr && IVRequest && !IVWrite)
+			else if (IVAddress == OBktOfIStartAddr && IVRequest && HdOfIStat < 3)	// there should be 2 reads and 1 write
 				HdOfIStat <= HdOfIStat + 1;
-			else if (HdOfIStat == 2)
-				HdOfIStat <= HdOfIStat + 1;
+				// 0 - found; 1 - have read once; 2 - have read twice; 3 - have written back, all set.
 		end
+		
+		assign 	IVReady_BktOfI = HdOfIStat == 0 && BktOfI_Transition;
 		
 	end else begin: NO_BUF
 	

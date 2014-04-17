@@ -4,7 +4,7 @@
 	localparam					BlocksOnPath =		ORAMLP1 * ORAMZ;
 	localparam					StashCapacity =		BlocksOnPath + ORAMC; // including the path ...
 	localparam					SNULL =				StashCapacity; // an invalid stash location
-	localparam					BASEDUMMY =			32'hdeafdeaf;
+	localparam					BASEDUMMY =			32'hdeaf9999;
 	localparam					DummyBlockAddress =	(ORAMU > 32) ? { {ORAMU{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAMU-1:0];
 	localparam					DummyLeafLabel =	(ORAML > 32) ? { {ORAML{1'b0}}, BASEDUMMY} : BASEDUMMY[ORAML-1:0];
 	localparam					DummyBlock =		{BEDWidth{1'b0}};
