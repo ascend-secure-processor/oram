@@ -20,6 +20,11 @@ module AddrGenBktHead
                                         // And we waste several spots due to subtree, requiring L+2 bits
 	output [ORAML-1:0] STIdx, BktIdxInST;  // tmp output for debugging
   
+  `ifndef ASIC
+  	initial begin
+		currentLevel = -1;
+	end
+  `endif
   
   /*
   // reverse the leaf

@@ -76,7 +76,15 @@ module REWStatCtr(
 	
 	// State transition based on CountAlarms
 	//		0	  1		0		1
-	reg 	RW_or_RO,	Read_or_Write;
+	reg 	RW_or_RO,	
+			Read_or_Write;
+			
+	`ifndef ASIC
+		initial begin
+			RW_or_RO = 1'b1;	
+			Read_or_Write = 1'b0;
+		end
+	`endif
 		
 	always @ (posedge Clock) begin
 		if (Reset) begin
@@ -106,7 +114,7 @@ module REWStatCtr(
 		else if (ROAccess && Writeback && RO_W_Done) begin
 			RW_or_RO <= E_RO_Accesses ? 1'b0 : 1'b1;
 			Read_or_Write <= E_RO_Accesses ? 1'b0 : 1'b0;
-		end			
+		end
 	end
 	
 	assign RWAccess = !Reset && !RW_or_RO;
@@ -115,11 +123,13 @@ module REWStatCtr(
 	assign Read = 	!Reset && !Read_or_Write;
 	assign Writeback =  !Reset && Read_or_Write;
 		
-	initial begin
-		if ( !(ORAME && RW_R_Chunk && RW_W_Chunk && RO_R_Chunk && RO_W_Chunk) ) begin
-			$display("Error: parameter uninitialized.");
-			$finish;
-		end	
-	end
+	`ifdef SIMULATION
+		initial begin
+			if ( !(ORAME && RW_R_Chunk && RW_W_Chunk && RO_R_Chunk && RO_W_Chunk) ) begin
+				$display("Error: parameter uninitialized.");
+				$finish;
+			end	
+		end
+	`endif
 	
 endmodule

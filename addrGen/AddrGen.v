@@ -32,6 +32,13 @@ module AddrGen
 	output [ORAML-1:0] STIdx, BktIdxInST;
 	output [ORAML+1:0] BktIdx;
 	// ====================================================
+
+	`ifndef ASIC
+		initial begin
+			RW = 1'b0;
+			BH = 1'b0;
+		end
+	`endif
  
 	// control logic for AddrGenBktHead
 	wire Enable, SwitchLevel;

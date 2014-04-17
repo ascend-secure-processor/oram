@@ -361,9 +361,12 @@ module PathORamTop(
 						
 							
 				aes(		.Clock(					Clock), 
-							.FastClock(				FastClock), 
+							.FastClock(				FastClock),
+				`ifdef ASIC
 							.Reset(					Reset),
-
+				`else
+							.Reset(					1'b0), // this module doesn't need reset
+				`endif
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
 							
@@ -440,18 +443,16 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 
 	generate if (Overclock) begin:INBUF_BRAM
-		wire				PathBuffer_Full, PathBuffer_Empty;
+		wire				PathBuffer_Full;
+		
+		assign	PathBuffer_InReady =				~PathBuffer_Full;
 		PathBuffer in_P_buf(.clk(					Clock),
-							.srst(					Reset), 
 							.din(					DRAMReadData), 
 							.wr_en(					DRAMReadDataValid), 
 							.rd_en(					PathBuffer_OutReady), 
 							.dout(					PathBuffer_OutData), 
 							.full(					PathBuffer_Full), 
-							.empty(					PathBuffer_Empty));
-							
-		assign	PathBuffer_InReady =				~PathBuffer_Full;
-		assign	PathBuffer_OutValid =				~PathBuffer_Empty;							
+							.valid(					PathBuffer_OutValid));						
 	end else begin:INBUF_LUTRAM
 		FIFORAM	#(			.Width(					DDRDWidth),
 							.Buffering(				PathSize_DRBursts))
