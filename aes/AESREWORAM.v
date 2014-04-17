@@ -291,6 +291,18 @@ module AESREWORAM(
 	// Derived signals
 	
 	reg						RWAccess_Delayed;
+
+	//--------------------------------------------------------------------------
+	//	Initial state
+	//--------------------------------------------------------------------------	
+	
+	`ifndef ASIC
+		initial begin
+			CS_RO = ST_RO_Idle;
+			CS_RW = ST_RW_StartRead;
+			CS_CO = ST_CO_Read;
+		end
+	`endif
 	
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
@@ -507,7 +519,7 @@ module AESREWORAM(
 	
 	Register	#(			.Width(					IVEntropyWidth))
 				ro_gentry(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					1'b0),
 							.Set(					1'b0),
 							.Enable(				CSROStartRead | (CSRORead & ROCommandTransfer)),
 							.In(					RO_IVNext),
@@ -516,14 +528,14 @@ module AESREWORAM(
 							.Reverse(				1),
 							.SWidth(				1))
 				ro_L_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					1'b0), 
 							.Load(					CSROStartRead),
 							.Enable(				CSRORead & ROCommandTransfer), 
 							.PIn(					ROLeaf),
 							.SIn(					1'b0),
 							.SOut(					RO_LeafNextDirection));
 							
-    AddrGen #(				.ORAMB(					ORAMB),
+    AddrGen 	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -700,7 +712,7 @@ module AESREWORAM(
 							.Reverse(				1),
 							.SWidth(				1))
 				gentry_shft(.Clock(					Clock), 
-							.Reset(					Reset), 
+							.Reset(					1'b0), 
 							.Load(					CSRWStartOp),
 							.Enable(				RWCommandTransfer), 
 							.PIn(					GentryCounter),
@@ -764,8 +776,7 @@ module AESREWORAM(
 							.IVEntropyWidth(		IVEntropyWidth),
 							.AESWidth(				AESWidth))
 				core(		.SlowClock(				Clock),
-							.FastClock(				FastClock), 
-							.SlowReset(				Reset),
+							.FastClock(				FastClock),
 
 							.ROIVIn(				Core_ROIVIn), 
 							.ROBIDIn(				Core_ROBIDIn), 
@@ -984,7 +995,7 @@ module AESREWORAM(
 	
 	Register	#(			.Width(					IVEntropyWidth + BIDWidth + BigUWidth + BigVWidth))
 				roi_info(	.Clock(					Clock),
-							.Reset(					Reset),
+							.Reset(					1'b0),
 							.Set(					1'b0),
 							.Enable(				ROI_HeaderLoad),
 							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
