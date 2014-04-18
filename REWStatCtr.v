@@ -7,11 +7,17 @@
 module REWStatCtr(
 	Clock, Reset,
 	RW_R_Transfer, RW_W_Transfer, RO_R_Transfer, RO_W_Transfer,
+	
+	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm,
+	
 	ROAccess, RWAccess, Read, Writeback,
 	RW_R_Ctr, RW_W_Ctr, RO_R_Ctr, RO_W_Ctr,
 );
 
 	parameter	ORAME = 0;
+	
+	// Most of these alarms aren't performance critical, so we can delay them by 1 (helps timing)
+	parameter	LatchOutput = 1; 
 	
 	// chunks to be transferred at each stage
 	parameter	RW_R_Chunk = 0,
@@ -22,6 +28,7 @@ module REWStatCtr(
 	input	Clock, Reset;
 		
 	output 	ROAccess, RWAccess, Read, Writeback;
+	output	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
 	
 	// count the number of chunks transferred
 	input	RW_R_Transfer, RW_W_Transfer, RO_R_Transfer, RO_W_Transfer;
@@ -66,7 +73,6 @@ module REWStatCtr(
 						.Done(					RO_W_Done)
 			);		
 	
-	
 	CountAlarm #(		.Threshold(				ORAME))
 	oram_e_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
@@ -74,10 +80,34 @@ module REWStatCtr(
 						.Done(					E_RO_Accesses)
 			);
 	
+	generate if (LatchOutput) begin:LATCH
+		Register #(		.Width(					4))
+				latch(	.Clock(					Clock),
+						.Reset(					Reset),						
+						.Set(					1'b0),
+						.Enable(				1'b1),
+						.In(					{RW_R_Done, 		RW_W_Done, 		RO_R_Done, 		RO_W_Done}),
+						.Out(					{RW_R_DoneAlarm, 	RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm}));
+						
+		always @(posedge Clock) begin
+			RW_or_RO_Post <=					RW_or_RO;
+			Read_or_Write_Post <=				Read_or_Write;
+		end
+	end else begin:PASS
+		assign	{RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm} = {RW_R_Done, RW_W_Done, RO_R_Done, RO_W_Done};
+		
+		always @( * ) begin
+			RW_or_RO_Post =						RW_or_RO;
+			Read_or_Write_Post =				Read_or_Write;
+		end		
+	end endgenerate
+	
 	// State transition based on CountAlarms
 	//		0	  1		0		1
 	reg 	RW_or_RO,	
 			Read_or_Write;
+	reg 	RW_or_RO_Post,
+			Read_or_Write_Post;
 			
 	`ifndef ASIC
 		initial begin
@@ -117,11 +147,11 @@ module REWStatCtr(
 		end
 	end
 	
-	assign RWAccess = !Reset && !RW_or_RO;
-	assign ROAccess = !Reset && RW_or_RO;
+	assign RWAccess = 	!Reset && !RW_or_RO_Post;
+	assign ROAccess = 	!Reset && RW_or_RO_Post;
 	
-	assign Read = 	!Reset && !Read_or_Write;
-	assign Writeback =  !Reset && Read_or_Write;
+	assign Read = 		!Reset && !Read_or_Write_Post;
+	assign Writeback =  !Reset && Read_or_Write_Post;
 		
 	`ifdef SIMULATION
 		initial begin

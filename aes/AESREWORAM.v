@@ -383,6 +383,10 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO overflow.", $time);
 				$stop;
 			end
+			if (~ROIDataValid & ROIDataReady) begin
+				$display("[%m @ %t] ERROR: Bucket of interest FIFO didn't have data.", $time);
+				$stop;
+			end			
 			
 			if (DataOutTransfer	& MaskIsHeader & |(ROHeaderMask & RWBGHeaderMask)) begin
 				$display("[%m @ %t] ERROR: RO and RW masks overlapped on header flit.", $time);
@@ -422,7 +426,8 @@ module AESREWORAM(
 							.RW_R_Chunk(			RW_R_Chunk),
 							.RW_W_Chunk(			RW_W_Chunk),
 							.RO_R_Chunk(			RO_R_Chunk),
-							.RO_W_Chunk(			RO_W_Chunk))
+							.RO_W_Chunk(			RO_W_Chunk),
+							.LatchOutput(			1))
 				rw_stat(	.Clock(					Clock),
 							.Reset(					Reset),
 							
@@ -435,6 +440,11 @@ module AESREWORAM(
 							.RWAccess(				RWAccess),
 							.Read(					PathRead),
 							.Writeback(				PathWriteback),
+							
+							.RW_R_DoneAlarm(		), 
+							.RW_W_DoneAlarm(		RWWBPathTransitionOut), 
+							.RO_R_DoneAlarm(		), 
+							.RO_W_DoneAlarm(		HWBPathTransitionOut),
 							
 							.RW_R_Ctr(				RW_R_Ctr),
 							.RW_W_Ctr(				RW_W_Ctr),
@@ -950,7 +960,6 @@ module AESREWORAM(
 							.Reset(					Reset | FinishWBOut), 
 							.Enable(				ROAccess & BufferedDataTransfer_Read),
 							.Done(					ProcessingLastHeader));	
-	
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				roi_pth_cnt(.Clock(					Clock), 
 							.Reset(					Reset | FinishWBOut), 
@@ -958,18 +967,6 @@ module AESREWORAM(
 							.Done(					StartROI));
 							
 	assign	FinishROI =								~StartROI & CSCOROI & BufferedDataBucketTransition; // after one more bucket
-
-	CountAlarm 	#(			.Threshold(				ORAML + 1))
-				hwb_cnt_O(	.Clock(					Clock), 
-							.Reset(					Reset | FinishWBOut), 
-							.Enable(				CSCOWrite & BufferedDataTransfer_Write),
-							.Done(					HWBPathTransitionOut));
-	CountAlarm 	#(			.Threshold(				PathSize_DRBursts))
-				rwwb_cnt_O(	.Clock(					Clock), 
-							.Reset(					Reset | FinishWBOut), 
-							.Enable(				CSCOWrite & BufferedDataTransfer_Write),
-							.Done(					RWWBPathTransitionOut));					
-							
 	assign	FinishWBOut =							(ROAccess) ? HWBPathTransitionOut : RWWBPathTransitionOut;
 	
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
@@ -1093,11 +1090,9 @@ module AESREWORAM(
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? 	Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
 	assign	ROMaskValid_Needed =					(ROMask_Needed) ? 	ROMaskBufOutValid : 1'b1;
 		
-	assign	GentryHeaderMask =						(ROIMask_Needed) ? 	ROIHeaderMask :	 	RWBGHeaderMask;
-	assign	GentryDataMask =						(ROIMask_Needed) ? 	ROIDataMask : 		RWBGDataMask;
-
-	assign	Mask =									(MaskIsHeader) ? ROHeaderMask | GentryHeaderMask : GentryDataMask;
-
+	assign	GentryHeaderMask =						(ROIMask_Needed) ? 	ROIHeaderMask :	 					RWBGHeaderMask;
+	assign	GentryDataMask =						(ROIMask_Needed) ? 	ROIDataMask : 						RWBGDataMask;
+	assign	Mask =									(MaskIsHeader) ? 	ROHeaderMask | GentryHeaderMask : 	GentryDataMask;
 	assign	DataOut_Unmask =						BufferedDataOut ^ Mask; 
 	
 	//--------------------------------------------------------------------------
