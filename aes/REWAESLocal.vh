@@ -16,13 +16,16 @@
 							
 							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWPayload_AESChunks)),
 							BIDWidth =				ORAML + 2, // Bucket ID width; ORAML + 2 to account for wasted space in subtree scheme (TODO: add this param to addr gen as well)
-							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth;
-						
+							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth,
+							
+							// *** NOTA BENE *** if you change the REWMaskFIFO depth, you must change this to match
+							MaskFIFODepth =			512,
+							InFlightMaskLimit =		`divceil(MaskFIFODepth, RWBkt_MaskChunks) - 1,
+							IFMWidth =				`log2(InFlightMaskLimit);
+							
 	localparam				AESLatency =			21;	// based on tiny_aes + extra stages we add
 	localparam				AESLatencyPlus =		32; // The expected _total_ latency through REWAESCore (factoring in cross clock FIFOs/etc).  We prefer 32deep because this best packs LUTRAMs.
 						
-	localparam				BlkSize_AESChunks =		`divceil(ORAMB, AESWidth);						
-							
 	// RO command encodings.  Only AESREWORAM needs these.
 	localparam				PCCMDWidth =			1,
 							PCMD_ROHeader =			1'b0,
