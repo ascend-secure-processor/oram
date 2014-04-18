@@ -183,6 +183,7 @@ module PathORamTop(
 							.LoadDataValid(			LoadValid), 
 							.LoadData(				LoadData));
 	
+	
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -235,7 +236,9 @@ module PathORamTop(
 							.ROLeaf(				ROLeaf),
 							.REWRoundDummy(			REWRoundDummy),
 							.DRAMInitComplete(		DRAMInitComplete));							
-							
+	
+	generate if (EnableREW) begin:CC
+
 	//--------------------------------------------------------------------------
 	//	Coherence Controller
 	//--------------------------------------------------------------------------
@@ -291,53 +294,55 @@ module PathORamTop(
 							.IVReady_BktOfI(		IVReady_BktOfI), 
 							.IVDone_BktOfI(			IVDone_BktOfI));
 							
-	//--------------------------------------------------------------------------
-	//	Integrity Verification
-	//--------------------------------------------------------------------------
+		//--------------------------------------------------------------------------
+		//	Integrity Verification
+		//--------------------------------------------------------------------------
 	
-	generate if (EnableIV) begin:INTEGRITY
-		IntegrityVerifier #(	.DDR_nCK_PER_CLK(	DDR_nCK_PER_CLK),
-								.DDRDQWidth(		DDRDQWidth),
-								.DDRCWidth(			DDRCWidth),
-								.DDRAWidth(			DDRAWidth),
-								
-								.ORAMB(				ORAMB),
-								.ORAMU(				ORAMU),
-								.ORAML(				ORAML),
-								.ORAMZ(				ORAMZ),
-								
-								.IVEntropyWidth(	IVEntropyWidth))
-				
-			int_verifier	(	.Clock(				Clock),
-								.Reset(				Reset || IVStart),
-								
-								.Request(			IVRequest),
-								.Write(				IVWrite),
-								.Address(			IVAddress),
-								.DataIn(			DataToIV),
-								.DataOut(			DataFromIV),
-								
-								.Done(				IVDone),
-								.IVDone_BktOfI(		IVDone_BktOfI),
-								
-								.IVReady_BktOfI(	IVReady_BktOfI)
-								
-								);
-								
-		// TODO: debugging now
+		 if (EnableIV) begin:INTEGRITY
+			IntegrityVerifier #(	.DDR_nCK_PER_CLK(	DDR_nCK_PER_CLK),
+									.DDRDQWidth(		DDRDQWidth),
+									.DDRCWidth(			DDRCWidth),
+									.DDRAWidth(			DDRAWidth),
+									
+									.ORAMB(				ORAMB),
+									.ORAMU(				ORAMU),
+									.ORAML(				ORAML),
+									.ORAMZ(				ORAMZ),
+									
+									.IVEntropyWidth(	IVEntropyWidth))
+					
+				int_verifier	(	.Clock(				Clock),
+									.Reset(				Reset || IVStart),
+									
+									.Request(			IVRequest),
+									.Write(				IVWrite),
+									.Address(			IVAddress),
+									.DataIn(			DataToIV),
+									.DataOut(			DataFromIV),
+									
+									.Done(				IVDone),
+									.IVDone_BktOfI(		IVDone_BktOfI),
+									
+									.IVReady_BktOfI(	IVReady_BktOfI)
+									
+									);
+									
+			// TODO: debugging now
 
-		//assign	IVDone_BktOfI = 					1'b1;		
-								
-	end	else begin: NO_INTEGRITY		
-	
-		assign	IVRequest = 1'b0;
-		assign 	IVWrite = 1'b0;
-		assign 	IVAddress = 0;
-		assign	DataFromIV = 0;
-	
-		// only the following two are important
-		assign	IVDone = 							1'b1;
-		assign	IVDone_BktOfI = 					1'b1;
+			//assign	IVDone_BktOfI = 					1'b1;		
+									
+		end	else begin: NO_INTEGRITY		
+		
+			assign	IVRequest = 1'b0;
+			assign 	IVWrite = 1'b0;
+			assign 	IVAddress = 0;
+			assign	DataFromIV = 0;
+		
+			// only the following two are important
+			assign	IVDone = 							1'b1;
+			assign	IVDone_BktOfI = 					1'b1;
+		end
+		
 	end endgenerate
 	
 	//--------------------------------------------------------------------------

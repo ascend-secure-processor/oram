@@ -154,37 +154,29 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 
-              
-	// distinguish headers from payloads
-	wire HeaderInValid;
-    /*
-	wire  [`log2(BktSize_DRBursts)-1:0] BlkCtr;   
-	
-	CountAlarm #(		.Threshold(				BktSize_DRBursts))
-		blk_ctr 	(	.Clock(					Clock), 
-						.Reset(					Reset), 
-						.Enable(				FromDecDataValid && FromDecDataReady),
-						.Count(					BlkCtr)
-					);
-	*/	
-	// assign HeaderInValid = ROAccess && PathRead && FromDecDataValid && BlkCtr < BktHSize_DRBursts;	
-	assign HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
+
+	wire HeaderInValid, HeaderInBkfOfI;	
+	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
+	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	 	
 	
 	// invalidate the bit for the target block
 	wire HdOfInterest;
 	wire [DDRDWidth-1:0]	HeaderIn;
-	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOut;
+	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOfI, ValidBitsOut;
 	
 	reg  [`log2(ORAML+1)-1:0]	BktOfInterest;
 	reg  [ORAMZ-1:0]			ValidBitsReg;
 	
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
-		assign ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
-		assign ValidBitsOut[j] = (ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]) ) ? 0 : ValidBitsIn[j];                  
+		assign 	ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
+		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
+			// one hot signal that if a block is of interest
 	end 
 	
-	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (ValidBitsIn != ValidBitsOut);
+	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
+	
+	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
 	
 	
@@ -287,7 +279,9 @@ module CoherenceController(
 						);
 	
 		//	AES --> Stash  	
-		assign	ToStashData =			FromDecData;
+		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOfI, FromDecData[IVEntropyWidth-1:0]}
+											: FromDecData;
+											
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
 											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
 											
@@ -298,12 +292,12 @@ module CoherenceController(
 										: ROAccess ? BufP1Reg_DOut
 										: {DDRDWidth{1'bx}};
 										
-		assign	ToEncDataValid =		RWAccess ? BufP1Reg_DOutValid //&& IVDone
-										: ROAccess ? BufP1Reg_DOutValid //&& IVDone_BktOfI
+		assign	ToEncDataValid =		RWAccess ? BufP1Reg_DOutValid
+										: ROAccess ? BufP1Reg_DOutValid
 										: 0;
 		
-		assign  BufP1Reg_DOutReady = 	RWAccess ? ToEncDataReady //&& IVDone 
-										: ROAccess ? ToEncDataReady //&& IVDone_BktOfI
+		assign  BufP1Reg_DOutReady = 	RWAccess ? ToEncDataReady
+										: ROAccess ? ToEncDataReady
 										: 0;
 		
 		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && PathWriteback;
@@ -377,8 +371,9 @@ module CoherenceController(
 	
 	
 		//	AES --> Stash 	
-		assign	ToStashData =			FromDecData;
-		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
+		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOfI, FromDecData[IVEntropyWidth-1:0]}
+											: FromDecData;
+		assign	ToStashDataValid =		RWAccess ? FromDecDataValid
 											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;

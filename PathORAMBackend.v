@@ -171,7 +171,7 @@ module PathORAMBackend(
 	wire	[BktBSTWidth-1:0] BucketReadCtr;
 	wire					ReadProcessingHeader;	
 	
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits_Pre, HeaderDownShift_ValidBits;
+	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
 	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
 	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
@@ -188,8 +188,7 @@ module PathORAMBackend(
 	(* mark_debug = "TRUE" *)	wire	[PBEDWidth-1:0]	PathReadCtr;
 	wire					DataDownShift_Transfer;
 	
-	wire					BlockReadCtr_Reset;
-	wire	[BlkBEDWidth-1:0] BlockReadCtr; 	
+	wire					BlockReadCtr_Reset;	
 	wire 					InPath_BlockReadComplete;	
 	
 	// Writeback pipeline
@@ -222,7 +221,6 @@ module PathORAMBackend(
 							
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	
-	wire	[PthBSTWidth-1:0] PathWritebackCtr_Data;
 	wire					PathWritebackComplete_Commands_RW, PathWritebackComplete_Commands_RO, PathWritebackComplete_Data_Pre;
 	wire					PathWritebackComplete_Commands, PathWritebackComplete_Data;	
 	
@@ -446,6 +444,7 @@ module PathORAMBackend(
 							.Reset(					Reset), 
 							.Enable(				OperationComplete),
 							.Done(					StartRW));
+							
 		Register #(			.Width(					1))
 				rew_rw(		.Clock(					Clock),
 							.Reset(					Reset | REWRoundComplete),
@@ -453,6 +452,7 @@ module PathORAMBackend(
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					RWAccess));
+							
 		assign	REWRoundComplete =					RWAccess & OperationComplete;
 							
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
@@ -679,7 +679,7 @@ module PathORAMBackend(
 	assign	DataDownShift_InValid =					DRAMReadDataValid & ~ReadProcessingHeader;
 	assign	DRAMReadDataReady =						(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
 	
-	assign	HeaderDownShift_ValidBits_Pre =			DRAMReadData[BktHVStart+BigVWidth-1:BktHVStart];
+	assign	HeaderDownShift_ValidBits =				DRAMReadData[BktHVStart+BigVWidth-1:BktHVStart];
 	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+BigUWidth-1:BktHUStart];
 	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHLStart+BigLWidth-1:BktHLStart];
 	
@@ -725,16 +725,6 @@ module PathORAMBackend(
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
-	// Invalidate RO blocks that we aren't interested in
-	generate if (EnableREW) begin:REW_VALIDBITS
-		genvar i;
-		for (i = 0; i < ORAMZ; i = i + 1) begin:REW_VALIDBIT
-			assign	HeaderDownShift_ValidBits[i] =	HeaderDownShift_ValidBits_Pre[i] & (RWAccess | (~REWRoundDummy & PAddr_Internal == HeaderDownShift_PAddrs[ORAMU*(i+1)-1:ORAMU*i]));
-		end
-	end else begin:BASIC_VALIDBITS
-		assign	HeaderDownShift_ValidBits =			HeaderDownShift_ValidBits_Pre;
-	end endgenerate
-	
 	// Use FIFOShiftRound to generate BlockPresent signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
 							.OWidth(				1))
@@ -746,19 +736,14 @@ module PathORAMBackend(
 							.OutData(			    ReadBlockIsValid),
 							.OutValid(				BlockPresent),
 							.OutReady(				InPath_BlockReadComplete));	
-	
-	Counter		#(			.Width(					BlkBEDWidth))
-				in_blk_cnt(	.Clock(					Clock),
-							.Reset(					Reset | BlockReadCtr_Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataDownShift_Transfer & ~ReadBlockIsValid & BlockPresent),
-							.In(					{BlkBEDWidth{1'bx}}),
-							.Count(					BlockReadCtr));	
-	CountCompare #(			.Width(					BlkBEDWidth),
-							.Compare(				BlkSize_BEDChunks - 1))
-				in_blk_cmp(	.Count(					BlockReadCtr), 
-							.TerminalCount(			BlockReadCtr_Reset));
+
+							
+	CountAlarm #(		.Threshold(				BlkSize_BEDChunks))
+		in_blk_cnt (	.Clock(					Clock), 
+						.Reset(					Reset), 
+						.Enable(				DataDownShift_Transfer & ~ReadBlockIsValid & BlockPresent),
+						.Done(					BlockReadCtr_Reset)
+			);
 	
 	//------------------------------------------------------------------------------
 	//	[Read path] Path counters
@@ -766,33 +751,19 @@ module PathORAMBackend(
 	
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
-	
-	// TODO use CountAlarm
-	
-	Counter		#(			.Width(					PBEDWidth))
-				in_path_cnt(.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataDownShift_Transfer & ~PathReadComplete),
-							.In(					{PBEDWidth{1'bx}}),
-							.Count(					PathReadCtr));
-		
-	CountCompare #(			.Width(					PBEDWidth),
-							.Compare(				PathSize_BEDChunks))
-				in_path_cmp(.Count(					PathReadCtr), 
-							.TerminalCount(			FullPathReadComplete));
-		
-	generate if (EnableREW) begin:RO_PATH_SUPPORT
-		CountCompare #(		.Width(					PBEDWidth),
-							.Compare(				BktSize_BEDChunks))
-				in_bkt_cmp(	.Count(					PathReadCtr), 
-							.TerminalCount(			ROPathReadComplete));
-		assign	PathReadComplete =					(ROAccess) ? ROPathReadComplete : FullPathReadComplete;	
-	end else begin:FULL_PATH
-		assign	PathReadComplete =					FullPathReadComplete;
-	end endgenerate
 
+	CountAlarm #(		.Threshold(				PathSize_BEDChunks),
+						.IThreshold(			BktSize_BEDChunks))
+		in_path_cmp (	.Clock(					Clock), 
+						.Reset(					Reset | CSIdle), 
+						.Enable(				DataDownShift_Transfer),
+						.Done(					FullPathReadComplete),
+						.Intermediate(			ROPathReadComplete),
+						.Count(					PathReadCtr)
+				);
+	
+	assign	PathReadComplete = EnableREW && ROAccess ? ROPathReadComplete : FullPathReadComplete;	
+	
 	//------------------------------------------------------------------------------
 	//	Stash
 	//------------------------------------------------------------------------------
@@ -985,18 +956,14 @@ module PathORAMBackend(
 	
 	// Count data written back (identical logic as above)
 	// TODO convert to CountAlarm
-	Counter		#(			.Width(					PthBSTWidth))
-				out_D_cnt(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
-							.In(					{PthBSTWidth{1'bx}}),
-							.Count(					PathWritebackCtr_Data));	
-	CountCompare #(			.Width(					PthBSTWidth),
-							.Compare(				PathSize_DRBursts - 1))
-				out_D_cmp(	.Count(					PathWritebackCtr_Data), 
-							.TerminalCount(			PathWritebackComplete_Data_Pre));
+	
+	CountAlarm #(		.Threshold(				PathSize_DRBursts))
+		rw_r_ctr (		.Clock(					Clock), 
+						.Reset(					Reset | CSIdle), 
+						.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+						.Done(					PathWritebackComplete_Data_Pre)
+				);
+										
 	Register	#(			.Width(					1))
 				out_D_hld(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
