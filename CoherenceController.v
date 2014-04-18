@@ -33,7 +33,7 @@
 module CoherenceController(
 	Clock, Reset,
 	
-    ROPAddr, REWRoundDummy, DRAMInitComplete,
+    ROPAddr, REWRoundDummy,
 
 	FromDecData, FromDecDataValid, FromDecDataReady,
 	ToEncData, ToEncDataValid, ToEncDataReady,
@@ -64,7 +64,7 @@ module CoherenceController(
 		
   	input 					Clock, Reset;
 	input	[ORAMU-1:0]		ROPAddr;
-    input					REWRoundDummy, DRAMInitComplete;
+    input					REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
 	//	AES Interface
@@ -132,7 +132,7 @@ module CoherenceController(
 							.RO_W_Chunk(			RO_W_Chunk))
 							
 			rw_stat		(	.Clock(					Clock),
-							.Reset(					Reset | !DRAMInitComplete),
+							.Reset(					Reset),
 							
 							.RW_R_Transfer(			RWAccess && PathRead && FromDecDataValid && FromDecDataReady),
 							.RW_W_Transfer(			RWAccess && PathWriteback && ToEncDataValid && ToEncDataReady),
@@ -300,7 +300,7 @@ module CoherenceController(
 										: ROAccess ? ToEncDataReady
 										: 0;
 		
-		assign	FromStashDataReady = 	!DRAMInitComplete ? ToEncDataReady : RWAccess && PathWriteback;
+		assign	FromStashDataReady = 	RWAccess && PathWriteback;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
