@@ -269,7 +269,7 @@ module PathORamTop(
 							
 							.FromDecData(			AES_DRAMReadData), 
 							.FromDecDataValid(		AES_DRAMReadDataValid), 
-							.FromDecDataReady(		AES_DRAMReadDataReady),
+							.FromDecDataReady(		AES_DRAMReadDataReady), // TODO remove
 							
 							.ToEncData(				AES_DRAMWriteData), 
 							.ToEncDataValid(		AES_DRAMWriteDataValid), 
@@ -376,10 +376,7 @@ module PathORamTop(
 							.ROLeaf(				ROLeaf), 
 							
 							.BEDataOut(				AES_DRAMReadData), 
-							.BEBVOut(				),
-							.BEBIDOut(				),
-							.BEDataOutValid(		AES_DRAMReadDataValid), 
-							.BEDataOutReady(		AES_DRAMReadDataReady),						
+							.BEDataOutValid(		AES_DRAMReadDataValid), 			
 
 							.BEDataIn(				AES_DRAMWriteData), 
 							.BEDataInValid(			AES_DRAMWriteDataValid), 
