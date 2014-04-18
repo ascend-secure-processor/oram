@@ -88,11 +88,10 @@ module ascend_vc707(
 							DDRAWidth =				28;
 								
     parameter				NumValidBlock = 		1024,
-							Recursion = 			3,
-							MaxLogRecursion = 		4;
+							Recursion = 			3;
 	
     parameter				LeafWidth = 			32,
-							PLBCapacity = 			8192 << 3;
+							PLBCapacity = 			8192;
 	
 	`ifdef SIMULATION
 		initial begin
@@ -243,7 +242,6 @@ module ascend_vc707(
 							.IVEntropyWidth(		IVEntropyWidth),
 							.NumValidBlock(         NumValidBlock), 
 							.Recursion(             Recursion), 
-							.MaxLogRecursion(		MaxLogRecursion),
 							.LeafWidth(             LeafWidth), 
 							.PLBCapacity(           PLBCapacity))
                 oram(		.Clock(					ORAMClock),
