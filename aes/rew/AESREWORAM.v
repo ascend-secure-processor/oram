@@ -50,10 +50,9 @@ module AESREWORAM(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-
+	`include "PathORAM.vh"
+	
+	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"

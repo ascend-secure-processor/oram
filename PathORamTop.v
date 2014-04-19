@@ -31,12 +31,10 @@ module PathORamTop(
 	//	Constants
 	//--------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-	`include "Stash.vh"; 
-	`include "UORAM.vh"; 
-	`include "PLB.vh";
+	`include "PathORAM.vh"
+	`include "Stash.vh" 
+	`include "UORAM.vh" 
+	`include "PLB.vh"
 	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
@@ -169,12 +167,7 @@ module PathORamTop(
 							.EnableIV(				EnableIV),
 							
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.BEDWidth(				BEDWidth))
 				back_end (	.Clock(					Clock),
 			                .FastClock(				FastClock),
 							.Reset(					Reset),
@@ -237,7 +230,7 @@ module PathORamTop(
 	//	DRAM Write Interface
 	//--------------------------------------------------------------------------
 
-	assign	DRAMWriteMask =						{DDRMWidth{1'b0}};
+	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
 	
 	//--------------------------------------------------------------------------
 endmodule

@@ -80,13 +80,6 @@ module ascend_vc707(
 	parameter				EnableREW =				1;
 	parameter				EnableIV =				0;
 	
-	parameter				IVEntropyWidth =		64;
-	
-	parameter 				DDR_nCK_PER_CLK = 		4,
-							DDRDQWidth =			64,
-							DDRCWidth =				3,
-							DDRAWidth =				28;
-								
     parameter				NumValidBlock = 		1024,
 							Recursion = 			3;
 	
@@ -234,12 +227,7 @@ module ascend_vc707(
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
+							.BEDWidth(				BEDWidth),
 							.NumValidBlock(         NumValidBlock), 
 							.Recursion(             Recursion), 
 							.LeafWidth(             LeafWidth), 
