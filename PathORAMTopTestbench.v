@@ -66,13 +66,6 @@ module PathORAMTopTestbench;
 	parameter				EnableAES =				1,
 							EnableREW =				1,
 							EnableIV =				0;
-	
-	parameter 				DDR_nCK_PER_CLK = 		4,
-							DDRDQWidth =			64,
-							DDRCWidth =				3,
-							DDRAWidth =				`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
-								
-	parameter				IVEntropyWidth =		64;	
 
     parameter				NumValidBlock = 		1024,
 							Recursion = 			3,
@@ -173,12 +166,7 @@ module PathORAMTopTestbench;
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
+							.BEDWidth(				BEDWidth),
 							.NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 
                             .LeafWidth(             LeafWidth), 

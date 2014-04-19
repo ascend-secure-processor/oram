@@ -80,6 +80,23 @@ module REWStatCtr(
 						.Done(					E_RO_Accesses)
 			);
 	
+	// State transition based on CountAlarms
+	//		0	  1		0		1
+	reg 	RW_or_RO,	
+			Read_or_Write;
+	reg 	RW_or_RO_Post,
+			Read_or_Write_Post;
+	reg		Reset_Post;
+	
+	`ifndef ASIC
+		initial begin
+			RW_or_RO = 1'b1;	
+			Read_or_Write = 1'b0;
+
+			Reset_Post = 1'b1;
+		end
+	`endif	
+	
 	generate if (LatchOutput) begin:LATCH
 		Register #(		.Width(					4))
 				latch(	.Clock(					Clock),
@@ -92,6 +109,7 @@ module REWStatCtr(
 		always @(posedge Clock) begin
 			RW_or_RO_Post <=					RW_or_RO;
 			Read_or_Write_Post <=				Read_or_Write;
+			Reset_Post <=						Reset;
 		end
 	end else begin:PASS
 		assign	{RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm} = {RW_R_Done, RW_W_Done, RO_R_Done, RO_W_Done};
@@ -99,22 +117,9 @@ module REWStatCtr(
 		always @( * ) begin
 			RW_or_RO_Post =						RW_or_RO;
 			Read_or_Write_Post =				Read_or_Write;
+			Reset_Post =						Reset;
 		end		
 	end endgenerate
-	
-	// State transition based on CountAlarms
-	//		0	  1		0		1
-	reg 	RW_or_RO,	
-			Read_or_Write;
-	reg 	RW_or_RO_Post,
-			Read_or_Write_Post;
-			
-	`ifndef ASIC
-		initial begin
-			RW_or_RO = 1'b1;	
-			Read_or_Write = 1'b0;
-		end
-	`endif
 		
 	always @ (posedge Clock) begin
 		if (Reset) begin
@@ -147,11 +152,11 @@ module REWStatCtr(
 		end
 	end
 	
-	assign RWAccess = 	!Reset && !RW_or_RO_Post;
-	assign ROAccess = 	!Reset && RW_or_RO_Post;
+	assign RWAccess = 	!Reset_Post && !RW_or_RO_Post;
+	assign ROAccess = 	!Reset_Post && RW_or_RO_Post;
 	
-	assign Read = 		!Reset && !Read_or_Write_Post;
-	assign Writeback =  !Reset && Read_or_Write_Post;
+	assign Read = 		!Reset_Post && !Read_or_Write_Post;
+	assign Writeback =  !Reset_Post && Read_or_Write_Post;
 		
 	`ifdef SIMULATION
 		initial begin

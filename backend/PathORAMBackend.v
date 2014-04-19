@@ -99,7 +99,6 @@ module PathORAMBackend(
 	// CC - AES
 
     wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
-    wire 	[DDRMWidth-1:0]	AES_DRAMWriteMask;
     wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
     wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 
@@ -193,8 +192,7 @@ module PathORAMBackend(
 							.REWRoundDummy(			REWRoundDummy),
 							
 							.FromDecData(			AES_DRAMReadData), 
-							.FromDecDataValid(		AES_DRAMReadDataValid), 	
-							//.FromDecDataReady(		AES_DRAMReadDataReady),	// TODO remove
+							.FromDecDataValid(		AES_DRAMReadDataValid),
 							
 							.ToEncData(				AES_DRAMWriteData), 
 							.ToEncDataValid(		AES_DRAMWriteDataValid), 
@@ -319,7 +317,7 @@ module PathORAMBackend(
 							.BackendRReady(			AES_DRAMReadDataReady),
 							
 							.BackendWData(			AES_DRAMWriteData),
-							.BackendWMask(			AES_DRAMWriteMask),
+							.BackendWMask(			),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady),
 

@@ -131,7 +131,7 @@ module PathORAMBackendInner(
 	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy;
 	
-	wire					AppendComplete, FullPathReadComplete, ROPathReadComplete, PathReadComplete, PathWritebackComplete;
+	wire					AppendComplete, PathReadComplete, PathWritebackComplete;
 	wire					OperationComplete_Pre, OperationComplete;
 	
 	wire					ROAccess, RWAccess, StartRW, REWRoundComplete;
@@ -157,66 +157,7 @@ module PathORAMBackendInner(
 	wire	[BEDWidth-1:0]	Load_ShiftBufData;
 	wire					Load_ShiftBufValid, Load_ShiftBufReady;
 	
-	wire					EvictGate, UpdateGate;
-	
-	// Read pipeline
-		
-	(* mark_debug = "TRUE" *)	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
-	wire					DataDownShift_InValid, DataDownShift_InReady;
-		
-	wire	[BktBSTWidth-1:0] BucketReadCtr;
-	wire					ReadProcessingHeader;	
-	
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
-	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
-	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
-		
-	(* mark_debug = "TRUE" *)	wire					ReadBlockIsValid, BlockPresent;
-	
-	wire	[BEDWidth-1:0]	DataDownShift_OutData;
-	wire					DataDownShift_OutValid, DataDownShift_OutReady;
-	wire					BlockReadValid, BlockReadReady;
-	
-	wire	[ORAMU-1:0]		HeaderDownShift_OutPAddr; 
-	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
-	wire					HeaderDownShift_OutValid;		
-	
-	(* mark_debug = "TRUE" *)	wire	[PBEDWidth-1:0]	PathReadCtr;
-	wire					DataDownShift_Transfer;
-	
-	wire					BlockReadCtr_Reset;
-	wire	[BlkBEDWidth-1:0] BlockReadCtr; 	
-	wire 					InPath_BlockReadComplete;	
-	
 	// Writeback pipeline
-
-	wire					Stash_BlockReadComplete;
-	
-	wire	[ORAMU-1:0]		HeaderUpShift_InPAddr; 
-	wire	[ORAML-1:0]		HeaderUpShift_InLeaf;
-	wire					HeaderUpShift_InReady;
-	(* mark_debug = "TRUE" *)	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
-
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
-	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
-	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
-	
-	wire	[BEDWidth-1:0]	DataUpShift_InData;
-	wire					DataUpShift_InValid, DataUpShift_InReady;
-	wire	[DDRDWidth-1:0]	DataUpShift_OutData;
-	(* mark_debug = "TRUE" *)	wire					DataUpShift_OutValid, DataUpShift_OutReady;
-
-	wire					WritebackBlockIsValid;
-	wire 					WritebackBlockCommit;
-	
-	(* mark_debug = "TRUE" *)	wire 					WritebackProcessingHeader;		
-	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
-	wire					BucketBuf_OutValid, BucketBuf_OutReady;
-							
-	wire					BucketWritebackValid;
-	wire	[BktBSTWidth-1:0] BucketWritebackCtr;
-							
-	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 	
 	wire					PathWritebackComplete_Commands_RW, PathWritebackComplete_Commands_RO, PathWritebackComplete_Data_Pre;
 	wire					PathWritebackComplete_Commands, PathWritebackComplete_Data;	
@@ -235,15 +176,10 @@ module PathORAMBackendInner(
 	
 	wire					Stash_ResetDone;
 	
-	wire					Stash_UpdateBlockValid, Stash_UpdateBlockReady;
-	wire					Stash_EvictBlockValid, Stash_EvictBlockReady;
-
-	wire					Stash_BlockWriteComplete;
+	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
+	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
 	
-	(* mark_debug = "TRUE" *)	wire					StashAlmostFull, StashOverflow;
-	
-	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
-	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
+	(* mark_debug = "TRUE" *)	wire					StashAlmostFull;
 	
 	// ORAM initialization
 	
@@ -676,16 +612,16 @@ module PathORAMBackendInner(
 							.DRAMReadDataValid(		DRAMReadDataValid),
 							.DRAMReadDataReady(		DRAMReadDataReady),
 							
-							.DRAMWriteData(			DRAMWriteData),
-							.DRAMWriteDataValid(	DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMWriteDataReady),
+							.DRAMWriteData(			Stash_DRAMWriteData),
+							.DRAMWriteDataValid(	Stash_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady),
 
 							.ROAccess(				ROAccess),
 							.CSIdle(				CSIdle),
 							.CSAppend(				CSAppend),
 							.CSORAMAccess(			CSORAMAccess),
 							.PathReadComplete(		PathReadComplete));
-
+							
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
@@ -739,19 +675,18 @@ module PathORAMBackendInner(
 	//	DRAM interface multiplexing
 	//------------------------------------------------------------------------------
 
-	assign	DRAMCommandAddress =					(DRAMInitializing) ? 	DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
-	assign	DRAMCommand =							(DRAMInitializing) ? 	DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
-	assign	DRAMCommandValid =						(DRAMInitializing) ? 	DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
+	assign	DRAMCommandAddress =					(DRAMInitializing) ? 	DRAMInit_DRAMCommandAddress : 	AddrGen_DRAMCommandAddress;
+	assign	DRAMCommand =							(DRAMInitializing) ? 	DRAMInit_DRAMCommand : 			AddrGen_DRAMCommand;
+	assign	DRAMCommandValid =						(DRAMInitializing) ? 	DRAMInit_DRAMCommandValid : 	AddrGen_DRAMCommandValid; 
 	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~DRAMInitializing;
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		DRAMInitializing;
+	
+	assign	DRAMWriteData =							(DRAMInitializing) ? 	DRAMInit_DRAMWriteData : 		Stash_DRAMWriteData;
+	assign	DRAMWriteDataValid =					(DRAMInitializing) ? 	DRAMInit_DRAMWriteDataValid : 	Stash_DRAMWriteDataValid;
+	
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
+	assign	Stash_DRAMWriteDataReady =				DRAMWriteDataReady &	~DRAMInitializing;
 	
-	assign	DRAMWriteData =							(DRAMInitializing) ? DRAMInit_DRAMWriteData : 		UpShift_DRAMWriteData;
-	assign	DRAMWriteDataValid =					(DRAMInitializing) ? DRAMInit_DRAMWriteDataValid : 	BucketWritebackValid;
-	
-	assign	BucketBuf_OutReady =					~DRAMInitializing & ~WritebackProcessingHeader & DRAMWriteDataReady;
-	assign	HeaderUpShift_OutReady =				~DRAMInitializing &  WritebackProcessingHeader & DRAMWriteDataReady;
-		
 	//------------------------------------------------------------------------------	
 endmodule
 //------------------------------------------------------------------------------

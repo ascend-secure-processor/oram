@@ -59,11 +59,6 @@ module ascend_vc707(
 	
 	// ORAM related
 	
-	`include "BucketLocal.vh"
-	`include "DDR3SDRAMLocal.vh"
-	`include "PathORAMBackendLocal.vh"
-	`include "TestHarnessLocal.vh"
-	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					10, // set to 31 for production
@@ -86,13 +81,18 @@ module ascend_vc707(
     parameter				LeafWidth = 			32,
 							PLBCapacity = 			8192;
 	
+	`include "SecurityLocal.vh"
+	`include "BucketLocal.vh"
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketDRAMLocal.vh"
+	`include "PathORAMBackendLocal.vh"
+	`include "TestHarnessLocal.vh"
+	
+	// Otherwise your simulator will crash hard
+	localparam				DDRAWidth_Sim =			(UseMIG) ? DDRAWidth : `log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
+		
 	`ifdef SIMULATION
 		initial begin
-			if ((UseMIG == 0) & (ORAML > 10)) begin
-				$display("[%m @ %t] ERROR: you are about to crash your computer", $time);
-				$stop;
-			end
-			
 			// More notes for the board test:
 			// 1.) Make sure to run a long enough simulation to test the gentry counter[ORAML-1:0] rollover case
 			$display("[%m @ %t] ERROR: Remember do simulate with L = 31 (from AES's perspective) ... somehow", $time);
@@ -135,7 +135,7 @@ module ascend_vc707(
 	wire					DDR3SDRAM_ResetDone;
 	
 	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
-	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
+	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
@@ -149,7 +149,7 @@ module ascend_vc707(
 	wire					MIGWriting;
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address_MIG;
 	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 	
@@ -333,28 +333,36 @@ module ascend_vc707(
 	// present WriteCommands & WriteData out of sync with each other
 	// NOTE: this doesn't impact writeback performance
 	
-	// Always fully specifying DDR3SDRAM_Command_MIG prevents us from having to 
-	// complicate the workaround ...
-	`ifdef SIMULATION
-		reg ResetPulsed = 1'b0;
+	initial begin
+		if (EnableREW == 0) $stop; // Create a stat counter for basic ORAM
+	end
 	
-		always @(posedge MemoryClock) begin
-			if (ORAMReset) ResetPulsed <= 1'b1;
-		
-			if (ResetPulsed & ^DDR3SDRAM_Command_MIG === 1'bx) begin
-				$display("[%m @ %t] ERROR: Command must always be fully specified", $time);
-				$stop;
-			end
-		end
-	`endif
-		
-	assign	MIGWriting =							DDR3SDRAM_Command_MIG == DDR3CMD_Write;
+	// We need to specify when to tie the interfaces together
+	wire	PathRead, PathWriteback, ROAccess, RWAccess;
+	REWStatCtr	#(			.ORAME(					ORAME),
+							.RW_R_Chunk(			PathSize_DRBursts),
+							.RW_W_Chunk(			PathSize_DRBursts),
+							.RO_R_Chunk(			PathSize_DRBursts),
+							.RO_W_Chunk(			(ORAML+1) * BktHSize_DRBursts),
+							.LatchOutput(			1))
+				rw_stat(	.Clock(					MemoryClock),
+							.Reset(					MemoryReset),
+							
+							.RW_R_Transfer(			RWAccess & PathRead & 		DDR3SDRAM_DataOutValid_MIG),
+							.RW_W_Transfer(			RWAccess & PathWriteback & 	DDR3SDRAM_DataInValid_MIG & 	DDR3SDRAM_CommandReady_MIG),
+							.RO_R_Transfer(			ROAccess & PathRead & 		DDR3SDRAM_DataOutValid_MIG),
+							.RO_W_Transfer(			ROAccess & PathWriteback & 	DDR3SDRAM_DataInValid_MIG & 	DDR3SDRAM_CommandReady_MIG),
+
+							.Writeback(				PathWriteback),
+							.Read(					PathRead),
+							.ROAccess(				ROAccess),
+							.RWAccess(				RWAccess));
 	
-	assign	DDR3SDRAM_CommandValid_MIG =			DDR3SDRAM_CommandValid_MIG_Pre & 	((MIGWriting) ? DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG : 1'b1);
-	assign	DDR3SDRAM_DataInValid_MIG =				DDR3SDRAM_CommandValid_MIG_Pre & 					DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_CommandReady_MIG;
+	assign	DDR3SDRAM_CommandValid_MIG =			DDR3SDRAM_CommandValid_MIG_Pre & 	((PathWriteback) ? 	DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG : 1'b1);
+	assign	DDR3SDRAM_DataInValid_MIG =				DDR3SDRAM_CommandValid_MIG_Pre & 						DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_CommandReady_MIG;
 	
-	assign	DDR3SDRAM_CommandReady_MIG_Pre =		DDR3SDRAM_CommandReady_MIG & 		((MIGWriting) ?	DDR3SDRAM_DataInValid_MIG_Pre &	DDR3SDRAM_DataInReady_MIG : 1'b1);
-	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 						DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG;
+	assign	DDR3SDRAM_CommandReady_MIG_Pre =		DDR3SDRAM_CommandReady_MIG & 		((PathWriteback) ?	DDR3SDRAM_DataInValid_MIG_Pre &	DDR3SDRAM_DataInReady_MIG : 1'b1);
+	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 							DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG;
 	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7)
@@ -432,7 +440,7 @@ module ascend_vc707(
 		
 		SynthesizedRandDRAM	#(.InBufDepth(			36),
 							.UWidth(				8),
-							.AWidth(				DDRAWidth + 6),
+							.AWidth(				DDRAWidth_Sim + 6),
 							.DWidth(				DDRDWidth),
 							.BurstLen(				1), // just for this module ...
 							.EnableMask(			1),
