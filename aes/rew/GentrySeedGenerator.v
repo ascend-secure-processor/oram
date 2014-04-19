@@ -65,8 +65,6 @@ module GentrySeedGenerator(
 	wire	[AESEntropy-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
 
 	wire	[ORAML-1:0]		GentryLeaf;
-
-	wire					RW_BIDInReady;	
 	
 	`ifndef ASIC
 		initial begin	
@@ -90,13 +88,11 @@ module GentrySeedGenerator(
 		NS_RW = 									CS_RW;
 		case (CS_RW)
 			ST_RW_StartRead :
-				if (RW_BIDInReady)
 					NS_RW =							ST_RW_Read;
 			ST_RW_Read : 
 				if (RWPathTransition)
 					NS_RW =							ST_RW_StartWrite;
 			ST_RW_StartWrite : 
-				if (RW_BIDInReady)
 					NS_RW =							ST_RW_Write;
 			ST_RW_Write : 
 				if (RWPathTransition)
@@ -135,23 +131,17 @@ module GentrySeedGenerator(
 	assign	OutIV =									(CSRWWrite) ? GentryCounterShifted + 1 : GentryCounterShifted;
 	
 	assign	GentryLeaf =							GentryCounter[ORAML-1:0];
-	
-    AddrGen #(				.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
-				rw_bid(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Start(					CSRWStartOp), 
-							.Ready(					RW_BIDInReady),
-							.RWIn(					1'b0), // don't care
-							.BHIn(					1'b1), // only send one command per bucket
-							.leaf(					GentryLeaf),
-							.CmdValid(				OutValid),
-							.CmdReady(				OutReady),
-							.BktIdx(				OutBID));
-	
-	assign	Transfer =								OutValid & OutReady;
+
+	BktIDGen # 	(	.ORAML(		ORAML))
+		rw_bid 	(	.Clock(		Clock),
+					.ReStart(	CSRWStartOp),
+					.leaf(		GentryLeaf),
+					.Enable(	Transfer),
+					.BktIdx(	OutBID)			
+				);
+
+	assign	OutValid = !CSRWStartOp;					
+	assign	Transfer = OutValid && OutReady;
 	
 	//--------------------------------------------------------------------------
 endmodule

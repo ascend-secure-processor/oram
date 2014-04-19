@@ -5,9 +5,9 @@ module PathGen (Clock, Reset, Enable, Switch, BinChild,  NodeIdx);
 	input Clock, Reset, Enable;
 	input Switch;     // indicating the degree of the tree. Assertion every k Enable means 2^k-ary tree. 
 	input BinChild;   // left-or-right child 
-	output reg [ORAML-1:0]  NodeIdx;
+	output reg [ORAML:0]  NodeIdx;
  
-	reg [ORAML-1:0] Accum, Child;  
+	reg [ORAML:0] Accum, Child;  
 
 	always@(posedge Clock) begin
 		if (Reset) begin

@@ -531,6 +531,7 @@ module AESREWORAM(
 							.PIn(					ROLeaf),
 							.SIn(					1'b0),
 							.SOut(					RO_LeafNextDirection));
+						
 							
     AddrGen 	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -546,6 +547,7 @@ module AESREWORAM(
 							.CmdValid(				RO_BIDOutValid),
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));
+
 							
 	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;
 							

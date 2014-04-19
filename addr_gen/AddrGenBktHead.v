@@ -19,7 +19,7 @@ module AddrGenBktHead
 	output reg [ORAMLogL-1:0]  currentLevel; 
 	output [ORAML+1:0] BktIdx;            // A tree of depth L needs L+1 bits to denote the node. 
                                         // And we waste several spots due to subtree, requiring L+2 bits
-	output [ORAML-1:0] STIdx, BktIdxInST;  // tmp output for debugging
+	output [ORAML:0] STIdx, BktIdxInST;  // tmp output for debugging
   
   `ifndef ASIC
   	initial begin

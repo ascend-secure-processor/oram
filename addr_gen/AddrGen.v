@@ -30,13 +30,16 @@ module AddrGen
 	output CmdValid;
 	output [DDRCWidth-1:0] Cmd;
 	output [DDRAWidth-1:0] Addr;
-
+	output [ORAML:0] BktIdx;	// logic bucket ID (no subtree)
+	
 	// tmp output for debugging
 	output [ORAMLogL-1:0]  currentLevel; 
-	output [ORAML-1:0] STIdx, BktIdxInST;
-	output [ORAML+1:0] BktIdx;
+	output [ORAML:0] STIdx, BktIdxInST;
+	
 	// ====================================================
 
+	wire [ORAML+1:0] BktIdx_Padded;
+	
 	`ifndef ASIC
 		initial begin
 			RW = 1'b0;
@@ -55,7 +58,7 @@ module AddrGen
 					) 
 	addGenBktHead (   Clock, Reset, Start && Ready, Enable, 
 					leaf, 
-					currentLevel, BktIdx,
+					currentLevel, BktIdx_Padded,
 					STIdx, BktIdxInST // tmp output for debugging
 				  );  
 			  
@@ -66,7 +69,7 @@ module AddrGen
 	assign Ready = currentLevel > ORAML;
 	assign CmdValid = currentLevel <= ORAML;
 	assign Cmd = RW ? DDR3CMD_Read : DDR3CMD_Write;
-	assign Addr = (BktIdx * BktSize_DRBursts + BktCounter) * DDRBstLen;
+	assign Addr = (BktIdx_Padded * BktSize_DRBursts + BktCounter) * DDRBstLen;
 
 	always@(posedge Clock) begin
 		if (Reset) begin
@@ -83,5 +86,13 @@ module AddrGen
 			BktCounter <= SwitchLevel ? 0 : BktCounter + 1;
 		end      
 	end
+	
+	BktIDGen # 	(	.ORAML(		ORAML))
+		bid 	(	.Clock(		Clock),
+					.ReStart(	Start && Ready),
+					.leaf(		leaf),
+					.Enable(	Enable),
+					.BktIdx(	BktIdx)			
+				);
 
 endmodule
