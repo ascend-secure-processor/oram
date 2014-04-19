@@ -126,7 +126,8 @@ module PathORAMBackend
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 	wire  					IVReady_BktOfI, IVDone_BktOfI;
 	
-	StashTop #(				.ORAMB(					ORAMB),
+	PathORAMBackend_Inner #(				
+							.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -145,7 +146,7 @@ module PathORAMBackend
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
-			stash_bkend (	.Clock(					Clock),
+		back_end_inner (	.Clock(					Clock),
 							.Reset(					Reset),
 							
 							.Command(				Command),
