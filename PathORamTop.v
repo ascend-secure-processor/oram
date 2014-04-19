@@ -99,20 +99,6 @@ module PathORamTop(
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 
-/*	
-	// Backend - CC
-
-	wire 	[DDRDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
-	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
-	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
-
-	// CC - AES
-
-    wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
-    wire 	[DDRMWidth-1:0]	AES_DRAMWriteMask;
-    wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
-    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
-*/	
 	// Path buffer
 
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
@@ -189,7 +175,7 @@ module PathORamTop(
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
-			back_end (		.Clock(					Clock),
+				back_end (	.Clock(					Clock),
 			                .FastClock(				FastClock),
 							.Reset(					Reset),
 							
@@ -217,11 +203,8 @@ module PathORamTop(
 							
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMWriteDataReady)
-							
-                    );					
+							.DRAMWriteDataReady(	DRAMWriteDataReady));					
 	
-
 	//--------------------------------------------------------------------------
 	//	DRAM Read Interface
 	//--------------------------------------------------------------------------
@@ -254,10 +237,7 @@ module PathORamTop(
 	//	DRAM Write Interface
 	//--------------------------------------------------------------------------
 
-	// TODO put write mask generation here
-	
-	// assign	AES_DRAMWriteMask =						{DDRMWidth{1'b0}}; // TODO: have LowLevelBackend.v choose what to do with this
-	assign	DRAMWriteMask =						{DDRMWidth{1'b0}}; // TODO: have LowLevelBackend.v choose what to do with this
+	assign	DRAMWriteMask =						{DDRMWidth{1'b0}};
 	
 	//--------------------------------------------------------------------------
 endmodule

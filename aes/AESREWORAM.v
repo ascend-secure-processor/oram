@@ -597,8 +597,7 @@ module AESREWORAM(
 																			{BEDataIn_Inner,{IVEntropyWidth{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
-	generate if (0) begin:BRAM_DATABUFF
-	//generate if (Overclock) begin:BRAM_DATABUFF
+	generate if (Overclock) begin:BRAM_DATABUFF
 		wire	BufferedDataFull;
 		
 		assign	BufferedDataInReady =				~BufferedDataFull;
