@@ -1,10 +1,9 @@
 -- Copyright 1986-1999, 2001-2013 Xilinx, Inc. All Rights Reserved.
 -- --------------------------------------------------------------------------------
 -- Tool Version: Vivado v.2013.4 (win64) Build 353583 Mon Dec  9 17:49:19 MST 2013
--- Date        : Wed Apr 16 16:37:36 2014
+-- Date        : Sat Apr 19 14:47:43 2014
 -- Host        : running 64-bit Service Pack 1  (build 7601)
--- Command     : write_vhdl -force -mode funcsim
---               C:/chip/ascend_vc707/ascend_vc707.srcs/sources_1/ip/AESROFIFO/AESROFIFO_funcsim.vhdl
+-- Command     : write_vhdl -force -mode funcsim C:/chip/oram/aes/rew/xilinx_ip/AESROFIFO/AESROFIFO_funcsim.vhdl
 -- Design      : AESROFIFO
 -- Purpose     : This VHDL netlist is a functional simulation representation of the design and should not be modified or
 --               synthesized. This netlist cannot be used for SDF annotated simulation.

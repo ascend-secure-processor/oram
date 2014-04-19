@@ -1,10 +1,9 @@
 // Copyright 1986-1999, 2001-2013 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2013.4 (win64) Build 353583 Mon Dec  9 17:49:19 MST 2013
-// Date        : Thu Apr 17 16:18:17 2014
+// Date        : Sat Apr 19 14:51:18 2014
 // Host        : running 64-bit Service Pack 1  (build 7601)
-// Command     : write_verilog -force -mode synth_stub
-//               c:/chip/ascend_vc707/ascend_vc707.srcs/sources_1/ip/AESIntDataBuff/AESIntDataBuff_stub.v
+// Command     : write_verilog -force -mode synth_stub C:/chip/oram/aes/rew/xilinx_ip/AESIntDataBuff/AESIntDataBuff_stub.v
 // Design      : AESIntDataBuff
 // Purpose     : Stub declaration of top-level module interface
 // Device      : xc7vx485tffg1761-2
