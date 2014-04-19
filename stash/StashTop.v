@@ -70,11 +70,12 @@ module StashTop(
 	output					Stash_ReturnDataValid;
 	
 	input	[BEDWidth-1:0]	Stash_StoreData;						
-	input					Stash_StoreDataValid, Stash_StoreDataReady;
+	input					Stash_StoreDataValid;
+	output					Stash_StoreDataReady;
 	output                  AppendComplete;
 	
 	//--------------------------------------------------------------------------
-	//	Stash interface to backend, change name
+	//	Backend Interface
 	//--------------------------------------------------------------------------
 	
 	input	[DDRDWidth-1:0]	DRAMReadData;
@@ -85,8 +86,7 @@ module StashTop(
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 	
-	
-	input	ROAccess, CSIdle, CSAppend, CSORAMAccess; // to remove
+	input	ROAccess, CSIdle, CSAppend, CSORAMAccess; // TODO to remove
 	output	PathReadComplete;
 	
 	//--------------------------------------------------------------------------

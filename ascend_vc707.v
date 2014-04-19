@@ -146,8 +146,6 @@ module ascend_vc707(
 	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
 	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
-	wire					MIGWriting;
-	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address_MIG;
 	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 

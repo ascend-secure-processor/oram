@@ -244,7 +244,7 @@ module CoherenceController(
 				
 		CCPortArbiter # (	.DWidth(				DDRDWidth),
 							.ORAML(					ORAML),
-							.BktSize_DRBursts(		BktSize_DRBursts)	)
+							.BktSize_DRBursts(		BktSize_DRBursts))
 							
 			port_arbiter(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -304,7 +304,8 @@ module CoherenceController(
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
-		//-------------------------------------------------------------------------- 
+		//--------------------------------------------------------------------------
+		
 		reg [1:0] 	HdOfIStat;
 		reg [TrancateDigestWidth-1:0] BktOfINewHash;
 		
