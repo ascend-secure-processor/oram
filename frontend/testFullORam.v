@@ -279,7 +279,6 @@ module testFullORam;
   //                         FPGA Memory Controller
   //===========================================================================
 
-    `include "DDR3SDRAM.vh";
 	`include "DDR3SDRAMLocal.vh"
 	
     wire                        Clock, Reset; 
@@ -381,8 +380,7 @@ module testFullORam;
     `include "PathORAM.vh";
     `include "UORAM.vh";
     `include "PLB.vh";
-    `include "PLBLocal.vh"; 
-	`include "AES.vh";
+    `include "PLBLocal.vh";
     `include "BucketLocal.vh";
 	`include "PathORAMBackendLocal.vh";
 

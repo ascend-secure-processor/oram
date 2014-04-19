@@ -32,7 +32,7 @@ module AES_DW
 	parameter W = 4;
 	parameter D = 12;
 	
-	`include "AES.vh";
+	`include "SecurityLocal.vh"
 	
      //--------------------------------------------------------------------------
      //	System I/O
@@ -44,7 +44,7 @@ module AES_DW
      //	Interface 1
      //--------------------------------------------------------------------------
 
-     input  [IVEntropyWidth-1:0] DataIn;
+     input  [AESEntropy-1:0] 	DataIn;
      input                       DataInValid;
      output                      DataInReady;
 
@@ -133,7 +133,7 @@ module AES_DW
                                        (InTurn == k) && !AESWorking[k]),
                                    .done(AESResValid[k][j]),
                                    .key(Key),
-                                   .text_in({{(AESWidth-IVEntropyWidth){1'b0}}, DataIn + j}),
+                                   .text_in({{(AESWidth-AESEntropy){1'b0}}, DataIn + j}),
                                    .text_out(AESRes[k][(j+1)*AESWidth - 1:j*AESWidth]));
             end
         end

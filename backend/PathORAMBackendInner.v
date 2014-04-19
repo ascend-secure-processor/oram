@@ -35,11 +35,10 @@ module PathORAMBackendInner(
 	//	Parameters & Constants
 	//------------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-	`include "Stash.vh";
+	`include "PathORAM.vh"
+	`include "Stash.vh"
 	
+	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
@@ -579,12 +578,7 @@ module PathORAMBackendInner(
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 				addr_gen(	.Clock(					Clock),
 							.Reset(					Reset | CSInitialize),
 							.Start(					AddrGen_InValid), 
@@ -621,12 +615,7 @@ module PathORAMBackendInner(
 		DRAMInitializer #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 			dram_init(		.Clock(					Clock),
 							.Reset(					Reset),
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
@@ -647,11 +636,6 @@ module PathORAMBackendInner(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
 							.EnableREW(             EnableREW))
 				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),

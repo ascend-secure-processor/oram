@@ -32,11 +32,9 @@ module PathORAMBackend(
 	//	Parameters & Constants
 	//------------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-	`include "Stash.vh";
+	`include "PathORAM.vh"
 	
+	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
@@ -136,12 +134,7 @@ module PathORAMBackend(
 							.EnableIV(				EnableIV),
 							
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.BEDWidth(				BEDWidth))
 			bend_inner (	.Clock(					Clock),
 							.Reset(					Reset),
 							
@@ -181,12 +174,7 @@ module PathORAMBackend(
 	//----------------------------------------------------------------------
 	
 	generate if (EnableREW) begin:CC
-		CoherenceController #(.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							
-							.ORAMB(					ORAMB),
+		CoherenceController #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -232,17 +220,10 @@ module PathORAMBackend(
 							.IVDone_BktOfI(			IVDone_BktOfI));
 							
 		 if (EnableIV) begin:INTEGRITY
-			IntegrityVerifier #(.DDR_nCK_PER_CLK(	DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							
-							.ORAMB(					ORAMB),
+			IntegrityVerifier #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 					
 				iv(			.Clock(					Clock),
 							.Reset(					Reset || IVStart),
@@ -285,12 +266,8 @@ module PathORAMBackend(
 							.ORAML(					ORAML),
 							.ORAMB(					ORAMB),
 							.ORAME(					ORAME),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
-							.AESWidth(				AESWidth),
 							.Overclock(				Overclock),
-							.EnableIV(				EnableIV))						
+							.EnableIV(				EnableIV))					
 				aes(		.Clock(					Clock), 
 							.FastClock(				FastClock),
 				`ifdef ASIC
@@ -324,12 +301,7 @@ module PathORAMBackend(
 							.Overclock(				Overclock),
 							.EnableREW(				EnableREW),
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.BEDWidth(				BEDWidth))
 					aes(	.Clock(					Clock),
 							.Reset(					Reset),
 

@@ -47,10 +47,9 @@ module REWAESCore(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-
+	`include "PathORAM.vh"
+	
+	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
@@ -67,13 +66,13 @@ module REWAESCore(
 	//	Input Interfaces
 	//--------------------------------------------------------------------------
 
-	input	[IVEntropyWidth-1:0] ROIVIn; 
+	input	[AESEntropy-1:0] ROIVIn; 
 	input	[BIDWidth-1:0]	ROBIDIn; 
 	input	[PCCMDWidth-1:0] ROCommandIn; 
 	input					ROCommandInValid;
 	output					ROCommandInReady;
 
-	input	[IVEntropyWidth-1:0] RWIVIn;
+	input	[AESEntropy-1:0] RWIVIn;
 	input	[BIDWidth-1:0]	RWBIDIn;
 	input					RWCommandInValid; 
 	output					RWCommandInReady;
@@ -99,7 +98,7 @@ module REWAESCore(
 	
 	wire					ROCommandFull;
 	
-	wire	[IVEntropyWidth-1:0] ROIV_Fifo, ROIV; 
+	wire	[AESEntropy-1:0] ROIV_Fifo, ROIV; 
 	wire	[BIDWidth-1:0]	ROBID_Fifo, ROBID; 
 	wire	[PCCMDWidth-1:0] ROCommand_Fifo, ROCommand;
 	wire					ROValid_Fifo, ROReady_Fifo, ROValid, ROReady;
@@ -117,7 +116,7 @@ module REWAESCore(
 	
 	wire					RWCommandFull;
 	
-	wire	[IVEntropyWidth-1:0] RWIV_Fifo, RWIV; 
+	wire	[AESEntropy-1:0] RWIV_Fifo, RWIV; 
 	wire	[BIDWidth-1:0]	RWBID_Fifo, RWBID; 
 	wire					RWValid_Fifo, RWReady_Fifo, RWValid, RWReady;
 		
@@ -156,7 +155,7 @@ module REWAESCore(
 		
 	`ifdef SIMULATION
 		initial begin
-			if ((IVEntropyWidth + BIDWidth + PCCMDWidth) > 108) begin
+			if ((AESEntropy + BIDWidth + PCCMDWidth) > 108) begin
 				$display("[%m @ %t] ERROR: Data is too wide for ro_I_fifo.", $time);
 				$stop;
 			end
@@ -214,7 +213,7 @@ module REWAESCore(
 							.rd_en(					ROReady_Fifo), 
 							.valid(					ROValid_Fifo));
 
-	FIFORegister #(			.Width(					IVEntropyWidth + BIDWidth + PCCMDWidth),
+	FIFORegister #(			.Width(					AESEntropy + BIDWidth + PCCMDWidth),
 							.Initial(				0),
 							.InitialValid(			0))
 				ro_state(	.Clock(					FastClock),
@@ -281,7 +280,7 @@ module REWAESCore(
 							.rd_en(					RWReady_Fifo),
 							.valid(					RWValid_Fifo));
 	
-	FIFORegister #(			.Width(					IVEntropyWidth + BIDWidth),
+	FIFORegister #(			.Width(					AESEntropy + BIDWidth),
 							.Initial(				0),
 							.InitialValid(			0))
 				rw_state(	.Clock(					FastClock),

@@ -16,7 +16,7 @@
 							
 							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWPayload_AESChunks)),
 							BIDWidth =				ORAML + 2, // Bucket ID width; ORAML + 2 to account for wasted space in subtree scheme (TODO: add this param to addr gen as well)
-							SeedSpaceRemaining =	AESWidth - IVEntropyWidth - BIDWidth - CIDWidth,
+							SeedSpaceRemaining =	AESWidth - AESEntropy - BIDWidth - CIDWidth,
 							
 							// *** NOTA BENE *** if you change the REWMaskFIFO depth, you must change this to match
 							MaskFIFODepth =			512,

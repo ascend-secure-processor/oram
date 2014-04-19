@@ -31,8 +31,8 @@ module StashScanTable(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 	
-	`include "PathORAM.vh";
-	`include "Stash.vh";	
+	`include "PathORAM.vh"
+	`include "Stash.vh"
 	
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"

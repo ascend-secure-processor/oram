@@ -20,10 +20,9 @@ module GentrySeedGenerator(
 	//	Constants
 	//--------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";	
-	`include "AES.vh";
-
+	`include "PathORAM.vh"
+	
+	`include "SecurityLocal.vh"
 	// TODO We only need these includes because we need BIDWidth in REWAESLocal.vh
 	// Clean up param system to avoid the crazy includes ...
 	`include "DDR3SDRAMLocal.vh"
@@ -47,7 +46,7 @@ module GentrySeedGenerator(
 	//	Output Interface
 	//--------------------------------------------------------------------------
 
-	output	[IVEntropyWidth-1:0] OutIV;
+	output	[AESEntropy-1:0] OutIV;
 	output	[BIDWidth-1:0] 	OutBID;
 
 	output					OutValid;
@@ -63,7 +62,7 @@ module GentrySeedGenerator(
 	wire					RWPathTransition;
 	wire					Transfer;
 
-	wire	[IVEntropyWidth-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
+	wire	[AESEntropy-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
 
 	wire	[ORAML-1:0]		GentryLeaf;
 
@@ -111,19 +110,19 @@ module GentrySeedGenerator(
 							.Enable(				Transfer),
 							.Done(					RWPathTransition));
 	
-	Counter		#(			.Width(					IVEntropyWidth))
+	Counter		#(			.Width(					AESEntropy))
 				gentry_bg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				RWPathTransition & CSRWWrite),
-							.In(					{IVEntropyWidth{1'bx}}),
+							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter));						
 							
 	// RW seed generation scheme for bucket @ level L (L = 0...):
 	//	decrypt( GentryCounter >> L)
 	//	encrypt((GentryCounter >> L) + 1)
-	ShiftRegister #(		.PWidth(				IVEntropyWidth),
+	ShiftRegister #(		.PWidth(				AESEntropy),
 							.Reverse(				1),
 							.SWidth(				1))
 				gentry_shft(.Clock(					Clock), 
@@ -140,12 +139,7 @@ module GentrySeedGenerator(
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 				rw_bid(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Start(					CSRWStartOp), 

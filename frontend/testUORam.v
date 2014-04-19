@@ -3,10 +3,6 @@
 // `timescale 1ns/1ns
 
 module testUORam;
-	parameter 					DDR_nCK_PER_CLK = 	4;
-	parameter					DDRDQWidth =		64;
-	parameter					DDRCWidth =			3;
-						
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
 	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
@@ -17,8 +13,7 @@ module testUORam;
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-
-    parameter                   DDRAWidth =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
+    parameter                   DDRAWidth_Sim =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
     
     parameter                   NumValidBlock = 1024;
     parameter                   Recursion = 3;
@@ -45,7 +40,7 @@ module testUORam;
     wire [FEDWidth-1:0] DataIn, ReturnData;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
+	wire	[DDRAWidth_Sim-1:0]		DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 	
@@ -114,7 +109,7 @@ module testUORam;
 	                        .OutBandWidth(OutBandWidth),
 	                           
                             .UWidth(				8),
-                            .AWidth(				DDRAWidth + 6),
+                            .AWidth(				DDRAWidth_Sim + 6),
                             .DWidth(				DDRDWidth),
                             .BurstLen(				1), // just for this module ...
                             .EnableMask(			1),

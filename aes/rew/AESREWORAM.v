@@ -80,7 +80,7 @@ module AESREWORAM(
 							ST_CO_Write =			2'd2;	
 	
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
-							BDWidth =				DDRDWidth + IVEntropyWidth + BIDWidth + 1;
+							BDWidth =				DDRDWidth + AESEntropy + BIDWidth + 1;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -101,7 +101,7 @@ module AESREWORAM(
 
 	// These signals will be valid from when the bucket of interest is found to 
 	// the end of the header writeback
-	output	[IVEntropyWidth-1:0] ROIBVOut;
+	output	[AESEntropy-1:0] ROIBVOut;
 	output	[BIDWidth-1:0]	ROIBIDOut;
 	
 	output	[DDRDWidth-1:0] BEDataOut;	
@@ -133,13 +133,13 @@ module AESREWORAM(
 	
 	// AES Core
 	
-	wire	[IVEntropyWidth-1:0] Core_ROIVIn; 
+	wire	[AESEntropy-1:0] Core_ROIVIn; 
 	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
 	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
 	wire					Core_ROCommandInValid;
 	wire					Core_ROCommandInReady;
 
-	wire	[IVEntropyWidth-1:0] Core_RWIVIn;
+	wire	[AESEntropy-1:0] Core_RWIVIn;
 	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
 	wire					Core_RWCommandInValid; 
 	wire					Core_RWCommandInReady;
@@ -158,7 +158,7 @@ module AESREWORAM(
 	
 	wire					DRAMReadTransfer, ROCommandTransfer;
 
-	wire	[IVEntropyWidth-1:0] GentryCounter_MemoryConsistant;
+	wire	[AESEntropy-1:0] GentryCounter_MemoryConsistant;
 	
 	wire	[BDWidth-1:0]	BufferedDataIn_Wide, BufferedDataOut_Wide;
 	wire					BufferedDataInValid, BufferedDataInReady;
@@ -172,11 +172,11 @@ module AESREWORAM(
 	
 	wire					BucketNotYetWritten, BufferedIVNotValid;
 	
-	wire	[IVEntropyWidth-1:0] BufferedROIVOutData;
+	wire	[AESEntropy-1:0] BufferedROIVOutData;
 	wire					BufferedROIVInValid, BufferedROIVInReady;
 	wire					BufferedROIVOutValid, BufferedROIVOutReady;	
 	
-	wire	[IVEntropyWidth-1:0] WritebackROIVOutData;
+	wire	[AESEntropy-1:0] WritebackROIVOutData;
 	wire					WritebackROIVInReady, WritebackROIVOutValid, WritebackROIVOutReady;
 	
 	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
@@ -185,13 +185,13 @@ module AESREWORAM(
 	
 	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
 	
-	wire	[IVEntropyWidth-1:0] RO_GentryIV, BufferedIV;
+	wire	[AESEntropy-1:0] RO_GentryIV, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
 	
-	wire	[IVEntropyWidth-1:0] RO_ExternalIV, RO_UpdatedExternalIV, RW_UpdatedExternalIV;
+	wire	[AESEntropy-1:0] RO_ExternalIV, RO_UpdatedExternalIV, RW_UpdatedExternalIV;
 	
 	wire					RO_LeafNextDirection;
-	wire	[IVEntropyWidth-1:0] RO_IVIncrement, RO_IVNext;
+	wire	[AESEntropy-1:0] RO_IVIncrement, RO_IVNext;
 		
 	wire					CSROIdle, CSROStartRead, CSROStartOp, CSRORead, CSROROIReadCommand, CSROROIRead, CSROWrite;
 	
@@ -229,7 +229,7 @@ module AESREWORAM(
 	wire	[BigVWidth-1:0] DataOutV;
 	wire	[BigUWidth-1:0] DataOutU;
 	
-	wire	[IVEntropyWidth-1:0] ROI_GentryIV;
+	wire	[AESEntropy-1:0] ROI_GentryIV;
 	wire	[BIDWidth-1:0]	ROI_BID;
 	wire	[BigUWidth-1:0]	ROI_U;
 	wire	[BigVWidth-1:0]	ROI_V;
@@ -261,7 +261,7 @@ module AESREWORAM(
 
 	wire	[BktHSize_ValidBits-1:0] RecomputedValidBits;
 	wire	[BigUWidth+BktHSize_ValidBits-1:0] RecomputedVU;
-	wire	[IVEntropyWidth-1:0] UpdatedExternalIV;
+	wire	[AESEntropy-1:0] UpdatedExternalIV;
 	
 	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Read1, DataOut_Read, DataOut_Write;
 	wire					DataOutValid, DataOutReady;
@@ -505,23 +505,23 @@ module AESREWORAM(
 							.Done(					RWWBPathTransition));							
 	assign	FinishWBIn =							(ROAccess) ? HWBPathTransition : RWWBPathTransition;
 
-	assign	RO_ExternalIV = 						DRAMReadData[IVEntropyWidth-1:0];
+	assign	RO_ExternalIV = 						DRAMReadData[AESEntropy-1:0];
 	
 	// Represents the actual gentry counter of blocks stored in memory
-	Counter		#(			.Width(					IVEntropyWidth))
+	Counter		#(			.Width(					AESEntropy))
 				gentry_mem(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				RWAccess_Delayed & ROAccess),
-							.In(					{IVEntropyWidth{1'bx}}),
+							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));	
 	
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
-	assign	RO_IVIncrement =						RO_GentryIV + {{IVEntropyWidth-1{1'b0}}, ~RO_LeafNextDirection};
-	assign	RO_IVNext = 							(CSROStartRead) ? GentryCounter_MemoryConsistant : {1'b0, RO_IVIncrement[IVEntropyWidth-1:1]};
+	assign	RO_IVIncrement =						RO_GentryIV + {{AESEntropy-1{1'b0}}, ~RO_LeafNextDirection};
+	assign	RO_IVNext = 							(CSROStartRead) ? GentryCounter_MemoryConsistant : {1'b0, RO_IVIncrement[AESEntropy-1:1]};
 	
-	Register	#(			.Width(					IVEntropyWidth))
+	Register	#(			.Width(					AESEntropy))
 				ro_gentry(	.Clock(					Clock),
 							.Reset(					1'b0),
 							.Set(					1'b0),
@@ -542,12 +542,7 @@ module AESREWORAM(
     AddrGen 	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 				ro_bid(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Start(					CSROStartOp),
@@ -593,7 +588,7 @@ module AESREWORAM(
 	
 	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	RO_GentryIV, 			Core_ROBIDIn,	BucketNotYetWritten} : 
 													(CSROROIRead) ?			{ROIData,		ROI_GentryIV, 			ROI_BID,		BucketNotYetWritten} : 
-																			{BEDataIn_Inner,{IVEntropyWidth{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
+																			{BEDataIn_Inner,{AESEntropy{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	generate if (Overclock) begin:BRAM_DATABUFF
@@ -631,9 +626,9 @@ module AESREWORAM(
 	// thing simple, we always just increment it by the same amount.  On A 
 	// RWAccess, we must set to something ...
 	assign	RO_UpdatedExternalIV =					RO_ExternalIV + ROHeader_AESChunks;
-	assign	RW_UpdatedExternalIV =					(RWAccess & BucketNotYetWritten) ? {IVEntropyWidth{1'b0}} : RO_UpdatedExternalIV;
+	assign	RW_UpdatedExternalIV =					(RWAccess & BucketNotYetWritten) ? {AESEntropy{1'b0}} : RO_UpdatedExternalIV;
 	
-	FIFORAM		#(			.Width(					IVEntropyWidth),
+	FIFORAM		#(			.Width(					AESEntropy),
 							.Buffering(				ORAML + 1))
 				hwb_ivc_buf(.Clock(					Clock),
 							.Reset(					Reset),
@@ -654,7 +649,7 @@ module AESREWORAM(
 		   first mask & hwb_ivc_buf writing the last command (= about 10 cycles 
 		   when L = 32). 
 	   NOTE 2: [ASIC] we should implement as RAM for ASIC ... */
-	FIFORAM		#(			.Width(					IVEntropyWidth),
+	FIFORAM		#(			.Width(					AESEntropy),
 							.Buffering(				ORAML + 1))
 				hwb_ivo_buf(.Clock(					Clock),
 							.Reset(					Reset),
@@ -674,12 +669,7 @@ module AESREWORAM(
 	GentrySeedGenerator	#(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth))
+							.ORAMZ(					ORAMZ))
 				gentry_rw(	.Clock(					Clock),
 							.Reset(					Reset),
 							.OutIV(					Core_RWIVIn), 
@@ -713,11 +703,7 @@ module AESREWORAM(
 	REWAESCore	#(			.ORAMZ(					ORAMZ),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMB(					ORAMB),
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
-							.AESWidth(				AESWidth))
+							.ORAMB(					ORAMB))
 				core(		.SlowClock(				Clock),
 							.FastClock(				FastClock),
 
@@ -776,9 +762,9 @@ module AESREWORAM(
 							.OutSend(				ROMaskBufOutValid),
 							.OutReady(				ROMaskBufOutReady));
 	
-	assign	ROHeaderMask =							{	{BktHSize_RndBits-ROHeader_VUBits-IVEntropyWidth{1'b0}},
+	assign	ROHeaderMask =							{	{BktHSize_RndBits-ROHeader_VUBits-AESEntropy{1'b0}},
 														ROMaskBufOutData, 
-														{IVEntropyWidth{1'b0}}	};
+														{AESEntropy{1'b0}}	};
 	
 	//--------------------------------------------------------------------------
 	//	RW Mask Formation
@@ -932,7 +918,7 @@ module AESREWORAM(
 							.In(					1'bx),
 							.Out(					ROI_BucketLoaded));
 	
-	Register	#(			.Width(					IVEntropyWidth + BIDWidth + BigUWidth + BigVWidth))
+	Register	#(			.Width(					AESEntropy + BIDWidth + BigUWidth + BigVWidth))
 				roi_info(	.Clock(					Clock),
 							.Reset(					1'b0),
 							.Set(					1'b0),
@@ -1020,12 +1006,12 @@ module AESREWORAM(
 	assign	DataOut_Read =							{	
 														DataOut_Read1[DDRDWidth-1:BktHLStart],
 														RecomputedVU,
-														DataOut_Unmask[IVEntropyWidth-1:0]
+														DataOut_Unmask[AESEntropy-1:0]
 													};
 	
 	// Writeback the IVs that we used to generate the new ROHeaderMasks to 
 	// memory
-	assign	UpdatedExternalIV =						(MaskIsHeader) ? WritebackROIVOutData : DataOut_Unmask[IVEntropyWidth-1:0]; 
+	assign	UpdatedExternalIV =						(MaskIsHeader) ? WritebackROIVOutData : DataOut_Unmask[AESEntropy-1:0]; 
 	assign	DataOut_Write =							{
 														DataOut_Unmask[DDRDWidth-1:BktHVStart],
 														UpdatedExternalIV

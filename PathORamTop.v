@@ -32,10 +32,10 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
-	`include "Stash.vh" 
 	`include "UORAM.vh" 
 	`include "PLB.vh"
 	
+	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"

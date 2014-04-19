@@ -32,11 +32,10 @@ module StashTop(
 	//	Parameters & Constants
 	//------------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-	`include "Stash.vh";
+	`include "PathORAM.vh"
+	`include "Stash.vh"
 	
+	`include "SecurityLocal.vh"
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"

@@ -4,8 +4,8 @@ module AddrGen
 (Clock, Reset, Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, Addr, currentLevel, STIdx, BktIdxInST, BktIdx);
 
 	`include "PathORAM.vh";
-	`include "AES.vh";
-  
+	
+	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	

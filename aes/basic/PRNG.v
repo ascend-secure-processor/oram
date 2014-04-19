@@ -11,7 +11,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 	parameter RandWidth = 32;
 	parameter SecretKey = 128'h0; 
 	
-	`include "AES.vh";
+	`include "SecurityLocal.vh"
 	
 	input  Clock, Reset;
 	input  RandOutReady;
@@ -20,10 +20,10 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 
 	
 	wire  SeedValid, SeedReady;
-	wire  [IVEntropyWidth-1:0] Seed;
+	wire  [AESEntropy-1:0] Seed;
 
-    Counter #(.Width(IVEntropyWidth))
-        SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {IVEntropyWidth{1'bx}}, Seed); // load = set = 0, in= x 
+    Counter #(.Width(AESEntropy))
+        SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {AESEntropy{1'bx}}, Seed); // load = set = 0, in= x 
         	// TODO: if reset, seed goes back to 0, not secure anymore. 
 
     wire [AESWidth-1:0]                            AESKey;
@@ -39,9 +39,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 
 
     AES_DW #(.W(1),
-             .D(1),
-             .IVEntropyWidth(IVEntropyWidth),
-             .AESWidth(AESWidth))
+             .D(1))
     aes_dw (.Clock(Clock),
             .Reset(Reset),
             .DataIn(Seed),

@@ -51,9 +51,9 @@ module CoherenceController(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
-    `include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
+    `include "PathORAM.vh"
+    
+	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
@@ -169,7 +169,7 @@ module CoherenceController(
 	
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
-		assign 	ValidBitsIn[j] = FromDecData[IVEntropyWidth+j];
+		assign 	ValidBitsIn[j] = FromDecData[AESEntropy+j];
 		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
 			// one hot signal that if a block is of interest
 	end 
@@ -177,7 +177,7 @@ module CoherenceController(
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
 	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
-	assign HeaderIn = {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOut, FromDecData[IVEntropyWidth-1:0]};
+	assign HeaderIn = {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, FromDecData[AESEntropy-1:0]};
 	
 	
 	//--------------------------------------------------------------------------
@@ -279,7 +279,7 @@ module CoherenceController(
 						);
 	
 		//	AES --> Stash  	
-		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOfI, FromDecData[IVEntropyWidth-1:0]}
+		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
 											: FromDecData;
 											
 		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
@@ -315,7 +315,7 @@ module CoherenceController(
 		assign  BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		assign  DataToIV = HdOfIStat != 1 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsReg, BufP2_DOut[IVEntropyWidth-1:0]};;
+		assign  DataToIV = HdOfIStat != 1 ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsReg, BufP2_DOut[AESEntropy-1:0]};;
 			
 		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin
@@ -371,7 +371,7 @@ module CoherenceController(
 	
 	
 		//	AES --> Stash 	
-		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:IVEntropyWidth+ORAMZ], ValidBitsOfI, FromDecData[IVEntropyWidth-1:0]}
+		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
 											: FromDecData;
 		assign	ToStashDataValid =		RWAccess ? FromDecDataValid
 											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;

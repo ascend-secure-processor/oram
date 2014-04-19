@@ -5,4 +5,4 @@
 								
 								// When we simulate, should we fail if we are looking for a block but cannot find it?
 								// KEEP THIS DEFAULTED TO 1
-								StopOnBlockNotFound = 1
+								StopOnBlockNotFound = 1;

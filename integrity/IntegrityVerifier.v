@@ -18,9 +18,9 @@ module IntegrityVerifier (
 	parameter NUMSHA3 = 3;
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
 	
-    `include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
+    `include "PathORAM.vh"
+	
+	`include "SecurityLocal.vh"	
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
@@ -83,7 +83,7 @@ module IntegrityVerifier (
 	end
 	
 	// data passed to SHA engines
-	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:IVEntropyWidth], {IVEntropyWidth{1'b0}}  } 
+	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  } 
 						: DataIn;
 		// cannot include digest itself, nor header IV (since they change for every bucket on RO access).
 		// should replace them with BktCtr and BktID. Currently just zero.

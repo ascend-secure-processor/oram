@@ -6,9 +6,9 @@
 	// 	DRWords = in terms of DDR3 DQ bus width (typically 64b)
 
 	`ifdef SIMULATION
-	localparam				IVINITValue =			{32'hdeadbeef, {IVEntropyWidth-32{1'b0}}};
+	localparam				IVINITValue =			{32'hdeadbeef, {AESEntropy-32{1'b0}}};
 	`else
-	localparam				IVINITValue =			{IVEntropyWidth{1'bx}};
+	localparam				IVINITValue =			{AESEntropy{1'bx}};
 	`endif
 	
 	// TODO shouldn't hash digest be factored in here?
@@ -19,7 +19,7 @@
 	
 	localparam				BktHSize_ValidBits =	`divceil(ORAMZ,8) * 8; // = 8 bits for Z < 9
 	localparam				BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ;
-	localparam				BktHVStart =			IVEntropyWidth;
+	localparam				BktHVStart =			AESEntropy;
 	localparam				BktHUStart =			BktHVStart + BktHSize_ValidBits; // at what position do the U's start?
 	localparam				BktHLStart =			BktHUStart + BigUWidth; // at what position do the U's start?
 	localparam				BktHSize_RawBits = 		BktHLStart + BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
