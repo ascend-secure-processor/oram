@@ -295,7 +295,6 @@ module StashTop(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock))
-
 				stash(		.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
