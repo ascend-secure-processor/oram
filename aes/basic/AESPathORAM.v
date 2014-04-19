@@ -36,9 +36,8 @@ module AESPathORAM(
 	//------------------------------------------------------------------------------
 
 	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
-	`include "AES.vh";
-
+	
+    `include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "BucketLocal.vh"
@@ -95,17 +94,17 @@ module AESPathORAM(
 
     reg                                            RW; //0: ORAM->MIG, 1: MIG->ORAM
 
-    wire [IVEntropyWidth-1:0]                      IVDataIn;
+    wire [AESEntropy-1:0]                      IVDataIn;
     wire                                           IVDataInValid;
     wire                                           IVDataInAccept;
-    wire [IVEntropyWidth-1:0]                      IVDataOut;
+    wire [AESEntropy-1:0]                      IVDataOut;
     wire                                           IVDataOutValid;
     wire                                           IVDataOutReady;
 
-    wire [IVEntropyWidth-1:0]                      IVDupIn;
+    wire [AESEntropy-1:0]                      IVDupIn;
     wire                                           IVDupInValid;
     wire                                           IVDupInAccept;
-    wire [IVEntropyWidth-1:0]                      IVDupOut;
+    wire [AESEntropy-1:0]                      IVDupOut;
     wire                                           IVDupOutValid;
     wire                                           IVDupOutReady;
 
@@ -120,7 +119,7 @@ module AESPathORAM(
     wire                                           AESDataOutValid;
     wire                                           AESDataOutReady;
 
-    wire [IVEntropyWidth-1:0]                      AESDWDataIn;
+    wire [AESEntropy-1:0]                      AESDWDataIn;
     wire                                           AESDWDataInValid;
     wire                                           AESDWDataInAccept;
 
@@ -374,10 +373,10 @@ module AESPathORAM(
 
     assign IsIV = (BucketReadCtr == 0) & ~IVDone;
 
-    assign IVDataIn = DataIn[IVEntropyWidth-1:0];
+    assign IVDataIn = DataIn[AESEntropy-1:0];
     assign IVDataInValid = IsIV & DataInValid;
 
-    assign IVDupIn = DataIn[IVEntropyWidth-1:0];
+    assign IVDupIn = DataIn[AESEntropy-1:0];
     assign IVDupInValid = IsIV & DataInValid;
 
     assign AESDataIn = DataIn;
@@ -393,7 +392,7 @@ module AESPathORAM(
     //only remove the duplicate IV when we output to MIG/Stash
     assign IVDupOutReady = IsAESIV & DataOutValid & DataOutReady;
 
-    FIFORAM#(.Width(IVEntropyWidth),
+    FIFORAM#(.Width(AESEntropy),
              .Buffering(FIFO_D))
     iv_fifo (.Clock(Clock),
              .Reset(Reset),
@@ -405,7 +404,7 @@ module AESPathORAM(
              .OutReady(IVDataOutReady)
              );
 
-    FIFORAM#(.Width(IVEntropyWidth),
+    FIFORAM#(.Width(AESEntropy),
              .Buffering(FIFO_D))
     ivdup_fifo (.Clock(Clock),
                 .Reset(Reset),
@@ -520,9 +519,9 @@ module AESPathORAM(
 
     //replace the IV portion with actual IV
     //don't need to worry about IVDupOutValid, since it gets enq same time as IV
-    assign DataOut[DDRDWidth-1:IVEntropyWidth] = XorRes[DDRDWidth-1:IVEntropyWidth];
-    assign DataOut[IVEntropyWidth-1:0] = IsAESIV & IVDupOutValid ? IVDupOut :
-                                         XorRes[IVEntropyWidth-1:0];
+    assign DataOut[DDRDWidth-1:AESEntropy] = XorRes[DDRDWidth-1:AESEntropy];
+    assign DataOut[AESEntropy-1:0] = IsAESIV & IVDupOutValid ? IVDupOut :
+                                         XorRes[AESEntropy-1:0];
 
     assign DataOutValid = AESDataOutValid & AESResDataOutValid;
     assign DataOutReady = ((RW == PATH_READ) & BackendRReady) | ((RW == PATH_WRITE) & MIGOutReady);

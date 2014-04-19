@@ -10,9 +10,10 @@ module AddrGenBktHead
    STIdx, BktIdxInST  // tmp
 );
 
-	parameter ORAML = 10, ORAMLogL = 5, DDRROWWidth = 1024, BktSize_DRWords = 8;
+	parameter ORAML = 10, DDRROWWidth = 1024, BktSize_DRWords = 8;
 	`include "SubTreeLocal.vh"
-
+	localparam ORAMLogL = `log2(ORAML) + 1;
+	
 	input Clock, Reset, Start, Enable;
 	input [ORAML-1:0] leaf;                     // the input leaf label
 	output reg [ORAMLogL-1:0]  currentLevel; 

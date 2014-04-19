@@ -41,6 +41,8 @@ module UORamController
     `include "BucketLocal.vh"
     `include "PLBLocal.vh"
 
+    localparam MaxLogRecursion = 4;
+
     input Clock, Reset;
     
     // receive command from network
@@ -136,7 +138,6 @@ module UORamController
                 .ORAMB(             ORAMB), 
                 .NumValidBlock(     NumValidBlock), 
                 .Recursion(         Recursion), 
-                .LeafWidth(         LeafWidth), 
                 .PLBCapacity(       PLBCapacity)) 
         PPP (   .Clock(             Clock), 
                 .Reset(             Reset), 
@@ -276,7 +277,6 @@ module UORamController
 
     // =================== data interface with network and backend ====================    
     UORamDataPath #(    .FEDWidth(          FEDWidth), 
-                        .LeafWidth(         LeafWidth), 
                         .ORAMB(             ORAMB))
     DataScheduler (     .Clock(             Clock), 
                         .Reset(             Reset),

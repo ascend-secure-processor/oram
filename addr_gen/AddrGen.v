@@ -1,10 +1,14 @@
 `include "Const.vh"
 
 module AddrGen
-(Clock, Reset, Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, Addr, currentLevel, STIdx, BktIdxInST, BktIdx);
+(
+	Clock, Reset, 
+	Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, 
+	Addr, currentLevel, BktIdx,
+	STIdx, BktIdxInST
+);
 
 	`include "PathORAM.vh";
-	
 	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
@@ -14,7 +18,7 @@ module AddrGen
 	// =========================== in/out =========================
 	input Clock; 
 
-	// interface with backend ORAM controller
+	// interface with backend controller
 	input Reset, Start; 
 	input RWIn;              // 0 for write, 1 for read, 
 	input BHIn;              // 0 for the entire bucket, 1 for the header
@@ -45,10 +49,9 @@ module AddrGen
 	reg RW, BH;
 	reg [ORAMLogL-1:0] BktCounter;
      
-	AddrGenBktHead #( .ORAML(ORAML), 
-					.ORAMLogL(ORAMLogL),
-					.DDRROWWidth(DDRROWWidth),
-					.BktSize_DRWords(BktSize_DRWords)
+	AddrGenBktHead #( 	.ORAML(ORAML), 
+						.DDRROWWidth(DDRROWWidth),
+						.BktSize_DRWords(BktSize_DRWords)
 					) 
 	addGenBktHead (   Clock, Reset, Start && Ready, Enable, 
 					leaf, 

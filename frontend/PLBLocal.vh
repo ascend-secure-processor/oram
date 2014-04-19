@@ -10,6 +10,8 @@ function [31:0] GeoSum;
     end
 endfunction  
 
+localparam LeafWidth = 32;	// in bits
+
 localparam LeafInBlock = ORAMB / LeafWidth;
 localparam LogLeafInBlock = `log2f(LeafInBlock);
 

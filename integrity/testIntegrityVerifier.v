@@ -1,8 +1,7 @@
 module testIntegrityVerifier;
 
 	parameter NUMSHA3 = 1;
-
-	`include "DDR3SDRAM.vh";	
+	
 	`include "DDR3SDRAMLocal.vh"
 
 	wire  Clock, Reset;

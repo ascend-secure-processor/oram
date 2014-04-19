@@ -58,15 +58,24 @@ module UORamDataPath
     input  [FEDWidth-1:0] LoadData;
 
     // PPPEvictBuffer
+	wire PPPEvictDataValid_Reg;
+	wire [LeafWidth-1:0] PPPEvictData_Reg;
+	
     wire EvictBufferOutReady, EvictBufferOutValid;
     wire [LeafWidth-1:0] EvictBufferDOut;
-      
+    	
+	Register #(	.Width(LeafWidth + 1))
+		EvictReg	(	.Clock(Clock), .Reset(Reset), .Set(1'b0),
+						.Enable(1'b1), .In({PPPEvictDataValid, PPPEvictData}), 
+						.Out({PPPEvictDataValid_Reg, PPPEvictData_Reg})
+					);
+	
     FIFORAM #(.Width(LeafWidth), .Buffering(LeafInBlock)) 
         EvictBuffer (   .Clock(Clock), 
                         .Reset(Reset), 
                         .InAccept(PPPEvictDataReady), 
-                        .InValid(PPPEvictDataValid), 
-                        .InData(PPPEvictData),                      
+                        .InValid(PPPEvictDataValid_Reg), 
+                        .InData(PPPEvictData_Reg),                      
                         .OutReady(EvictBufferOutReady), 
                         .OutSend(EvictBufferOutValid), 
                         .OutData(EvictBufferDOut)

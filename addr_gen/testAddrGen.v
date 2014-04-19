@@ -279,7 +279,6 @@ module testAddrGen;
   //                         FPGA Memory Controller
   //===========================================================================
 
-    `include "DDR3SDRAM.vh";
 	`include "DDR3SDRAMLocal.vh"
 	
     wire                        Clock, Reset; 
@@ -382,7 +381,7 @@ module testAddrGen;
     `include "UORAM.vh";
     `include "PLB.vh";
     `include "PLBLocal.vh"; 
-	`include "AES.vh";
+	`include "SecurityLocal.vh"
     `include "BucketLocal.vh";
 	`include "PathORAMBackendLocal.vh";
 

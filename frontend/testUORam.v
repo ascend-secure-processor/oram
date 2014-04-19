@@ -17,8 +17,7 @@ module testUORam;
     
     parameter                   NumValidBlock = 1024;
     parameter                   Recursion = 3;
-                
-    parameter                   LeafWidth = 32;         // in bits       
+                   
     parameter                   PLBCapacity = 1024;     // in bits
 
 	parameter					Overclock = 		1;
@@ -64,7 +63,6 @@ module testUORam;
 							
                             .NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 
-                            .LeafWidth(             LeafWidth), 
                             .PLBCapacity(           PLBCapacity))
                             
             ORAM    (		.Clock(					Clock),
