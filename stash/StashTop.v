@@ -161,7 +161,7 @@ module StashTop(
 
 	wire					Stash_BlockWriteComplete;
 	
-	(* mark_debug = "TRUE" *)	wire					StashAlmostFull, StashOverflow;
+	(* mark_debug = "TRUE" *)	wire					StashOverflow;
 	
 	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
 	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
