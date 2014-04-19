@@ -6,10 +6,11 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		A temporary module. All the stuff here should be in PathORAMBackend
+//	Module:		PathORAMBackendInner
+//	Desc:		Stash, DRAM address and top level state machine that interfaces 
+//				with the FrontEnd
 //==============================================================================
-
-module PathORAMBackend_Inner(
+module PathORAMBackendInner(
 	Clock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf, 
@@ -319,7 +320,6 @@ module PathORAMBackend_Inner(
 				$display("[%m @ %t] DRAM read %x", $time, DRAMReadData);
 			end
 	`endif
-
 		end
 	`endif
 	
@@ -538,15 +538,6 @@ module PathORAMBackend_Inner(
 							.OutSend(				Stash_StoreDataValid),
 							.OutReady(				Stash_StoreDataReady));
 
-/*							
-	assign	EvictGate =								CSAppend;
-	assign	UpdateGate = 							CSORAMAccess & (Command_Internal == BECMD_Update);
-	assign	Stash_StoreDataReady = 					(Stash_EvictBlockReady & EvictGate) | 
-													(Stash_UpdateBlockReady & UpdateGate);
-	assign	Stash_EvictBlockValid = 				Stash_StoreDataValid & EvictGate;
-	assign	Stash_UpdateBlockValid =				Stash_StoreDataValid & UpdateGate;
-*/
-
 	//------------------------------------------------------------------------------
 	//	Front-end loads
 	//------------------------------------------------------------------------------								
@@ -648,12 +639,11 @@ module PathORAMBackend_Inner(
 							.Done(					DRAMInitComplete));
 	end endgenerate
 
-
 	//------------------------------------------------------------------------------
 	//	StashTop
 	//------------------------------------------------------------------------------
 	
-	StashTop			#(	.ORAMB(					ORAMB),
+	StashTop	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -662,11 +652,8 @@ module PathORAMBackend_Inner(
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth),
-							
 							.EnableREW(             EnableREW))
-		
-		stash_top		(
-							.Clock(					Clock),
+				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),
 							
 							.Stash_ResetDone(		Stash_ResetDone),
@@ -698,288 +685,13 @@ module PathORAMBackend_Inner(
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady),
-							
-							
-							.ROAccess(	ROAccess),
-							.CSIdle(	CSIdle),
-							.CSAppend(	CSAppend),
-							.CSORAMAccess(	CSORAMAccess),
-							.PathReadComplete(	PathReadComplete)
-						);
-	
-	/*
-	//------------------------------------------------------------------------------
-	//	[Read path] Buffers and down shifters
-	//------------------------------------------------------------------------------
-	
-	// Count where we are in a bucket (so we can determine when we are at a header)
-	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
-				in_bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
-							.Count(					BucketReadCtr));
-	
-	// Per-bucket header/payload arbitration
-	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
-	assign	HeaderDownShift_InValid =				DRAMReadDataValid & ReadProcessingHeader;
-	assign	DataDownShift_InValid =					DRAMReadDataValid & ~ReadProcessingHeader;
-	assign	DRAMReadDataReady =						(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
-	
-	assign	HeaderDownShift_ValidBits =				DRAMReadData[BktHVStart+BigVWidth-1:BktHVStart];
-	assign	HeaderDownShift_PAddrs =				DRAMReadData[BktHUStart+BigUWidth-1:BktHUStart];
-	assign	HeaderDownShift_Leaves =				DRAMReadData[BktHLStart+BigLWidth-1:BktHLStart];
-	
-	FIFOShiftRound #(		.IWidth(				BigUWidth),
-							.OWidth(				ORAMU))
-				in_U_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderDownShift_PAddrs),
-							.InValid(				HeaderDownShift_InValid),
-							.InAccept(				HeaderDownShift_InReady),
-							.OutData(			    HeaderDownShift_OutPAddr),
-							.OutValid(				HeaderDownShift_OutValid),
-							.OutReady(				InPath_BlockReadComplete));
-	ShiftRegister #(		.PWidth(				BigLWidth),
-							.SWidth(				ORAML))
-				in_L_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					HeaderDownShift_InValid & HeaderDownShift_InReady), 
-							.Enable(				InPath_BlockReadComplete), 
-							.PIn(					HeaderDownShift_Leaves), 
-							.SIn(					{ORAML{1'bx}}),
-							.SOut(					HeaderDownShift_OutLeaf));
 
-	FIFOShiftRound #(		.IWidth(				DDRDWidth),
-							.OWidth(				BEDWidth),
-							.Register(				1))
-				in_D_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DataDownShift_InValid),
-							.InAccept(				DataDownShift_InReady),
-							.OutData(				DataDownShift_OutData),
-							.OutValid(				DataDownShift_OutValid),
-							.OutReady(				DataDownShift_OutReady));
+							.ROAccess(				ROAccess),
+							.CSIdle(				CSIdle),
+							.CSAppend(				CSAppend),
+							.CSORAMAccess(			CSORAMAccess),
+							.PathReadComplete(		PathReadComplete));
 
-							
-							
-							
-	//------------------------------------------------------------------------------
-	//	[Read path] Dummy block handling
-	//------------------------------------------------------------------------------
-
-	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
-	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ReadBlockIsValid & BlockPresent);
-	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
-	
-	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
-	
-	// Use FIFOShiftRound to generate BlockPresent signal
-	FIFOShiftRound #(		.IWidth(				ORAMZ),
-							.OWidth(				1))
-				in_V_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderDownShift_ValidBits),
-							.InValid(				HeaderDownShift_InValid),
-							.InAccept(				), // will be the same as in_L_shft
-							.OutData(			    ReadBlockIsValid),
-							.OutValid(				BlockPresent),
-							.OutReady(				InPath_BlockReadComplete));	
-	
-	Counter		#(			.Width(					BlkBEDWidth))
-				in_blk_cnt(	.Clock(					Clock),
-							.Reset(					Reset | BlockReadCtr_Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataDownShift_Transfer & ~ReadBlockIsValid & BlockPresent),
-							.In(					{BlkBEDWidth{1'bx}}),
-							.Count(					BlockReadCtr));	
-	CountCompare #(			.Width(					BlkBEDWidth),
-							.Compare(				BlkSize_BEDChunks - 1))
-				in_blk_cmp(	.Count(					BlockReadCtr), 
-							.TerminalCount(			BlockReadCtr_Reset));
-	
-	//------------------------------------------------------------------------------
-	//	[Read path] Path counters
-	//------------------------------------------------------------------------------	
-	
-	// count number of real/dummy blocks on path and signal the end of the path 
-	// read when we read a whole path's worth 	
-
-	CountAlarm #(		.Threshold(				PathSize_BEDChunks),
-						.IThreshold(			BktSize_BEDChunks))
-		in_path_cmp (	.Clock(					Clock), 
-						.Reset(					Reset | CSIdle), 
-						.Enable(				DataDownShift_Transfer),
-						.Done(					FullPathReadComplete),
-						.Intermediate(			ROPathReadComplete),
-						.Count(					PathReadCtr)
-				);
-	
-	assign	PathReadComplete = EnableREW && ROAccess ? ROPathReadComplete : FullPathReadComplete;	
-	
-	//------------------------------------------------------------------------------
-	//	Stash
-	//------------------------------------------------------------------------------
-	
-	Stash	#(				.StashOutBuffering(		4), // this should be good enough ...
-							.StopOnBlockNotFound(	StopOnBlockNotFound),
-							.BEDWidth(				BEDWidth),
-							.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.Overclock(				Overclock))
-
-			stash(			.Clock(					Clock),
-							.Reset(					Reset),
-							.ResetDone(				Stash_ResetDone),
-							
-							.IsIdle(				Stash_IsIdle),
-							
-							.RemapLeaf(				RemappedLeaf_Internal),
-							.AccessLeaf(			AddrGen_Leaf),
-							.AccessPAddr(			PAddr_Internal),
-							.AccessIsDummy(			AccessIsDummy),
-							.AccessCommand(			Command_Internal),
-							
-							.StartScan(				Stash_StartScanOp),
-							.SkipWriteback(			Stash_SkipWritebackOp),
-							.StartWriteback(		Stash_StartWritebackOp),
-							
-							.ReturnData(			Stash_ReturnData),
-							.ReturnPAddr(			), // not connected
-							.ReturnLeaf(			), // not connected
-							.ReturnDataOutValid(	Stash_ReturnDataValid),
-							.BlockReturnComplete(	), // not connected
-							
-							.UpdateData(			Stash_StoreData),
-							.UpdateDataInValid(		Stash_UpdateBlockValid),
-							.UpdateDataInReady(		Stash_UpdateBlockReady),
-							.BlockUpdateComplete(	), // not connected
-							
-							.EvictData(				Stash_StoreData),
-							.EvictPAddr(			PAddr_Internal),
-							.EvictLeaf(				RemappedLeaf_Internal),
-							.EvictDataInValid(		Stash_EvictBlockValid),
-							.EvictDataInReady(		Stash_EvictBlockReady),
-							.BlockEvictComplete(	AppendComplete),
-
-							.WriteData(				DataDownShift_OutData),
-							.WriteInValid(			BlockReadValid),
-							.WriteInReady(			BlockReadReady), 
-							.WritePAddr(			HeaderDownShift_OutPAddr),
-							.WriteLeaf(				HeaderDownShift_OutLeaf),
-							.BlockWriteComplete(	Stash_BlockWriteComplete), 
-							
-							.ReadData(				DataUpShift_InData),
-							.ReadPAddr(				HeaderUpShift_InPAddr),
-							.ReadLeaf(				HeaderUpShift_InLeaf),
-							.ReadOutValid(			DataUpShift_InValid), 
-							.ReadOutReady(			DataUpShift_InReady), 
-							.BlockReadComplete(		Stash_BlockReadComplete),
-							.PathReadComplete(		), // not connected
-							
-							.StashAlmostFull(		StashAlmostFull),
-							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		StashOccupancy), // not connected
-							.BlockNotFound(			BlockNotFound), // not connected
-							.BlockNotFoundValid(	BlockNotFoundValid)); // not connected
-
-	//------------------------------------------------------------------------------
-	//	[Writeback path] Buffers and up shifters
-	//------------------------------------------------------------------------------
-	
-	// Translate:
-	//		{Z{ULD}} (the stash's format) 
-	//		to 
-	//		{ {Z{U}}, {Z{L}}, {Z{L}} } (the DRAM's format)
-	
-	// Note: It is probably best that Stash computes these; not changing them now to save time
-	assign	WritebackBlockIsValid =					HeaderUpShift_InPAddr != DummyBlockAddress;
-	assign	WritebackBlockCommit =					Stash_BlockReadComplete & DataUpShift_InValid & DataUpShift_InReady;
-	
-	`ifdef SIMULATION
-		always @(posedge Clock) begin
-			if (~HeaderUpShift_InReady & WritebackBlockCommit) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
-				$stop;
-			end
-		end
-	`endif
-	
-	FIFOShiftRound #(		.IWidth(				ORAMU),
-							.OWidth(				BigUWidth))
-				out_U_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderUpShift_InPAddr),
-							.InValid(				WritebackBlockCommit),
-							.InAccept(				HeaderUpShift_InReady),
-							.OutData(			    HeaderUpShift_PAddrs),
-							.OutValid(				HeaderUpShift_OutValid),
-							.OutReady(				HeaderUpShift_OutReady));
-	ShiftRegister #(		.PWidth(				BigLWidth),
-							.SWidth(				ORAML))
-				out_L_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					1'b0), 
-							.Enable(				WritebackBlockCommit), 
-							.SIn(					HeaderUpShift_InLeaf), 
-							.POut(					HeaderUpShift_Leaves));							
-	ShiftRegister #(		.PWidth(				ORAMZ),
-							.SWidth(				1))
-				out_V_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					1'b0), 
-							.Enable(				WritebackBlockCommit), 
-							.SIn(					WritebackBlockIsValid), 
-							.POut(					HeaderUpShift_ValidBits));
-	FIFOShiftRound #(		.IWidth(				BEDWidth),
-							.OWidth(				DDRDWidth))
-				out_D_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DataUpShift_InData),
-							.InValid(				DataUpShift_InValid),
-							.InAccept(				DataUpShift_InReady),
-							.OutData(			    DataUpShift_OutData),
-							.OutValid(				DataUpShift_OutValid),
-							.OutReady(				DataUpShift_OutReady));
-							
-	// FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer whole bucket 
-	// so that we can write back to DRAM in {Header, Payload} order
-	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				BktPSize_DRBursts))
-				out_bkt_buf(.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DataUpShift_OutData),
-							.InValid(				DataUpShift_OutValid),
-							.InAccept(				DataUpShift_OutReady),
-							.OutData(				BucketBuf_OutData),
-							.OutSend(				BucketBuf_OutValid),
-							.OutReady(				BucketBuf_OutReady));
-
-	assign	WritebackProcessingHeader =				BucketWritebackCtr < BktHSize_DRBursts;
-	
-	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'bx}},
-														HeaderUpShift_Leaves,
-														HeaderUpShift_PAddrs,
-														{BktHWaste_ValidBits{1'b0}},
-														HeaderUpShift_ValidBits, 
-														IVINITValue	};
-	assign	UpShift_DRAMWriteData =					(WritebackProcessingHeader) ? UpShift_HeaderFlit : BucketBuf_OutData;
-
-	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
-													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
-
-	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
-			out_bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
-							.Count(					BucketWritebackCtr));
-	
-*/
-	
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Let control know the WB is complete
 	//------------------------------------------------------------------------------
@@ -1011,14 +723,12 @@ module PathORAMBackend_Inner(
 	// read path won't be able to proceed until all writes are pushed to ORAM anyway.
 	
 	// Count data written back (identical logic as above)
-	// TODO convert to CountAlarm
-	
-	CountAlarm #(		.Threshold(				PathSize_DRBursts))
-		rw_r_ctr (		.Clock(					Clock), 
-						.Reset(					Reset | CSIdle), 
-						.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
-						.Done(					PathWritebackComplete_Data_Pre)
-				);
+
+	CountAlarm 	#(			.Threshold(				PathSize_DRBursts))
+				rw_r_cnt(	.Clock(					Clock), 
+							.Reset(					Reset | CSIdle), 
+							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.Done(					PathWritebackComplete_Data_Pre));
 										
 	Register	#(			.Width(					1))
 				out_D_hld(	.Clock(					Clock),
@@ -1031,9 +741,6 @@ module PathORAMBackend_Inner(
 	assign	PathWritebackComplete =					(ROAccess) ? 	PathWritebackComplete_Commands : 
 																	PathWritebackComplete_Commands & PathWritebackComplete_Data;
 
-
-
-																	
 	//------------------------------------------------------------------------------
 	//	DRAM interface multiplexing
 	//------------------------------------------------------------------------------
