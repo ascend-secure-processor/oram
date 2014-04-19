@@ -578,13 +578,13 @@ module Stash(
 	assign	UpdateDataInReady =						TurnoverUpdate & 				Core_InReady;
 	assign	WriteInReady =							~(CSEvict | TurnoverUpdate) & 	Core_InReady;
 	
-	StashCore	#(			.BEDWidth(				BEDWidth),
-							.ORAMB(					ORAMB),
+	StashCore	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC))
-							
+							.ORAMC(					ORAMC),
+							.Overclock(				Overclock),
+							.BEDWidth(				BEDWidth))
 				core(		.Clock(					Clock), 
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
@@ -636,16 +636,19 @@ module Stash(
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
 	assign	IsWritebackCandidate =					~FoundRemoveBlock & ~AccessSkipsWB & AccessStarted;
 	
-	StashScanTable #(		.Overclock(				Overclock),
-							.BEDWidth(				BEDWidth),
-							.ORAMB(					ORAMB),
+	StashScanTable #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC)) 
-							
+							.ORAMC(					ORAMC),
+							.Overclock(				Overclock),
+							.BEDWidth(				BEDWidth)) 
 				scan_table(	.Clock(					Clock),
+				`ifdef ASIC
 							.Reset(					Reset),
+				`else
+							.Reset(					1'b0), // this module doesn't need reset
+				`endif							
 							.PerAccessReset(		ScanTableReset),
 							.AccessComplete(		PerAccessReset),
 							.ResetDone(				ScanTableResetDone),

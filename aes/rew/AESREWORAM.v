@@ -945,7 +945,7 @@ module AESREWORAM(
 							.dout(					ROIData), 
 							.valid(					ROIDataValid),
 							.rd_en(					ROIDataReady));
-	end else begin:LUTRAM_DATABUFF
+	end else begin:LUTRAM_ROIBUFF
 		FIFORAM	#(			.Width(					DDRDWidth),
 							.Buffering(				BktSize_DRBursts))
 				roi_P_buf(	.Clock(					Clock),

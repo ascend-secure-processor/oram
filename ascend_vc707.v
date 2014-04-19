@@ -78,8 +78,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1024,
 							Recursion = 			3;
 	
-    parameter				LeafWidth = 			32,
-							PLBCapacity = 			8192;
+    parameter				PLBCapacity = 			8192;
 	
 	`include "SecurityLocal.vh"
 	`include "BucketLocal.vh"
@@ -228,7 +227,6 @@ module ascend_vc707(
 							.BEDWidth(				BEDWidth),
 							.NumValidBlock(         NumValidBlock), 
 							.Recursion(             Recursion), 
-							.LeafWidth(             LeafWidth), 
 							.PLBCapacity(           PLBCapacity))
                 oram(		.Clock(					ORAMClock),
 							.FastClock(				AESClock),

@@ -254,10 +254,14 @@ module StashCore(
 	
 	// Syncing
 	
-	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync;
+	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync, SyncState;
 	wire 					CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
 	
-	wire	[SEAWidth-1:0]	SyncCount, Sync_StashPUpdateSrc, LastULE, LastFLE;
+	wire	[SEAWidth-1:0]	SyncCount_PreLatch;
+	
+	wire					Sync_StashPWE;
+	wire	[SEAWidth-1:0]	Sync_StashPUpdateSrc, LastULE, LastFLE;
+	reg		[SEAWidth-1:0]	SyncCount;
 	wire					ULHSet, FLHSet;
 	wire					Sync_SettingULH, Sync_SettingFLH;
 	wire					Sync_FoundUsedElement, Sync_FoundFreeElement;
@@ -717,11 +721,7 @@ module StashCore(
 	assign	StashP_DataIn = 						(CSReset) ? 	ResetCount + 1 :
 													(CSSyncing) ? 	SyncCount : 
 																	UsedListHead;
-	assign	StashP_WE =								CSReset | 
-													FirstChunk_Transfer_Write | 
-													(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |
-													(CSSyncing_CapUL & ULHSet) | 
-													(CSSyncing_CapFL & FLHSet);
+	assign	StashP_WE =								CSReset | FirstChunk_Transfer_Write | Sync_StashPWE;
 	assign	StashP_EN =								~CSPushing | FirstChunk_Transfer_Write;
 			
 	RAM			#(			.DWidth(				SEAWidth),
@@ -759,7 +759,7 @@ module StashCore(
 	assign	StashC_Address = 						(InScanStreaming) ? 	InScanSAddr : 
 													(CSHUpdate) ? 			InSAddr :
 													(CSReset) ? 			ResetCount : 
-													(CSSyncing) ?			SyncCount : 
+													(CSSyncing_PreLatch) ?	SyncCount_PreLatch : 
 																			{SEAWidth{1'bx}};
 
 	assign	StashC_DataIn = 						(InScanStreaming) ? 	((InScanAccepted) ? EN_Free : EN_Used) :
@@ -770,7 +770,7 @@ module StashCore(
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),
-							.RLatency(				0)) // THIS might be a problem critical-path-wise
+							.RLatency(				Overclock))
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				1'b1),
@@ -836,11 +836,12 @@ module StashCore(
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------
 			
-	assign	CSSyncing_Main =						CS_Sync == ST_Sync_Main;
-	assign	CSSyncing_CapUL =						CS_Sync == ST_Sync_CapUL;
-	assign	CSSyncing_CapFL =						CS_Sync == ST_Sync_CapFL;
-	assign	CSSyncing =								CSSyncing_Main | CSSyncing_CapUL | CSSyncing_CapFL;
-	assign	SyncComplete = 							CS_Sync == ST_Sync_Done;
+	assign	CSSyncing_Main =						SyncState == ST_Sync_Main;
+	assign	CSSyncing_CapUL =						SyncState == ST_Sync_CapUL;
+	assign	CSSyncing_CapFL =						SyncState == ST_Sync_CapFL;
+	assign	CSSyncing_PreLatch =					CS_Sync == ST_Sync_Main | 	CS_Sync == ST_Sync_CapUL | 		CS_Sync == ST_Sync_CapFL;
+	assign	CSSyncing =								SyncState == ST_Sync_Main | SyncState == ST_Sync_CapUL | 	SyncState == ST_Sync_CapFL;
+	assign	SyncComplete = 							SyncState == ST_Sync_Done;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS_Sync <= 						ST_Sync_Idle;
@@ -881,6 +882,18 @@ module StashCore(
 				LastULE = SyncCount	
 			else: ... same logic for free list	
 	*/
+
+	generate if (Overclock) begin:SYNC_DELAY
+		always @(posedge Clock) begin
+			SyncState <=							CS_Sync;
+			SyncCount <=							SyncCount_PreLatch;
+		end
+	end else begin:SYNC_PASS
+		always @( * ) begin
+			SyncState =								CS_Sync;
+			SyncCount =								SyncCount_PreLatch;
+		end
+	end endgenerate
 	
 	Counter		#(			.Width(					SEAWidth),
 							.Limited(				1),
@@ -889,13 +902,15 @@ module StashCore(
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				CSSyncing),
+							.Enable(				CSSyncing_PreLatch),
 							.In(					{SEAWidth{1'bx}}),
-							.Count(					SyncCount));
-
-	assign	Sync_Terminator = 						SyncCount == (StashCapacity - 1);
+							.Count(					SyncCount_PreLatch));
+	assign	Sync_Terminator = 						SyncCount_PreLatch == (StashCapacity - 1);
 	
 	assign	Sync_StashPUpdateSrc =					((CSSyncing_CapUL | StashC_DataOut == EN_Used) & ~CSSyncing_CapFL) ? LastULE : LastFLE;
+	assign	Sync_StashPWE =							(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |
+													(CSSyncing_CapUL & ULHSet) | 
+													(CSSyncing_CapFL & FLHSet);	
 													
 	assign	Sync_FoundUsedElement =					CSSyncing_Main & StashC_DataOut == EN_Used;
 	assign	Sync_FoundFreeElement =					CSSyncing_Main & StashC_DataOut == EN_Free;
