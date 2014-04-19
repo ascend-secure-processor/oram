@@ -5,7 +5,6 @@
 	// 	DRBursts = in terms of DDR3 bursts
 	// 	DRWords = in terms of DDR3 DQ bus width (typically 64b)
 
-	
 	`ifdef SIMULATION
 	localparam				IVINITValue =			{32'hdeadbeef, {IVEntropyWidth-32{1'b0}}};
 	`else

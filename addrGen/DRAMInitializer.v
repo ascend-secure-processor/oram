@@ -26,9 +26,9 @@ module DRAMInitializer(
 	//	Constants
 	//-------------------------------------------------------------------------- 
 
-	`include "PathORAM.vh"; 
-	`include "DDR3SDRAM.vh"; 
+	`include "PathORAM.vh";
 	`include "AES.vh"; 
+	
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "SubTreeLocal.vh"

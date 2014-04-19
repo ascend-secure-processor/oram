@@ -4,11 +4,11 @@ module AddrGen
 (Clock, Reset, Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, Addr, currentLevel, STIdx, BktIdxInST, BktIdx);
 
 	`include "PathORAM.vh";
-	`include "DDR3SDRAM.vh";
 	`include "AES.vh";
   
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
+	
 	localparam ORAMLogL = `log2(ORAML) + 1; // TODO need plus one for Ready signal corner case (e.g., ORAML = 31); find a better solution?
 
 	// =========================== in/out =========================

@@ -118,12 +118,12 @@ module PathORAMBackend(
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 	wire  					IVReady_BktOfI, IVDone_BktOfI;
-	
+
 	//--------------------------------------------------------------------------
-	//	The Stash
+	//	Address generation & the stash
 	//--------------------------------------------------------------------------
 
-	StashTop #(				.ORAMB(					ORAMB),
+	PathORAMBackendInner #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -142,7 +142,7 @@ module PathORAMBackend(
 							.DDRCWidth(				DDRCWidth),
 							.DDRAWidth(				DDRAWidth),
 							.IVEntropyWidth(		IVEntropyWidth))
-			stash_bkend (	.Clock(					Clock),
+			bend_inner (	.Clock(					Clock),
 							.Reset(					Reset),
 							
 							.Command(				Command),
@@ -206,7 +206,7 @@ module PathORAMBackend(
 							
 							.FromDecData(			AES_DRAMReadData), 
 							.FromDecDataValid(		AES_DRAMReadDataValid), 	
-							.FromDecDataReady(		AES_DRAMReadDataReady),	// TODO remove
+							//.FromDecDataReady(		AES_DRAMReadDataReady),	// TODO remove
 							
 							.ToEncData(				AES_DRAMWriteData), 
 							.ToEncDataValid(		AES_DRAMWriteDataValid), 
@@ -260,7 +260,7 @@ module PathORAMBackend(
 									
 			// TODO: debugging now
 
-			//assign	IVDone_BktOfI = 					1'b1;		
+			//assign	IVDone_BktOfI = 			1'b1;		
 									
 		end	else begin: NO_INTEGRITY		
 			assign	IVRequest = 					1'b0;

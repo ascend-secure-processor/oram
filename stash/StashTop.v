@@ -9,7 +9,6 @@
 //	Module:		StashTop
 //	Desc:		The stash and associated funnels and counters
 //==============================================================================
-
 module StashTop(
 	Clock, Reset,
 
@@ -26,8 +25,7 @@ module StashTop(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	
-	ROAccess, CSAppend, CSIdle, CSORAMAccess, PathReadComplete	// to remove
+	ROAccess, CSAppend, CSIdle, CSORAMAccess, PathReadComplete // to remove
 	);
 		
 	//------------------------------------------------------------------------------
@@ -167,7 +165,11 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
 	
 	wire					EvictGate, UpdateGate;
-			
+	
+	//------------------------------------------------------------------------------
+	//	Control logic
+	//------------------------------------------------------------------------------
+	
 	assign	EvictGate =								CSAppend;
 	assign	UpdateGate = 							CSORAMAccess & (Command == BECMD_Update);
 	assign	Stash_StoreDataReady = 					(Stash_EvictBlockReady & EvictGate) | 
@@ -270,23 +272,22 @@ module StashTop(
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
 
-	CountAlarm #(		.Threshold(				PathSize_BEDChunks),
-						.IThreshold(			BktSize_BEDChunks))
-		in_path_cmp (	.Clock(					Clock), 
-						.Reset(					Reset | CSIdle), 
-						.Enable(				DataDownShift_Transfer),
-						.Done(					FullPathReadComplete),
-						.Intermediate(			ROPathReadComplete),
-						.Count(					PathReadCtr)
-				);
+	CountAlarm #(			.Threshold(				PathSize_BEDChunks),
+							.IThreshold(			BktSize_BEDChunks))
+			in_path_cmp(	.Clock(					Clock), 
+							.Reset(					Reset | CSIdle), 
+							.Enable(				DataDownShift_Transfer),
+							.Done(					FullPathReadComplete),
+							.Intermediate(			ROPathReadComplete),
+							.Count(					PathReadCtr));
 	
-	assign	PathReadComplete = EnableREW && ROAccess ? ROPathReadComplete : FullPathReadComplete;	
+	assign	PathReadComplete = 						(EnableREW & ROAccess) ? ROPathReadComplete : FullPathReadComplete;	
 	
 	//------------------------------------------------------------------------------
 	//	Stash
 	//------------------------------------------------------------------------------
 	
-	Stash	#(				.StashOutBuffering(		4), // this should be good enough ...
+	Stash		#(			.StashOutBuffering(		4), // this should be good enough ...
 							.StopOnBlockNotFound(	StopOnBlockNotFound),
 							.BEDWidth(				BEDWidth),
 							.ORAMB(					ORAMB),
@@ -296,7 +297,7 @@ module StashTop(
 							.ORAMC(					ORAMC),
 							.Overclock(				Overclock))
 
-			stash(			.Clock(					Clock),
+				stash(		.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				Stash_ResetDone),
 							
@@ -437,19 +438,17 @@ module StashTop(
 													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
 
 	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
-			out_bkt_cnt(	.Clock(					Clock),
+				out_bkt_cnt(.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				BucketWritebackValid & DRAMWriteDataReady),
 							.Count(					BucketWritebackCtr));
-
-							
-	assign	DRAMWriteData = UpShift_DRAMWriteData;
-	assign	DRAMWriteDataValid = BucketWritebackValid;	
+	
+	assign	DRAMWriteData = 						UpShift_DRAMWriteData;
+	assign	DRAMWriteDataValid = 					BucketWritebackValid;	
 
 	assign	BucketBuf_OutReady =					~WritebackProcessingHeader & DRAMWriteDataReady;
 	assign	HeaderUpShift_OutReady =				WritebackProcessingHeader & DRAMWriteDataReady;
 	
-	
-							
+	//------------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------
