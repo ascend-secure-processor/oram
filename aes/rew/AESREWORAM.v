@@ -7,20 +7,13 @@
 
 //==============================================================================
 //	Module:		AESREWORAM
-//	Desc:		AES Unit for REW ORAM.  This module acts as a filter which 
-//				decrypts/re-encrypts the data that is sent to it.  **Crucially, 
-//				if N bytes of data are input to this module, it will eventually 
-//				output N bytes, and each byte's logical position in the stream 
-//				will be unchanged.**
+//	Desc:		AES Unit for REW ORAM.  
 //				ROHeader = valid bits + program addresses
-//
-//				TODO update this description
 //
 //				- 	On an REW RO access (DRAM -> Backend): 
 //						In: 	Encrypted path
-//						Out: 	Path with decrypted ROHeaders, 
-//								encrypted payload except for bucket/block of 
-//								interest
+//						Out: 	Decrypted RO headers, followed by a fully 
+//								decrypted bucket of interest
 //				-	On an REW H access (Backend -> DRAM): 
 //						In:		Decrypted headers
 //						Out:	Re-encrypted headers

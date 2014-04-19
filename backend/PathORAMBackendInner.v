@@ -254,6 +254,8 @@ module PathORAMBackendInner(
 	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
 	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 	
+	wire					DRAMInitializing;
+	
 	// Address generator
 	
 	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
@@ -580,7 +582,7 @@ module PathORAMBackendInner(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ))
 				addr_gen(	.Clock(					Clock),
-							.Reset(					Reset | CSInitialize),
+							.Reset(					Reset | DRAMInitializing),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
 							.RWIn(					AddrGen_Reading),
@@ -590,8 +592,9 @@ module PathORAMBackendInner(
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), 
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));
-	FIFORegister #(			.Width(					DDRAWidth + DDRCWidth),
-							.FWLatency(				Overclock))
+	generate if (Overclock) begin:ADDR_DELAY	
+		FIFORAM	#(			.Width(					DDRAWidth + DDRCWidth),
+							.Buffering(				32)) // Doesn't really matter; might as well make it 32 because we get that for free with LUT RAM
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				{AddrGen_DRAMCommand_Internal,	AddrGen_DRAMCommandAddress_Internal}),
@@ -599,7 +602,12 @@ module PathORAMBackendInner(
 							.InAccept(				AddrGen_DRAMCommandReady_Internal),
 							.OutData(				{AddrGen_DRAMCommand,			AddrGen_DRAMCommandAddress}),
 							.OutSend(				AddrGen_DRAMCommandValid),
-							.OutReady(				AddrGen_DRAMCommandReady));						
+							.OutReady(				AddrGen_DRAMCommandReady));								
+	end else begin:ADDR_PASS
+		assign	{AddrGen_DRAMCommand, AddrGen_DRAMCommandAddress} = {AddrGen_DRAMCommand_Internal, AddrGen_DRAMCommandAddress_Internal};
+		assign	AddrGen_DRAMCommandValid =			AddrGen_DRAMCommandValid_Internal;
+		assign	AddrGen_DRAMCommandReady_Internal =	AddrGen_DRAMCommandReady;
+	end endgenerate
 							
 	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.  REW ORAM 
 	// uses gentry bucket version #s to determine whether a bucket is valid.
@@ -627,6 +635,8 @@ module PathORAMBackendInner(
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
 							.Done(					DRAMInitComplete));
 	end endgenerate
+	
+	assign	DRAMInitializing =						~DRAMInitComplete;
 
 	//------------------------------------------------------------------------------
 	//	StashTop
@@ -729,18 +739,18 @@ module PathORAMBackendInner(
 	//	DRAM interface multiplexing
 	//------------------------------------------------------------------------------
 
-	assign	DRAMCommandAddress =					(CSInitialize) ? DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
-	assign	DRAMCommand =							(CSInitialize) ? DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
-	assign	DRAMCommandValid =						(CSInitialize) ? DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
-	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~CSInitialize;
-	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		CSInitialize;
-	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	CSInitialize;
+	assign	DRAMCommandAddress =					(DRAMInitializing) ? 	DRAMInit_DRAMCommandAddress 	: AddrGen_DRAMCommandAddress;
+	assign	DRAMCommand =							(DRAMInitializing) ? 	DRAMInit_DRAMCommand 			: AddrGen_DRAMCommand;
+	assign	DRAMCommandValid =						(DRAMInitializing) ? 	DRAMInit_DRAMCommandValid 		: AddrGen_DRAMCommandValid; 
+	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~DRAMInitializing;
+	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		DRAMInitializing;
+	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
 	
-	assign	DRAMWriteData =							(CSInitialize) ? DRAMInit_DRAMWriteData : 		UpShift_DRAMWriteData;
-	assign	DRAMWriteDataValid =					(CSInitialize) ? DRAMInit_DRAMWriteDataValid : 	BucketWritebackValid;
+	assign	DRAMWriteData =							(DRAMInitializing) ? DRAMInit_DRAMWriteData : 		UpShift_DRAMWriteData;
+	assign	DRAMWriteDataValid =					(DRAMInitializing) ? DRAMInit_DRAMWriteDataValid : 	BucketWritebackValid;
 	
-	assign	BucketBuf_OutReady =					~CSInitialize & ~WritebackProcessingHeader & DRAMWriteDataReady;
-	assign	HeaderUpShift_OutReady =				~CSInitialize &  WritebackProcessingHeader & DRAMWriteDataReady;
+	assign	BucketBuf_OutReady =					~DRAMInitializing & ~WritebackProcessingHeader & DRAMWriteDataReady;
+	assign	HeaderUpShift_OutReady =				~DRAMInitializing &  WritebackProcessingHeader & DRAMWriteDataReady;
 		
 	//------------------------------------------------------------------------------	
 endmodule

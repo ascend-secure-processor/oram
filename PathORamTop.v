@@ -114,7 +114,8 @@ module PathORamTop(
 		end
 	`endif
 	
-		
+	// TODO do a check to make sure hash digest is at least as long as the security param in SecurityLocal.vh
+	
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//-------------------------------------------------------------------------- 	

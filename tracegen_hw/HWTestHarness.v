@@ -11,7 +11,25 @@
 //				host machine, which can send address requests directly to 
 //				PathORAMTop
 //==============================================================================
-module HWTestHarness #(		`include "PathORAM.vh",
+module HWTestHarness(
+  	SlowClock, FastClock,
+	SlowReset, FastReset,
+
+	ORAMCommand, ORAMPAddr,
+	ORAMCommandValid, ORAMCommandReady,
+	
+	ORAMDataIn, ORAMDataInValid, ORAMDataInReady,
+	ORAMDataOut, ORAMDataOutValid, ORAMDataOutReady,
+	
+	UARTRX, UARTTX,
+	
+	ErrorReceiveOverflow, ErrorReceivePattern, ErrorSendOverflow
+	);
+	//--------------------------------------------------------------------------
+	//	Constants
+	//-------------------------------------------------------------------------- 
+
+	`include "PathORAM.vh"
 
 	parameter				SlowClockFreq =			100_000_000,
 	
@@ -19,52 +37,8 @@ module HWTestHarness #(		`include "PathORAM.vh",
 							// before the first is sent NOTE: you should 
 							// regenerate THSendFIFO/THReceiveFIFO if Buffering,
 							// ORAMB,DBaseWidth changes
-							Buffering =				1024
-	) (
-	//--------------------------------------------------------------------------
-	//	System I/O
-	//--------------------------------------------------------------------------
-	
-  	input 					SlowClock, FastClock,
-	input					SlowReset, FastReset,
-
-	//--------------------------------------------------------------------------
-	//	CUT (ORAM) interface
-	//--------------------------------------------------------------------------
-
-	output	[BECMDWidth-1:0] ORAMCommand,
-	output	[ORAMU-1:0]		ORAMPAddr,
-	output					ORAMCommandValid,
-	input					ORAMCommandReady,
-	
-	output	[FEDWidth-1:0]	ORAMDataIn,
-	output					ORAMDataInValid,
-	input					ORAMDataInReady,
-	
-	input	[FEDWidth-1:0]	ORAMDataOut,
-	input					ORAMDataOutValid,
-	output					ORAMDataOutReady,
-	
-	//--------------------------------------------------------------------------
-	//	HW<->SW interface
-	//--------------------------------------------------------------------------
-
-	input					UARTRX,
-	output					UARTTX,
-	
-	//--------------------------------------------------------------------------
-	//	Status interface
-	//--------------------------------------------------------------------------
-	
-	output					ErrorReceiveOverflow,
-	output					ErrorReceivePattern,	
-	output					ErrorSendOverflow
-	);
-
-	//--------------------------------------------------------------------------
-	//	Constants
-	//-------------------------------------------------------------------------- 
-		
+							Buffering =				1024;
+							
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
 	
@@ -74,6 +48,45 @@ module HWTestHarness #(		`include "PathORAM.vh",
 	localparam				BlkSize_UARTChunks = 	ORAMB / UARTWidth;
 	localparam				DBSize_UARTChunks = 	DBaseWidth / UARTWidth;
 	localparam				BlkUARTWidth =			`log2(BlkSize_UARTChunks);	
+							
+	//--------------------------------------------------------------------------
+	//	System I/O
+	//--------------------------------------------------------------------------
+	
+  	input 					SlowClock, FastClock;
+	input					SlowReset, FastReset;
+
+	//--------------------------------------------------------------------------
+	//	CUT (ORAM) interface
+	//--------------------------------------------------------------------------
+
+	output	[BECMDWidth-1:0] ORAMCommand;
+	output	[ORAMU-1:0]		ORAMPAddr;
+	output					ORAMCommandValid;
+	input					ORAMCommandReady;
+	
+	output	[FEDWidth-1:0]	ORAMDataIn;
+	output					ORAMDataInValid;
+	input					ORAMDataInReady;
+	
+	input	[FEDWidth-1:0]	ORAMDataOut;
+	input					ORAMDataOutValid;
+	output					ORAMDataOutReady;
+	
+	//--------------------------------------------------------------------------
+	//	HW<->SW interface
+	//--------------------------------------------------------------------------
+
+	input					UARTRX;
+	output					UARTTX;
+	
+	//--------------------------------------------------------------------------
+	//	Status interface
+	//--------------------------------------------------------------------------
+	
+	output					ErrorReceiveOverflow;
+	output					ErrorReceivePattern;
+	output					ErrorSendOverflow;
 	
 	//------------------------------------------------------------------------------
 	// 	Wires & Regs

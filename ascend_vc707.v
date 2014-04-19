@@ -438,7 +438,7 @@ module ascend_vc707(
 							.EnableMask(			1),
 							.Class1(				1),
 							.RLatency(				1),
-							.WLatency(				1)) 
+							.WLatency(				1))
 				fake_mig(	.Clock(					MemoryClock),
 							.Reset(					MemoryReset),
 

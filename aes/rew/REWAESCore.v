@@ -25,13 +25,14 @@
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300+ Mhz).
 //
-//	TODO: Nix Initial -- we default the correct way now
+//	Note: 		This module specifies Flop Initial values -- this is redundant 
+//				now because gatelib flops are now initialized the correct way.
 //
 //	Notes on getting clock up:
-//		- No reset to any module
-//		- Size FIFOs smaller to use smaller data counts (not implemented)
-//		- Disable FIFO reset
-//		- No backpressure
+//				- No reset to any module [Done]
+//				- Size FIFOs smaller to use smaller data counts [Not done]
+//				- Disable FIFO reset [Done]
+//				- No backpressure [Done]
 //==============================================================================
 module REWAESCore(
 	SlowClock, FastClock,
