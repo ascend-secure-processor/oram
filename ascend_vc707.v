@@ -49,6 +49,7 @@ module ascend_vc707(
 	// uBlaze/caches/System
 	
 	parameter				SlowClockFreq =			100_000_000;
+	parameter				MemoryClockFreq =		200_000_000;
 	
 	/* 	Debugging.
 		UseMIG: 			use MIG or a simple synthesized DRAM for memory?
@@ -106,7 +107,7 @@ module ascend_vc707(
 	// Clocking
 	
 	wire					MemoryClock; // always 200 Mhz (matches MIG)
-	wire					MemoryReset;
+	wire					MemoryReset_Pre, MemoryReset;
 	
 	wire					ORAMClock; // Configurable (typically >= 100 Mhz, <= 200 Mhz)
 	wire					ORAMReset;
@@ -361,20 +362,21 @@ module ascend_vc707(
 	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 							DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG;
 	
 	//------------------------------------------------------------------------------
-	//	DDR3SDRAM (MIG7)
+	//	DDR3SDRAM (MIG7 or some synthetic memory)
 	//------------------------------------------------------------------------------	
 	
+	ResetGenerator	#(		.ClockFreq(				MemoryClockFreq),
+							.UseIn(					1),
+							.UsePowerOn(			1),
+							.InWidth(				1),
+							.POWidth(				150),
+							.PODelay(				0))
+				rst_gen(	.Clock(					MemoryClock), 
+							.Reset(					1'b0),
+							.In(					MemoryReset_Pre),
+							.Out(					MemoryReset));
+
 	generate if (UseMIG == 1) begin:MIG
-		wire				MemoryReset_Pre;
-	
-		// To help with timing closure ...
-		Pipeline	#(		.Width(					1),
-							.Stages(				4))
-				rst_pipe(	.Clock(					MemoryClock),
-							.Reset(					1'b0), 
-							.InData(				MemoryReset_Pre), 
-							.OutData(				MemoryReset));
-	
 		DDR3SDRAM DDR3SDRAMController(
 							// System interface
 							.sys_clk_p(				sys_clk_p),
@@ -430,7 +432,7 @@ module ascend_vc707(
 							.O(						MemoryClock_Bufg));
 		BUFG 	clk_f200(	.I(						MemoryClock_Bufg),
 							.O(						MemoryClock));
-		assign	MemoryReset =						sys_rst;
+		assign	MemoryReset_Pre =					sys_rst;
 
 		assign	DDR3SDRAM_ResetDone =				~MemoryReset;
 		

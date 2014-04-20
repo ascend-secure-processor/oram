@@ -20,7 +20,7 @@ module PathORAMTopTestbench;
 	wire                               sys_rst;
 
 
-	reg								sys_clk_i;
+	reg									sys_clk_i;
 	wire                               sys_clk_p;
 	wire                               sys_clk_n;
 
@@ -51,31 +51,12 @@ module PathORAMTopTestbench;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	parameter				ORAMB =					512,
-							ORAMU =					32,
-							ORAML =					10,
-							ORAMZ =					5,
-							ORAMC =					10,
-							ORAME = 				5;
-
-	parameter				FEDWidth =				64,
-							BEDWidth =				512;
-								
-	parameter				Overclock =				1;
-	
-	parameter				EnableAES =				1,
-							EnableREW =				1,
-							EnableIV =				0;
-
-    parameter				NumValidBlock = 		1024,
-							Recursion = 			3,
-							MaxLogRecursion = 		4;
-	
-    parameter				LeafWidth = 			32,
-							PLBCapacity = 			8192;
-	
-	parameter				SlowDownORAMClock = 	0;
-	parameter				SlowClockFreq =			100_000_000;
+	// We need to declare these to make the local.vh files happy
+	// NOTE: we don't want to pass params to CUT ... we want this to simulate 
+	// ascend_vc707.v as accurately as possible
+	parameter				ORAMB = 				CUT.ORAMB;
+	parameter				ORAMU =					CUT.ORAMU;
+	parameter				FEDWidth =				CUT.FEDWidth;
 	
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
@@ -94,6 +75,14 @@ module PathORAMTopTestbench;
 	
 	wire	[DBaseWidth-1:0] RecvData;
 	wire					RecvDataValid;
+
+	reg		[31:0]			InitWait = 0;
+	reg						Start = 1'b0;
+	
+	always @(posedge sys_clk_p) begin
+		InitWait <= InitWait + 1;
+		if (InitWait == 250) Start <= 1'b1;
+	end
 	
 	Counter		#(			.Width(					TimeWidth))
 				rd_ret_cnt(	.Clock(					sys_clk_p),
@@ -104,14 +93,15 @@ module PathORAMTopTestbench;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 							
-	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'h38c, 32'h0, 32'd0} : // write
-													(CmdCount == 1) ? {8'd0, 32'h3f9, 32'hf, 32'd0} : // write
-													(CmdCount == 2) ? {8'd0, 32'h300, 32'hff, 32'd0} : // write
-													(CmdCount == 3) ? {8'd2, 32'h38c, 32'h0, 32'd100} :
-													(CmdCount == 4) ? {8'd2, 32'h3f9, 32'h0, 32'd100} :
-													(CmdCount == 5) ? {8'd2, 32'h300, 32'h0, 32'd100} :
-													{8'hff, 32'h0, 32'h0, 32'd512};
-	assign	UARTShftDataInValid =					CmdCount < 7;
+													// Format:			 Cmd   	PAddr		DataBase	TimeDelay
+	assign	UARTShftDataIn =						(CmdCount == 0) ? 	{8'd0, 	32'h38c, 	32'h0, 		32'd0} : // update
+													(CmdCount == 1) ? 	{8'd0, 	32'h3f9, 	32'hf, 		32'd0} : 
+													(CmdCount == 2) ? 	{8'd0, 	32'h300, 	32'hff, 	32'd0} : 
+													(CmdCount == 3) ? 	{8'd2, 	32'h38c, 	32'h0, 		32'd0} : // read
+													(CmdCount == 4) ? 	{8'd2, 	32'h3f9, 	32'h0, 		32'd0} :
+													(CmdCount == 5) ? 	{8'd2, 	32'h300, 	32'h0, 		32'd0} :
+																		{8'hff, 32'h0, 		32'h0, 		32'd0}; // start
+	assign	UARTShftDataInValid =					Start & CmdCount < 7;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),
@@ -155,25 +145,7 @@ module PathORAMTopTestbench;
 			$display("[%m @ %t] Received data = %x", $time, RecvData);
 	end
 	
-	ascend_vc707 #(			.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.ORAME(					ORAME),
-							.Overclock(				Overclock),
-							.EnableAES(				EnableAES),
-							.EnableREW(				EnableREW),
-							.EnableIV(				EnableIV),
-							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),
-							.NumValidBlock(         NumValidBlock), 
-                            .Recursion(             Recursion), 
-                            .LeafWidth(             LeafWidth), 
-                            .PLBCapacity(           PLBCapacity),						
-							.SlowClockFreq(			SlowClockFreq),
-							.UseMIG(				0),
-							.SlowDownORAMClock(		SlowDownORAMClock))
+	ascend_vc707 #(			.UseMIG(				0))
 				CUT(		.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 
