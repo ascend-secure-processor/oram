@@ -271,6 +271,9 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	BEDataOut_Pre;
 	wire					BEDataOutValid_Pre;
 	
+	wire	[DDRDWidth-1:0]	DRAMWriteData_Pre; 
+	wire					DRAMWriteDataValid_Pre, DRAMWriteDataReady_Pre;
+
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -485,7 +488,7 @@ module AESREWORAM(
 							.Enable(				CSROROIRead & BufferedDataInValid & BufferedDataInReady),
 							.Done(					ROI_Rebuffer2Complete));		
 							
-	// Writeback counters
+	// Writeback counters TODO replace with the stat ctrs
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				hwb_cnt(	.Clock(					Clock), 
 							.Reset(					Reset | CSROStartOp), 
@@ -1027,16 +1030,16 @@ module AESREWORAM(
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
 	assign	DataOutValid =							 BDataValid_Needed & 	ROMaskValid_Needed & RMMaskValid_Needed & 	(RMMask_Needed | ROIMask_Needed | ROMask_Needed);
 
-	// We split these signals apart to help meet timing (using DRAMWriteDataReady when you don't need to is DISASTROUS for timing)
-	assign	BufferedDataOutReady_Read =				 						ROMaskValid_Needed & RMMaskValid_Needed;
-	assign	BufferedDataOutReady_Write =			 DRAMWriteDataReady &	ROMaskValid_Needed & RMMaskValid_Needed;
-	assign	BufferedDataOutReady =					 DataOutReady & 		ROMaskValid_Needed & RMMaskValid_Needed;
+	// We split these signals apart to help meet timing (using DRAMWriteDataReady_Pre when you don't need to is DISASTROUS for timing)
+	assign	BufferedDataOutReady_Read =				 							ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	BufferedDataOutReady_Write =			 DRAMWriteDataReady_Pre &	ROMaskValid_Needed & RMMaskValid_Needed;
+	assign	BufferedDataOutReady =					 DataOutReady & 			ROMaskValid_Needed & RMMaskValid_Needed;
 	
 	assign	RMMaskReady =							(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	RMMask_Needed;
 	assign	ROIMaskShiftOutReady =					(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
 	assign	ROMaskBufOutReady =						 DataOutReady & 		RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
 	
-	assign	DataOutReady =							(PathRead) ? 1'b1 : DRAMWriteDataReady;
+	assign	DataOutReady =							(PathRead) ? 1'b1 : DRAMWriteDataReady_Pre;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
 	
 	//--------------------------------------------------------------------------
@@ -1062,28 +1065,34 @@ module AESREWORAM(
 	// State signals on RO accesses
 	assign	ROIBVOut =								ROI_GentryIV;
 	assign	ROIBIDOut =								ROI_BID;
-
-	/*
-	Register	#(			.Width(					DDRDWidth + 1))
-				bein_dly(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Enable(				1'b1),
-							.In(					{BEDataIn, 			BEDataInValid}),
-							.Out(					{BEDataIn_Inner, 	BEDataInValid_Inner}));
-	*/
 	
+	// NOTE: The inner signals are here in case we want to pipeline it ...
 	assign	BEDataIn_Inner =						BEDataIn;
 	assign	BEDataInValid_Inner =					BEDataInValid;
-	
 	assign	BEDataInReady = 						CSROWrite & BufferedDataInReady;
 	
 	//--------------------------------------------------------------------------
-	//	Path Writeback Interface
+	//	DRAM Write Interface
 	//--------------------------------------------------------------------------
-
-	assign	DRAMWriteData =							DataOut_Write;
-	assign	DRAMWriteDataValid = 					PathWriteback & DataOutValid;
+	
+	assign	DRAMWriteData_Pre =						DataOut_Write;
+	assign	DRAMWriteDataValid_Pre =				PathWriteback & DataOutValid;
+	
+	generate if (Overclock) begin:PIPE_DRAMOUT
+		FIFORegister #(		.Width(					DDRDWidth))
+				dramout_dly(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMWriteData_Pre),
+							.InValid(				DRAMWriteDataValid_Pre),
+							.InAccept(				DRAMWriteDataReady_Pre),
+							.OutData(				DRAMWriteData),
+							.OutSend(				DRAMWriteDataValid),
+							.OutReady(				DRAMWriteDataReady));	
+	end else begin:PASS_DRAMOUT
+		assign	DRAMWriteData =						DRAMWriteData_Pre;
+		assign	DRAMWriteDataValid =				DRAMWriteDataValid_Pre;
+		assign	DRAMWriteDataReady_Pre =			DRAMWriteDataReady;
+	end endgenerate
 	
 	//--------------------------------------------------------------------------
 endmodule

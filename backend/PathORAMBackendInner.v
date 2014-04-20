@@ -540,8 +540,7 @@ module PathORAMBackendInner(
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));
 							
 	generate if (Overclock) begin:ADDR_DELAY	
-		FIFORAM	#(			.Width(					DDRAWidth + DDRCWidth),
-							.Buffering(				32)) // Doesn't really matter; might as well make it 32 because we get that for free with LUT RAM
+		FIFORegister	#(	.Width(					DDRAWidth + DDRCWidth))
 				addr_dly(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				{AddrGen_DRAMCommand_Internal,	AddrGen_DRAMCommandAddress_Internal}),
@@ -549,7 +548,7 @@ module PathORAMBackendInner(
 							.InAccept(				AddrGen_DRAMCommandReady_Internal),
 							.OutData(				{AddrGen_DRAMCommand,			AddrGen_DRAMCommandAddress}),
 							.OutSend(				AddrGen_DRAMCommandValid),
-							.OutReady(				AddrGen_DRAMCommandReady));								
+							.OutReady(				AddrGen_DRAMCommandReady));
 	end else begin:ADDR_PASS
 		assign	{AddrGen_DRAMCommand, AddrGen_DRAMCommandAddress} = {AddrGen_DRAMCommand_Internal, AddrGen_DRAMCommandAddress_Internal};
 		assign	AddrGen_DRAMCommandValid =			AddrGen_DRAMCommandValid_Internal;
