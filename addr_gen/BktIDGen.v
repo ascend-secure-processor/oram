@@ -1,6 +1,6 @@
 //==============================================================================
 //	Module:		BktIDGen
-//	Desc:		Return bucket IDs on a path
+//	Desc:		Return logical bucket IDs on a path
 //==============================================================================
 
 module BktIDGen ( Clock, ReStart, Enable, leaf, BktIdx );
@@ -9,14 +9,13 @@ module BktIDGen ( Clock, ReStart, Enable, leaf, BktIdx );
 	
 	input Clock, ReStart, Enable;
 	input [ORAML-1:0] leaf;    
- 
 	output [ORAML:0] BktIdx;            // A tree of depth L needs L+1 bits to denote the node. 
-                                        // If we waste several spots due to subtree, requiring L+2 bits
-										// This module outputs the unwasted version of bucket ID
+                                        // If we waste several spots due to subtree, we need L+2 bits
+										// This module outputs the unwasted version, thus L+1
     
 	reg [ORAML-1:0] leaf_shift;
 
-	PathGen #(ORAML) BktGen(Clock, ReStart, Enable, Enable, leaf_shift[0], BktIdx);
+	PathGen #(ORAML) 	BktGen(Clock, ReStart, Enable, 1'b1, leaf_shift[0], BktIdx);
 
 	always@(posedge Clock) begin
 		if (ReStart)

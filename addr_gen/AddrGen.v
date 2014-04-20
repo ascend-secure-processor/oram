@@ -1,3 +1,9 @@
+//==============================================================================
+//	Module:		AddrGen
+//	Desc:		Output physical addresses along a path, 
+//				using subtree locality trick from ISCA'13
+//==============================================================================
+
 `include "Const.vh"
 
 module AddrGen
@@ -5,6 +11,8 @@ module AddrGen
 	Clock, Reset, 
 	Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, 
 	Addr, currentLevel, BktIdx,
+	
+	// tmp output for debugging
 	STIdx, BktIdxInST
 );
 
@@ -52,15 +60,22 @@ module AddrGen
 	reg RW, BH;
 	reg [ORAMLogL-1:0] BktCounter;
      
-	AddrGenBktHead #( 	.ORAML(ORAML), 
-						.DDRROWWidth(DDRROWWidth),
-						.BktSize_DRWords(BktSize_DRWords)
+	AddrGenBktHead #( 	.ORAML(	ORAML), 
+						.DDRROWWidth( DDRROWWidth),
+						.BktSize_DRWords( BktSize_DRWords)
 					) 
-	addGenBktHead (   Clock, Reset, Start && Ready, Enable, 
-					leaf, 
-					currentLevel, BktIdx_Padded,
-					STIdx, BktIdxInST // tmp output for debugging
-				  );  
+	addGenBktHead 	(  	.Clock(		Clock),
+						.Reset(		Reset),
+						.Start(		Start && Ready),
+						.Enable(	Enable),
+						.leaf(		leaf),
+						.currentLevel(	currentLevel),
+						.BktIdx(	BktIdx_Padded),
+						
+						// tmp output for debugging
+						.STIdx(		STIdx),
+						.BktIdxInST(BktIdxInST)
+					);  
 			  
 	assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 1;
 	assign Enable = !Ready && CmdReady && SwitchLevel;

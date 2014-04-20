@@ -92,14 +92,15 @@ module IntegrityVerifier (
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
 	assign ConsumeHash = HashOutValid[Turn];
-	assign CheckHash = ConsumeHash && (
-							(BucketID[Turn] < TotalBucketD / 2) || 
-							(BucketID[Turn] == TotalBucketD && BktOfIStat == 1)		// first task is to update the hash, second is to check against the old hash
-						);	
-	
+	assign CheckHash = ConsumeHash && 
+						(BktOnPathDone < TotalBucketD / 2 
+						|| BktOfIDone > 0);		// first task is to update the hash, second is to check against the old hash
+							
 	// checking hash for the input path
 	assign Violation = ConsumeHash && CheckHash &&	
 		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
+	
+	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
 	
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
@@ -133,17 +134,16 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------
 	// Remaining work status
 	//------------------------------------------------------------------------------------ 	
-	reg [BktAWidth-1:0] BucketProgress;
-	reg [2:0]			BktOfIStat;
+	reg [BktAWidth-1:0] BktOnPathStarted, BktOnPathDone;
+	reg [1:0]			BktOfIStarted, BktOfIDone;
+	
 	wire				PendingWork;
 	
-	assign Done = BucketProgress >= TotalBucketD && (& Idle);
+	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
 	
-	assign PendingWork = BucketProgress < TotalBucketD || BktOfIStat > 2;	
-	
-	assign IVDone_BktOfI = BktOfIStat == 0;
-		// hacky solution to dispatch the task of verifying the two versions of bucket of interest
-	
+	assign Done = BktOnPathDone == TotalBucketD;
+	assign IVDone_BktOfI = BktOfIDone == 2;
+		
 	//------------------------------------------------------------------------------------
 	// Round robin scheduling for hash engines
 	//------------------------------------------------------------------------------------ 	
@@ -151,8 +151,11 @@ module IntegrityVerifier (
 	always @(posedge Clock) begin
         if (Reset) begin
             Turn <= 0;
-			BucketProgress <= 0;
-			BktOfIStat <= 0;
+			BktOnPathStarted <= TotalBucketD;
+			BktOnPathDone <= TotalBucketD;
+			BktOfIStarted <= 2;
+			BktOfIDone <= 2;
+			
             for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1)
                 BucketOffset[hashid] <= BktSize_DRBursts + 1;			
         end
@@ -165,27 +168,41 @@ module IntegrityVerifier (
 			end
 			
 			// dispatch work if there's any
-			else if (PendingWork && (ConsumeHash || Idle[Turn])) begin	
+	//		if (PendingWork && (ConsumeHash || Idle)) begin	
+			if (PendingWork && (0 || Idle)) begin	
 				BucketOffset[Turn] <= 0;
 				
-				if (BktOfIStat > 2) begin			// prioritize RO bucket of interest
+				if (BktOfIStarted < 2) begin			// prioritize RO bucket of interest
 					BucketID[Turn] <= TotalBucketD;
-					BktOfIStat <= BktOfIStat - 1;
+					BktOfIStarted <= BktOfIStarted + 1;
 				end
 				else begin	
-					BucketID[Turn] <= BucketProgress;
-					BucketProgress <= BucketProgress + 1;
+					BucketID[Turn] <= BktOnPathStarted;
+					BktOnPathStarted <= BktOnPathStarted + 1;
 				end
 			end
 			
-			else if (ConsumeHash)									// mark idle
-				BucketOffset[Turn] <= BucketOffset[Turn] + 1;
-						
-			// bucket of interest done
-			if (IVReady_BktOfI)
-				BktOfIStat <= 4;				
-			else if (ConsumeHash && BucketID[Turn] == TotalBucketD)		
-				BktOfIStat <= BktOfIStat - 1;			
+			// mark idle and tick *Done
+			if (ConsumeHash) begin								
+				BucketOffset[Turn] <= BucketOffset[Turn] + 1;	// mark idle
+				
+				if (BucketID[Turn] == TotalBucketD)
+					BktOfIDone <= BktOfIDone + 1;
+				else
+					BktOnPathDone <= BktOnPathDone + 1;
+			end
+			
+			// bucket of ready done
+			if (IVReady_BktOfI) begin
+				BktOfIStarted <= 0;
+				BktOfIDone <= 0;
+				
+				`ifdef SIMULATION
+				if (IVDone_BktOfI)
+					$display("Error: RO bucket arrives so soon? Have not finished the last one");				
+				`endif
+				
+			end
 		end
     end
 	
@@ -196,8 +213,6 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	genvar k;
 	generate for (k = 0; k < NUMSHA3; k = k + 1) begin: HashEngines
-	
-		assign Idle[k] = BucketOffset[k] == BktSize_DRBursts + 1;
 		
         Keccak_WF #(        .IWidth(            DDRDWidth),
                             .HashByteCount(     HashByteCount))                         

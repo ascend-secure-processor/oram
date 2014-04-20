@@ -531,8 +531,7 @@ module AESREWORAM(
 							.PIn(					ROLeaf),
 							.SIn(					1'b0),
 							.SOut(					RO_LeafNextDirection));
-						
-							
+											
     AddrGen 	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -548,6 +547,19 @@ module AESREWORAM(
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));
 
+
+/*
+	// ideally BktIDGen should meet this purpose
+	
+	BktIDGen # 	(	.ORAML(		ORAML))
+		bid 	(	.Clock(		Clock),
+					.ReStart(	CSROStartOp),
+					.leaf(		ROLeaf),
+					.Enable(	RO_BIDOutReady),
+					.BktIdx(	RO_BIDOut)			
+				);
+	assign	RO_BIDOutValid = ???  ;
+*/	
 							
 	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;
 							

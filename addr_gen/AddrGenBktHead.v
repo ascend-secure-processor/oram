@@ -21,11 +21,12 @@ module AddrGenBktHead
                                         // And we waste several spots due to subtree, requiring L+2 bits
 	output [ORAML:0] STIdx, BktIdxInST;  // tmp output for debugging
   
-  `ifndef ASIC
-  	initial begin
+	// don't delete, REWAES needs this to get rid of Reset
+`ifndef ASIC	
+	initial begin
 		currentLevel = -1;
 	end
-  `endif
+`endif
   
   /*
   // reverse the leaf
@@ -42,7 +43,7 @@ module AddrGenBktHead
   // wire [ORAML-1:0] STIdx, BktIdxInST;
   wire switchST;
   PathGen #(ORAML) STGen(Clock, Start, Enable, switchST, leaf_shift[0], STIdx); 
-  PathGen #(ORAML) BktGen(Clock, Start || (Enable && switchST), Enable, Enable, leaf_shift[0], BktIdxInST);
+  PathGen #(ORAML) BktGen(Clock, Start || (Enable && switchST), Enable, 1'b1, leaf_shift[0], BktIdxInST);
     // or equivalently
     // PathGen2 BktGen(Clock, Reset || switchST, Enable, leaf_reverse_shift[0], BktIdxInST);
   
