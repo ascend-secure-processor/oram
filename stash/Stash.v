@@ -274,6 +274,16 @@ module Stash(
 	wire	[SEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
 	
 	//--------------------------------------------------------------------------
+	//	Initial state
+	//--------------------------------------------------------------------------	
+	
+	`ifndef ASIC
+		initial begin
+			CS = ST_Reset;
+		end
+	`endif	
+	
+	//--------------------------------------------------------------------------
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
@@ -539,14 +549,14 @@ module Stash(
 													(CSTurnaround2) ? 	RemapLeaf : 
 																		WriteLeaf;
 							
-	assign	PerformCoreHeaderUpdate =				~AccessIsDummy & 
+	assign	PerformCoreHeaderUpdate =				AccessStarted & ~AccessIsDummy & 
 													(	(AccessCommand == BECMD_Update) | 
 														(AccessCommand == BECMD_Read) |
 														(AccessCommand == BECMD_ReadRmv));
 														
 	// Having BlockWasFound prevents us from removing blocks that aren't there.  
 	// Handling this case is only important for debugging											
-	assign	CoreHeaderRemove =						~AccessIsDummy & BlockWasFound & 
+	assign	CoreHeaderRemove =						AccessStarted & ~AccessIsDummy & BlockWasFound & 
 													(AccessCommand == BECMD_ReadRmv);
 	
 	Register	#(			.Width(					1))
@@ -644,11 +654,7 @@ module Stash(
 							.Overclock(				Overclock),
 							.BEDWidth(				BEDWidth)) 
 				scan_table(	.Clock(					Clock),
-				`ifdef ASIC
-							.Reset(					Reset),
-				`else
-							.Reset(					1'b0), // this module doesn't need reset
-				`endif							
+							.Reset(					Reset),		
 							.PerAccessReset(		ScanTableReset),
 							.AccessComplete(		PerAccessReset),
 							.ResetDone(				ScanTableResetDone),

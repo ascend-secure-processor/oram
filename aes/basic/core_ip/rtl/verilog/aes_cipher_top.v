@@ -101,6 +101,13 @@ reg	[3:0]	dcnt;
 // Misc Logic
 //
 
+`ifndef ASIC
+	initial begin
+		dcnt = 4'h0;
+		busy = 1'b0;
+	end
+`endif	
+
 always @(posedge clk)
 	if(!rst) begin 
 		dcnt <= #1 4'h0;

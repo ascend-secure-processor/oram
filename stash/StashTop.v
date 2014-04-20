@@ -105,7 +105,7 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
 	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
-	(* mark_debug = "TRUE" *)	wire					ReadBlockIsValid, BlockPresent;
+	(* mark_debug = "TRUE" *)	wire					ValidDownShift_OutData, ValidDownShift_OutValid;
 	
 	wire	[BEDWidth-1:0]	DataDownShift_OutData;
 	wire					DataDownShift_OutValid, DataDownShift_OutReady;
@@ -164,6 +164,19 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
 	
 	wire					EvictGate, UpdateGate;
+
+	//------------------------------------------------------------------------------
+	//	Simulation checks
+	//------------------------------------------------------------------------------
+	
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
+				$display("[%m] ERROR: control signal is X");
+				$stop;
+			end
+		end
+	`endif
 	
 	//------------------------------------------------------------------------------
 	//	Control logic
@@ -234,12 +247,12 @@ module StashTop(
 	//------------------------------------------------------------------------------
 
 	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
-	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ReadBlockIsValid & BlockPresent);
-	assign	DataDownShift_OutReady =				(BlockPresent) ? ((ReadBlockIsValid) ? BlockReadReady : 1'b1) : 1'b0; 
+	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ValidDownShift_OutData & ValidDownShift_OutValid);
+	assign	DataDownShift_OutReady =				(ValidDownShift_OutValid) ? ((ValidDownShift_OutData) ? BlockReadReady : 1'b1) : 1'b0; 
 	
 	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
 	
-	// Use FIFOShiftRound to generate BlockPresent signal
+	// Use FIFOShiftRound to generate ValidDownShift_OutValid signal
 	FIFOShiftRound #(		.IWidth(				ORAMZ),
 							.OWidth(				1))
 				in_V_shft(	.Clock(					Clock),
@@ -247,8 +260,8 @@ module StashTop(
 							.InData(				HeaderDownShift_ValidBits),
 							.InValid(				HeaderDownShift_InValid),
 							.InAccept(				), // will be the same as in_L_shft
-							.OutData(			    ReadBlockIsValid),
-							.OutValid(				BlockPresent),
+							.OutData(			    ValidDownShift_OutData),
+							.OutValid(				ValidDownShift_OutValid),
 							.OutReady(				InPath_BlockReadComplete));	
 	
 	Counter		#(			.Width(					BlkBEDWidth))
@@ -256,7 +269,7 @@ module StashTop(
 							.Reset(					Reset | BlockReadCtr_Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				DataDownShift_Transfer & ~ReadBlockIsValid & BlockPresent),
+							.Enable(				DataDownShift_Transfer & ~ValidDownShift_OutData & ValidDownShift_OutValid),
 							.In(					{BlkBEDWidth{1'bx}}),
 							.Count(					BlockReadCtr));	
 	CountCompare #(			.Width(					BlkBEDWidth),

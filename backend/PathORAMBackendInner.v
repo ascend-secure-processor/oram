@@ -209,6 +209,16 @@ module PathORAMBackendInner(
 	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;									
 
 	//--------------------------------------------------------------------------
+	//	Initial state
+	//--------------------------------------------------------------------------	
+	
+	`ifndef ASIC
+		initial begin
+			CS = ST_Initialize;
+		end
+	`endif
+	
+	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 
@@ -528,6 +538,7 @@ module PathORAMBackendInner(
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), 
 							.Addr(					AddrGen_DRAMCommandAddress_Internal));
+							
 	generate if (Overclock) begin:ADDR_DELAY	
 		FIFORAM	#(			.Width(					DDRAWidth + DDRCWidth),
 							.Buffering(				32)) // Doesn't really matter; might as well make it 32 because we get that for free with LUT RAM

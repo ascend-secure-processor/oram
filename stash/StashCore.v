@@ -250,7 +250,7 @@ module StashCore(
 	wire					SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire					OutScanValidPush, OutScanValidDump;
 	
-	wire					StashWalkValid, DumpCompleted;
+	wire					StillWalkingStash, PrepareDumpStop, DumpCompleted;
 	
 	// Syncing
 	
@@ -274,12 +274,25 @@ module StashCore(
 							InScanValid_Delayed, FirstChunk_Transfer_Delayed;
 	wire					CSPushing_FirstCycle, CSDumping_FirstCycle, 
 							CSSyncing_FirstCycle;
-	
-	initial begin
-		CS = ST_Reset;
-		CSDumping_Delayed = 1'b0;
-	end
 
+	//--------------------------------------------------------------------------
+	//	Initial state
+	//--------------------------------------------------------------------------	
+	
+	`ifndef ASIC
+		initial begin
+			CS = ST_Reset;
+			CS_Sync = ST_Sync_Idle;
+			SyncState = CS_Sync;
+			
+			StashWalk_Delayed = 1'b0;
+			CSDumping_Delayed = 1'b0;
+			CSSyncing_Delayed = 1'b0;
+			InScanValid_Delayed = 1'b0;
+			FirstChunk_Transfer_Delayed = 1'b0;
+		end
+	`endif	
+	
 	//--------------------------------------------------------------------------
 	//	Software debugging
 	//--------------------------------------------------------------------------
@@ -338,6 +351,15 @@ module StashCore(
 			end
 			*/
 			
+			if (^OutScanValidDump === 1'bx | 
+				^PrepareDumpStop === 1'bx |
+				^InScanValid === 1'bx |
+				^InValid === 1'bx |
+				^InCommandValid === 1'bx) begin
+				$display("[%m] ERROR: control signal is X");
+				$stop;
+			end
+
 			if (RemoveBlock & StashOccupancy == 0) begin
 				$display("[%m] ERROR: we removed a block from an empty stash");
 				$stop;			
@@ -365,12 +387,13 @@ module StashCore(
 	`ifdef SIMULATION_VERBOSE_STASH
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
-					MS_pt = StashP.Mem[MS_pt];
-					i = i + 1;
 					if (StashC.Mem[MS_pt] == EN_Free) begin
-						$display("[ERROR] used list entry tagged as free");
+						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$stop;
 					end
+					
+					MS_pt = StashP.Mem[MS_pt];
+					i = i + 1;
 					
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (UsedList)");
@@ -436,7 +459,7 @@ module StashCore(
 				if (OutPAddr == DummyBlockAddress)
 					;//$display("[%m @ %t] Reading dummy block", $time);
 				else
-					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed);
+					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d, stashc_bit=%b]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed, StashC.Mem[StashE_Address_Delayed]);
 		end	
 	`endif
 	
@@ -665,7 +688,7 @@ module StashCore(
 		For each data block, store its program address / leaf label.
 	*/
 	RAM			#(			.DWidth(				SHDWidth),
-							.AWidth(				SEAWidth) 
+							.AWidth(				SEAWidth)
 							`ifdef ASIC , .ASIC(1) `endif)
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
@@ -695,7 +718,8 @@ module StashCore(
 		The head of the used/free lists.
 	*/
 	Register	#(			.Width(					SEAWidth),
-							.ResetValue(			SNULL))
+							.ResetValue(			SNULL),
+							.Initial(				SNULL))
 				UsedListH(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
@@ -770,7 +794,9 @@ module StashCore(
 		
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),
-							.RLatency(				Overclock))
+							.RLatency(				Overclock),
+							.EnableInitial(			1),
+							.Initial(				{1 << SEAWidth{EN_Free}}))
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				1'b1),
@@ -787,7 +813,8 @@ module StashCore(
 	assign	RemoveBlock =							(~InScanAdd & InScanValid & InScanAccepted) |
 													(CSHUpdate & InHeaderRemove);
 	
-	UDCounter	#(			.Width(					SEAWidth))
+	UDCounter	#(			.Width(					SEAWidth),
+							.Initial(				{SEAWidth{1'b0}}))
 				ElementCount(.Clock(				Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
@@ -817,19 +844,22 @@ module StashCore(
 	assign	OutScanAdd =							CSPushing;
 	assign	OutScanStreaming =						CSPushing | CSDumping;
 	
-	assign	StashWalkValid =						StashWalk_Delayed != SNULL;
+	assign	StillWalkingStash =						StashWalk_Delayed != SNULL;
+	
+	assign	PrepareDumpStop =						CSDumping_Delayed & CSDumping &
+													~StillWalkingStash & ~DumpCompleted;
 	
 	Register	#(			.Width(					1))
 				dump_kill(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
-							.Set(					CSDumping & ~StashWalkValid),
+							.Set(					PrepareDumpStop),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					DumpCompleted));	
 	
 	assign	OutScanValidPush =						CSPushing & FirstChunk_Transfer_Write;
 	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot
-													StashWalkValid & ~DumpCompleted; // don't send end-of-list marker
+													StillWalkingStash & ~DumpCompleted; // don't send end-of-list marker
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
 
 	//--------------------------------------------------------------------------
