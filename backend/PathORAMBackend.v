@@ -26,7 +26,7 @@ module PathORAMBackend(
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
-	);
+);
 	
 	//------------------------------------------------------------------------------
 	//	Parameters & Constants
@@ -110,11 +110,14 @@ module PathORAMBackend(
     wire                    DRAMInitComplete;
 	
 	// integrity verification
-	
-	wire 					IVStart, IVDone, IVRequest, IVWrite;
+		
+	wire 					PathReady_IV, PathDone_IV, BOIReady, BOIDone;
+	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
-	wire  					IVReady_BktOfI, IVDone_BktOfI;
+
+	wire	[AESEntropy-1:0] 	ROIBV;
+	wire	[ORAML:0]			ROIBID;
 
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
@@ -209,40 +212,45 @@ module PathORAMBackend(
 							.FromStashDataValid(	BE_DRAMWriteDataValid), 
 							.FromStashDataReady(	BE_DRAMWriteDataReady),
 							
-							.IVStart(				IVStart),
-							.IVDone(				IVDone),
+							.PathReady_IV(			PathReady_IV),
+							.PathDone_IV(			PathDone_IV),
 							.IVRequest(				IVRequest),
 							.IVWrite(				IVWrite),
 							.IVAddress(				IVAddress),
 							.DataFromIV(			DataFromIV),
 							.DataToIV(				DataToIV),
 
-							.IVReady_BktOfI(		IVReady_BktOfI), 
-							.IVDone_BktOfI(			IVDone_BktOfI));
+							.BOIReady_IV(			BOIReady_IV), 
+							.BOIDone_IV(			BOIDone_IV)
+						);
 							
 		 if (EnableIV) begin:INTEGRITY
 			IntegrityVerifier #(.ORAMB(				ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+								.ORAMU(				ORAMU),
+								.ORAML(				ORAML),
+								.ORAMZ(				ORAMZ))
 					
-				iv(			.Clock(					Clock),
-							.Reset(					Reset || IVStart),
+				iv(				.Clock(				Clock),
+								.Reset(				Reset),
 							
-							.Request(				IVRequest),
-							.Write(					IVWrite),
-							.Address(				IVAddress),
-							.DataIn(				DataToIV),
-							.DataOut(				DataFromIV),
+								.Request(			IVRequest),
+								.Write(				IVWrite),
+								.Address(			IVAddress),
+								.DataIn(			DataToIV),
+								.DataOut(			DataFromIV),
 							
-							.Done(					IVDone),
-							.IVDone_BktOfI(			IVDone_BktOfI),
-							
-							.IVReady_BktOfI(		IVReady_BktOfI));
+								.PathReady(			PathReady_IV),
+								.PathDone(			PathDone_IV),
+								.BOIReady(			BOIReady_IV),
+								.BOIDone(			BOIDone_IV),
+								
+								.ROIBV(				ROIBV),
+								.ROIBID(			ROIBID)
+							);
 									
 			// TODO: debugging now
 
-			//assign	IVDone_BktOfI = 			1'b1;		
+			//assign	BOIDone = 			1'b1;		
 									
 		end	else begin: NO_INTEGRITY		
 			assign	IVRequest = 					1'b0;
@@ -251,8 +259,8 @@ module PathORAMBackend(
 			assign	DataFromIV = 					0;
 		
 			// only the following two are important
-			assign	IVDone = 						1'b1;
-			assign	IVDone_BktOfI = 				1'b1;
+			assign	PathDone_IV = 						1'b1;
+			assign	BOIDone = 				1'b1;
 		end
 	end endgenerate
 	
@@ -279,6 +287,9 @@ module PathORAMBackend(
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
 							
+							.ROIBVOut(				ROIBV),
+							.ROIBIDOut(				ROIBID),
+														
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEDataOutValid(		AES_DRAMReadDataValid), 					
 

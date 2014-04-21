@@ -20,15 +20,18 @@ module GentrySeedGenerator(
 	//	Constants
 	//--------------------------------------------------------------------------
 
-	`include "PathORAM.vh"
+	parameter				ORAML = 0;
 	
 	`include "SecurityLocal.vh"
+	
 	// TODO We only need these includes because we need BIDWidth in REWAESLocal.vh
 	// Clean up param system to avoid the crazy includes ...
-	`include "DDR3SDRAMLocal.vh"
-	`include "BucketDRAMLocal.vh"
+//	`include "PathORAM.vh"
+//	`include "DDR3SDRAMLocal.vh"
+//	`include "BucketDRAMLocal.vh"
+//	`include "REWAESLocal.vh"
 	
-	`include "REWAESLocal.vh"
+	localparam				BIDWidth = ORAML + 1;
 	
 	localparam				RWSWidth =				2,
 							ST_RW_StartRead =		2'd0,

@@ -10,9 +10,9 @@
 
 module IntegrityVerifier (
 	Clock, Reset,
-	Done,
 	Request, Write, Address, DataIn, DataOut,	// RAM interface
-	IVReady_BktOfI, IVDone_BktOfI
+	PathReady, PathDone, BOIReady, BOIDone,
+	ROIBV, ROIBID
 );
 
 	parameter NUMSHA3 = 3;
@@ -29,20 +29,24 @@ module IntegrityVerifier (
     localparam  AWidth = PathBufAWidth;
 	localparam  BktAWidth = `log2(ORAML) + 1;
 	localparam	BlkAWidth = `log2(BktSize_DRBursts + 1);
+	localparam	BIDWidth = ORAML + 1;
 	
 	//------------------------------------------------------------------------------------
 	// variables
 	//------------------------------------------------------------------------------------ 	
 	input  	Clock, Reset;
-	output 	Done;
+
 	output 	Request, Write;
 	output 	[AWidth-1:0] Address;
 	input  	[DDRDWidth-1:0]  DataIn;
 	output 	[DDRDWidth-1:0]  DataOut;
 	
-	input  	IVReady_BktOfI;
-	output 	IVDone_BktOfI;
-
+	input  	PathReady, BOIReady;
+	output 	PathDone, BOIDone;
+	
+	input	[AESEntropy-1:0] ROIBV;
+	input	[BIDWidth-1:0]	 ROIBID;
+	
 	// status and meta dat for hash engines
 	reg [BktAWidth-1:0] 	BucketID		[0:NUMSHA3-1];	
 	reg [BlkAWidth-1:0] 	BucketOffset	[0:NUMSHA3-1];
@@ -51,15 +55,8 @@ module IntegrityVerifier (
 	// hash IO internal variables
 	localparam HashByteCount = (BktSize_RawBits + 0) / 8;    	
 	
-	wire [DDRDWidth-1:0] HashData;
 	wire HashDataReady [0:NUMSHA3-1];
-	wire DataInValid, HeaderInValid;
-	
-	wire HashOutValid 	[0:NUMSHA3-1];
-	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	wire ConsumeHash, Violation, CheckHash; 
-	wire [0:NUMSHA3-1]   Idle;
-	
+		
 	// select one hash engine
 	reg  [LogNUMSHA3-1:0] Turn;
 	wire [LogNUMSHA3-1:0] LastTurn;
@@ -71,19 +68,54 @@ module IntegrityVerifier (
 		BucketID[Turn] * BktSize_DRBursts : 						//	updating hash for the previous set of buckets
 		BucketID[Turn] * BktSize_DRBursts + BucketOffset[Turn];		//  reading data from the current set of buckets
 		
-	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts ));
+	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts )) && !DataInValid; 
+																											// can remove !DataInValid if we make Gentry always valid
+	//------------------------------------------------------------------------------------
+	// Process and save headers
+	//------------------------------------------------------------------------------------ 	
+	wire DataInValid, HeaderInValid;
+	wire [DDRDWidth-1:0] HashData;
 	
 	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 	DataInValid);
 	assign  HeaderInValid = DataInValid && BucketOffset[LastTurn] == 1;		// TODO: do not work for  header > 1
 	
-	// saving header
 	always @(posedge Clock) begin
 		if (!Reset && HeaderInValid)
 			BucketHeader[LastTurn] <= DataIn;					
 	end
+
+	// Bucket ID and bucket version
+	wire [AESEntropy-1:0] 	RWBV;
+	wire [BIDWidth-1:0]   	RWBID;
+	wire RWVIDValid, RWVIDReady, ROIHeaderInValid; 
 	
-	// data passed to SHA engines
-	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  } 
+	wire [AESEntropy-1:0] BktV;
+	wire [BIDWidth-1:0]   BktID;
+	
+	GentrySeedGenerator	#(	.ORAML(					ORAML))				
+			gentry_rw	(	.Clock(					Clock),
+							.Reset(					Reset),
+							.OutIV(					RWBV), 
+							.OutBID(				RWBID), 
+							.OutValid(				RWVIDValid), 
+							.OutReady(				RWVIDReady)
+						);
+	
+	always @(posedge Clock) begin
+		if (HeaderInValid && !ROIHeaderInValid && !RWVIDValid) begin
+			$display("GentrySeedGenerator not valid. Really unlucky ... ");
+			$stop;
+		end
+	end
+	
+	assign RWVIDReady = HeaderInValid && !ROIHeaderInValid;
+	
+	assign ROIHeaderInValid = HeaderInValid && BucketID[LastTurn] == TotalBucketD;	
+	assign BktV = ROIHeaderInValid ? ROIBV : RWBV;
+	assign BktID = ROIHeaderInValid ? ROIBID : RWBID;
+	
+//	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  }
+	assign HashData = HeaderInValid ? {  {(TrancateDigestWidth-BIDWidth){1'b0}}, BktID, DataIn[BktHSize_RawBits-1:AESEntropy], BktV} 
 						: DataIn;
 		// cannot include digest itself, nor header IV (since they change for every bucket on RO access).
 		// should replace them with BktCtr and BktID. Currently just zero.
@@ -91,6 +123,11 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
+	wire HashOutValid 	[0:NUMSHA3-1];
+	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
+	wire ConsumeHash, Violation, CheckHash; 
+	wire Idle;
+	
 	assign ConsumeHash = HashOutValid[Turn];
 	assign CheckHash = ConsumeHash && 
 						(BktOnPathDone < TotalBucketD / 2 
@@ -141,8 +178,8 @@ module IntegrityVerifier (
 	
 	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
 	
-	assign Done = BktOnPathDone == TotalBucketD;
-	assign IVDone_BktOfI = BktOfIDone == 2;
+	assign PathDone = BktOnPathDone == TotalBucketD;
+	assign BOIDone = BktOfIDone == 2;
 		
 	//------------------------------------------------------------------------------------
 	// Round robin scheduling for hash engines
@@ -193,16 +230,26 @@ module IntegrityVerifier (
 			end
 			
 			// bucket of ready done
-			if (IVReady_BktOfI) begin
+			if (BOIReady) begin
 				BktOfIStarted <= 0;
 				BktOfIDone <= 0;
 				
 				`ifdef SIMULATION
-				if (IVDone_BktOfI)
+				if (!BOIDone)
 					$display("Error: RO bucket arrives so soon? Have not finished the last one");				
-				`endif
-				
+				`endif	
 			end
+			
+			if (PathReady) begin
+				BktOnPathStarted <= 0;
+				BktOnPathDone <= 0;
+				
+				`ifdef SIMULATION
+				if (!PathDone)
+					$display("Error: Have not finished the last path");				
+				`endif				
+			end
+			
 		end
     end
 	
@@ -215,7 +262,9 @@ module IntegrityVerifier (
 	generate for (k = 0; k < NUMSHA3; k = k + 1) begin: HashEngines
 		
         Keccak_WF #(        .IWidth(            DDRDWidth),
-                            .HashByteCount(     HashByteCount))                         
+                            .HashByteCount(     HashByteCount),
+							.KeyLength(			HashKeyLength),
+							.Key(				128'h 5e_7a_2a_9d_43_35_74_5b_85_ce_e5_b3_c0_c1_23_a6))							
             HashEngine (    .Clock(             Clock),         
                             .Reset(             Reset),
                             .DataInReady(       HashDataReady[k]),

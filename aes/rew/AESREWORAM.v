@@ -306,7 +306,7 @@ module AESREWORAM(
 				//$stop;
 			end
 		end
-		
+/*		
 		always @(posedge Clock) begin
 			if (BEDataOutValid) begin
 				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b) ", $time, BEDataOut, ROAccess, CSCOROI);
@@ -322,9 +322,9 @@ module AESREWORAM(
 			
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
-			end
-			
+			end		
 		end
+*/
 		
 		always @(posedge Clock) begin
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
@@ -676,10 +676,7 @@ module AESREWORAM(
 	//	RW AES Input
 	//--------------------------------------------------------------------------
 	
-	GentrySeedGenerator	#(	.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+	GentrySeedGenerator	#(	.ORAML(					ORAML))				
 				gentry_rw(	.Clock(					Clock),
 							.Reset(					Reset),
 							.OutIV(					Core_RWIVIn), 

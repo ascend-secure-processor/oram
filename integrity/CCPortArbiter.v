@@ -12,7 +12,7 @@ module CCPortArbiter (
 	FromDecDataTransfer, FromStashDataTransfer, 
 	FromDecData, HeaderDataIn, FromStashData,
 	
-	BufReg_InValid, BufReg_EmptyCount, IVDone, IVDone_BktOfI,
+	BufReg_InValid, BufReg_EmptyCount, PathDone_IV, BOIDone_IV,
 	
 	Enable, Write, 
 	Address,
@@ -39,7 +39,7 @@ module CCPortArbiter (
 //	input	HeaderInValid, HdOfInterest;
 	input 	FromDecDataTransfer, FromStashDataTransfer;
 	input	[1:0] BufReg_EmptyCount;
-	input	IVDone, IVDone_BktOfI;
+	input	PathDone_IV, BOIDone_IV;
 	
 	input	[DWidth-1:0]	FromDecData, HeaderDataIn, FromStashData;
 		
@@ -110,10 +110,10 @@ module CCPortArbiter (
 	assign Enable = RWAccess ? 
 								(	PathRead ? FromDecDataTransfer
 									: PthRW ? FromStashDataTransfer 
-											: IVDone && BufReg_EmptyCount > BufReg_InValid)			// Send data to AES							
+											: PathDone_IV && BufReg_EmptyCount > BufReg_InValid)			// Send data to AES							
 					: ROAccess ? 
 								(	PathRead ? FromDecDataTransfer 									// header and BktOfI from Dec
-									: !HdRW && IVDone_BktOfI && BufReg_EmptyCount > BufReg_InValid)		// Send headers to AES
+									: !HdRW && BOIDone_IV && BufReg_EmptyCount > BufReg_InValid)		// Send headers to AES
 					: 0;							
 		
 	assign Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )

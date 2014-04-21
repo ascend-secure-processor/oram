@@ -41,10 +41,9 @@ module CoherenceController(
 	ToStashData, ToStashDataValid, ToStashDataReady,
 	FromStashData, FromStashDataValid, FromStashDataReady,
 	
-	IVStart, IVDone,
-	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV,
 	
-	IVReady_BktOfI, IVDone_BktOfI
+	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV,
+	PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV
 );
 		
 	//--------------------------------------------------------------------------
@@ -98,18 +97,15 @@ module CoherenceController(
 	//	Integrity Interface
 	//--------------------------------------------------------------------------
 
-	output						IVStart;
-	input						IVDone;
 	input 						IVRequest, IVWrite;
 	input 	[PathBufAWidth-1:0] 	IVAddress;
 	input 	[DDRDWidth-1:0]  	DataFromIV;
 	output 	[DDRDWidth-1:0]  	DataToIV;
 	
-	output  					IVReady_BktOfI;
-	input						IVDone_BktOfI;
+	output  					PathReady_IV, BOIReady_IV;
+	input						PathDone_IV, BOIDone_IV;
 	
 	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
-	
 	
 	//--------------------------------------------------------------------------
 	// CC status control logic
@@ -263,8 +259,8 @@ module CoherenceController(
 							.FromDecData(			FromDecData),
 							.FromStashData(			FromStashData),
 							
-							.IVDone(				IVDone),
-							.IVDone_BktOfI(			IVDone_BktOfI),
+							.PathDone_IV(			PathDone_IV),
+							.BOIDone_IV(			BOIDone_IV),
 							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
 							
 							.Enable(				BufP1_Enable),
@@ -309,7 +305,7 @@ module CoherenceController(
 		reg [1:0] 	HdOfIStat;
 		reg [TrancateDigestWidth-1:0] BktOfINewHash;
 		
-		assign 	IVStart = RWAccess && PathRead && PthRW_Transition;
+		assign 	PathReady_IV = RWAccess && PathRead && PthRW_Transition;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
@@ -343,7 +339,7 @@ module CoherenceController(
 				HdOfIStat <= 3;
 		end
 		
-		assign 	IVReady_BktOfI = HdOfIStat == 0 && BktOfI_Transition;
+		assign 	BOIReady_IV = HdOfIStat == 0 && BktOfI_Transition;
 		
 	end else begin: NO_BUF
 	

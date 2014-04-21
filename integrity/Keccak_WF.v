@@ -4,6 +4,7 @@
 //	Desc:		A Keccak unit wrapped with ready-valid interface on both input and output 			
 //				Input has a funnel. Hash input has a fixed amount of chunks
 //==============================================================================
+`include "Const.vh"
 
 module Keccak_WF (
 	Clock, Reset, 
@@ -14,8 +15,14 @@ module Keccak_WF (
 	parameter IWidth = 512;
 	parameter HashByteCount = 1;
 	
+	parameter KeyLength = 0;
+	parameter Key = 0;
+	
 	localparam HashInWidth = 64;
 	localparam HashOutWidth = 512;
+	
+	localparam NumKeyChunk = `divceil(KeyLength, HashInWidth);
+	localparam LogNumKeyChunk = `log2(NumKeyChunk+1);
 	
 	input  Clock, Reset;
 	
@@ -35,9 +42,14 @@ module Keccak_WF (
 	
 	// hash in and out data path
 	wire HashFunnelOutValid, HashFunnelOutReady, HashInValid, HashInReady;
-	wire [HashInWidth-1:0] HashIn; 
+	wire [HashInWidth-1:0] HashFunnelOut, HashIn; 
 	
-	wire LastChunk, LastBut2Chunk, HashBufFull, HashBusy, HashReset;
+	wire PrependingKey;
+	wire [HashInWidth-1:0] KeyChunk;
+	
+	
+	wire LastChunk, HashBufFull, HashBusy, HashReset;
+	wire LastBut2Chunk, LastEmptyChunk;
 	
 	// Funnel --> HashEngine, controlled by a CounterAlarm
 	
@@ -48,7 +60,7 @@ module Keccak_WF (
 							.InData(				DataIn),
 							.InValid(				DataInValid),
 							.InAccept(				DataInReady),
-							.OutData(			    HashIn),
+							.OutData(			    HashFunnelOut),
 							.OutValid(				HashFunnelOutValid),
 							.OutReady(				HashFunnelOutReady)
 						);
@@ -73,9 +85,33 @@ module Keccak_WF (
 							.Intermediate(  LastBut2Chunk),
 							.Done(		    LastChunk)
 						);
-	assign HashInValid = HashFunnelOutValid || (LastBut2Chunk && !BytesInLastChunk);
+	
+	generate if (NumKeyChunk > 0) begin: HMAC
+		
+		wire [LogNumKeyChunk-1:0] KeyChunkIdx;
+	
+		Counter		#(		.Width(			LogNumKeyChunk))
+		KeyChunkCtr		(	.Clock(			Clock),
+							.Reset(			HashReset),									
+							.Enable(		PrependingKey && HashInReady),
+							.Count(			KeyChunkIdx),							
+												.Set(1'b0),	.Load(1'b0), .In({LogNumKeyChunk{1'bx}})
+						);
+		
+		assign PrependingKey = KeyChunkIdx < NumKeyChunk;
+		assign KeyChunk = Key >> ( KeyChunkIdx * HashInWidth );
+	end	
+	else begin : NO_HMAC
+		assign PrependingKey = 0;		
+	end endgenerate
+	
+	
+	assign LastEmptyChunk = LastBut2Chunk && !BytesInLastChunk;
+	
+	assign HashIn = PrependingKey ? KeyChunk : HashFunnelOut;
 	assign HashInReady = !HashBusy && !HashBufFull;
-	assign HashFunnelOutReady = HashInReady && !(LastBut2Chunk && !BytesInLastChunk);	
+	assign HashInValid = HashFunnelOutValid || LastEmptyChunk || PrependingKey;	
+	assign HashFunnelOutReady = HashInReady && !LastEmptyChunk && !PrependingKey;	
 	
 	Register #(.Width(1)) Hash (Clock, HashReset, LastChunk, 1'b0, 1'bx, HashBusy);
 	assign HashReset = Reset || (HashOutValid && HashOutReady);
