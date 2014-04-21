@@ -7,7 +7,7 @@
 
 //==============================================================================
 //	Module:		StashTop
-//	Desc:		The stash and associated funnels and counters
+//	Desc:		The stash and associated funnels and counters.
 //==============================================================================
 module StashTop(
 	Clock, Reset,
@@ -95,17 +95,17 @@ module StashTop(
 	
 	// Read pipeline
 		
-	(* mark_debug = "TRUE" *)	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
+	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
 	wire					DataDownShift_InValid, DataDownShift_InReady;
 		
 	wire	[BktBSTWidth-1:0] BucketReadCtr;
 	wire					ReadProcessingHeader;	
 	
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
-	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
-	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
+	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
 		
-	(* mark_debug = "TRUE" *)	wire					ValidDownShift_OutData, ValidDownShift_OutValid;
+	wire					ValidDownShift_OutData, ValidDownShift_OutValid;
 	
 	wire	[BEDWidth-1:0]	DataDownShift_OutData;
 	wire					DataDownShift_OutValid, DataDownShift_OutReady;
@@ -115,7 +115,7 @@ module StashTop(
 	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
 	wire					HeaderDownShift_OutValid;		
 	
-	(* mark_debug = "TRUE" *)	wire	[PBEDWidth-1:0]	PathReadCtr;
+	wire	[PBEDWidth-1:0]	PathReadCtr;
 	wire					DataDownShift_Transfer;
 	
 	wire					BlockReadCtr_Reset;
@@ -129,21 +129,21 @@ module StashTop(
 	wire	[ORAMU-1:0]		HeaderUpShift_InPAddr; 
 	wire	[ORAML-1:0]		HeaderUpShift_InLeaf;
 	wire					HeaderUpShift_InReady;
-	(* mark_debug = "TRUE" *)	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
+	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
 
-	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
-	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
-	(* mark_debug = "TRUE" *)	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
+	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
 	
 	wire	[BEDWidth-1:0]	DataUpShift_InData;
 	wire					DataUpShift_InValid, DataUpShift_InReady;
 	wire	[DDRDWidth-1:0]	DataUpShift_OutData;
-	(* mark_debug = "TRUE" *)	wire					DataUpShift_OutValid, DataUpShift_OutReady;
+	wire					DataUpShift_OutValid, DataUpShift_OutReady;
 
 	wire					WritebackBlockIsValid;
 	wire 					WritebackBlockCommit;
 	
-	(* mark_debug = "TRUE" *)	wire 					WritebackProcessingHeader;		
+	wire 					WritebackProcessingHeader;		
 	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
 	wire					BucketBuf_OutValid, BucketBuf_OutReady;
 							

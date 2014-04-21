@@ -56,7 +56,7 @@ module ascend_vc707(
 		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
 							ChipScope signals & meet timing */
 	parameter				UseMIG =				1; // NOTE: leave default to 1
-	parameter				SlowDownORAMClock =		0; // NOTE: set to 0 for performance run
+	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
 	
 	// ORAM related
 	
@@ -107,7 +107,8 @@ module ascend_vc707(
 	// Clocking
 	
 	wire					MemoryClock; // always 200 Mhz (matches MIG)
-	wire					MemoryReset_Pre, MemoryReset;
+	wire					MemoryReset_Pre, MemoryReset_Gen;
+	(* mark_debug = "TRUE" *)	reg						MemoryReset;
 	
 	wire					ORAMClock; // Configurable (typically >= 100 Mhz, <= 200 Mhz)
 	wire					ORAMReset;
@@ -124,11 +125,11 @@ module ascend_vc707(
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PathORAM_PAddr;
 	(* mark_debug = "TRUE" *)	wire					PathORAM_CommandValid, PathORAM_CommandReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_DataIn;
+	(* mark_debug = "FALSE" *)	wire	[FEDWidth-1:0]	PathORAM_DataIn;
 	(* mark_debug = "TRUE" *)	wire					PathORAM_DataInValid, PathORAM_DataInReady;
 
-	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_ReturnData;
-	(* mark_debug = "TRUE" *)	wire 					PathORAM_ReturnDataValid, PathORAM_ReturnDataReady;
+	(* mark_debug = "FALSE" *)	wire	[FEDWidth-1:0]	PathORAM_DataOut;
+	(* mark_debug = "TRUE" *)	wire 					PathORAM_DataOutValid, PathORAM_DataOutReady;
 	
 	// MIG/DDR3 DRAM
 	
@@ -148,7 +149,7 @@ module ascend_vc707(
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address_MIG;
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 	
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
@@ -200,9 +201,9 @@ module ascend_vc707(
 							.ORAMDataInValid(		PathORAM_DataInValid),
 							.ORAMDataInReady(		PathORAM_DataInReady),
 							
-							.ORAMDataOut(			PathORAM_ReturnData),
-							.ORAMDataOutValid(		PathORAM_ReturnDataValid),
-							.ORAMDataOutReady(		PathORAM_ReturnDataReady),
+							.ORAMDataOut(			PathORAM_DataOut),
+							.ORAMDataOutValid(		PathORAM_DataOutValid),
+							.ORAMDataOutReady(		PathORAM_DataOutReady),
 							
 							.UARTRX(				uart_rxd),
 							.UARTTX(				uart_txd),
@@ -242,9 +243,9 @@ module ascend_vc707(
 							.DataInValid(           PathORAM_DataInValid),
 							.DataInReady(           PathORAM_DataInReady), 
 							
-							.DataOut(           	PathORAM_ReturnData),
-							.DataOutValid(      	PathORAM_ReturnDataValid),
-							.DataOutReady(      	PathORAM_ReturnDataReady), 
+							.DataOut(           	PathORAM_DataOut),
+							.DataOutValid(      	PathORAM_DataOutValid),
+							.DataOutReady(      	PathORAM_DataOutReady), 
 							
 							.DRAMCommand(			DDR3SDRAM_Command),
 							.DRAMAddress(           DDR3SDRAM_Address),
@@ -365,17 +366,24 @@ module ascend_vc707(
 	//	DDR3SDRAM (MIG7 or some synthetic memory)
 	//------------------------------------------------------------------------------	
 	
+	/*
 	ResetGenerator	#(		.ClockFreq(				MemoryClockFreq),
-							.UseIn(					1),
 							.UsePowerOn(			1),
 							.InWidth(				1),
 							.POWidth(				150),
 							.PODelay(				0))
 				rst_gen(	.Clock(					MemoryClock), 
 							.Reset(					1'b0),
-							.In(					MemoryReset_Pre),
-							.Out(					MemoryReset));
-
+							.In(					1'b0),
+							.Out(					MemoryReset_Gen));
+	*/
+	
+	// The tool imposes weird constraints on the shift register in 
+	// ResetGenerator.  Adding this extra pipeline really helps ...
+	always @(posedge MemoryClock) begin
+		MemoryReset <=								MemoryReset_Pre;						
+	end
+	
 	generate if (UseMIG == 1) begin:MIG
 		DDR3SDRAM DDR3SDRAMController(
 							// System interface

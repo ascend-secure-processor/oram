@@ -6,7 +6,7 @@
 	localparam				UARTWidth = 			8;
 
 	`ifdef SIMULATION
-	localparam				UARTBaud =				1152000; // unrealistically high
+	localparam				UARTBaud =				1500000; // unrealistically high
 	`else
 	localparam				UARTBaud =				115200;
 	`endif

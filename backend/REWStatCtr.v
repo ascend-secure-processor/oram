@@ -11,8 +11,8 @@ module REWStatCtr(
 	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm,
 	
 	ROAccess, RWAccess, Read, Writeback,
-	RW_R_Ctr, RW_W_Ctr, RO_R_Ctr, RO_W_Ctr,
-);
+	RW_R_Ctr, RW_W_Ctr, RO_R_Ctr, RO_W_Ctr
+	);
 
 	parameter	ORAME = 0;
 	
