@@ -138,11 +138,11 @@ module PathORAMBackend(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 			bend_inner (	.Clock(					Clock),
-				//`ifdef ASIC
+				`ifdef ASIC
 							.Reset(					Reset),
-				//`else
-				//			.Reset(					1'b0),
-				//`endif			
+				`else
+							.Reset(					1'b0),
+				`endif			
 							.Command(				Command),
 							.PAddr(					PAddr),
 							.CurrentLeaf(			CurrentLeaf),
