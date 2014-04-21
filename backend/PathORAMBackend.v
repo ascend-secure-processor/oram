@@ -111,13 +111,13 @@ module PathORAMBackend(
 	
 	// integrity verification
 		
-	wire 					PathReady_IV, PathDone_IV, BOIReady, BOIDone;
+	wire 					PathReady_IV, PathDone_IV, BOIReady, BOIDone_IV;
 	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 
-	wire	[AESEntropy-1:0] 	ROIBV;
-	wire	[ORAML:0]			ROIBID;
+	wire	[AESEntropy-1:0] ROIBV;
+	wire	[ORAML:0]		ROIBID;
 
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
@@ -249,9 +249,7 @@ module PathORAMBackend(
 							);
 									
 			// TODO: debugging now
-
-			//assign	BOIDone = 			1'b1;		
-									
+		
 		end	else begin: NO_INTEGRITY		
 			assign	IVRequest = 					1'b0;
 			assign 	IVWrite = 						1'b0;
@@ -259,8 +257,8 @@ module PathORAMBackend(
 			assign	DataFromIV = 					0;
 		
 			// only the following two are important
-			assign	PathDone_IV = 						1'b1;
-			assign	BOIDone = 				1'b1;
+			assign	PathDone_IV = 					1'b1;
+			assign	BOIDone_IV = 					1'b1;
 		end
 	end endgenerate
 	
