@@ -927,7 +927,7 @@ module AESREWORAM(
 	
 	Register	#(			.Width(					AESEntropy + BIDWidth + BigUWidth + BigVWidth))
 				roi_info(	.Clock(					Clock),
-							.Reset(					1'b0),
+							.Reset(					ROI_NotFoundBucket), // If we don't find the block of interest, we have to send a VersionNumber == 0
 							.Set(					1'b0),
 							.Enable(				ROI_HeaderLoad),
 							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
