@@ -56,7 +56,7 @@ module ascend_vc707(
 		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
 							ChipScope signals & meet timing */
 	parameter				UseMIG =				1; // NOTE: leave default to 1
-	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
+	parameter				SlowDownORAMClock =		0; // NOTE: set to 0 for performance run
 	
 	// ORAM related
 	
@@ -364,22 +364,8 @@ module ascend_vc707(
 	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7 or some synthetic memory)
-	//------------------------------------------------------------------------------	
+	//------------------------------------------------------------------------------
 	
-	/*
-	ResetGenerator	#(		.ClockFreq(				MemoryClockFreq),
-							.UsePowerOn(			1),
-							.InWidth(				1),
-							.POWidth(				150),
-							.PODelay(				0))
-				rst_gen(	.Clock(					MemoryClock), 
-							.Reset(					1'b0),
-							.In(					1'b0),
-							.Out(					MemoryReset_Gen));
-	*/
-	
-	// The tool imposes weird constraints on the shift register in 
-	// ResetGenerator.  Adding this extra pipeline really helps ...
 	always @(posedge MemoryClock) begin
 		MemoryReset <=								MemoryReset_Pre;						
 	end
