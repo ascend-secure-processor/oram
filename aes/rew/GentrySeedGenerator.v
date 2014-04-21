@@ -30,14 +30,8 @@ module GentrySeedGenerator(
 //	`include "DDR3SDRAMLocal.vh"
 //	`include "BucketDRAMLocal.vh"
 //	`include "REWAESLocal.vh"
-	
+
 	localparam				BIDWidth = ORAML + 1;
-	
-	localparam				RWSWidth =				2,
-							ST_RW_StartRead =		2'd0,
-							ST_RW_Read =			2'd1,
-							ST_RW_StartWrite =		2'd2,
-							ST_RW_Write =			2'd3;
 							
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -58,49 +52,37 @@ module GentrySeedGenerator(
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
-
-	reg		[RWSWidth-1:0] 	CS_RW, NS_RW;
-	wire					CSRWStartOp, CSRWWrite;
-	
 	wire					RWPathTransition;
 	wire					Transfer;
 
-	wire	[AESEntropy-1:0] GentryCounter, GentryCounterShifted, RWBVOut;
-
-	wire	[ORAML-1:0]		GentryLeaf;
+	wire	[AESEntropy-1:0] GentryCounter, GentryCounterShifted, GentryCounterIn;
 	
-	`ifndef ASIC
-		initial begin	
-			CS_RW = ST_RW_StartRead;
-		end
-	`endif
+	wire	[ORAML-1:0]		GentryLeaf;
 	
 	//--------------------------------------------------------------------------
 	//	Logic
 	//-------------------------------------------------------------------------- 	
 	
-	assign	CSRWStartOp =							CS_RW == ST_RW_StartRead | CS_RW == ST_RW_StartWrite;
-	assign	CSRWWrite =								CS_RW == ST_RW_Write;
+	reg CSRWWrite, CSStartOp;
+	
+	`ifndef ASIC
+		initial begin	
+			CSStartOp <= 1;
+			CSRWWrite <= 0;	// read first
+		end
+	`endif
 	
 	always @(posedge Clock) begin
-		if (Reset) CS_RW <= 						ST_RW_StartRead;
-		else CS_RW <= 								NS_RW;
-	end
-	
-	always @( * ) begin
-		NS_RW = 									CS_RW;
-		case (CS_RW)
-			ST_RW_StartRead :
-					NS_RW =							ST_RW_Read;
-			ST_RW_Read : 
-				if (RWPathTransition)
-					NS_RW =							ST_RW_StartWrite;
-			ST_RW_StartWrite : 
-					NS_RW =							ST_RW_Write;
-			ST_RW_Write : 
-				if (RWPathTransition)
-					NS_RW =							ST_RW_StartRead;
-		endcase
+		if (Reset) begin
+			CSStartOp <= 1;
+			CSRWWrite <= 0;	// read first
+		end 
+		else begin
+			if (CSStartOp) 
+				CSStartOp <= 0;
+			if (RWPathTransition) 
+				CSRWWrite <= ~CSRWWrite;
+		end
 	end
 	
 	CountAlarm #(			.Threshold(				ORAML + 1))
@@ -126,24 +108,27 @@ module GentrySeedGenerator(
 							.SWidth(				1))
 				gentry_shft(.Clock(					Clock), 
 							.Reset(					1'b0), 
-							.Load(					CSRWStartOp),
+							.Load(					RWPathTransition || CSStartOp),
 							.Enable(				Transfer), 
-							.PIn(					GentryCounter),
+							.PIn(					GentryCounterIn),
 							.SIn(					1'b0),
 							.POut(					GentryCounterShifted));
-	assign	OutIV =									(CSRWWrite) ? GentryCounterShifted + 1 : GentryCounterShifted;
+		
+	assign  GentryCounterIn = 		GentryCounter + (RWPathTransition & CSRWWrite);
 	
-	assign	GentryLeaf =							GentryCounter[ORAML-1:0];
+	assign	OutIV =					GentryCounterShifted + CSRWWrite;
+	
+	assign	GentryLeaf =			GentryCounterIn[ORAML-1:0];
 
 	BktIDGen # 	(	.ORAML(		ORAML))
 		rw_bid 	(	.Clock(		Clock),
-					.ReStart(	CSRWStartOp),
+					.ReStart(	CSStartOp || RWPathTransition),
 					.leaf(		GentryLeaf),
 					.Enable(	Transfer),
 					.BktIdx(	OutBID)			
 				);
 
-	assign	OutValid = !CSRWStartOp;					
+	assign	OutValid = !CSStartOp;					
 	assign	Transfer = OutValid && OutReady;
 	
 	//--------------------------------------------------------------------------

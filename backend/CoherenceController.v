@@ -107,6 +107,8 @@ module CoherenceController(
 	
 	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
 	
+	wire 	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
+	
 	//--------------------------------------------------------------------------
 	// CC status control logic
 	//-------------------------------------------------------------------------- 
@@ -122,18 +124,19 @@ module CoherenceController(
 	
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
+							.Overlap(				0),
 							.RW_R_Chunk(			RW_R_Chunk),
 							.RW_W_Chunk(			RW_W_Chunk),
 							.RO_R_Chunk(			RO_R_Chunk),
 							.RO_W_Chunk(			RO_W_Chunk))
 							
-			rw_stat		(	.Clock(					Clock),
+		rew_stat		(	.Clock(					Clock),
 							.Reset(					Reset),
 							
-							.RW_R_Transfer(			RWAccess && PathRead && FromDecDataValid && FromDecDataReady),
-							.RW_W_Transfer(			RWAccess && PathWriteback && ToEncDataValid && ToEncDataReady),
-							.RO_R_Transfer(			ROAccess && PathRead && FromDecDataValid && FromDecDataReady),
-							.RO_W_Transfer(			ROAccess && PathWriteback && ToEncDataValid && ToEncDataReady),
+							.RW_R_Transfer(			FromDecDataValid && FromDecDataReady),
+							.RW_W_Transfer(			ToEncDataValid && ToEncDataReady),
+							.RO_R_Transfer(			FromDecDataValid && FromDecDataReady),
+							.RO_W_Transfer(			ToEncDataValid && ToEncDataReady),
 							
 							.ROAccess(				ROAccess),
 							.RWAccess(				RWAccess),
@@ -143,17 +146,23 @@ module CoherenceController(
 							.RW_R_Ctr(				RW_R_Ctr),
 							.RW_W_Ctr(				RW_W_Ctr),
 							.RO_R_Ctr(				RO_R_Ctr),
-							.RO_W_Ctr(				RO_W_Ctr)													
+							.RO_W_Ctr(				RO_W_Ctr),
+
+							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
+							.RW_W_DoneAlarm(		RW_W_DoneAlarm),
+							.RO_R_DoneAlarm(		RO_R_DoneAlarm),
+							.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
 						);
 	
 	
 	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 
-
-	wire HeaderInValid, HeaderInBkfOfI;	
+	wire HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
+	
 	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
-	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	 	
+	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
+	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 	
 	
 	// invalidate the bit for the target block
 	wire HdOfInterest;
@@ -203,7 +212,7 @@ module CoherenceController(
                             .AWidth(				PathBufAWidth),
 							.NPorts(				2))
 							
-            out_path_buf  (	.Clock(					{2{Clock}}),
+            cc_path_buf  (	.Clock(					{2{Clock}}),
                             .Reset(					{2{Reset}}),
                             .Enable(				{BufP1_Enable, BufP2_Enable}),
                             .Write(					{BufP1_Write, BufP2_Write}),
@@ -214,20 +223,18 @@ module CoherenceController(
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read (through a FIFO) and written by AES
-		//-------------------------------------------------------------------------- 
-		wire 					PthRW_Transition, BktOfI_Transition;
-		
+		//-------------------------------------------------------------------------- 	
 		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
 		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
 		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr;
 
 		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && (HdOnPthCtr == (BktOfInterest + 1) % (ORAML+1));
-		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash[DigestStart-1:DigestEnd], BufP1_DOut[BktHSize_RawBits-1:0]}
+		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash, BufP1_DOut[BktHSize_RawBits-1:0]}
 									: BufP1_DOut;
 		
 		FIFORAM #(			.Width(					DDRDWidth),
-							.Buffering(				2))
+							.Buffering(				3))
 			out_path_reg (	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				BufP1Reg_DIn),
@@ -237,64 +244,88 @@ module CoherenceController(
 							.OutData(				BufP1Reg_DOut),
 							.OutSend(				BufP1Reg_DOutValid),
 							.OutReady(				BufP1Reg_DOutReady));
-				
-		CCPortArbiter # (	.DWidth(				DDRDWidth),
-							.ORAML(					ORAML),
-							.BktSize_DRBursts(		BktSize_DRBursts))
-							
-			port_arbiter(	.Clock(					Clock),
-							.Reset(					Reset),
-							
-							.ROAccess(				ROAccess),
-							.RWAccess(				RWAccess),
-							.PathRead(			    PathRead),
-							.PathWriteback(		    PathWriteback),
-							
-						//	.HeaderInValid(			HeaderInValid),
-						//	.HdOfInterest(			HdOfInterest),
-							
-							.FromDecDataTransfer(	FromDecDataValid && FromDecDataReady),
-							.FromStashDataTransfer(	FromStashDataValid && FromStashDataReady),
-							.HeaderDataIn(			HeaderIn),
-							.FromDecData(			FromDecData),
-							.FromStashData(			FromStashData),
-							
-							.PathDone_IV(			PathDone_IV),
-							.BOIDone_IV(			BOIDone_IV),
-							.BufReg_EmptyCount(		BufP1Reg_EmptyCount),
-							
-							.Enable(				BufP1_Enable),
-							.Write(					BufP1_Write),
-							.Address(				BufP1_Address),
-							.DIn(					BufP1_DIn),
-							
-							.BufReg_InValid(		BufP1Reg_DInValid),
-							.PthRW_Transition(		PthRW_Transition),
-							.HdOnPthCtr(			HdOnPthCtr),
-							.BktOfI_Transition(		BktOfI_Transition)
-						);
+		
+		Register #(	.Width(1))	// TODO: Read from P1 but not for AES? Yes, when delayed write back
+			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufP1_Enable && !BufP1_Write,	BufP1Reg_DInValid);
+		
+		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
 	
+		reg  PthRW, HdRW;
+		wire PthCtrEnable, HdCtrEnable;
+		wire HdRW_Transition, PthRW_Transition;	
+		
+		wire FromDecDataTransfer, FromStashDataTransfer;
+		assign FromDecDataTransfer = FromDecDataReady && FromDecDataValid;
+		assign FromStashDataTransfer = FromStashDataReady && FromStashDataValid;
+		
+		assign PthCtrEnable = RWAccess && BufP1_Enable;
+		CountAlarm #(		.Threshold(				PathSize_DRBursts))
+			blk_ctr (		.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				PthCtrEnable),
+							.Count(					BlkOnPthCtr),
+							.Done(					PthRW_Transition)
+					);
+		
+		assign HdCtrEnable = ROAccess && BufP1_Enable && !BktOfIInValid;
+		CountAlarm #(		.Threshold(				ORAML + 1))
+			hd_ctr (		.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				HdCtrEnable),
+							.Count(					HdOnPthCtr),
+							.Done(					HdRW_Transition)
+					);
+		
+		// 1 means read from DRAM,  write to buffer; 0 means write to DRAM, read from buffer
+		always @(posedge Clock) begin
+			if (Reset) begin
+				PthRW <= 1'b1;
+				HdRW <= 1'b1;
+			end
+			else begin 
+				if (RWAccess && PathWriteback && PthRW_Transition) 
+					PthRW = !PthRW;				
+				else if (ROAccess && HdRW_Transition) 
+					HdRW <= !HdRW;			
+			end
+		end
+	
+		assign BufP1_Enable = RWAccess ? 
+									(	PathRead ? FromDecDataTransfer
+										: PthRW ? FromStashDataTransfer 
+												: PathDone_IV && BufP1Reg_EmptyCount > 1)			// Send data to AES							
+							: ROAccess ? 
+									(	PathRead ? FromDecDataTransfer 						// header and BktOfI from Dec
+										: !HdRW && BOIDone_IV && BufP1Reg_EmptyCount > 1)		// Send headers to AES
+							: 0;							
+			
+		assign BufP1_Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )
+								: ROAccess ? (	PathRead ? 1'b1 : HdRW )
+								: 0;
+						
+		assign BufP1_Address = RWAccess ?  (	PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
+								: ROAccess ? (	PathRead ? 
+											(	BktOfIInValid ? OBktOfIStartAddr + RO_R_Ctr - RO_W_Chunk	// bucket of interest										     										  																								 		
+												: HdStartAddr + HdOnPthCtr)		// save header										
+										: HdStartAddr + HdOnPthCtr)				// header write back								
+								: 0;
+								
+		assign BufP1_DIn = 	RWAccess ? 	(	PathRead ? FromDecData : FromStashData)							
+							: ROAccess ? (	BktOfIInValid ? FromDecData : HeaderIn) 
+							: 0;	
+		
 		//	AES --> Stash  	
 		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
 											: FromDecData;
 											
-		assign	ToStashDataValid =		RWAccess ?  FromDecDataValid
-											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid : BktOfIInValid;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
-		//	ROAccess: header write back CC --> AES. RWAccess: BufP1 --> AES
-		assign	ToEncData =				RWAccess ? BufP1Reg_DOut 
-										: ROAccess ? BufP1Reg_DOut
-										: {DDRDWidth{1'bx}};
-										
-		assign	ToEncDataValid =		RWAccess ? BufP1Reg_DOutValid
-										: ROAccess ? BufP1Reg_DOutValid
-										: 0;
-		
-		assign  BufP1Reg_DOutReady = 	RWAccess ? ToEncDataReady
-										: ROAccess ? ToEncDataReady
-										: 0;
+		// BufP1 --> buffer --> AES
+		assign	ToEncData =				BufP1Reg_DOut;
+		assign	ToEncDataValid = 		BufP1Reg_DOutValid;
+		assign	BufP1Reg_DOutReady = 	ToEncDataReady;
 		
 		assign	FromStashDataReady = 	RWAccess && PathWriteback;
 		
@@ -305,7 +336,8 @@ module CoherenceController(
 		reg [1:0] 	HdOfIStat;
 		reg [TrancateDigestWidth-1:0] BktOfINewHash;
 		
-		assign 	PathReady_IV = RWAccess && PathRead && PthRW_Transition;
+		assign 	PathReady_IV = RW_R_DoneAlarm;
+		assign	BOIReady_IV = RO_R_DoneAlarm;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
@@ -317,7 +349,7 @@ module CoherenceController(
 		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin
 		    if (Reset) begin
-		        HdOfIStat <= 0;
+		        HdOfIStat <= 3;
 		    end
 						
 			if (HdOfInterest) begin
@@ -328,8 +360,8 @@ module CoherenceController(
 			
 			// there should be 2 reads and 1 write
 			// 0 - found; 1 - have read once; 2 - have read twice; 3 - all set.		
-			else if (IVRequest && IVAddress == OBktOfIStartAddr) begin	
-				if (!IVWrite)
+			else if (HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr) begin	
+				if (!IVWrite && HdOfIStat < 2)
 					HdOfIStat <= HdOfIStat + 1;
 				else
 					BktOfINewHash <= DataFromIV[DigestStart-1:DigestEnd];			
@@ -338,8 +370,6 @@ module CoherenceController(
 			else if (HdOfIStat == 2 && PathRead)
 				HdOfIStat <= 3;
 		end
-		
-		assign 	BOIReady_IV = HdOfIStat == 0 && BktOfI_Transition;
 		
 	end else begin: NO_BUF
 	
@@ -370,8 +400,7 @@ module CoherenceController(
 		//	AES --> Stash 	
 		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
 											: FromDecData;
-		assign	ToStashDataValid =		RWAccess ? FromDecDataValid
-											: PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts;
+		assign	ToStashDataValid =		RWAccess ? FromDecDataValid : BktOfIInValid;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 

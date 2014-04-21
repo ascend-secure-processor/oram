@@ -68,7 +68,7 @@ module IntegrityVerifier (
 		BucketID[Turn] * BktSize_DRBursts : 						//	updating hash for the previous set of buckets
 		BucketID[Turn] * BktSize_DRBursts + BucketOffset[Turn];		//  reading data from the current set of buckets
 		
-	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts )) && !DataInValid; 
+	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts )); 
 																											// can remove !DataInValid if we make Gentry always valid
 	//------------------------------------------------------------------------------------
 	// Process and save headers
@@ -78,11 +78,6 @@ module IntegrityVerifier (
 	
 	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 	DataInValid);
 	assign  HeaderInValid = DataInValid && BucketOffset[LastTurn] == 1;		// TODO: do not work for  header > 1
-	
-	always @(posedge Clock) begin
-		if (!Reset && HeaderInValid)
-			BucketHeader[LastTurn] <= DataIn;					
-	end
 
 	// Bucket ID and bucket version
 	wire [AESEntropy-1:0] 	RWBV;
@@ -118,7 +113,11 @@ module IntegrityVerifier (
 	assign HashData = HeaderInValid ? {  {(TrancateDigestWidth-BIDWidth){1'b0}}, BktID, DataIn[BktHSize_RawBits-1:AESEntropy], BktV} 
 						: DataIn;
 		// cannot include digest itself, nor header IV (since they change for every bucket on RO access).
-		// should replace them with BktCtr and BktID. Currently just zero.
+		
+	always @(posedge Clock) begin
+		if (!Reset && HeaderInValid)
+			BucketHeader[LastTurn] <= {DataIn[DDRDWidth-1:AESEntropy], BktV};					
+	end
 	
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash
@@ -131,10 +130,10 @@ module IntegrityVerifier (
 	assign ConsumeHash = HashOutValid[Turn];
 	assign CheckHash = ConsumeHash && 
 						(BktOnPathDone < TotalBucketD / 2 
-						|| BktOfIDone > 0);		// first task is to update the hash, second is to check against the old hash
+						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
 							
 	// checking hash for the input path
-	assign Violation = ConsumeHash && CheckHash &&	
+	assign Violation = ConsumeHash && CheckHash && BucketHeader[Turn][AESEntropy-1:0] > 0 &&
 		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
 	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
@@ -154,6 +153,7 @@ module IntegrityVerifier (
 			
 			else if (Violation === 1'bx) begin
 				$display("\tX bits in hash");
+				$stop;
 			end	
 		end
 		
@@ -205,8 +205,7 @@ module IntegrityVerifier (
 			end
 			
 			// dispatch work if there's any
-	//		if (PendingWork && (ConsumeHash || Idle)) begin	
-			if (PendingWork && (0 || Idle)) begin	
+			if (PendingWork && Idle) begin	
 				BucketOffset[Turn] <= 0;
 				
 				if (BktOfIStarted < 2) begin			// prioritize RO bucket of interest
@@ -233,22 +232,19 @@ module IntegrityVerifier (
 			if (BOIReady) begin
 				BktOfIStarted <= 0;
 				BktOfIDone <= 0;
-				
-				`ifdef SIMULATION
-				if (!BOIDone)
-					$display("Error: RO bucket arrives so soon? Have not finished the last one");				
-				`endif	
 			end
 			
 			if (PathReady) begin
 				BktOnPathStarted <= 0;
-				BktOnPathDone <= 0;
-				
-				`ifdef SIMULATION
-				if (!PathDone)
-					$display("Error: Have not finished the last path");				
-				`endif				
+				BktOnPathDone <= 0;			
 			end
+			
+			`ifdef SIMULATION
+			if (BOIReady && !BOIDone)
+				$display("Error: RO bucket arrives so soon? Have not finished the last one");	
+			if (PathReady && !PathDone)
+				$display("Error: Have not finished the last path");	
+			`endif	
 			
 		end
     end

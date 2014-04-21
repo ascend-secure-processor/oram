@@ -19,12 +19,16 @@ module REWStatCtr(
 	// Most of these alarms aren't performance critical, so we can delay them by 1 (helps timing)
 	parameter	LatchOutput = 1; 
 	
+	// whether we allow two phases to make progress together
+	parameter	Overlap = 0;
+	
 	// chunks to be transferred at each stage
 	parameter	RW_R_Chunk = 0,
 				RW_W_Chunk = 0,
 				RO_R_Chunk = 0,
 				RO_W_Chunk = 0;
-							
+	
+	
 	input	Clock, Reset;
 		
 	output 	ROAccess, RWAccess, Read, Writeback;
@@ -32,6 +36,13 @@ module REWStatCtr(
 	
 	// count the number of chunks transferred
 	input	RW_R_Transfer, RW_W_Transfer, RO_R_Transfer, RO_W_Transfer;
+	
+	wire	RW_R_Enable, RW_W_Enable, RO_R_Enable, RO_W_Enable;
+	
+	assign	RW_R_Enable = Overlap ? RW_R_Transfer : RWAccess && Read 		&& RW_R_Transfer;
+	assign	RW_W_Enable = Overlap ? RW_W_Transfer : RWAccess && Writeback 	&& RW_W_Transfer;
+	assign	RO_R_Enable = Overlap ? RO_R_Transfer : ROAccess && Read 		&& RO_R_Transfer;
+	assign	RO_W_Enable = Overlap ? RO_W_Transfer : ROAccess && Writeback 	&& RO_W_Transfer;
 	
 	output	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
 	output	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
@@ -44,7 +55,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RW_R_Chunk))
 		rw_r_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RW_R_Transfer),
+						.Enable(				RW_R_Enable),
 						.Count(					RW_R_Ctr),
 						.Done(					RW_R_Done)
 			);
@@ -52,7 +63,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RW_W_Chunk))
 		rw_w_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RW_W_Transfer),
+						.Enable(				RW_W_Enable),
 						.Count(					RW_W_Ctr),
 						.Done(					RW_W_Done)
 			);		
@@ -60,7 +71,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RO_R_Chunk))
 		ro_r_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RO_R_Transfer),
+						.Enable(				RO_R_Enable),
 						.Count(					RO_R_Ctr),
 						.Done(					RO_R_Done)
 			);
@@ -68,7 +79,7 @@ module REWStatCtr(
 	CountAlarm #(		.Threshold(				RO_W_Chunk))
 		ro_w_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
-						.Enable(				RO_W_Transfer),
+						.Enable(				RO_W_Enable),
 						.Count(					RO_W_Ctr),
 						.Done(					RO_W_Done)
 			);		

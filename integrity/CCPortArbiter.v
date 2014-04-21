@@ -8,18 +8,19 @@
 module CCPortArbiter (
 	Clock, Reset,
 	ROAccess, RWAccess, PathRead, PathWriteback,
-//	HeaderInValid, HdOfInterest,
+
 	FromDecDataTransfer, FromStashDataTransfer, 
 	FromDecData, HeaderDataIn, FromStashData,
 	
-	BufReg_InValid, BufReg_EmptyCount, PathDone_IV, BOIDone_IV,
+	BufReg_EmptyCount, PathDone_IV, BOIDone_IV,
 	
 	Enable, Write, 
 	Address,
 	DIn,
 	
-	PthRW_Transition, BlkOnPthCtr, 
-	HdOnPthCtr, BktOfI_Transition
+	BlkOnPthCtr, 
+	HdOnPthCtr
+	
 );
 
 	parameter 	DWidth = 1,
@@ -36,7 +37,7 @@ module CCPortArbiter (
 	
 	input	ROAccess, RWAccess;
 	input 	PathRead, PathWriteback;
-//	input	HeaderInValid, HdOfInterest;
+
 	input 	FromDecDataTransfer, FromStashDataTransfer;
 	input	[1:0] BufReg_EmptyCount;
 	input	PathDone_IV, BOIDone_IV;
@@ -47,23 +48,14 @@ module CCPortArbiter (
 	output 	[AWidth-1:0] 	Address;
 	output 	[DWidth-1:0] 	DIn;
 	
-	output BufReg_InValid; 
-	
-	output  PthRW_Transition;
 	output [PthBSTWidth-1:0]	BlkOnPthCtr;
 	output [`log2(ORAML+1)-1:0] HdOnPthCtr;
-	output BktOfI_Transition;
 	
 	reg  PthRW, HdRW;
 	wire PthCtrEnable, HdCtrEnable;
-	wire BufReg_InValid_Pre;
 	wire HdRW_Transition, BktOfInterest;	
 	wire [`log2(BktSize_DRBursts)-1:0]	BktOfInterestCtr;
 	
-	Register #(	.Width(1))
-		to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufReg_InValid_Pre,	BufReg_InValid);
-	
-	assign BufReg_InValid_Pre = Enable && !Write;	// TODO: is there any case read but not for AES
 	
 	assign PthCtrEnable = RWAccess && Enable;
 	CountAlarm #(		.Threshold(				PathSize_DRBursts))
@@ -87,8 +79,7 @@ module CCPortArbiter (
 		bkt_of_i_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				FromDecDataTransfer && BktOfInterest),
-						.Count(					BktOfInterestCtr),
-						.Done(					BktOfI_Transition)
+						.Count(					BktOfInterestCtr)
 			);
 
 	assign BktOfInterest = ROAccess && PathRead && !HdRW;
@@ -106,14 +97,15 @@ module CCPortArbiter (
 				HdRW <= !HdRW;			
 		end
 	end
-		
+	
+	
 	assign Enable = RWAccess ? 
 								(	PathRead ? FromDecDataTransfer
 									: PthRW ? FromStashDataTransfer 
-											: PathDone_IV && BufReg_EmptyCount > BufReg_InValid)			// Send data to AES							
+											: PathDone_IV && BufReg_EmptyCount > 1)			// Send data to AES							
 					: ROAccess ? 
-								(	PathRead ? FromDecDataTransfer 									// header and BktOfI from Dec
-									: !HdRW && BOIDone_IV && BufReg_EmptyCount > BufReg_InValid)		// Send headers to AES
+								(	PathRead ? FromDecDataTransfer 						// header and BktOfI from Dec
+									: !HdRW && BOIDone_IV && BufReg_EmptyCount > 1)		// Send headers to AES
 					: 0;							
 		
 	assign Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )
@@ -132,4 +124,39 @@ module CCPortArbiter (
 					: 0;	
 							
 endmodule
+
+
+/*
+	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
+	localparam  ORAME = 5;
+	localparam	RW_R_Chunk = PathSize_DRBursts,
+				RW_W_Chunk = PathSize_DRBursts,
+				RO_R_Chunk = (ORAML+1) * 1 + BktSize_DRBursts,
+				RO_W_Chunk = (ORAML+1) * 1;
+	
+	wire	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
+	wire	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
+	wire	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
+	wire	[`log2(RO_W_Chunk)-1:0]		RO_W_Ctr;
+	
+	REWStatCtr	#(			.ORAME(					ORAME),
+							.RW_R_Chunk(			RW_R_Chunk),
+							.RW_W_Chunk(			RW_W_Chunk),
+							.RO_R_Chunk(			RO_R_Chunk),
+							.RO_W_Chunk(			RO_W_Chunk))
+							
+		cc_buf_addr		(	.Clock(					Clock),
+							.Reset(					Reset),
+							
+							.RW_R_Transfer(			RWAccess && PathRead && Enable),
+							.RW_W_Transfer(			RWAccess && PathWriteback && Enable),
+							.RO_R_Transfer(			ROAccess && PathRead && Enable),
+							.RO_W_Transfer(			ROAccess && PathWriteback && Enable),
+											
+							.RW_R_Ctr(				RW_R_Ctr),
+							.RW_W_Ctr(				RW_W_Ctr),
+							.RO_R_Ctr(				RO_R_Ctr),
+							.RO_W_Ctr(				RO_W_Ctr)													
+						);
+*/
 							

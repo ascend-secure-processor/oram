@@ -111,7 +111,7 @@ module PathORAMBackend(
 	
 	// integrity verification
 		
-	wire 					PathReady_IV, PathDone_IV, BOIReady, BOIDone_IV;
+	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV;
 	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
