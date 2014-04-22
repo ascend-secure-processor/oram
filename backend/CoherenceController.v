@@ -284,7 +284,7 @@ module CoherenceController(
 			end
 			else begin 
 				if (RWAccess && PathWriteback && PthRW_Transition) 
-					PthRW = !PthRW;				
+					PthRW <= !PthRW;				
 				else if (ROAccess && HdRW_Transition) 
 					HdRW <= !HdRW;			
 			end
