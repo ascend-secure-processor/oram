@@ -26,7 +26,7 @@ module Stash(
 	
 	RemapLeaf, AccessLeaf, AccessPAddr,
 	AccessIsDummy, AccessCommand,
-	StartScan, SkipWriteback, StartWriteback,
+	StartAppend, StartScan, AccessSkipsWriteback, StartWriteback,
 		
 	ReturnData, ReturnPAddr, ReturnLeaf,
 	ReturnDataOutValid, BlockReturnComplete,
@@ -89,21 +89,20 @@ module Stash(
 	input	[ORAML-1:0]		RemapLeaf;
 	input	[ORAML-1:0]		AccessLeaf;
 	input	[ORAMU-1:0]		AccessPAddr;
-	
 	/*	Controls the Return/Eviction interfaces 
 		Command code:
 			IsDummy ==	1		Command ==	X
 			IsDummy ==	0		Perform command */
 	input					AccessIsDummy;
+	input					AccessSkipsWriteback;
 	input	[BECMDWidth-1:0]AccessCommand;
+	
+	input					StartAppend;
 	
 	/*	Start scanning the contents of the stash.  This should be pulsed as soon 
 		as the PosMap is read.  The level command signals must be valid at this 
 		time. */
 	input					StartScan;
-	
-	/**/
-	input					SkipWriteback;
 	
 	/*	Start dumping data to AES encrypt in the NEXT cycle.  This should be 
 		pulsed as soon as the last dummy block is decrypted */
@@ -191,10 +190,12 @@ module Stash(
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSIdle, CSPathRead, CSPathWriteback, CSScan, 
 							CSEvict, CSTurnaround1, CSTurnaround2,
-							CSCoreSync;
+							CSCoreSync, CSCoreSyncWait;
 	reg						CSTurnaround1_Delayed;
 	wire					CSTurnaround1_FirstCycle;
 	
+	wire 					NormalWriteback, KillWriteback;
+
 	// Input timing
 	
 	wire					StartScan_Pass, StartScan_Set, StartScan_Primed;
@@ -287,14 +288,10 @@ module Stash(
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
-	// TODO move
-	wire NormalWriteback, KillWriteback;
-	wire SkipWriteback_Primed, SkipWriteback_Pass, SkipWriteback_Set;
-	wire AccessSkipsWB;
-	wire CSCoreSyncWait;	
-	
 	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
+	
+	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
@@ -370,7 +367,7 @@ module Stash(
 				if (CSScan)
 					$display("[%m @ %t] Stash: start Scan", $time);
 				if (CSPathRead)
-					$display("[%m @ %t] Stash: start PathRead (cmd = %d, leaf = %x, paddr = %x, dummy = %b, RO access = %b)", $time, AccessCommand, AccessLeaf, AccessPAddr, AccessIsDummy, AccessSkipsWB);
+					$display("[%m @ %t] Stash: start PathRead (cmd = %d, leaf = %x, paddr = %x, dummy = %b, RO access = %b)", $time, AccessCommand, AccessLeaf, AccessPAddr, AccessIsDummy, AccessSkipsWriteback);
 				if (CSTurnaround1)
 					$display("[%m @ %t] Stash: start frontend operation", $time);
 				if (CSPathWriteback)
@@ -425,8 +422,8 @@ module Stash(
 	
 	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
 	
-	assign	NormalWriteback = 						CSCoreSync & Core_CommandComplete & ~AccessSkipsWB;
-	assign	KillWriteback = 						CSCoreSync & Core_CommandComplete & AccessSkipsWB;
+	assign	NormalWriteback = 						CSCoreSync & Core_CommandComplete & ~AccessSkipsWriteback;
+	assign	KillWriteback = 						CSCoreSync & Core_CommandComplete & AccessSkipsWriteback;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -443,7 +440,7 @@ module Stash(
 			ST_Idle :
 				if (AccessStarted) 
 					NS =							ST_Scan;
-				else if (EvictDataInValid & AccessCommand == BECMD_Append)
+				else if (StartAppend)
 					NS =							ST_Evict;
 			ST_Scan :
 				if (ScanComplete_Conservative)
@@ -487,15 +484,7 @@ module Stash(
 								.Enable(			1'b0),
 								.In(				1'bx),
 								.Out(				StartScan_Primed));
-	Register	#(				.Width(				1))
-				wbskip_hold(	.Clock(				Clock),
-								.Reset(				Reset | PerAccessReset),
-								.Set(				SkipWriteback),
-								.Enable(			1'b0),
-								.In(				1'bx),
-								.Out(				SkipWriteback_Primed));
-	assign	StartScan_Pass = 						CSIdle & (StartScan | 		StartScan_Primed);
-	assign	SkipWriteback_Pass =					CSIdle & (SkipWriteback | 	SkipWriteback_Primed);
+	assign	StartScan_Pass = 						CSIdle & (StartScan | StartScan_Primed); // TODO this is a bit of an overdesign now ... StashTop won't send StartScan at wrong times anymore.
 	
 	// Generate valid signals for this access
 	Register	#(				.Width(				1))
@@ -505,15 +494,7 @@ module Stash(
 								.Enable(			1'b0),
 								.In(				1'bx),
 								.Out(				StartScan_Set));
-	Register	#(				.Width(				1))
-				skip_wb(		.Clock(				Clock),
-								.Reset(				Reset | PerAccessReset),
-								.Set(				SkipWriteback_Pass),
-								.Enable(			1'b0),
-								.In(				1'bx),
-								.Out(				SkipWriteback_Set));
-	assign	AccessStarted =							StartScan_Set | StartScan_Pass;
-	assign	AccessSkipsWB =							SkipWriteback_Pass | SkipWriteback_Set;
+	assign	AccessStarted =							StartScan_Set | StartScan_Pass; 
 	
 	Register	#(				.Width(				1))
 				wb_hold(		.Clock(				Clock),
@@ -644,7 +625,7 @@ module Stash(
 	
 	// don't try to push back blocks that we are removing
 	assign	FoundRemoveBlock =						(LookForBlock & FoundBlock_ThisCycle) & (AccessCommand == BECMD_ReadRmv);
-	assign	IsWritebackCandidate =					~FoundRemoveBlock & ~AccessSkipsWB & AccessStarted;
+	assign	IsWritebackCandidate =					~FoundRemoveBlock & ~AccessSkipsWriteback & AccessStarted;
 	
 	StashScanTable #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),

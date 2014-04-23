@@ -351,6 +351,11 @@ module StashCore(
 			end
 			*/
 			
+			if (StashH_WE & (^InPAddr === 1'bx | ^InLeaf === 1'bx)) begin
+				$display("[%m] ERROR: writing some X header into stash");
+				$stop;			
+			end
+			
 			if (^OutScanValidDump === 1'bx | 
 				^PrepareDumpStop === 1'bx |
 				^InScanValid === 1'bx |
@@ -457,7 +462,7 @@ module StashCore(
 			
 			if (CSPeaking & LastChunk_Read)
 				if (OutPAddr == DummyBlockAddress)
-					;//$display("[%m @ %t] Reading dummy block", $time);
+					$display("[%m @ %t] Reading dummy block", $time);
 				else
 					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d, stashc_bit=%b]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed, StashC.Mem[StashE_Address_Delayed]);
 		end	

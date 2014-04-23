@@ -7,27 +7,24 @@
 
 //==============================================================================
 //	Module:		StashTop
-//	Desc:		The stash and associated funnels and counters.
+//	Desc:		The stash itself and an interface conversion between DRAM and 
+//				what the stash expects.
 //==============================================================================
 module StashTop(
 	Clock, Reset,
 
-	Stash_ResetDone, Stash_IsIdle, StashAlmostFull,
+	StashAlmostFull,
 	
-	Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp,
-	
-	Command, PAddr, CurrentLeaf, RemappedLeaf, AccessIsDummy,  
+	Command, CommandValid, CommandReady,
+	BECommand, PAddr, CurrentLeaf, RemappedLeaf, AccessIsDummy, AccessSkipsWriteback,
 
-	Stash_ReturnData, Stash_ReturnDataValid,
-	
-	Stash_StoreData, Stash_StoreDataValid, Stash_StoreDataReady, AppendComplete,
+	FEReadData, FEReadDataValid,
+	FEWriteData, FEWriteDataValid, FEWriteDataReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
-	
-	ROAccess, CSAppend, CSIdle, CSORAMAccess, PathReadComplete // to remove
 	);
-		
+
 	//------------------------------------------------------------------------------
 	//	Parameters & Constants
 	//------------------------------------------------------------------------------
@@ -37,6 +34,7 @@ module StashTop(
 	
 	`include "SecurityLocal.vh"
 	`include "StashLocal.vh"
+	`include "StashTopLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
@@ -44,35 +42,45 @@ module StashTop(
 	
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
 
+	localparam				STWidth =				3,
+							ST_Initialize =			3'd0,
+							ST_Idle =				3'd1,
+							ST_Read =				3'd2,
+							ST_StartWriteback =		3'd3,
+							ST_Update =				3'd4,
+							ST_Writeback =			3'd5,
+							ST_Append =				3'd6;
+							
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
   	input 					Clock, Reset;
 	
-	// stash status
-	output					Stash_ResetDone, Stash_IsIdle, StashAlmostFull;
-	
-	// stash commands
-	input					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
-	
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
-	input	[BECMDWidth-1:0] Command;
+	output					StashAlmostFull;
+	
+	input	[STCMDWidth-1:0] Command;
+	input					CommandValid;
+	output					CommandReady;
+	
+	// These commands must be valid when CommandValid & CommandReady & Command == StartRead | Command == StartAppend
+	input	[BECMDWidth-1:0] BECommand;
 	input	[ORAMU-1:0]		PAddr;
 	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX 
 	input	[ORAML-1:0]		RemappedLeaf;
 	input					AccessIsDummy;
+	input					AccessSkipsWriteback;
 	
-	output	[BEDWidth-1:0]	Stash_ReturnData;
-	output					Stash_ReturnDataValid;
+	output	[BEDWidth-1:0]	FEReadData;
+	output					FEReadDataValid;
 	
-	input	[BEDWidth-1:0]	Stash_StoreData;						
-	input					Stash_StoreDataValid;
-	output					Stash_StoreDataReady;
-	output                  AppendComplete;
+	input	[BEDWidth-1:0]	FEWriteData;						
+	input					FEWriteDataValid;
+	output					FEWriteDataReady;
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -86,12 +94,31 @@ module StashTop(
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 	
-	input	ROAccess, CSIdle, CSAppend, CSORAMAccess; // TODO to remove
-	output	PathReadComplete;
-	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
+	
+	// Control logic & commands
+	
+	wire	[STCMDWidth-1:0] WritebackCommand;
+	
+	wire					ResetDone, StashIdle;
+	
+	wire					StartAppendOp, StartScanOp, StartWritebackOp;
+	wire					AppendComplete, UpdateComplete;
+	
+	wire					EvictGate, UpdateGate;
+	
+	reg		[STWidth-1:0]	CS, NS;	
+	wire					CSIdle, CSRead, CSStartWrite, CSWrite, CSAppend, CSUpdate;
+	
+	wire	[PBEDWidth-1:0]	InnerCount, OuterCount;
+
+	wire	[BECMDWidth-1:0] BECommand_Internal;
+	wire	[ORAMU-1:0]		PAddr_Internal;
+	wire	[ORAML-1:0]		CurrentLeaf_Internal;
+	wire	[ORAML-1:0]		RemappedLeaf_Internal;
+	wire					AccessIsDummy_Internal, AccessSkipsWriteback_Internal;
 	
 	// Read pipeline
 		
@@ -115,7 +142,6 @@ module StashTop(
 	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
 	wire					HeaderDownShift_OutValid;		
 	
-	wire	[PBEDWidth-1:0]	PathReadCtr;
 	wire					DataDownShift_Transfer;
 	
 	wire					BlockReadCtr_Reset;
@@ -153,6 +179,7 @@ module StashTop(
 	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
 				
 	// Stash
+	
 	wire					Stash_UpdateBlockValid, Stash_UpdateBlockReady;
 	wire					Stash_EvictBlockValid, Stash_EvictBlockReady;
 
@@ -162,17 +189,50 @@ module StashTop(
 	
 	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
 	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
-	
-	wire					EvictGate, UpdateGate;
 
-	//------------------------------------------------------------------------------
+	// Derived signals
+	
+	reg						CSRead_Delayed, CSAppend_Delayed;
+	wire					CSRead_FirstCycle, CSAppend_FirstCycle;
+	
+	//--------------------------------------------------------------------------
+	//	Initial state
+	//--------------------------------------------------------------------------	
+	
+	`ifndef ASIC
+		initial begin
+			CS = ST_Initialize;
+		end
+	`endif
+		
+	//--------------------------------------------------------------------------
 	//	Simulation checks
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
+				$stop;
+			end
+			
+			if (OuterCount < InnerCount) begin
+				$display("[%m] ERROR: Stash received more blocks than BEndInner sent ...");
+				$stop;
+			end
+			
+			if (CSIdle & CommandValid & (Command !== STCMD_StartRead & Command !== STCMD_Append) ) begin
+				$display("[%m] ERROR: Only start read commands/appends accepted at this time.");
+				$stop;
+			end
+			
+			if (CSRead & CommandValid & Command !== STCMD_StartWrite) begin
+				$display("[%m] ERROR: Only start write command accepted at this time.");
+				$stop;				
+			end
+			
+			if (CommandValid & Command == STCMD_Append & BECommand != BECMD_Append) begin
+				$display("[%m] ERROR: Bogus command.");
 				$stop;
 			end
 		end
@@ -183,12 +243,97 @@ module StashTop(
 	//------------------------------------------------------------------------------
 	
 	assign	EvictGate =								CSAppend;
-	assign	UpdateGate = 							CSORAMAccess & (Command == BECMD_Update);
-	assign	Stash_StoreDataReady = 					(Stash_EvictBlockReady & EvictGate) | 
-													(Stash_UpdateBlockReady & UpdateGate);
-	assign	Stash_EvictBlockValid = 				Stash_StoreDataValid & EvictGate;
-	assign	Stash_UpdateBlockValid =				Stash_StoreDataValid & UpdateGate;
+	assign	UpdateGate = 							CSUpdate;
+	
+	assign	FEWriteDataReady = 						(Stash_EvictBlockReady & 	EvictGate) | 
+													(Stash_UpdateBlockReady & 	UpdateGate);
+	assign	Stash_EvictBlockValid = 				FEWriteDataValid & 			EvictGate;
+	assign	Stash_UpdateBlockValid =				FEWriteDataValid & 			UpdateGate;
+	
+	assign	CommandReady =							(CSIdle & StashIdle) | CSRead;
+	
+	assign	CSIdle =								CS == ST_Idle;
+	assign	CSRead =								CS == ST_Read;
+	assign	CSStartWrite =							CS == ST_StartWriteback;
+	assign	CSUpdate =								CS == ST_Update;
+	assign	CSWrite =								CS == ST_Writeback;
+	assign	CSAppend =								CS == ST_Append;
+	
+	assign	StartAppendOp =							CSAppend_FirstCycle;
+	assign	StartScanOp =							CSRead_FirstCycle;
+	assign	StartWritebackOp =						CSStartWrite & WritebackCommand == STCMD_StartWrite;
+
+	assign	CSAppend_FirstCycle =					CSAppend & ~CSAppend_Delayed;
+	assign	CSRead_FirstCycle =						CSRead & ~CSRead_Delayed;
+	
+	always @(posedge Clock) begin
+		if (Reset) CS <= 							ST_Initialize;
+		else CS <= 									NS;
 		
+		CSRead_Delayed <=							CSRead;
+		CSAppend_Delayed <=							CSAppend;
+	end
+	
+	always @( * ) begin
+		NS = 										CS;
+		case (CS)
+			ST_Initialize : 
+				if (ResetDone) 
+					NS =						 	ST_Idle;
+			ST_Idle :
+				if (CommandValid & Command == STCMD_Append)
+					NS =						 	ST_Append;
+				else if (CommandValid)
+					NS =						 	ST_Read;
+			ST_Read :
+				if (CommandValid)
+					NS =						 	ST_StartWriteback;
+			ST_StartWriteback :
+				if (		OuterCount == InnerCount & ~AccessIsDummy_Internal & BECommand_Internal == BECMD_Update)
+					 NS =							ST_Update;
+				else if (	OuterCount == InnerCount)
+					NS =							ST_Writeback;
+			ST_Update :
+				if (UpdateComplete)
+					NS =							ST_Writeback;
+			ST_Writeback :
+				if (StashIdle)
+					NS =						 	ST_Idle;
+			ST_Append :
+				if (AppendComplete)
+					NS =						 	ST_Idle;
+		endcase
+	end	
+	
+	Counter		#(			.Width(					PBEDWidth))
+				outer_cnt(	.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DRAMReadDataValid & DRAMReadDataReady & ~ReadProcessingHeader & CSRead),
+							.In(					{PBEDWidth{1'bx}}),
+							.Count(					OuterCount));
+	
+	//--------------------------------------------------------------------------
+	//	Commands from the Backend
+	//--------------------------------------------------------------------------	
+
+	Register	#(			.Width(					STCMDWidth))
+				cmd_reg(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				CommandValid & CommandReady & CSRead),
+							.In(					Command),
+							.Out(					WritebackCommand));
+		
+	Register	#(			.Width(					BECMDWidth + ORAMU + 2*ORAML + 1 + 1))
+				becmd_reg(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				CommandValid & CommandReady & CSIdle),
+							.In(					{BECommand, 			PAddr, 			CurrentLeaf, 			RemappedLeaf, 			AccessIsDummy,				AccessSkipsWriteback}),
+							.Out(					{BECommand_Internal, 	PAddr_Internal, CurrentLeaf_Internal, 	RemappedLeaf_Internal,	AccessIsDummy_Internal, 	AccessSkipsWriteback_Internal}));			
+
 	//------------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
 	//------------------------------------------------------------------------------
@@ -284,16 +429,14 @@ module StashTop(
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
 
-	CountAlarm #(			.Threshold(				PathSize_BEDChunks),
-							.IThreshold(			BktSize_BEDChunks))
-			in_path_cmp(	.Clock(					Clock), 
-							.Reset(					Reset | CSIdle), 
+	Counter		#(			.Width(					PBEDWidth))
+				inner_cnt(	.Clock(					Clock),
+							.Reset(					Reset | CSIdle),
+							.Set(					1'b0),
+							.Load(					1'b0),
 							.Enable(				DataDownShift_Transfer),
-							.Done(					FullPathReadComplete),
-							.Intermediate(			ROPathReadComplete),
-							.Count(					PathReadCtr));
-	
-	assign	PathReadComplete = 						(EnableREW & ROAccess) ? ROPathReadComplete : FullPathReadComplete;	
+							.In(					{PBEDWidth{1'bx}}),
+							.Count(					InnerCount));	
 	
 	//------------------------------------------------------------------------------
 	//	Stash
@@ -310,34 +453,35 @@ module StashTop(
 							.Overclock(				Overclock))
 				stash(		.Clock(					Clock),
 							.Reset(					Reset),
-							.ResetDone(				Stash_ResetDone),
+							.ResetDone(				ResetDone),
 							
-							.IsIdle(				Stash_IsIdle),
+							.IsIdle(				StashIdle),
 							
-							.RemapLeaf(				RemappedLeaf),
-							.AccessLeaf(			CurrentLeaf),	// should pass AddrGen_Leaf!!!
-							.AccessPAddr(			PAddr),
-							.AccessIsDummy(			AccessIsDummy),
-							.AccessCommand(			Command),
+							.RemapLeaf(				RemappedLeaf_Internal),
+							.AccessLeaf(			CurrentLeaf_Internal),	// should pass AddrGen_Leaf!!!
+							.AccessPAddr(			PAddr_Internal),
+							.AccessIsDummy(			AccessIsDummy_Internal),
+							.AccessSkipsWriteback(	AccessSkipsWriteback_Internal),
+							.AccessCommand(			BECommand_Internal),
 							
-							.StartScan(				Stash_StartScanOp),
-							.SkipWriteback(			Stash_SkipWritebackOp),
-							.StartWriteback(		Stash_StartWritebackOp),
+							.StartAppend(			StartAppendOp),
+							.StartScan(				StartScanOp),
+							.StartWriteback(		StartWritebackOp),
 							
-							.ReturnData(			Stash_ReturnData),
+							.ReturnData(			FEReadData),
 							.ReturnPAddr(			), // not connected
 							.ReturnLeaf(			), // not connected
-							.ReturnDataOutValid(	Stash_ReturnDataValid),
+							.ReturnDataOutValid(	FEReadDataValid),
 							.BlockReturnComplete(	), // not connected
 							
-							.UpdateData(			Stash_StoreData),
+							.UpdateData(			FEWriteData),
 							.UpdateDataInValid(		Stash_UpdateBlockValid),
 							.UpdateDataInReady(		Stash_UpdateBlockReady),
-							.BlockUpdateComplete(	), // not connected
+							.BlockUpdateComplete(	UpdateComplete), // not connected
 							
-							.EvictData(				Stash_StoreData),
-							.EvictPAddr(			PAddr),
-							.EvictLeaf(				RemappedLeaf),
+							.EvictData(				FEWriteData),
+							.EvictPAddr(			PAddr_Internal),
+							.EvictLeaf(				RemappedLeaf_Internal),
 							.EvictDataInValid(		Stash_EvictBlockValid),
 							.EvictDataInReady(		Stash_EvictBlockReady),
 							.BlockEvictComplete(	AppendComplete),
@@ -359,9 +503,9 @@ module StashTop(
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		StashOccupancy), // not connected
-							.BlockNotFound(			BlockNotFound), // not connected
-							.BlockNotFoundValid(	BlockNotFoundValid)); // not connected
+							.StashOccupancy(		StashOccupancy), // debugging
+							.BlockNotFound(			BlockNotFound), // debugging
+							.BlockNotFoundValid(	BlockNotFoundValid)); // debugging
 
 	//------------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters

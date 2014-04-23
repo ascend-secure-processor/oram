@@ -36,10 +36,10 @@ module PathORAMBackendInner(
 	//------------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
-	`include "Stash.vh"
-	
+
 	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
+	`include "StashTopLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
@@ -47,14 +47,16 @@ module PathORAMBackendInner(
 	
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
 	
-	localparam				STWidth =				3,
-							ST_Initialize =			3'd0,
-							ST_Idle =				3'd1,
-							ST_Append =				3'd2,
-							ST_StartRead =			3'd3,
-							ST_PathRead =			3'd4,
-							ST_StartWriteback =		3'd5,
-							ST_PathWriteback =		3'd6;
+	localparam				STWidth =				4,
+							ST_Initialize =			4'd0,
+							ST_Idle =				4'd1,
+							ST_Append =				4'd2,
+							ST_StartRead =			4'd3,
+							ST_StartStash =			4'd4,
+							ST_PathRead =			4'd5,
+							ST_StartWriteback =		4'd6,
+							ST_WBStash =			4'd7,
+							ST_PathWriteback =		4'd8;
 								
 	localparam				PRNGLWidth =			`divceil(ORAML, 8) * 8;
 	
@@ -122,17 +124,21 @@ module PathORAMBackendInner(
 
 	// Control logic
 	
-	wire					AllResetsDone;
+	wire	[STCMDWidth-1:0] Stash_Command; 
+	wire					Stash_CommandValid, Stash_CommandReady;
+	
 	reg		[STWidth-1:0]	CS, NS;
-	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, CSPathRead, CSPathWriteback, 
-							CSStartWriteback;
-	wire					CSORAMAccess;
+	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, CSPathRead, 
+							CSPathWriteback, CSStartStash, CSWBStash, CSStartWriteback;
 
 	wire					SetDummy, ClearDummy;
-	wire					AccessIsDummy;
+	wire					AccessIsDummy, AccessSkipsWriteback;
 	
-	wire					AppendComplete, PathReadComplete, PathWritebackComplete;
-	wire					OperationComplete_Pre, OperationComplete;
+	wire					PathReadComplete, ROPathReadComplete, RWPathReadComplete;
+	wire					PathWritebackComplete;
+	wire					AppendQueued, OperationComplete_Pre, OperationComplete;
+	
+	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid, Stash_WBCmdValid;
 	
 	wire					ROAccess, RWAccess, StartRW, REWRoundComplete;
 	wire	[ORAML-1:0]		GentryLeaf_Pre;	
@@ -164,17 +170,11 @@ module PathORAMBackendInner(
 	
 	// Stash
 	
-	wire					Stash_IsIdle;
-	
-	wire					Stash_StartScanOp, Stash_SkipWritebackOp, Stash_StartWritebackOp;
-	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
 	wire					Stash_StoreDataValid, Stash_StoreDataReady;
 	
 	wire	[BEDWidth-1:0]	Stash_ReturnData;
 	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
-	
-	wire					Stash_ResetDone;
 	
 	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
 	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
@@ -278,19 +278,13 @@ module PathORAMBackendInner(
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSAppend =								CS == ST_Append;
 	assign	CSStartRead =							CS == ST_StartRead;
+	assign	CSStartStash =							CS == ST_StartStash;
 	assign	CSStartWriteback =						CS == ST_StartWriteback;
 	assign	CSPathRead =							CS == ST_PathRead;
+	assign	CSWBStash =								CS == ST_WBStash;
 	assign	CSPathWriteback =						CS == ST_PathWriteback;
 	
-	assign	CSORAMAccess =							~CSInitialize & ~CSIdle;
-	
-	assign	AllResetsDone =							Stash_ResetDone & DRAMInitComplete;
-
-	assign	Stash_StartScanOp =						CSStartRead;
-	assign	Stash_SkipWritebackOp =					CSStartRead & ROAccess;
-	assign	Stash_StartWritebackOp =				CSStartWriteback; // Note: this will go high even for RO accesses; this is intended
-	
-	assign	OperationComplete_Pre =					CSPathWriteback & Stash_IsIdle & PathWritebackComplete & AddrGen_InReady;
+	assign	OperationComplete_Pre =					CSPathWriteback & PathWritebackComplete & AddrGen_InReady & Stash_CommandReady;
 		
 	generate if (Overclock) begin
 		Register #(			.Width(					1),
@@ -305,9 +299,26 @@ module PathORAMBackendInner(
 		assign	OperationComplete =					OperationComplete_Pre;
 	end endgenerate
 	
-	assign	Command_InternalReady =					AppendComplete | (OperationComplete & ~AccessIsDummy);
+	assign	AppendQueued =							Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
+	assign	Command_InternalReady =					AppendQueued | (OperationComplete & 		~AccessIsDummy);
 
 	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
+
+	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we 
+	// don't want to start real accesses _earlier_ than dummy accesses
+	assign	Stash_AppendCmdValid =					CSIdle & DummyLeaf_Valid & Command_InternalValid & (Command_Internal == BECMD_Append) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
+	assign	Stash_DummyCmdValid =					CSIdle & DummyLeaf_Valid & SetDummy;								
+	assign	Stash_RdRmvCmdValid = 					CSIdle & DummyLeaf_Valid & Command_InternalValid & ((Command_Internal == BECMD_Read) | (Command_Internal == BECMD_ReadRmv)) & 	(ReturnBuf_Space >= BlkSize_BEDChunks);
+	assign	Stash_UpdateCmdValid =					CSIdle & DummyLeaf_Valid & Command_InternalValid & ( Command_Internal == BECMD_Update) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
+	assign	Stash_WBCmdValid =						CSWBStash;
+	
+	assign	Stash_Command =							(Stash_DummyCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid) ? 	STCMD_StartRead : // Order is important; prioritize dummy reads
+													(Stash_AppendCmdValid) ?												STCMD_Append :
+																															STCMD_StartWrite;
+
+	assign	AccessSkipsWriteback =					CSIdle & ROAccess & EnableREW;
+	
+	assign	Stash_CommandValid =					Stash_AppendCmdValid | Stash_DummyCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid | Stash_WBCmdValid;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -318,35 +329,34 @@ module PathORAMBackendInner(
 		NS = 										CS;
 		case (CS)
 			ST_Initialize : 
-				if (AllResetsDone) 
+				if (DRAMInitComplete) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				// stash capacity check gets highest priority
-				if (DummyLeaf_Valid) begin
-					if (SetDummy)
-						NS =						ST_StartRead;
-					// do appends first ("greedily") because they are cheap
-					else if (Command_InternalValid	& 	Command_Internal == BECMD_Append)
-						NS =						ST_Append;
-					else if (Command_InternalValid 	& (	(Command_Internal == BECMD_Read) | 
-														(Command_Internal == BECMD_ReadRmv))
-													&	(ReturnBuf_Space >= BlkSize_BEDChunks))
-						NS =						ST_StartRead;
-					else if (Command_InternalValid 	& (	Command_Internal == BECMD_Update)
-													& (	EvictBuf_Chunks >= BlkSize_BEDChunks))
-						NS = 						ST_StartRead;
-				end
+				if (		Stash_CommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
+					NS =						ST_StartRead;
+				else if (	Stash_CommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
+					NS =						ST_Append;
+				else if (	Stash_CommandReady & Stash_RdRmvCmdValid)
+					NS =						ST_StartRead;
+				else if (	Stash_CommandReady & Stash_UpdateCmdValid)
+					NS = 						ST_StartRead;
 			ST_Append :
-				if (AppendComplete)
+				if (Stash_CommandReady)
 					NS = 							ST_Idle;
 			ST_StartRead : 
 				if (AddrGen_InReady)
+					NS =							ST_StartStash;
+			ST_StartStash :
+				if (Stash_CommandReady)
 					NS =							ST_PathRead;
 			ST_PathRead : 							
 				if (PathReadComplete)
 					NS =							ST_StartWriteback;
 			ST_StartWriteback :
 				if (AddrGen_InReady)
+					NS =							ST_WBStash;
+			ST_WBStash :
+				if (Stash_CommandReady)
 					NS =							ST_PathWriteback;
 			ST_PathWriteback : 
 				if (OperationComplete)
@@ -520,9 +530,8 @@ module PathORAMBackendInner(
 	//------------------------------------------------------------------------------
 
 	assign	AddrGen_Reading = 						CSStartRead;
-	assign	AddrGen_Leaf =							(AccessIsDummy) ? DummyLeaf : CurrentLeaf_Internal;
+	assign	AddrGen_Leaf =							(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
 	
-	// TODO pass AES header params
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -585,6 +594,20 @@ module PathORAMBackendInner(
 	assign	DRAMInitializing =						~DRAMInitComplete;
 
 	//------------------------------------------------------------------------------
+	//	Read counters
+	//------------------------------------------------------------------------------
+		
+	CountAlarm #(			.Threshold(				PathSize_DRBursts),
+							.IThreshold(			BktSize_DRBursts))
+			in_path_cmp(	.Clock(					Clock), 
+							.Reset(					Reset | CSIdle), 
+							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
+							.Intermediate(			ROPathReadComplete),
+							.Done(					RWPathReadComplete));
+	
+	assign	PathReadComplete = 						(EnableREW & ROAccess) ? ROPathReadComplete : RWPathReadComplete;	
+	
+	//------------------------------------------------------------------------------
 	//	StashTop
 	//------------------------------------------------------------------------------
 	
@@ -597,27 +620,25 @@ module PathORAMBackendInner(
 				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),
 							
-							.Stash_ResetDone(		Stash_ResetDone),
-							.Stash_IsIdle(			Stash_IsIdle),
 							.StashAlmostFull(       StashAlmostFull),
 							
-							.Stash_StartScanOp(		Stash_StartScanOp),
-							.Stash_SkipWritebackOp(	Stash_SkipWritebackOp),
-							.Stash_StartWritebackOp(Stash_StartWritebackOp),
+							.Command(				Stash_Command), 
+							.CommandValid(			Stash_CommandValid), 
+							.CommandReady(			Stash_CommandReady),
 							
-							.Command(				Command_Internal),
+							.BECommand(				Command_Internal),
 							.PAddr(					PAddr_Internal),
 							.CurrentLeaf(			AddrGen_Leaf),
 							.RemappedLeaf(			RemappedLeaf_Internal),
-							.AccessIsDummy(			AccessIsDummy),
+							.AccessSkipsWriteback(	AccessSkipsWriteback),
+							.AccessIsDummy(			SetDummy),
 							
-							.Stash_ReturnData(		Stash_ReturnData),
-							.Stash_ReturnDataValid(	Stash_ReturnDataValid),
+							.FEReadData(			Stash_ReturnData),
+							.FEReadDataValid(		Stash_ReturnDataValid),
 							
-							.Stash_StoreData(		Stash_StoreData),
-							.Stash_StoreDataValid(	Stash_StoreDataValid),
-							.Stash_StoreDataReady(	Stash_StoreDataReady),
-							.AppendComplete(		AppendComplete),
+							.FEWriteData(			Stash_StoreData),
+							.FEWriteDataValid(		Stash_StoreDataValid),
+							.FEWriteDataReady(		Stash_StoreDataReady),
 							
 							.DRAMReadData(			DRAMReadData),
 							.DRAMReadDataValid(		DRAMReadDataValid),
@@ -625,29 +646,23 @@ module PathORAMBackendInner(
 							
 							.DRAMWriteData(			Stash_DRAMWriteData),
 							.DRAMWriteDataValid(	Stash_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady),
-
-							.ROAccess(				ROAccess),
-							.CSIdle(				CSIdle),
-							.CSAppend(				CSAppend),
-							.CSORAMAccess(			CSORAMAccess),
-							.PathReadComplete(		PathReadComplete));
+							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady));
 							
 	//------------------------------------------------------------------------------
-	//	[Writeback path] Let control know the WB is complete
+	//	Writeback counters
 	//------------------------------------------------------------------------------
 
 	// Count commands written back	
 	CountAlarm #(			.Threshold(				PathSize_DRBursts))
 				out_CRW_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				CSPathWriteback & DRAMInitComplete & ~ROAccess & DRAMCommandValid & DRAMCommandReady),
+							.Enable(				(CSWBStash | CSPathWriteback) & DRAMInitComplete & ~ROAccess & DRAMCommandValid & DRAMCommandReady),
 							.Done(					PathWritebackComplete_Commands_RW));
 	generate if (EnableREW) begin:RO_CMD_CNT
 		CountAlarm #(		.Threshold(				BktHSize_DRBursts * (ORAML + 1))) // header writeback
 				out_CRO_cnt(.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Enable(				CSPathWriteback & DRAMInitComplete & ROAccess & DRAMCommandValid & DRAMCommandReady),
+							.Enable(				(CSWBStash | CSPathWriteback) & DRAMInitComplete & ROAccess & DRAMCommandValid & DRAMCommandReady),
 							.Done(					PathWritebackComplete_Commands_RO));
 	end endgenerate
 	Register	#(			.Width(					1))

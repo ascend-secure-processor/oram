@@ -306,7 +306,8 @@ module AESREWORAM(
 				//$stop;
 			end
 		end
-/*		
+
+		/*
 		always @(posedge Clock) begin
 			if (BEDataOutValid) begin
 				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b) ", $time, BEDataOut, ROAccess, CSCOROI);
@@ -324,7 +325,7 @@ module AESREWORAM(
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end		
 		end
-*/
+		*/
 		
 		always @(posedge Clock) begin
 			if (BufferedDataInValid & ~BufferedDataInReady) begin

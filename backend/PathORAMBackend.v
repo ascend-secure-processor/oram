@@ -10,7 +10,6 @@
 //	Desc:		The stash, AES, address generation, and throughput back-pressure 
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //==============================================================================
-
 module PathORAMBackend(
 	Clock, FastClock, Reset,
 
@@ -26,11 +25,11 @@ module PathORAMBackend(
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
-);
+	);
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Parameters & Constants
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
 	
