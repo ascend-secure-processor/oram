@@ -25,9 +25,9 @@ module StashTop(
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	);
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Parameters & Constants
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
 	`include "Stash.vh"
@@ -114,6 +114,8 @@ module StashTop(
 	
 	wire	[PBEDWidth-1:0]	InnerCount, OuterCount;
 
+	wire					LatchCommand, LatchBECommand;
+	
 	wire	[BECMDWidth-1:0] BECommand_Internal;
 	wire	[ORAMU-1:0]		PAddr_Internal;
 	wire	[ORAML-1:0]		CurrentLeaf_Internal;
@@ -235,12 +237,17 @@ module StashTop(
 				$display("[%m] ERROR: Bogus command.");
 				$stop;
 			end
+			
+			if (LatchBECommand & StashAlmostFull & ~AccessIsDummy) begin
+				$display("[%m] ERROR: We are about to perform a real access but the stash is almost full.");
+				$stop;			
+			end
 		end
 	`endif
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Control logic
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	assign	EvictGate =								CSAppend;
 	assign	UpdateGate = 							CSUpdate;
@@ -316,27 +323,30 @@ module StashTop(
 	
 	//--------------------------------------------------------------------------
 	//	Commands from the Backend
-	//--------------------------------------------------------------------------	
-
+	//--------------------------------------------------------------------------
+	
+	assign	LatchCommand =							CommandValid & CommandReady & CSRead;
+	assign	LatchBECommand =						CommandValid & CommandReady & CSIdle;
+	
 	Register	#(			.Width(					STCMDWidth))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				CommandValid & CommandReady & CSRead),
+							.Enable(				LatchCommand),
 							.In(					Command),
 							.Out(					WritebackCommand));
-		
+	
 	Register	#(			.Width(					BECMDWidth + ORAMU + 2*ORAML + 1 + 1))
 				becmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				CommandValid & CommandReady & CSIdle),
+							.Enable(				LatchBECommand),
 							.In(					{BECommand, 			PAddr, 			CurrentLeaf, 			RemappedLeaf, 			AccessIsDummy,				AccessSkipsWriteback}),
 							.Out(					{BECommand_Internal, 	PAddr_Internal, CurrentLeaf_Internal, 	RemappedLeaf_Internal,	AccessIsDummy_Internal, 	AccessSkipsWriteback_Internal}));			
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	[Read path] Buffers and down shifters
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	// Count where we are in a bucket (so we can determine when we are at a header)
 	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
@@ -387,9 +397,9 @@ module StashTop(
 							.OutValid(				DataDownShift_OutValid),
 							.OutReady(				DataDownShift_OutReady));
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	[Read path] Dummy block handling
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	assign	InPath_BlockReadComplete =				Stash_BlockWriteComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
 	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ValidDownShift_OutData & ValidDownShift_OutValid);
@@ -422,9 +432,9 @@ module StashTop(
 				in_blk_cmp(	.Count(					BlockReadCtr), 
 							.TerminalCount(			BlockReadCtr_Reset));
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	[Read path] Path counters
-	//------------------------------------------------------------------------------	
+	//--------------------------------------------------------------------------	
 	
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
@@ -438,9 +448,9 @@ module StashTop(
 							.In(					{PBEDWidth{1'bx}}),
 							.Count(					InnerCount));	
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Stash
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	Stash		#(			.StashOutBuffering(		4), // this should be good enough ...
 							.StopOnBlockNotFound(	StopOnBlockNotFound),
@@ -457,12 +467,12 @@ module StashTop(
 							
 							.IsIdle(				StashIdle),
 							
+							.AccessCommand(			BECommand_Internal),
 							.RemapLeaf(				RemappedLeaf_Internal),
-							.AccessLeaf(			CurrentLeaf_Internal),	// should pass AddrGen_Leaf!!!
+							.AccessLeaf(			CurrentLeaf_Internal),
 							.AccessPAddr(			PAddr_Internal),
 							.AccessIsDummy(			AccessIsDummy_Internal),
 							.AccessSkipsWriteback(	AccessSkipsWriteback_Internal),
-							.AccessCommand(			BECommand_Internal),
 							
 							.StartAppend(			StartAppendOp),
 							.StartScan(				StartScanOp),
@@ -507,9 +517,9 @@ module StashTop(
 							.BlockNotFound(			BlockNotFound), // debugging
 							.BlockNotFoundValid(	BlockNotFoundValid)); // debugging
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	// Translate:
 	//		{Z{ULD}} (the stash's format) 
@@ -604,6 +614,6 @@ module StashTop(
 	assign	BucketBuf_OutReady =					~WritebackProcessingHeader & DRAMWriteDataReady;
 	assign	HeaderUpShift_OutReady =				WritebackProcessingHeader & DRAMWriteDataReady;
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

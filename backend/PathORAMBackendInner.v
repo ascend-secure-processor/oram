@@ -31,9 +31,9 @@ module PathORAMBackendInner(
 	DRAMInitComplete
 	);
 		
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Parameters & Constants
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
 
@@ -246,6 +246,11 @@ module PathORAMBackendInner(
 				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
 				$stop;
 			end
+			
+			if (Command_InternalValid & (Command_Internal == BECMD_Update)) begin
+				$display("[%m @ %t] Found update", $time);
+				$stop;
+			end
 		
 	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
@@ -272,7 +277,7 @@ module PathORAMBackendInner(
 	
 	//--------------------------------------------------------------------------
 	//	Control logic
-	//--------------------------------------------------------------------------		
+	//--------------------------------------------------------------------------	
 
 	assign	CSInitialize =							CS == ST_Initialize;
 	assign	CSIdle =								CS == ST_Idle;
@@ -302,7 +307,7 @@ module PathORAMBackendInner(
 	assign	AppendQueued =							Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
 	assign	Command_InternalReady =					AppendQueued | (OperationComplete & 		~AccessIsDummy);
 
-	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback; 
+	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback;
 
 	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we 
 	// don't want to start real accesses _earlier_ than dummy accesses
@@ -495,9 +500,9 @@ module PathORAMBackendInner(
 							.OutSend(				Stash_StoreDataValid),
 							.OutReady(				Stash_StoreDataReady));
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Front-end loads
-	//------------------------------------------------------------------------------								
+	//--------------------------------------------------------------------------							
 	
 	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
 	// NOTE: this should come before the shifter because the Stash ReturnData path 
@@ -525,9 +530,9 @@ module PathORAMBackendInner(
 							.OutValid(				LoadValid),
 							.OutReady(				LoadReady));
 							
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Address generation & ORAM initialization
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	assign	AddrGen_Reading = 						CSStartRead;
 	assign	AddrGen_Leaf =							(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
@@ -593,9 +598,9 @@ module PathORAMBackendInner(
 	
 	assign	DRAMInitializing =						~DRAMInitComplete;
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Read counters
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 		
 	CountAlarm #(			.Threshold(				PathSize_DRBursts),
 							.IThreshold(			BktSize_DRBursts))
@@ -607,9 +612,9 @@ module PathORAMBackendInner(
 	
 	assign	PathReadComplete = 						(EnableREW & ROAccess) ? ROPathReadComplete : RWPathReadComplete;	
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	StashTop
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	StashTop	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -648,9 +653,9 @@ module PathORAMBackendInner(
 							.DRAMWriteDataValid(	Stash_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady));
 							
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	Writeback counters
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	// Count commands written back	
 	CountAlarm #(			.Threshold(				PathSize_DRBursts))
@@ -697,9 +702,9 @@ module PathORAMBackendInner(
 	assign	PathWritebackComplete =					(ROAccess) ? 	PathWritebackComplete_Commands : 
 																	PathWritebackComplete_Commands & PathWritebackComplete_Data;
 
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	//	DRAM interface multiplexing
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 
 	assign	DRAMCommandAddress =					(DRAMInitializing) ? 	DRAMInit_DRAMCommandAddress : 	AddrGen_DRAMCommandAddress;
 	assign	DRAMCommand =							(DRAMInitializing) ? 	DRAMInit_DRAMCommand : 			AddrGen_DRAMCommand;
@@ -713,6 +718,6 @@ module PathORAMBackendInner(
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
 	assign	Stash_DRAMWriteDataReady =				DRAMWriteDataReady &	~DRAMInitializing;
 	
-	//------------------------------------------------------------------------------	
+	//--------------------------------------------------------------------------	
 endmodule
 //------------------------------------------------------------------------------
