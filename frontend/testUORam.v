@@ -36,7 +36,8 @@ module testUORam;
     wire CmdInReady, DataInReady, ReturnDataValid;
     reg [1:0] CmdIn;
     reg [ORAMU-1:0] AddrIn;
-    wire [FEDWidth-1:0] DataIn, ReturnData;
+    wire [FEDWidth-1:0] ReturnData;
+	reg  [FEDWidth-1:0] DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
 	wire	[DDRAWidth_Sim-1:0]		DDR3SDRAM_Address;
@@ -145,7 +146,6 @@ module testUORam;
     end
 
     assign Reset = CycleCount < 30;
-    assign DataIn = 1;
   
     localparam  Freq =	200_000_000,
 				FastFreq = 300_000_000;
@@ -155,7 +155,8 @@ module testUORam;
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
-    
+    reg [ORAMU-1:0] AddrRand, AddrPrev;
+	
     task Task_StartORAMAccess;
         input [1:0] cmd;
         input [ORAMU-1:0] addr;
@@ -196,39 +197,69 @@ module testUORam;
            GlobalPosMap[ORAM.BEnd_PAddr] <= ORAM.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.RemappedLeaf};
        end 
     endtask    
-  
-   integer i; 
-   task Handle_ProgStore;
-       begin
-          #(Cycle);
-          #(Cycle / 2) DataInValid <= 1;
-          for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-              while (!DataInReady)  #(Cycle);        
-              #(Cycle);
-          end
-          //DataInValid <= 0;
-       end
-   endtask
+
+	reg [ORAMB-1:0] GlobalData [0:NumValidBlock-1];
+	
+	
+	integer i; 
+	task Handle_ProgStore;
+		begin
+			#(Cycle);
+			#(Cycle / 2) DataInValid <= 1;
+			GlobalData[AddrIn] = 0;
+			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
+				DataIn = $random;
+				GlobalData[AddrIn] <= (GlobalData[AddrIn] << FEDWidth) + DataIn;
+				while (!DataInReady)  #(Cycle);   
+				#(Cycle);
+			end
+			DataInValid <= 0;
+		end
+	endtask
     
-   reg  [ORAMU-1:0] AddrRand;
-   wire [1:0] Op;
-   wire  Exist;
-   
-   assign Exist = GlobalPosMap[AddrRand][ORAML];
-   assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-   
-   initial begin
-        $display("ORAML = %d", ORAML);
-        TestCount <= 0;
-        CmdInValid <= 0;
-        DataInValid <= 0;
-        ReturnDataReady <= 1;   
-        AddrRand <= 0;
-         
-        for (i = 0; i < TotalNumBlock; i=i+1) begin
-            GlobalPosMap[i][ORAML] <= 0;
-        end 
-   end
+	reg Checking_ProgData;
+	reg [ORAMB-1:0] ReceivedData;
+	task Check_ProgData;
+		begin
+			Checking_ProgData <= 1;
+			ReceivedData = 0;
+			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
+				while (!ReturnDataReady || !ReturnDataValid)  #(Cycle);
+				ReceivedData <= (ReceivedData << FEDWidth) + ReturnData;
+				#(Cycle);
+			end
+
+			if (GlobalData[AddrPrev] != ReceivedData) begin
+				$display("Received data does not match for Block %d, %x != %x", AddrPrev, ReceivedData, GlobalData[AddrPrev]);
+				$stop;
+			end
+			Checking_ProgData <= 0;
+		end
+	endtask
+
+	wire [1:0] Op;
+	wire  Exist;
+
+	assign Exist = GlobalPosMap[AddrRand][ORAML];
+	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+
+	initial begin
+		$display("ORAML = %d", ORAML);
+		TestCount <= 0;
+		CmdInValid <= 0;
+		DataInValid <= 0;
+		ReturnDataReady <= 1;   
+		AddrRand <= 0;
+		Checking_ProgData <= 0;
+
+		for (i = 0; i < TotalNumBlock; i=i+1) begin
+			GlobalPosMap[i][ORAML] <= 0;
+		end
+		
+		for (i = 0; i < NumValidBlock; i=i+1) begin
+			GlobalData[i] <= 0;
+		end 
+	end
    
    wire WriteCmd;
    assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
@@ -236,10 +267,11 @@ module testUORam;
    always @(posedge Clock) begin
        if (!Reset && CmdInReady) begin
            if (TestCount < 100) begin
-               #(Cycle * 10);       
+               #(Cycle * 100);       
                Task_StartORAMAccess(Op, AddrRand);
-               #(Cycle);       
-               AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
+               #(Cycle); 
+			   AddrPrev <= AddrRand;
+               AddrRand <= 0;//((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
                TestCount <= TestCount + 1;
            end
            else begin
@@ -249,16 +281,22 @@ module testUORam;
        end
    end
    
-   always @(posedge Clock) begin
-       if (CmdInValid && CmdInReady && WriteCmd) begin
-           Handle_ProgStore;
-       end
-   end
-   
-    always @(posedge Clock) begin    
-       if (ORAM.BEnd_CmdValid && ORAM.BEnd_CmdReady) begin
-           Check_Leaf;
-       end
-   end
+	always @(posedge Clock) begin
+		if (CmdInValid && CmdInReady && WriteCmd) begin
+		   Handle_ProgStore;
+		end
+	end
+
+	always @(posedge Clock) begin
+		if (ReturnDataValid && ReturnDataReady && !Checking_ProgData) begin
+		   Check_ProgData;
+		end
+	end
+	
+	always @(posedge Clock) begin    
+		if (ORAM.BEnd_CmdValid && ORAM.BEnd_CmdReady) begin
+		   Check_Leaf;
+		end
+	end
        
 endmodule

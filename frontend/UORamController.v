@@ -98,7 +98,8 @@ module UORamController
 							.OutData(				DataIn_Internal),
 							.OutSend(				DataInValid_Internal),
 							.OutReady(				DataInReady_Internal));	
-	
+
+/*							
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU))
 				in_C_buf(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -108,6 +109,11 @@ module UORamController
 							.OutData(				{CmdIn_Internal, 	ProgAddrIn_Internal}),
 							.OutSend(				CmdInValid_Internal),
 							.OutReady(				CmdInReady_Internal));	
+*/
+	assign CmdIn_Internal = CmdIn;
+	assign ProgAddrIn_Internal = ProgAddrIn;
+	assign CmdInValid_Internal = CmdInValid;
+	assign CmdInReady = CmdInReady_Internal;
 	
 	// =============================================================================
 	
