@@ -48,6 +48,55 @@ module testUORam;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 
+
+
+	
+	
+	
+	
+	integer KK;
+	
+	reg	[1:0]  CmdIn_TEST;
+	wire [ORAMU-1:0] AddrIn_TEST;
+	reg CmdInValid_TEST;
+	
+	wire [FEDWidth-1:0] DataIn_TEST;
+	wire DataInValid_TEST;
+	wire ReturnDataReady_TEST;
+	
+	initial begin
+		KK = 0;
+		CmdInValid_TEST = 1'b0;
+		#(Cycle*60);
+		
+		CmdIn_TEST = BECMD_Update;
+		CmdInValid_TEST = 1'b1;
+		
+		while (KK < 200) begin
+			#(Cycle);
+			if (CmdInValid_TEST & CmdInReady) begin
+				KK = KK + 1;
+			end
+		end
+		
+		KK = 0;
+		
+		CmdIn_TEST = BECMD_Read;
+		
+		while (KK < 200) begin
+			#(Cycle);
+			if (CmdInValid_TEST & CmdInReady) begin
+				KK = KK + 1;
+			end
+		end
+		CmdInValid_TEST = 1'b0;
+	end 
+	
+	assign	AddrIn_TEST = KK;
+	assign	DataIn_TEST = 0;
+	assign	DataInValid_TEST = 1'b1;
+	assign	ReturnDataReady_TEST = 1'b1;
+	
     PathORamTop        #(	.StopOnBlockNotFound(	0),
                             .ORAMB(					ORAMB),
                             .ORAMU(					ORAMU),
@@ -71,14 +120,14 @@ module testUORam;
                             .Reset(					Reset),
                             
                             // interface with network			
-                            .Cmd(				    CmdIn),
-                            .PAddr(					AddrIn),
-                            .CmdValid(			    CmdInValid),
+                            .Cmd(				    CmdIn_TEST),
+                            .PAddr(					AddrIn_TEST),
+                            .CmdValid(			    CmdInValid_TEST),
                             .CmdReady(			    CmdInReady),
                             .DataInReady(           DataInReady), 
-                            .DataInValid(           DataInValid), 
-                            .DataIn(                DataIn),                                    
-                            .DataOutReady(          ReturnDataReady), 
+                            .DataInValid(           DataInValid_TEST), 
+                            .DataIn(                DataIn_TEST),                                    
+                            .DataOutReady(          ReturnDataReady_TEST), 
                             .DataOutValid(          ReturnDataValid), 
                             .DataOut(               ReturnData),
                             
@@ -271,7 +320,7 @@ module testUORam;
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle); 
 			   AddrPrev <= AddrRand;
-               AddrRand <= 0;//((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
+               AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
                TestCount <= TestCount + 1;
            end
            else begin
