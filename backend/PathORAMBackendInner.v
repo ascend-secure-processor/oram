@@ -246,11 +246,6 @@ module PathORAMBackendInner(
 				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
 				$stop;
 			end
-			
-			if (Command_InternalValid & (Command_Internal == BECMD_Update)) begin
-				$display("[%m @ %t] Found update", $time);
-				$stop;
-			end
 		
 	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
@@ -584,7 +579,7 @@ module PathORAMBackendInner(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ))
-			dram_init(		.Clock(					Clock),
+				dram_init(	.Clock(					Clock),
 							.Reset(					Reset),
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
 							.DRAMCommand(			DRAMInit_DRAMCommand),
@@ -604,7 +599,7 @@ module PathORAMBackendInner(
 		
 	CountAlarm #(			.Threshold(				PathSize_DRBursts),
 							.IThreshold(			BktSize_DRBursts))
-			in_path_cmp(	.Clock(					Clock), 
+				in_path_cmp(.Clock(					Clock), 
 							.Reset(					Reset | CSIdle), 
 							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
 							.Intermediate(			ROPathReadComplete),

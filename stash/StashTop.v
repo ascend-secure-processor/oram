@@ -487,7 +487,7 @@ module StashTop(
 							.UpdateData(			FEWriteData),
 							.UpdateDataInValid(		Stash_UpdateBlockValid),
 							.UpdateDataInReady(		Stash_UpdateBlockReady),
-							.BlockUpdateComplete(	UpdateComplete), // not connected
+							.BlockUpdateComplete(	UpdateComplete),
 							
 							.EvictData(				FEWriteData),
 							.EvictPAddr(			PAddr_Internal),
