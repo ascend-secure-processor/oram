@@ -3,6 +3,8 @@
 							DBaseWidth = 			32,
 							TimeWidth =				32;
 							
+	localparam				HGAWidth =				12; // # slots in histogram (-> no access should take > 2^HGAWidth cycles
+							
 	localparam				UARTWidth = 			8;
 
 	`ifdef SIMULATION

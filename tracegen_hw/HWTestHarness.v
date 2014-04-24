@@ -37,8 +37,13 @@ module HWTestHarness(
 							// before the first is sent NOTE: you should 
 							// regenerate THSendFIFO/THReceiveFIFO if Buffering,
 							// ORAMB,DBaseWidth changes
-							Buffering =				1024;
+							Buffering =				1024,
 							
+							// Should the test harness return confirmations that 
+							// accesses completed (=0), or should it generate a 
+							// histogram of access latencies (=1)?
+							GenHistogram =			1;
+
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
 	
@@ -155,7 +160,28 @@ module HWTestHarness(
 	
 	(* mark_debug = "FALSE" *)	wire				SendBlockComplete;
 	(* mark_debug = "FALSE" *)	wire	[BlkDBaseWidth-1:0] SendChunkID;
-		
+
+	// Histogram generation
+	
+	wire	[FEDWidth-1:0]	ORAMDataOut_Post;
+	wire					ORAMDataOutValid_Post, ORAMDataOutReady_Post;
+	
+	wire					StartCounting, AccessInProgress, StopCounting, StopCounting_Delay;
+	wire	[HGAWidth-1:0]	AccessLatency, HistogramAddress;
+	wire					HistogramWrite;
+	
+	wire	[DBaseWidth-1:0] ReceiveCrossDataIn;
+	wire					ReceiveCrossDataInValid, ReceiveCrossDataInReady;
+	
+	wire	[DBaseWidth-1:0] HistogramInData, HistogramOutData;
+	wire					HistogramOutValid, HistogramOutReady;
+	
+	wire	[HGAWidth-1:0]	DumpAddress;
+	wire					DumpHistogram;
+			
+	wire	[DBaseWidth-1:0] ReceiveCrossDataOut;
+	wire					ReceiveCrossDataOutValid, ReceiveCrossDataOutReady;
+
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Shifts & buffers
 	//------------------------------------------------------------------------------	
@@ -164,17 +190,37 @@ module HWTestHarness(
 		initial begin
 			if ( (UARTWidth > DBaseWidth) | (DBaseWidth > FEDWidth) ) begin
 				$display("[%m @ %t] Illegal parameter settings", $time);
+				$stop;
 			end
+			
+			if (GenHistogram & HGAWidth > 12) begin
+				$display("[%m @ %t] recv_fifo may overflow --- make it deeper.", $time);
+				$stop;
+			end			
 		end
 	`endif
 	
-	FIFOShiftRound #(		.IWidth(				FEDWidth),
-							.OWidth(				UARTWidth))
-				O_down_shft(.Clock(					FastClock),
+	// NOTE: all logic in this block is disconnected from the UART when GenHistogram == 1
+
+	// When GenHistogram is 1, we want to pull in data as fast as possible
+	FIFORAM		#(			.Width(					FEDWidth),
+							.Buffering(				FEORAMBChunks))
+				in_buf(		.Clock(					FastClock),
 							.Reset(					FastReset),
 							.InData(				ORAMDataOut),
 							.InValid(				ORAMDataOutValid),
 							.InAccept(				ORAMDataOutReady),
+							.OutData(				ORAMDataOut_Post),
+							.OutSend(				ORAMDataOutValid_Post),
+							.OutReady(				ORAMDataOutReady_Post));
+
+	FIFOShiftRound #(		.IWidth(				FEDWidth),
+							.OWidth(				UARTWidth))
+				O_down_shft(.Clock(					FastClock),
+							.Reset(					FastReset),
+							.InData(				ORAMDataOut_Post),
+							.InValid(				ORAMDataOutValid_Post),
+							.InAccept(				ORAMDataOutReady_Post),
 							.OutData(				CrossBufOut_DataIn),
 							.OutValid(				CrossBufOut_DataInValid_Pre),
 							.OutReady(				CrossBufOut_DataInReady));
@@ -196,18 +242,6 @@ module HWTestHarness(
 							.TerminalCount(			BlkKeepTerminal_Pre));	
 	assign	BlkKeepTerminal =						BlkKeepTerminal_Pre & CrossBufOut_DataInValid_Pre & CrossBufOut_DataInReady;
 	
-	// Clock crossing; we should never have to change the depth of this module
-	THReceiveFIFO recv_fifo(.rst(					FastReset), 
-							.wr_clk(				FastClock), 
-							.rd_clk(				SlowClock), 
-							.din(					CrossBufOut_DataIn), 
-							.wr_en(					CrossBufOut_DataInValid),
-							.full(					CrossBufOut_Full),  
-							.dout(					UARTDataIn), 
-							.valid(					UARTDataInValid),
-							.rd_en(					UARTDataInReady));				
-	assign	CrossBufOut_DataInReady =				~CrossBufOut_Full;
-	
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Data checker
 	//------------------------------------------------------------------------------	
@@ -219,7 +253,7 @@ module HWTestHarness(
 				O_db_shft(	.Clock(					FastClock),
 							.Reset(					FastReset),
 							.InData(				ORAMDataOut),
-							.InValid(				ORAMDataOutValid & ORAMDataOutReady),
+							.InValid(				ORAMDataOutValid_Post & ORAMDataOutReady_Post),
 							.InAccept(				),
 							.OutData(				DataOutActual),
 							.OutValid(				DataOutActualValid),
@@ -253,6 +287,45 @@ module HWTestHarness(
 	
 	assign	MismatchReceivePattern =				(DataOutActual != DataOutExpected) & ~ReceiveBlockComplete_Pre &
 													DataOutActualValid & DataOutActual_BaseValid; 
+	
+	//------------------------------------------------------------------------------
+	// 	[Receive path] Funnels & crossing
+	//------------------------------------------------------------------------------	
+	
+	assign	CrossBufOut_DataInReady =				(GenHistogram) ? 1'b1 : 					ReceiveCrossDataInReady;
+	assign	HistogramOutReady =						(GenHistogram) ? ReceiveCrossDataInReady : 	1'b0;
+	
+	assign	ReceiveCrossDataIn =					(GenHistogram) ? HistogramOutData : 		CrossBufOut_DataIn;
+	assign	ReceiveCrossDataInValid =				(GenHistogram) ? HistogramOutValid : 		CrossBufOut_DataInValid; 
+	
+	// Clock crossing; we should never have to change the depth of this module
+	assign	ReceiveCrossDataInReady =				~CrossBufOut_Full;
+	THReceiveFIFO recv_fifo(.rst(					FastReset), 
+							.wr_clk(				FastClock), 
+							.rd_clk(				SlowClock), 
+							.din(					ReceiveCrossDataIn), 
+							.wr_en(					ReceiveCrossDataInValid),
+							.full(					CrossBufOut_Full),  
+							.dout(					ReceiveCrossDataOut), 
+							.valid(					ReceiveCrossDataOutValid),
+							.rd_en(					ReceiveCrossDataOutReady));
+
+	generate if (GenHistogram) begin:HIST_SHIFT
+		FIFOShiftRound #(	.IWidth(				DBaseWidth),
+							.OWidth(				UARTWidth))
+				O_db_shft(	.Clock(					SlowClock),
+							.Reset(					SlowReset),
+							.InData(				ReceiveCrossDataOut),
+							.InValid(				ReceiveCrossDataOutValid),
+							.InAccept(				ReceiveCrossDataOutReady),
+							.OutData(				UARTDataIn),
+							.OutValid(				UARTDataInValid),
+							.OutReady(				UARTDataInReady));
+	end else begin:NO_HIST_SHIFT
+		assign	UARTDataIn =						ReceiveCrossDataOut[UARTWidth-1:0];	
+		assign	UARTDataInValid =					ReceiveCrossDataOutValid;
+		assign	ReceiveCrossDataOutReady =			UARTDataInReady;
+	end endgenerate
 	
 	//------------------------------------------------------------------------------
 	// 	HW<->SW Bridge (UART)
@@ -326,7 +399,18 @@ module HWTestHarness(
 
 	assign	BurstComplete =							StartGate & ~CrossBufIn_DataOutValid;
 	
-	Register	#(			.Width(					1))
+	generate if (GenHistogram) begin:ALWAYS_SEND
+		assign	StartGate =							1'b1;
+		
+		Register	#(		.Width(					1))
+				stop_reg(	.Clock(					FastClock),
+							.Reset(					FastReset),
+							.Set(					FastStartSignal),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					DumpHistogram));		
+	end else begin:GATED_SEND
+		Register	#(		.Width(					1))
 				start_reg(	.Clock(					FastClock),
 							.Reset(					FastReset | BurstComplete),
 							.Set(					FastStartSignal),
@@ -334,6 +418,9 @@ module HWTestHarness(
 							.In(					1'bx),
 							.Out(					StartGate));
 							
+		assign	DumpHistogram =						1'b0;
+	end endgenerate
+	
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + DBaseWidth + TimeWidth))
 				oram_freg(	.Clock(					FastClock),
 							.Reset(					FastReset),
@@ -400,12 +487,83 @@ module HWTestHarness(
 							.Enable(				ORAMRegOutValid & ~TimeGate),
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					PacketAge));
-	assign	TimeGate =								PacketAge >= ORAMTimeDelay;							
+	assign	TimeGate =								(GenHistogram) ? 1'b1 : PacketAge >= ORAMTimeDelay;							
 							
-	assign	ORAMCommandValid =						TimeGate & WriteGate & ORAMRegOutValid;
+	assign	ORAMCommandValid =						TimeGate & WriteGate & ORAMRegOutValid & ((GenHistogram) ? ~AccessInProgress : 1'b1);
 	assign	ORAMRegOutReady =						TimeGate & WriteGate & ORAMCommandReady;
 	
 	assign	ORAMCommandTransfer =					ORAMCommandValid & ORAMCommandReady;
+				
+	//------------------------------------------------------------------------------
+	// 	Histogram generation
+	//------------------------------------------------------------------------------				
+	
+	CountAlarm #(			.Threshold(				FEORAMBChunks))
+				lat_term(	.Clock(					FastClock), 
+							.Reset(					FastReset), 
+							.Enable(				ORAMDataOutValid & ORAMDataOutReady),
+							.Done(					StopCounting));
+	ShiftRegister #(		.PWidth(				2),
+							.SWidth(				1))
+				ro_L_shft(	.Clock(					FastClock), 
+							.Reset(					FastReset), 
+							.Load(					1'b0),
+							.Enable(				1'b1), 
+							.SIn(					StopCounting),
+							.SOut(					StopCounting_Delay));
+							
+	assign	StartCounting = 						ORAMCommandTransfer & ORAMCommand == BECMD_Read;
+
+	Register	#(			.Width(					1))
+				lat_control(.Clock(					FastClock),
+							.Reset(					FastReset | StopCounting),
+							.Set(					StartCounting),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					AccessInProgress));
+				
+	Counter		#(			.Width(					DBaseWidth))
+				latency(	.Clock(					FastClock),
+							.Reset(					FastReset | StartCounting),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				AccessInProgress),
+							.In(					{DBaseWidth{1'bx}}),
+							.Count(					AccessLatency));
+	
+	assign	HistogramAddress =						(DumpHistogram) ? DumpAddress : AccessLatency;			
+	assign	HistogramWrite =						StopCounting_Delay; // Wait for HistogramOutData to become accurate
+	assign	HistogramInData =						HistogramOutData + 1;
+	
+	RAM			#(			.DWidth(				DBaseWidth),
+							.AWidth(				HGAWidth),
+							.EnableInitial(			1),
+							.Initial(				{1 << HGAWidth{{DBaseWidth{1'b0}}}}))
+				histogram(	.Clock(					FastClock),
+							.Reset(					1'b0),
+							.Enable(				1'b1),
+							.Write(					HistogramWrite),
+							.Address(				HistogramAddress),
+							.DIn(					HistogramInData),
+							.DOut(					HistogramOutData));
+
+	Counter		#(			.Width(					HGAWidth),
+							.Limited(				1))
+				dump_addr(	.Clock(					FastClock),
+							.Reset(					FastReset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DumpHistogram),
+							.In(					{HGAWidth{1'bx}}),
+							.Count(					DumpAddress));	
+	
+	Register	#(			.Width(					1))
+				h_O_valid(	.Clock(					FastClock),
+							.Reset(					FastReset),
+							.Set(					1'b0),
+							.Enable(				1'b1),
+							.In(					DumpHistogram & ~&DumpAddress),
+							.Out(					HistogramOutValid));
 				
 	//------------------------------------------------------------------------------
 	//	Error messages

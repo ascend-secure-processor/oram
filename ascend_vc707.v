@@ -58,6 +58,9 @@ module ascend_vc707(
 	parameter				UseMIG =				1; // NOTE: leave default to 1
 	parameter				SlowDownORAMClock =		0; // NOTE: set to 0 for performance run
 	
+	// See HWTestHarness for documentation
+	parameter				GenHistogram = 			1;
+	
 	// ORAM related
 	
 	parameter				ORAMB =					512,
@@ -184,8 +187,13 @@ module ascend_vc707(
 	// 	uBlaze core & caches
 	//------------------------------------------------------------------------------
 	
-	HWTestHarness #(		.ORAMU(					ORAMU),
+	HWTestHarness #(		.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
 							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),
+							.GenHistogram(			GenHistogram),
 							.SlowClockFreq(			SlowClockFreq))
 				tester(		.SlowClock(				SlowClock),
 							.FastClock(				ORAMClock),
@@ -220,6 +228,7 @@ module ascend_vc707(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),

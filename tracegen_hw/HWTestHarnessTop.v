@@ -5,13 +5,13 @@
 `include "Const.vh"
 //==============================================================================
 
-`timescale 1ps/1ps
+`timescale 1ns/1ns
 
 //==============================================================================
 //	Module:		HWTestHarnessTop
 //	Desc: 		
 //==============================================================================
-module HWTestHarnessTop (
+module HWTestHarnessTop(
 			// GPIO
 			output	[7:0]	led,
 
@@ -36,35 +36,20 @@ module HWTestHarnessTop (
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
 	
-	parameter				ORAMB =					512,
-							ORAMU =					32,
-							ORAML =					25,
-							ORAMZ =					5,
-							ORAMC =					10;
-
-	parameter				FEDWidth =				64,
+	parameter				ORAMU =					32,
+							ORAMB =					512,
+							ORAML =					10,
+							ORAMZ =					5,			
+							FEDWidth =				64,
 							BEDWidth =				512;
-								
-	parameter				Overclock =				1;
-								
-	parameter 				DDR_nCK_PER_CLK = 		4,
-							DDRDQWidth =			64,
-							DDRCWidth =				3,
-							DDRAWidth =				28;
-								
-	parameter				IVEntropyWidth =		64;	
-	
-
-    parameter				NumValidBlock = 		1024,
-							Recursion = 			3,
-							MaxLogRecursion = 		4;
-	
-    parameter				LeafWidth = 			32,
-							PLBCapacity = 			8192;
 
 	// uBlaze/caches/System
 	
-	parameter				SystemClockFreq =		100_000_000;
+	parameter				SystemClockFreq =		100_000_000,
+							ORAMClockFreq =			200_000_000,
+							GenHistogram =			1;
+	
+	localparam  			Cycle = 				1000000000/ORAMClockFreq;	
 	
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
@@ -89,6 +74,8 @@ module HWTestHarnessTop (
 	wire	[FEDWidth-1:0]	PathORAM_ReturnData;
 	wire 					PathORAM_ReturnDataValid, PathORAM_ReturnDataReady;
 
+	integer					NumAccess = 1;
+	
 	//------------------------------------------------------------------------------
 	// 	Clocking
 	//------------------------------------------------------------------------------
@@ -117,8 +104,14 @@ module HWTestHarnessTop (
 	// 	CUT & loopback
 	//------------------------------------------------------------------------------
 	
-	HWTestHarness #(		.ORAMU(					ORAMU),
-							.SlowClockFreq(			SystemClockFreq))
+	HWTestHarness #(		.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),
+							.SlowClockFreq(			SystemClockFreq),
+							.GenHistogram(			1))
 				tester(		.SlowClock(				ClockF100),
 							.FastClock(				ClockF200),
 							.SlowReset(				ResetF100), 
@@ -145,8 +138,43 @@ module HWTestHarnessTop (
 							.ErrorSendOverflow(		led[2]));
 
 	assign	PathORAM_CommandReady = 				1'b1;
-							
-	FIFORAM		#(			.Width(					FEDWidth),
+	
+	generate if (GenHistogram) begin
+		reg	[FEDWidth-1:0]	PathORAM_ReturnDataPre;
+		reg 				PathORAM_ReturnDataValidPre = 1'b0;	
+		integer	done, j;
+		
+		assign	PathORAM_DataInReady =				1'b1;
+		
+		assign	PathORAM_ReturnData =				PathORAM_ReturnDataPre;
+		assign	PathORAM_ReturnDataValid =			PathORAM_ReturnDataValidPre;
+		
+		always @(posedge ClockF200) begin
+			if (PathORAM_CommandValid & PathORAM_Command == BECMD_Read) begin
+				j = 0;
+				while (j < NumAccess * 6) begin
+					#(Cycle);
+					j = j + 1;
+				end
+				
+				NumAccess = NumAccess + 1;
+				
+				done = 0;
+				PathORAM_ReturnDataPre = 0;
+				PathORAM_ReturnDataValidPre = 1'b1;
+				while (done == 0) begin
+					#(Cycle);
+					if (PathORAM_ReturnDataValidPre & PathORAM_ReturnDataReady) begin
+						PathORAM_ReturnDataPre = PathORAM_ReturnDataPre + 1;
+						if (PathORAM_ReturnDataPre == FEORAMBChunks) 
+							done = 1;
+					end
+				end
+				PathORAM_ReturnDataValidPre = 1'b0;
+			end
+		end
+	end else begin
+		FIFORAM		#(		.Width(					FEDWidth),
 							.Buffering(				16))
 				loopback(	.Clock(					ClockF200),
 							.Reset(					ResetF200),
@@ -156,7 +184,8 @@ module HWTestHarnessTop (
 							.OutData(				PathORAM_ReturnData),
 							.OutSend(				PathORAM_ReturnDataValid),
 							.OutReady(				PathORAM_ReturnDataReady));
-
+	end endgenerate
+	
 	//------------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

@@ -7,7 +7,7 @@
 `include "Const.vh"
 //==============================================================================
 
-module ascend_vc707_testbench_HWTestHarness;
+module HWTestHarnessTestbench;
 
 	localparam RESET_PERIOD = 200000; //in pSec  
 	parameter CLKIN_PERIOD          = 5000;
@@ -50,25 +50,13 @@ module ascend_vc707_testbench_HWTestHarness;
 	//	CUT
 	//--------------------------------------------------------------------------
 
-	parameter				ORAMB =					512,
-							ORAMU =					32,
-							ORAML =					25,
-							ORAMZ =					5,
-							ORAMC =					10;
-
-	parameter				FEDWidth =				64,
-							BEDWidth =				512; // TODO this will be higher!							
-								
-	parameter				Overclock =				1;
-								
-	parameter 				DDR_nCK_PER_CLK = 		4,
-							DDRDQWidth =			64,
-							DDRCWidth =				3,
-							DDRAWidth =				28;
-								
-	parameter				IVEntropyWidth =		64;	
+	parameter				SystemClockFreq =		100_000_000,
+							ORAMClockFreq =			200_000_000,
+							GenHistogram =			1;
 		
-	parameter				SystemClockFreq =		100_000_000;
+	parameter				ORAMB = 				CUT.ORAMB;
+	parameter				ORAMU = 				CUT.ORAMU;
+	parameter				FEDWidth =				CUT.FEDWidth;
 	
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
@@ -97,13 +85,23 @@ module ascend_vc707_testbench_HWTestHarness;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 
-	assign	UARTShftDataIn =						(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : // write
+	generate if (GenHistogram) begin
+		assign	UARTShftDataIn =					(CmdCount == 0) ? {8'd0, 32'h00000000, 32'h0, 32'd0} : // write
+													(CmdCount == 1) ? {8'd0, 32'hf0000001, 32'h2f, 32'd0} : // write
+													(CmdCount == 2) ? {8'd2, 32'hf0000000, 32'h3f, 32'd0} : 
+													(CmdCount == 3) ? {8'd2, 32'hf0000001, 32'h4f, 32'd0} : 
+													(CmdCount == 4) ? {8'd2, 32'hf0000001, 32'h4f, 32'd0} : 
+													{8'hff, 32'h0, 32'h0, 32'd0};
+		assign	UARTShftDataInValid =				CmdCount < 6;	
+	end else begin
+		assign	UARTShftDataIn =					(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : // write
 													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'h2f, 32'd128} : // write
 													(CmdCount == 2) ? {8'd2, 32'hf0000001, 32'h3f, 32'd256} : 
 													(CmdCount == 3) ? {8'd3, 32'hf0000002, 32'h4f, 32'd512} : 
 													(CmdCount == 4) ? {8'd0, 32'hf0000003, 32'h5f, 32'd1024} : // write
 													{8'hff, 32'h0, 32'h0, 32'd512};
-	assign	UARTShftDataInValid =					CmdCount < 6;
+		assign	UARTShftDataInValid =				CmdCount < 6;
+	end endgenerate
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),
@@ -117,7 +115,7 @@ module ascend_vc707_testbench_HWTestHarness;
 							.OutValid(				UARTDataInValid),
 							.OutReady(				UARTDataInReady));
 	
-	UART		#(			.ClockFreq(				200_000_000),
+	UART		#(			.ClockFreq(				ORAMClockFreq),
 							.Baud(					UARTBaud),
 							.Width(					UARTWidth))
 				uart(		.Clock(					sys_clk_p), 
@@ -147,20 +145,9 @@ module ascend_vc707_testbench_HWTestHarness;
 			$display("[%m @ %t] Received data = %x", $time, RecvData);
 	end
 
-	HWTestHarnessTop #(		.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.Overclock(				Overclock),
-							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),							
-							.DDR_nCK_PER_CLK(		DDR_nCK_PER_CLK),
-							.DDRDQWidth(			DDRDQWidth),
-							.DDRCWidth(				DDRCWidth),
-							.DDRAWidth(				DDRAWidth),
-							.IVEntropyWidth(		IVEntropyWidth),
-							.SystemClockFreq(		SystemClockFreq))
+	HWTestHarnessTop #(		.SystemClockFreq(		SystemClockFreq),
+							.ORAMClockFreq(			ORAMClockFreq),
+							.GenHistogram(			GenHistogram))
 				CUT(		.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 
