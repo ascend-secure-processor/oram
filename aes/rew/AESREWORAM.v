@@ -307,7 +307,7 @@ module AESREWORAM(
 			end
 		end
 
-		/*
+	`ifdef SIMULATION_VERBOSE_AES
 		always @(posedge Clock) begin
 			if (BEDataOutValid) begin
 				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b) ", $time, BEDataOut, ROAccess, CSCOROI);
@@ -325,8 +325,8 @@ module AESREWORAM(
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end		
 		end
-		*/
-		
+	`endif
+	
 		always @(posedge Clock) begin
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
 				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
@@ -370,7 +370,12 @@ module AESREWORAM(
 			if (WritebackROIVOutReady & ~WritebackROIVOutValid) begin
 				$display("[%m @ %t] ERROR: External IV FIFO didn't have data on a transfer.", $time);
 				$stop;
-			end			
+			end
+			
+			if (ROI_FoundBucket & ROI_NotFoundBucket) begin
+				$display("[%m @ %t] ERROR: now this just doesn't make any goddamn sense does it?.", $time);
+				$stop;
+			end
 		end
 	`endif
 
@@ -599,7 +604,7 @@ module AESREWORAM(
 	
 	assign	BufferedDataIn_Wide =					(CSRORead) ?			{DRAMReadData, 	RO_GentryIV, 			Core_ROBIDIn,	BucketNotYetWritten} : 
 													(CSROROIRead) ?			{ROIData,		ROI_GentryIV, 			ROI_BID,		BucketNotYetWritten} : 
-																			{BEDataIn_Inner,{AESEntropy{1'bx}}, RO_BIDOut,		1'b0}; // header WB + RW writeback
+																			{BEDataIn_Inner,{AESEntropy{1'bx}}, 	RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	generate if (Overclock) begin:BRAM_DATABUFF
@@ -892,8 +897,8 @@ module AESREWORAM(
 		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
 	end endgenerate
 					
-	assign	ROI_FoundBucket =						BufferedDataOutValid & (ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches);
-	assign	ROI_NotFoundBucket =					BufferedDataOutValid & (ROAccess & ProcessingLastHeader & ~ROI_HeaderValid);
+	assign	ROI_FoundBucket =						BufferedDataOutValid & ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches;
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & ROAccess & ProcessingLastHeader & ~ROI_HeaderValid & ~ROI_FoundBucket;
 
 	assign	ROI_HeaderLoad =						ROI_FoundBucket | ROI_NotFoundBucket;
 	
@@ -1033,9 +1038,9 @@ module AESREWORAM(
 	assign	BufferedDataOutReady_Write =			 DRAMWriteDataReady_Pre &	ROMaskValid_Needed & RMMaskValid_Needed;
 	assign	BufferedDataOutReady =					 DataOutReady & 			ROMaskValid_Needed & RMMaskValid_Needed;
 	
-	assign	RMMaskReady =							(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	RMMask_Needed;
-	assign	ROIMaskShiftOutReady =					(DataOutReady & 		ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
-	assign	ROMaskBufOutReady =						 DataOutReady & 		RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
+	assign	RMMaskReady =							(DataOutReady & 			ROMaskValid_Needed & BDataValid_Needed) & 	RMMask_Needed;
+	assign	ROIMaskShiftOutReady =					(DataOutReady & 			ROMaskValid_Needed & BDataValid_Needed) & 	ROIMask_Needed;
+	assign	ROMaskBufOutReady =						 DataOutReady & 			RMMaskValid_Needed & BDataValid_Needed & 	ROMask_Needed;
 	
 	assign	DataOutReady =							(PathRead) ? 1'b1 : DRAMWriteDataReady_Pre;
 	assign	DataOutTransfer =						DataOutValid & DataOutReady;
