@@ -290,8 +290,9 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-
+	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	assign Op = TestCount < NN ? 2'b00 : 2'b10;
+	
 	initial begin
 		$display("ORAML = %d", ORAML);
 		TestCount <= 0;
@@ -313,22 +314,28 @@ module testUORam;
    wire WriteCmd;
    assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
    
-   always @(posedge Clock) begin
-       if (!Reset && CmdInReady) begin
-           if (TestCount < 1000) begin
-               #(Cycle * 100);       
-               Task_StartORAMAccess(Op, AddrRand);
-               #(Cycle); 
-			   AddrPrev <= AddrRand;
-               AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;
-               TestCount <= TestCount + 1;
-           end
-           else begin
-               $display("ALL TESTS PASSED!");
-               $finish;  
-           end
-       end
-   end
+   localparam  NN = 400;
+   
+    always @(posedge Clock) begin
+        if (!Reset && CmdInReady) begin
+            if (TestCount < 2 * NN) begin
+                #(Cycle * 100);       
+                Task_StartORAMAccess(Op, AddrRand);
+                #(Cycle); 
+				AddrPrev <= AddrRand;
+                //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
+				AddrRand <= TestCount < NN ? TestCount : ((TestCount - NN) * 16) % NN;			   
+                TestCount <= TestCount + 1;
+  		   
+				if (AddrRand > NumValidBlock)	$finish;
+  					   
+            end
+            else begin
+                $display("ALL TESTS PASSED!");
+                $finish;  
+            end
+        end
+    end
    
 	always @(posedge Clock) begin
 		if (CmdInValid && CmdInReady && WriteCmd) begin
