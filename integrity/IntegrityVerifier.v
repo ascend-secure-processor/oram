@@ -124,16 +124,20 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	wire ConsumeHash, Violation, CheckHash; 
+	wire ConsumeHash, VersionNonzero, Violation, CheckHash, UpdateHash; 
 	wire Idle;
 	
 	assign ConsumeHash = HashOutValid[Turn];
 	assign CheckHash = ConsumeHash && 
 						(BktOnPathDone < TotalBucketD / 2 
 						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
-							
+	
+	assign UpdateHash = ConsumeHash && !CheckHash;
+	
+	assign VersionNonzero = BucketHeader[Turn][AESEntropy-1:0];
+	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && CheckHash && BucketHeader[Turn][AESEntropy-1:0] > 0 &&
+	assign Violation = ConsumeHash && CheckHash && VersionNonzero &&
 		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
 	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
@@ -143,7 +147,10 @@ module IntegrityVerifier (
 		if (ConsumeHash && CheckHash) begin
 			$display("Integrity verification results on Bucket %d", BucketID[Turn]);
 			if (Violation === 0) begin
-				$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
+				if (!VersionNonzero)
+					$display("\tVersion is 0, no need to check");
+				else
+					$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
 			end
 		
 			else if (Violation === 1) begin
@@ -157,15 +164,18 @@ module IntegrityVerifier (
 			end	
 		end
 		
-		if (Write) begin
-			$display("Updating Bucket %d hash to %x", BucketID[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
+		if (ConsumeHash && UpdateHash) begin
+			if (!VersionNonzero)
+				$display("\tVersion is 0, no need to update hash");
+			else
+				$display("Updating Bucket %d hash to %x", BucketID[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
 		end
 				
 	end
 `endif
 	
 	// updating hash for the output path
-	assign Write = ConsumeHash && !CheckHash;		
+	assign Write = ConsumeHash && UpdateHash && VersionNonzero;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
 		
 	//------------------------------------------------------------------------------------

@@ -222,13 +222,16 @@ module CoherenceController(
                         );     
 		
 		//--------------------------------------------------------------------------
-		// Port1 : written by Stash, read (through a FIFO) and written by AES
+		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
 		//-------------------------------------------------------------------------- 	
 		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
 		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
+		
 		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr;
-
+		wire 						HdOfIWriteBack;
+		reg [TrancateDigestWidth-1:0] BktOfINewHash;
+		
 		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && (HdOnPthCtr == (BktOfInterest + 1) % (ORAML+1));
 		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash, BufP1_DOut[BktHSize_RawBits-1:0]}
 									: BufP1_DOut;
@@ -249,7 +252,6 @@ module CoherenceController(
 			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufP1_Enable && !BufP1_Write,	BufP1Reg_DInValid);
 		
 		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
-	
 		reg  PthRW, HdRW;
 		wire PthCtrEnable, HdCtrEnable;
 		wire HdRW_Transition, PthRW_Transition;	
@@ -334,7 +336,6 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		
 		reg [1:0] 	HdOfIStat;
-		reg [TrancateDigestWidth-1:0] BktOfINewHash;
 		
 		assign 	PathReady_IV = RW_R_DoneAlarm;
 		assign	BOIReady_IV = RO_R_DoneAlarm;

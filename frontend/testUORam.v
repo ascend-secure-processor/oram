@@ -120,14 +120,14 @@ module testUORam;
                             .Reset(					Reset),
                             
                             // interface with network			
-                            .Cmd(				    CmdIn_TEST),
-                            .PAddr(					AddrIn_TEST),
-                            .CmdValid(			    CmdInValid_TEST),
+                            .Cmd(				    CmdIn),
+                            .PAddr(					AddrIn),
+                            .CmdValid(			    CmdInValid),
                             .CmdReady(			    CmdInReady),
                             .DataInReady(           DataInReady), 
-                            .DataInValid(           DataInValid_TEST), 
-                            .DataIn(                DataIn_TEST),                                    
-                            .DataOutReady(          ReturnDataReady_TEST), 
+                            .DataInValid(           DataInValid), 
+                            .DataIn(                DataIn),                                    
+                            .DataOutReady(          ReturnDataReady), 
                             .DataOutValid(          ReturnDataValid), 
                             .DataOut(               ReturnData),
                             
@@ -315,7 +315,7 @@ module testUORam;
    
    always @(posedge Clock) begin
        if (!Reset && CmdInReady) begin
-           if (TestCount < 100) begin
+           if (TestCount < 1000) begin
                #(Cycle * 100);       
                Task_StartORAMAccess(Op, AddrRand);
                #(Cycle); 
