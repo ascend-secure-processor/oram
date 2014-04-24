@@ -110,7 +110,7 @@ module ascend_vc707(
 	// Clocking
 	
 	wire					MemoryClock; // always 200 Mhz (matches MIG)
-	wire					MemoryReset_Pre, MemoryReset_Gen;
+	wire					MemoryReset_Pre;
 	(* mark_debug = "TRUE" *)	reg						MemoryReset;
 	
 	wire					ORAMClock; // Configurable (typically >= 100 Mhz, <= 200 Mhz)
