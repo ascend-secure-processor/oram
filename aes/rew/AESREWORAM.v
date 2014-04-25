@@ -308,6 +308,19 @@ module AESREWORAM(
 		end
 
 	`ifdef SIMULATION_VERBOSE_AES
+		wire	[AESEntropy-1:0] RWBVOut;
+		wire	[BIDWidth-1:0] 	RWBIDOut;
+		FIFORAM		#(		.Width(					AESEntropy + BIDWidth),
+							.Buffering(				1000))
+				rw_H_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{Core_RWIVIn, Core_RWBIDIn}),
+							.InValid(				RWSend),
+							.InAccept(				),
+							.OutData(				{RWBVOut, RWBIDOut}),
+							.OutSend(				),
+							.OutReady(				RWReceive));	
+	
 		always @(posedge Clock) begin
 			if (BEDataOutValid) begin
 				$display("[%m @ %t] Sending Backend: %x (RO: %b, ROI: %b) ", $time, BEDataOut, ROAccess, CSCOROI);
@@ -316,6 +329,9 @@ module AESREWORAM(
 				$display("[%m @ %t] Writing DRAM:    %x (RO: %b) ", $time, DRAMWriteData, ROAccess);
 			end
 			
+			if (RWReceive) begin
+				$display("[%m @ %t] Releasing Gentry mask w/ IV = %d, BID = %d", $time, RWBVOut, RWBIDOut);
+			end
 			
 			if (DRAMReadDataValid & DRAMReadDataReady) begin
 				$display("[%m @ %t] Reading DRAM:    %x (ROAccess = %b) ", $time, DRAMReadData, ROAccess);
@@ -324,7 +340,7 @@ module AESREWORAM(
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
 			end		
-		end
+		end		
 	`endif
 	
 		always @(posedge Clock) begin
@@ -897,8 +913,8 @@ module AESREWORAM(
 		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
 	end endgenerate
 					
-	assign	ROI_FoundBucket =						BufferedDataOutValid & ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches;
-	assign	ROI_NotFoundBucket =					BufferedDataOutValid & ROAccess & ProcessingLastHeader & ~ROI_HeaderValid & ~ROI_FoundBucket;
+	assign	ROI_FoundBucket =						BufferedDataOutValid & ROMaskBufOutValid & 	ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches;
+	assign	ROI_NotFoundBucket =					BufferedDataOutValid & ROMaskBufOutValid &	ROAccess & ProcessingLastHeader & ~ROI_HeaderValid & ~ROI_FoundBucket;
 
 	assign	ROI_HeaderLoad =						ROI_FoundBucket | ROI_NotFoundBucket;
 	
