@@ -50,10 +50,6 @@ module testUORam;
 
 
 
-	
-	
-	
-	
 	integer KK;
 	
 	reg	[1:0]  CmdIn_TEST;
@@ -254,7 +250,7 @@ module testUORam;
 	task Handle_ProgStore;
 		begin
 			#(Cycle);
-			#(Cycle / 2) DataInValid <= 1;
+			#(Cycle / 2.0) DataInValid <= 1;
 			GlobalData[AddrIn] = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				DataIn = $random;
@@ -291,7 +287,8 @@ module testUORam;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
 	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-	assign Op = TestCount < NN ? 2'b00 : 2'b10;
+	assign Op = Exist ? 2'b10 : 2'b00;
+	
 	
 	initial begin
 		$display("ORAML = %d", ORAML);
