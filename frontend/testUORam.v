@@ -5,7 +5,7 @@
 module testUORam;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
+	parameter                   ORAML = `ifdef ORAML `ORAML `else 15 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
 	parameter					ORAMC =				10; 
 	parameter					ORAME =				5;
@@ -13,12 +13,12 @@ module testUORam;
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter                   DDRAWidth_Sim =		`log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
+    parameter                   DDRAWidth_Sim =		`log2(ORAMZ) + ORAML + 2;
     
-    parameter                   NumValidBlock = 1024;
-    parameter                   Recursion = 3;
+    parameter                   NumValidBlock = 	1 << (ORAML - 1);
+    parameter                   Recursion = 		3;
                    
-    parameter                   PLBCapacity = 1024;     // in bits
+    parameter                   PLBCapacity = 		8192 << 3; // in bits
 
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
@@ -40,58 +40,13 @@ module testUORam;
 	reg  [FEDWidth-1:0] DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth_Sim-1:0]		DDR3SDRAM_Address;
+	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 	
 	wire						DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
-
-
-
-	integer KK;
-	
-	reg	[1:0]  CmdIn_TEST;
-	wire [ORAMU-1:0] AddrIn_TEST;
-	reg CmdInValid_TEST;
-	
-	wire [FEDWidth-1:0] DataIn_TEST;
-	wire DataInValid_TEST;
-	wire ReturnDataReady_TEST;
-	
-	initial begin
-		KK = 0;
-		CmdInValid_TEST = 1'b0;
-		#(Cycle*60);
-		
-		CmdIn_TEST = BECMD_Update;
-		CmdInValid_TEST = 1'b1;
-		
-		while (KK < 200) begin
-			#(Cycle);
-			if (CmdInValid_TEST & CmdInReady) begin
-				KK = KK + 1;
-			end
-		end
-		
-		KK = 0;
-		
-		CmdIn_TEST = BECMD_Read;
-		
-		while (KK < 200) begin
-			#(Cycle);
-			if (CmdInValid_TEST & CmdInReady) begin
-				KK = KK + 1;
-			end
-		end
-		CmdInValid_TEST = 1'b0;
-	end 
-	
-	assign	AddrIn_TEST = KK;
-	assign	DataIn_TEST = 0;
-	assign	DataInValid_TEST = 1'b1;
-	assign	ReturnDataReady_TEST = 1'b1;
 	
     PathORamTop        #(	.StopOnBlockNotFound(	0),
                             .ORAMB(					ORAMB),
@@ -148,14 +103,13 @@ module testUORam;
                 OutInitLat = 30,
                 OutBandWidth = 57;
 	
-	SynthesizedRandDRAM	#(	.InBufDepth(InBufDepth),
-	                        .OutInitLat(OutInitLat),
-	                        .OutBandWidth(OutBandWidth),
-	                           
-                            .UWidth(				8),
-                            .AWidth(				DDRAWidth_Sim + 6),
+	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
+	                        .OutInitLat(			OutInitLat),
+	                        .OutBandWidth(			OutBandWidth),
+                            .UWidth(				64),
+                            .AWidth(				DDRAWidth_Sim),
                             .DWidth(				DDRDWidth),
-                            .BurstLen(				1), // just for this module ...
+                            .BurstLen(				1),
                             .EnableMask(			1),
                             .Class1(				1),
                             .RLatency(				1),
@@ -163,10 +117,7 @@ module testUORam;
         ddr3model(	        .Clock(					Clock),
                             .Reset(					Reset),
                             
-                            .Initialized(			),
-                            .PoweredUp(				),
-                            
-                            .CommandAddress(		{DDR3SDRAM_Address, 6'b000000}),
+                            .CommandAddress(		DDR3SDRAM_Address),
                             .Command(				DDR3SDRAM_Command),
                             .CommandValid(			DDR3SDRAM_CommandValid),
                             .CommandReady(			DDR3SDRAM_CommandReady),
@@ -177,8 +128,6 @@ module testUORam;
                             .DataInReady(			DDR3SDRAM_WriteReady),
                             
                             .DataOut(				DDR3SDRAM_ReadData),
-                            .DataOutErrorChecked(	),
-                            .DataOutErrorCorrected(	),
                             .DataOutValid(			DDR3SDRAM_ReadValid),
                             .DataOutReady(			1'b1));
 
@@ -289,7 +238,6 @@ module testUORam;
 	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 	assign Op = Exist ? 2'b10 : 2'b00;
 	
-	
 	initial begin
 		$display("ORAML = %d", ORAML);
 		TestCount <= 0;
@@ -311,7 +259,7 @@ module testUORam;
    wire WriteCmd;
    assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
    
-   localparam  NN = 400;
+   localparam  NN = 300;
    
     always @(posedge Clock) begin
         if (!Reset && CmdInReady) begin
@@ -324,8 +272,8 @@ module testUORam;
 				AddrRand <= TestCount < NN ? TestCount : ((TestCount - NN) * 16) % NN;			   
                 TestCount <= TestCount + 1;
   		   
-				if (AddrRand > NumValidBlock)	$finish;
-  					   
+				if (AddrRand > NumValidBlock)
+					$finish;   
             end
             else begin
                 $display("ALL TESTS PASSED!");
