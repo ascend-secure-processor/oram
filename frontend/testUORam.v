@@ -202,7 +202,7 @@ module testUORam;
 			#(Cycle / 2.0) DataInValid <= 1;
 			GlobalData[AddrIn] = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = $random;
+				DataIn = $random % 256;
 				GlobalData[AddrIn] <= (GlobalData[AddrIn] << FEDWidth) + DataIn;
 				while (!DataInReady)  #(Cycle);   
 				#(Cycle);
@@ -235,8 +235,7 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-	assign Op = Exist ? 2'b10 : 2'b00;
+	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 	
 	initial begin
 		$display("ORAML = %d", ORAML);
@@ -268,8 +267,8 @@ module testUORam;
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle); 
 				AddrPrev <= AddrRand;
-                //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
-				AddrRand <= TestCount < NN ? TestCount : ((TestCount - NN) * 16) % NN;			   
+                AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
+				//AddrRand <= TestCount < NN ? TestCount : ((TestCount - NN) * 16) % NN;			   
                 TestCount <= TestCount + 1;
   		   
 				if (AddrRand > NumValidBlock)
