@@ -54,8 +54,7 @@ module DM_Cache
         RefillReg ( .Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
                     .In(Refilling), .Out(IsLastRefilling)); 
     
-    wire [LogLineSize:0] RefillOffset;
-        // RefillOffset[LogLineSize:1] is the addr offset, the last bit is evict/refill
+    wire [LogLineSize:0] RefillOffset; 	// RefillOffset[LogLineSize:1] is the addr offset, the last bit is evict/refill
     Counter #(.Width(LogLineSize+1))
         RefillCounter (Clock, Reset, 1'b0, 1'b0, Refilling, {(LogLineSize+1){1'bx}}, RefillOffset); // load = set = 0, in= x  
 
@@ -70,12 +69,14 @@ module DM_Cache
     wire TagInit;   
     wire InitEnd;
     wire [TArrayAddrWidth-1:0] InitTArrayAddr;
-    Register #(.Width(1))
-        TagInitReg (.Clock(Clock), .Reset(InitEnd), .Set(Reset), .Enable(1'b0), .Out(TagInit));
-    Counter #(.Width(TArrayAddrWidth))
-        TagInitCounter (Clock, Reset, 1'b0, 1'b0, TagInit, {TArrayAddrWidth{1'bx}}, InitTArrayAddr); // load = set = 0, in= x      
-    CountCompare #(.Width(TArrayAddrWidth), .Compare((1 << TArrayAddrWidth) - 1))
-        PosMapInitCountCmp(InitTArrayAddr, InitEnd);
+    Register1b TagInitReg	( Clock, InitEnd, Reset, TagInit);
+	CountAlarm #(			.Threshold(				1 << TArrayAddrWidth))
+		TagInitCounter (	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				TagInit),
+							.Count(					InitTArrayAddr),
+							.Done(					InitEnd)
+						);
         
     assign Ready = RefillOffset == 0 && !IsLastWrite && !TagInit;
     

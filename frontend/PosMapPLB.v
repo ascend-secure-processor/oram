@@ -43,8 +43,11 @@ module PosMapPLB
         CmdReg (Clock, Reset, 1'b0, CmdReady && CmdValid, Cmd, LastCmd);
         
     wire Busy;
-    Register #(.Width(1))
-        BusyReg (.Clock(Clock), .Reset(Reset || (Valid && OutReady)), .Set(CmdReady && CmdValid), .Enable(1'b0), .Out(Busy));
+    Register1b BusyReg (	.Clock(Clock), 
+							.Reset(Reset || (Valid && OutReady)), 
+							.Set(CmdReady && CmdValid), 
+							.Out(Busy)
+						);
     
 	wire [LeafWidth-1:0] NewLeafIn_Pre;
     wire [ORAML-1:0] NewLeafIn;
@@ -81,13 +84,15 @@ module PosMapPLB
     
     wire InitEnd;
     wire [LogFinalPosMapEntry-1:0] InitAddr;
-    Register #(.Width(1))
-        PosMapInitReg (.Clock(Clock), .Reset(InitEnd), .Set(Reset), .Enable(1'b0), .Out(PosMapInit));    
-    Counter #(.Width(LogFinalPosMapEntry))
-        PosMapInitCounter (Clock, Reset, 1'b0, 1'b0, PosMapInit, {LogFinalPosMapEntry{1'bx}}, InitAddr); // load = set = 0, in= x
-    CountCompare #(.Width(LogFinalPosMapEntry), .Compare(FinalPosMapEntry - 1))
-        PosMapInitCountCmp(InitAddr, InitEnd);
-
+    Register1b PosMapInitReg	(.Clock(Clock), .Reset(InitEnd), .Set(Reset), .Out(PosMapInit)); 
+	CountAlarm #(			.Threshold(				FinalPosMapEntry))
+		PosMapInitCounter (	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				PosMapInit),
+							.Count(					InitAddr),
+							.Done(					InitEnd)
+						);
+	
     assign PosMapSelect = InOnChipPosMap && CmdReady && CmdValid;                       
     assign PosMapEnable = PosMapInit || PosMapSelect || PosMapBusy;
     assign PosMapWrite = PosMapInit || PosMapBusy;        
@@ -145,8 +150,7 @@ module PosMapPLB
 
     always @(posedge Clock) begin
         if (Reset) begin
-            Valid <= 0;              
-    //        NewLeafIn <= $random;    
+            Valid <= 0;                
         end    
         else if (Valid && OutReady) begin
             Valid <= 0;
@@ -162,12 +166,12 @@ module PosMapPLB
                             
             if (PPPHit && LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
                 NewLeafOut <= NewLeafIn;
-		`ifdef SIMULATION
+			`ifdef SIMULATION
                 if (!NewLeafValid) begin
                     $display("Error: run out of random leaves.");
 					$finish;
                 end
-		`endif
+			`endif
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin
                 NewLeafOut <= PLBLeafOut;

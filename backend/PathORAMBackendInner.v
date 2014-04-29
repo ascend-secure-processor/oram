@@ -236,7 +236,7 @@ module PathORAMBackendInner(
 				
 			if (StartedFirstAccess & CSIdle & (WriteCount_Sim % PathSize_DRBursts)) begin
 				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
-//				$stop;
+				$stop;
 			end
 		
 	`ifdef SIMULATION_VERBOSE_BE

@@ -99,10 +99,17 @@ module REWStatCtr(
 			Read_or_Write_Post;
 	reg		Reset_Post;
 	
+	task Task_Init; 
+		begin
+			// Start from RW_R
+			RW_or_RO = 1'b0;	
+			Read_or_Write = 1'b0;
+		end
+    endtask
+	
 	`ifndef ASIC
 		initial begin
-			RW_or_RO = 1'b1;	
-			Read_or_Write = 1'b0;
+			Task_Init;
 
 			Reset_Post = 1'b1;
 		end
@@ -134,8 +141,7 @@ module REWStatCtr(
 		
 	always @ (posedge Clock) begin
 		if (Reset) begin
-			RW_or_RO <= 1'b1;
-			Read_or_Write <= 1'b0;
+			Task_Init;
 		end
 		
 		// RW_R --> RW_W

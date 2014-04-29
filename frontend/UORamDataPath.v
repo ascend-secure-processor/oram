@@ -120,7 +120,7 @@ module UORamDataPath
     assign DataReturnTransfer = ReturnDataReady && ReturnDataValid;
     assign DataInTransfer = DataInValid && DataInReady;
     assign ProgCounterInc = DataReturnTransfer || DataInTransfer;
-
+		
     Register #(.Width(1)) 
         ExpectingPosMapBlockReg (   .Clock(     Clock), 
                                     .Reset(     Reset), 
@@ -130,24 +130,27 @@ module UORamDataPath
                                     .Out(       ExpectingPosMapBlock));          
     Register #(.Width(1)) 
         ExpectingDataBlockReg (     .Clock(     Clock), 
-                                    .Reset(     Reset || (DataReturnTransfer && DataTransferEnd)), 
+                                    .Reset(     Reset || DataTransferEnd), 
                                     .Set(       1'b0), 
                                     .Enable(    SwitchReq), 
                                     .In(        DataBlockReq && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
                                     .Out(       ExpectingDataBlock));  
     Register #(.Width(1)) 
         ExpectingProgStoreReg (     .Clock(     Clock), 
-                                    .Reset(     Reset || (DataInTransfer && DataTransferEnd)), 
+                                    .Reset(     Reset || DataTransferEnd), 
                                     .Set(       1'b0), 
                                     .Enable(    SwitchReq), 
                                     .In(        DataBlockReq && (Cmd == BECMD_Append || Cmd == BECMD_Update)),
                                     .Out(       ExpectingProgStore));                                           
     
-    Counter #(.Width(LogFEORAMBChunks))
-        ProgCounter (Clock, Reset, 1'b0, 1'b0, ProgCounterInc, {LogFEORAMBChunks{1'bx}}, ProgDataCounter); // load = set = 0, in= x      
-    CountCompare #(.Width(LogFEORAMBChunks), .Compare(FEORAMBChunks - 1))
-        ProgCounterCmp(ProgDataCounter, DataTransferEnd);
-        
+	CountAlarm #(		.Threshold(				FEORAMBChunks))
+		ProgCounter (	.Clock(					Clock), 
+						.Reset(					Reset), 
+						.Enable(				ProgCounterInc),
+						.Count(					ProgDataCounter),
+						.Done(					DataTransferEnd)
+					);
+			     
     // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = ExpectingProgStore ? DataInValid : EvictFunnelOutValid;
     assign StoreData = ExpectingProgStore ? DataIn : EvictFunnelDOut;

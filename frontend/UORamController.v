@@ -203,36 +203,32 @@ module UORamController
 
 
     // front end control states
-    Register #(.Width(1))
-        PreparingReg (  .Clock(     Clock), 
-                        .Reset(     Reset || (PPPValid && PPPHit)), 
-                        .Set(       CmdInValid_Internal && CmdInReady_Internal), 
-                        .Enable(    1'b0),
-                        .In(        1'bx),
-                        .Out(       Preparing));    
-    Register #(.Width(1))
-        AccessingReg (  .Clock(     Clock), 
-                        .Reset(     Reset || (Accessing && SwitchReq && DataBlockReq)), 
-                        .Set(       Preparing && PPPValid && PPPHit), 
-                        .Enable(    1'b0), 
-                        .In(        1'bx),
-                        .Out(       Accessing));  
-    Register #(.Width(1))
+	Register1b 	
+		PreparingReg(  	.Clock(     Clock), 
+						.Reset(     Reset || (PPPValid && PPPHit)), 
+						.Set(       CmdInValid_Internal && CmdInReady_Internal), 
+						.Out(       Preparing));  	
+	Register1b 	
+		AccessingReg(  	.Clock(     Clock), 
+						.Reset(     Reset || (Accessing && SwitchReq && DataBlockReq)), 
+						.Set(       Preparing && PPPValid && PPPHit), 
+						.Out(       Accessing));							
+    Register #(	.Width(1))
         RefillStartReg (.Clock(     Clock), 
                         .Reset(     Reset || SwitchReq), 
                         .Set(       1'b0), 
                         .Enable(    1'b1),
                         .In(        RefillStarted || (PPPRefill && PPPCmdReady)),
                         .Out(       RefillStarted));  
-    Register #(.Width(1))
+    Register #(	.Width(1))
       PPPInitRefillReg (.Clock(     Clock), 
                         .Reset(     Reset || (PPPInitRefill && PPPCmdReady)), 
                         .Set(       1'b0), 
                         .Enable(    1'b1),
                         .In(        SwitchReq && !DataBlockReq && PPPUnInitialized),
                         .Out(       PPPInitRefill));
-    Register #(.Width(1))
-      PPPLookupReg (.Clock(     Clock), 
+    Register #(	.Width(1))
+      PPPLookupReg (	.Clock(     Clock), 
                         .Reset(     Reset || (Accessing && SwitchReq)), 
                         .Set(       CmdInValid_Internal && CmdInReady_Internal),          // this sets up PLB lookup for the first access
                         .Enable(    1'b1),
