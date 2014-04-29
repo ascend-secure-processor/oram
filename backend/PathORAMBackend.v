@@ -259,6 +259,15 @@ module PathORAMBackend(
 			assign	PathDone_IV = 					1'b1;
 			assign	BOIDone_IV = 					1'b1;
 		end
+		
+	end else begin: NO_CC
+		assign	BE_DRAMReadData = AES_DRAMReadData;
+		assign	BE_DRAMReadDataValid = AES_DRAMReadDataValid;
+		assign	AES_DRAMReadDataReady = BE_DRAMReadDataReady;
+		
+		assign	AES_DRAMWriteData = BE_DRAMWriteData;
+		assign  AES_DRAMWriteDataValid = BE_DRAMWriteDataValid;
+		assign	BE_DRAMWriteDataReady = AES_DRAMWriteDataReady;
 	end endgenerate
 	
 	//--------------------------------------------------------------------------

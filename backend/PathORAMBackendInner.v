@@ -134,19 +134,19 @@ module PathORAMBackendInner(
 	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy, AccessSkipsWriteback;
 	
-	wire					PathReadComplete, ROPathReadComplete, RWPathReadComplete;
-	wire					PathWritebackComplete;
-	wire					AppendQueued, OperationComplete_Pre, OperationComplete;
+	wire					AppendQueued, OperationComplete;
 	
 	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid, Stash_WBCmdValid;
-	
-	wire					ROAccess, RWAccess, StartRW, REWRoundComplete;
-	wire	[ORAML-1:0]		GentryLeaf_Pre;	
 	
 	wire	[ORAML-1:0]		DummyLeaf;
 	wire					DummyLeaf_Valid;
 	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;
 	
+	// REW
+	wire					ROAccess, RWAccess;
+	wire 					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
+	wire	[ORAML-1:0]		GentryLeaf;	
+		
 	// Front-end interfaces
 	
 	wire	[BECMDWidth-1:0] Command_Internal;
@@ -162,12 +162,7 @@ module PathORAMBackendInner(
 	
 	wire	[BEDWidth-1:0]	Load_ShiftBufData;
 	wire					Load_ShiftBufValid, Load_ShiftBufReady;
-	
-	// Writeback pipeline
-	
-	wire					PathWritebackComplete_Commands_RW, PathWritebackComplete_Commands_RO, PathWritebackComplete_Data_Pre;
-	wire					PathWritebackComplete_Commands, PathWritebackComplete_Data;	
-	
+		
 	// Stash
 	
 	wire	[BEDWidth-1:0]	Stash_StoreData;						
@@ -197,9 +192,6 @@ module PathORAMBackendInner(
 	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
 	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
-
-	wire 					AddrGen_HeaderWriteback;	
-	wire					AddrGen_Reading;
 	
 	wire	[ORAML-1:0]		AddrGen_Leaf;
 	wire					AddrGen_InReady, AddrGen_InValid;
@@ -244,7 +236,7 @@ module PathORAMBackendInner(
 				
 			if (StartedFirstAccess & CSIdle & (WriteCount_Sim % PathSize_DRBursts)) begin
 				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
-				$stop;
+//				$stop;
 			end
 		
 	`ifdef SIMULATION_VERBOSE_BE
@@ -274,30 +266,17 @@ module PathORAMBackendInner(
 	//	Control logic
 	//--------------------------------------------------------------------------	
 
-	assign	CSInitialize =							CS == ST_Initialize;
-	assign	CSIdle =								CS == ST_Idle;
-	assign	CSAppend =								CS == ST_Append;
-	assign	CSStartRead =							CS == ST_StartRead;
-	assign	CSStartStash =							CS == ST_StartStash;
-	assign	CSStartWriteback =						CS == ST_StartWriteback;
-	assign	CSPathRead =							CS == ST_PathRead;
-	assign	CSWBStash =								CS == ST_WBStash;
-	assign	CSPathWriteback =						CS == ST_PathWriteback;
+	assign	CSInitialize =					CS == ST_Initialize;
+	assign	CSIdle =						CS == ST_Idle;
+	assign	CSAppend =						CS == ST_Append;
+	assign	CSStartRead =					CS == ST_StartRead;
+	assign	CSStartStash =					CS == ST_StartStash;
+	assign	CSStartWriteback =				CS == ST_StartWriteback;
+//	assign	CSPathRead =					CS == ST_PathRead;
+	assign	CSWBStash =						CS == ST_WBStash;
+//	assign	CSPathWriteback =				CS == ST_PathWriteback;
 	
-	assign	OperationComplete_Pre =					CSPathWriteback & PathWritebackComplete & AddrGen_InReady & Stash_CommandReady;
-		
-	generate if (Overclock) begin
-		Register #(			.Width(					1),
-							.Initial(				0))
-				oc_dly(		.Clock(					Clock),
-							.Reset(					OperationComplete),
-							.Set(					1'b0),
-							.Enable(				1'b1),
-							.In(					OperationComplete_Pre),
-							.Out(					OperationComplete));		
-	end else begin
-		assign	OperationComplete =					OperationComplete_Pre;
-	end endgenerate
+	assign	OperationComplete = 					RO_W_DoneAlarm || RW_W_DoneAlarm;	
 	
 	assign	AppendQueued =							Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
 	assign	Command_InternalReady =					AppendQueued | (OperationComplete & 		~AccessIsDummy);
@@ -350,14 +329,14 @@ module PathORAMBackendInner(
 				if (Stash_CommandReady)
 					NS =							ST_PathRead;
 			ST_PathRead : 							
-				if (PathReadComplete)
+				if (RW_R_DoneAlarm || RO_R_DoneAlarm)
 					NS =							ST_StartWriteback;
 			ST_StartWriteback :
 				if (AddrGen_InReady)
 					NS =							ST_WBStash;
 			ST_WBStash :
 				if (Stash_CommandReady)
-					NS =							ST_PathWriteback;
+					NS =							ST_PathWriteback;				
 			ST_PathWriteback : 
 				if (OperationComplete)
 					NS =							ST_Idle;
@@ -375,35 +354,44 @@ module PathORAMBackendInner(
 		
 		Counter	#(			.Width(					ORAML))
 				gentry_leaf(.Clock(					Clock),
-							.Reset(					Reset | (REWRoundComplete & &GentryLeaf_Pre)),
+							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				REWRoundComplete),
+							.Enable(				RW_W_DoneAlarm),
 							.In(					{ORAML{1'bx}}),
-							.Count(					GentryLeaf_Pre));
+							.Count(					GentryLeaf));	
 		
-		CountAlarm #(		.Threshold(				ORAME))
-				rew_rnd_ctr(.Clock(					Clock | REWRoundComplete), 
-							.Reset(					Reset), 
-							.Enable(				OperationComplete),
-							.Done(					StartRW));
-		Register #(			.Width(					1))
-				rew_rw(		.Clock(					Clock),
-							.Reset(					Reset | REWRoundComplete),
-							.Set(					StartRW),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					RWAccess));
-		assign	REWRoundComplete =					RWAccess & OperationComplete;
+		REWStatCtr	#(			.ORAME(					ORAME),
+								.Overlap(				0),
+								.RW_R_Chunk(			PathSize_DRBursts),
+								.RW_W_Chunk(			PathSize_DRBursts),
+								.RO_R_Chunk(			BktSize_DRBursts),
+								.RO_W_Chunk(			1))	// nothing needs to happen for this stage, a little hacky
+								
+			rew_stat		(	.Clock(					Clock),
+								.Reset(					Reset),
+								
+								.RW_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
+								.RW_W_Transfer(			DRAMWriteDataValid & DRAMWriteDataReady),
+								.RO_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
+								.RO_W_Transfer(			1'b1),	// no such stage
 							
+								.ROAccess(				ROAccess),
+								.RWAccess(				RWAccess),
+								.Read(					CSPathRead),
+								.Writeback(				CSPathWriteback),
+
+								.RW_R_DoneAlarm(		RW_R_DoneAlarm),
+								.RW_W_DoneAlarm(		RW_W_DoneAlarm),
+								.RO_R_DoneAlarm(		RO_R_DoneAlarm),
+								.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
+							);	
+									
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
 		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
 		
-		assign	DummyLeaf =							(RWAccess) ? GentryLeaf_Pre : DummyLeaf_Wide[ORAML-1:0];
-
-		assign	AddrGen_HeaderWriteback =			~RWAccess & CSStartWriteback;
-		assign	ROAccess =							~RWAccess;
-		
+		assign	DummyLeaf =							(RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
+	
 		assign	ROPAddr_Pre =						PAddr_Internal;
 		assign	ROLeaf_Pre =						(REWRoundDummy) ? DummyLeaf : CurrentLeaf_Internal;
 		assign	REWRoundDummy_Pre =					AccessIsDummy;
@@ -427,7 +415,6 @@ module PathORAMBackendInner(
 		
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 		
-		assign	AddrGen_HeaderWriteback =			1'b0;
 		assign	ROAccess =							1'b0;
 		
 		always @( * ) begin
@@ -529,7 +516,6 @@ module PathORAMBackendInner(
 	//	Address generation & ORAM initialization
 	//--------------------------------------------------------------------------
 
-	assign	AddrGen_Reading = 						CSStartRead;
 	assign	AddrGen_Leaf =							(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
 	
     AddrGen #(				.ORAMB(					ORAMB),
@@ -540,8 +526,8 @@ module PathORAMBackendInner(
 							.Reset(					Reset | DRAMInitializing),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					AddrGen_Reading),
-							.BHIn(					AddrGen_HeaderWriteback),
+							.RWIn(					CSPathRead),
+							.BHIn(					ROAccess && CSPathWriteback),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
@@ -593,19 +579,6 @@ module PathORAMBackendInner(
 	
 	assign	DRAMInitializing =						~DRAMInitComplete;
 
-	//--------------------------------------------------------------------------
-	//	Read counters
-	//--------------------------------------------------------------------------
-		
-	CountAlarm #(			.Threshold(				PathSize_DRBursts),
-							.IThreshold(			BktSize_DRBursts))
-				in_path_cmp(.Clock(					Clock), 
-							.Reset(					Reset | CSIdle), 
-							.Enable(				DRAMReadDataValid & DRAMReadDataReady),
-							.Intermediate(			ROPathReadComplete),
-							.Done(					RWPathReadComplete));
-	
-	assign	PathReadComplete = 						(EnableREW & ROAccess) ? ROPathReadComplete : RWPathReadComplete;	
 	
 	//--------------------------------------------------------------------------
 	//	StashTop
@@ -648,55 +621,6 @@ module PathORAMBackendInner(
 							.DRAMWriteDataValid(	Stash_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady));
 							
-	//--------------------------------------------------------------------------
-	//	Writeback counters
-	//--------------------------------------------------------------------------
-
-	// Count commands written back	
-	CountAlarm #(			.Threshold(				PathSize_DRBursts))
-				out_CRW_cnt(.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				(CSWBStash | CSPathWriteback) & DRAMInitComplete & ~ROAccess & DRAMCommandValid & DRAMCommandReady),
-							.Done(					PathWritebackComplete_Commands_RW));
-	generate if (EnableREW) begin:RO_CMD_CNT
-		CountAlarm #(		.Threshold(				BktHSize_DRBursts * (ORAML + 1))) // header writeback
-				out_CRO_cnt(.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				(CSWBStash | CSPathWriteback) & DRAMInitComplete & ROAccess & DRAMCommandValid & DRAMCommandReady),
-							.Done(					PathWritebackComplete_Commands_RO));
-	end endgenerate
-	Register	#(			.Width(					1))
-				out_C_hld(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					(PathWritebackComplete_Commands_RO | PathWritebackComplete_Commands_RW) & DRAMCommandValid & DRAMCommandReady),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					PathWritebackComplete_Commands));
-	
-	// NOTE: this is like having a joint ready-valid.  We only have this logic 
-	// here because a lot of the backend internal modules assume all data is 
-	// flushed before next access.  This won't impact performance since the next 
-	// read path won't be able to proceed until all writes are pushed to ORAM anyway.
-	
-	// Count data written back (identical logic as above)
-
-	CountAlarm 	#(			.Threshold(				PathSize_DRBursts))
-				rw_r_cnt(	.Clock(					Clock), 
-							.Reset(					Reset | CSIdle), 
-							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
-							.Done(					PathWritebackComplete_Data_Pre));
-										
-	Register	#(			.Width(					1))
-				out_D_hld(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					PathWritebackComplete_Data_Pre & DRAMWriteDataValid & DRAMWriteDataReady),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					PathWritebackComplete_Data));	
-	
-	assign	PathWritebackComplete =					(ROAccess) ? 	PathWritebackComplete_Commands : 
-																	PathWritebackComplete_Commands & PathWritebackComplete_Data;
-
 	//--------------------------------------------------------------------------
 	//	DRAM interface multiplexing
 	//--------------------------------------------------------------------------
