@@ -114,7 +114,7 @@ module REWStatCtr(
 	endtask
 	
 	task Task_Init; 
-		State_Trans(rw_access, path_read);	// Start from RW_R
+		State_Trans(ro_access, path_read);	// Start from RW_R
     endtask
 	
 	`ifndef ASIC
