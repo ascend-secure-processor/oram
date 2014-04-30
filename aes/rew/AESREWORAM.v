@@ -50,6 +50,8 @@ module AESREWORAM(
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
 	
+	parameter				DebugAES =				0;
+	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
 	localparam				RW_R_Chunk = 			PathSize_DRBursts,
@@ -126,24 +128,24 @@ module AESREWORAM(
 	
 	// AES Core
 	
-	wire	[AESEntropy-1:0] Core_ROIVIn; 
-	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
-	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
-	wire					Core_ROCommandInValid;
-	wire					Core_ROCommandInReady;
+	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
+	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
+	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
+	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInValid;
+	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInReady;
 
-	wire	[AESEntropy-1:0] Core_RWIVIn;
-	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
-	wire					Core_RWCommandInValid; 
-	wire					Core_RWCommandInReady;
+	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_RWIVIn;
+	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
+	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInValid; 
+	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInReady;
 
-	wire	[AESWidth-1:0]	Core_RODataOut; 
-	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
-	wire					Core_RODataOutValid;
-	wire					Core_RODataOutReady;
+	(* mark_debug = "TRUE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
+	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
+	(* mark_debug = "TRUE" *)	wire					Core_RODataOutValid;
+	(* mark_debug = "TRUE" *)	wire					Core_RODataOutReady;
 	
-	wire	[DDRDWidth-1:0]	Core_RWDataOut;
-	wire					Core_RWDataOutValid;	
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
+	(* mark_debug = "TRUE" *)	wire					Core_RWDataOutValid;	
 	
 	// RO header mask & bucket of interest seed generation
 
@@ -1010,10 +1012,16 @@ module AESREWORAM(
 	assign	RMMaskValid_Needed =					(RMMask_Needed) ? 	Core_RWDataOutValid : (ROIMask_Needed) ? ROIMaskShiftOutValid : 1'b1;
 	assign	ROMaskValid_Needed =					(ROMask_Needed) ? 	ROMaskBufOutValid : 1'b1;
 		
-	assign	GentryHeaderMask =						(ROIMask_Needed) ? 	ROIHeaderMask :	 					RWBGHeaderMask;
-	assign	GentryDataMask =						(ROIMask_Needed) ? 	ROIDataMask : 						RWBGDataMask;
-	assign	Mask =									(MaskIsHeader) ? 	ROHeaderMask | GentryHeaderMask : 	GentryDataMask;
-	assign	DataOut_Unmask =						BufferedDataOut ^ Mask; 
+	assign	GentryHeaderMask =						(ROAccess) ? ((ROIMask_Needed) ? ROIHeaderMask : {DDRDWidth{1'b0}}) : 		RWBGHeaderMask;
+	assign	GentryDataMask =						(ROIMask_Needed) ? 	ROIDataMask : 											RWBGDataMask;
+	assign	Mask =									(MaskIsHeader) ? 	ROHeaderMask | GentryHeaderMask : 						GentryDataMask;
+	
+	// This won't prune any AES logic; it will just disable mask generation
+	generate if (DebugAES) begin
+		assign	DataOut_Unmask =					BufferedDataOut; 
+	end else begin
+		assign	DataOut_Unmask =					BufferedDataOut ^ Mask;
+	end endgenerate 
 	
 	//--------------------------------------------------------------------------
 	//	Output Arbitration
