@@ -2,7 +2,7 @@
 #include <SWTestHarnessDriver.h>
 
 void main() {
-	int fd = initialize_uart("/dev/ttyUSB0", UART_BAUD);
+	int fd = initialize_uart("/dev/ttyUSB1", UART_BAUD);
 
 	char buf[4];
 	int i = 0;
