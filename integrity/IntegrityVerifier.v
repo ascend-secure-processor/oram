@@ -27,7 +27,7 @@ module IntegrityVerifier (
 	`include "IVCCLocal.vh"
 
     localparam  AWidth = PathBufAWidth;
-	localparam  BktAWidth = `log2(ORAML) + 1;
+	localparam  BktAWidth = `log2(ORAML+2) + 1;
 	localparam	BlkAWidth = `log2(BktSize_DRBursts + 1);
 	localparam	BIDWidth = ORAML + 1;
 	
@@ -134,7 +134,7 @@ module IntegrityVerifier (
 	
 	assign UpdateHash = ConsumeHash && !CheckHash;
 	
-	assign VersionNonzero = BucketHeader[Turn][AESEntropy-1:0];
+	assign VersionNonzero = (BucketHeader[Turn][AESEntropy-1:0] > 64'b0);
 	
 	// checking hash for the input path
 	assign Violation = ConsumeHash && CheckHash && VersionNonzero &&
@@ -165,8 +165,13 @@ module IntegrityVerifier (
 		end
 		
 		if (ConsumeHash && UpdateHash) begin
-			if (!VersionNonzero)
+			if (!VersionNonzero) begin
 				$display("\tVersion is 0, no need to update hash");
+				if (BucketID[Turn] != TotalBucketD) begin
+					$display("\t Error: RW_W version 0 for Bucket %d", BucketID[Turn]);
+					$stop;
+				end
+			end
 			else
 				$display("Updating Bucket %d hash to %x", BucketID[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
 		end

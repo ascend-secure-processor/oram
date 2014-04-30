@@ -170,6 +170,7 @@ module PathORAMBackend(
 							
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
+							.ROStart(				ROStart),
 							.REWRoundDummy(			REWRoundDummy),
 							.DRAMInitComplete(		DRAMInitComplete));							
 	
@@ -194,6 +195,8 @@ module PathORAMBackend(
 							.Reset(					Reset),
 									
 							.ROPAddr(               ROPAddr),
+							.ROLeaf(				ROLeaf),
+							.ROStart(				ROStart),
 							.REWRoundDummy(			REWRoundDummy),
 							
 							.FromDecData(			AES_DRAMReadData), 

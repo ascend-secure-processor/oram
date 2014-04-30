@@ -26,7 +26,7 @@ module PathORAMBackendInner(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, REWRoundDummy, 
+	ROPAddr, ROLeaf, ROStart, REWRoundDummy, 
 	
 	DRAMInitComplete
 	);
@@ -109,6 +109,7 @@ module PathORAMBackendInner(
 	
 	output reg [ORAMU-1:0]	ROPAddr;
 	output reg [ORAML-1:0]	ROLeaf;
+	output					ROStart;
 	output reg				REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
@@ -274,10 +275,12 @@ module PathORAMBackendInner(
 	assign	CSWBStash =						CS == ST_WBStash;
 //	assign	CSPathWriteback =				CS == ST_PathWriteback;
 	
-	assign	OperationComplete = 					RO_W_DoneAlarm || RW_W_DoneAlarm;	
+	assign	ROStart = 						CSStartRead && ROAccess;				
 	
-	assign	AppendQueued =							Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
-	assign	Command_InternalReady =					AppendQueued | (OperationComplete & 		~AccessIsDummy);
+	assign	OperationComplete = 			RO_W_DoneAlarm || RW_W_DoneAlarm;	
+	
+	assign	AppendQueued =					Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
+	assign	Command_InternalReady =			AppendQueued | (OperationComplete & 		~AccessIsDummy);
 	
 	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we 
 	// don't want to start real accesses _earlier_ than dummy accesses

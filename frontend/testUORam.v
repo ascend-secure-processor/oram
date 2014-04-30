@@ -23,7 +23,7 @@ module testUORam;
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
-    parameter					EnableIV =          0;
+    parameter					EnableIV =          1;
 	
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
@@ -238,7 +238,6 @@ module testUORam;
 	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 	
 	initial begin
-		$display("ORAML = %d", ORAML);
 		TestCount <= 0;
 		CmdInValid <= 0;
 		DataInValid <= 0;
@@ -255,11 +254,10 @@ module testUORam;
 		end 
 	end
    
-   wire WriteCmd;
-   assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
-   
-   localparam  NN = 300;
-   
+	localparam  NN = 300;
+	localparam	nn = 10;
+	localparam	nn2 = nn * 2;
+
     always @(posedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
@@ -267,10 +265,10 @@ module testUORam;
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle); 
 				AddrPrev <= AddrRand;
-                AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
-				//AddrRand <= TestCount < NN ? TestCount : ((TestCount - NN) * 16) % NN;			   
-                TestCount <= TestCount + 1;
-  		   
+                //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
+				TestCount <= TestCount + 1;
+				AddrRand <=  (TestCount / nn2) * nn2 + TestCount % nn;	   
+                	   
 				if (AddrRand > NumValidBlock)
 					$finish;   
             end
@@ -280,6 +278,9 @@ module testUORam;
             end
         end
     end
+   
+    wire WriteCmd;
+	assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
    
 	always @(posedge Clock) begin
 		if (CmdInValid && CmdInReady && WriteCmd) begin
