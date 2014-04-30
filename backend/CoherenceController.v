@@ -166,25 +166,21 @@ module CoherenceController(
 	
 	// invalidate the bit for the target block
 	wire HdOfInterest;
-	wire [DDRDWidth-1:0]	HeaderIn;
+	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
 	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOfI, ValidBitsOut;
-	
-	reg  [`log2(ORAML+1)-1:0]	BktOfInterest;
-	reg  [ORAMZ-1:0]			ValidBitsReg;
 	
 	genvar j;
 	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
-		assign 	ValidBitsIn[j] = FromDecData[AESEntropy+j];
-		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == FromDecData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
+		assign 	ValidBitsIn[j] = CoherentData[AESEntropy+j];
+		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == CoherentData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
 			// one hot signal that if a block is of interest
 	end 
 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
 	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
-	assign HeaderIn = {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, FromDecData[AESEntropy-1:0]};
-	
-	
+	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
+		
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
@@ -222,6 +218,23 @@ module CoherenceController(
                         );     
 		
 		//--------------------------------------------------------------------------
+		// Resolve conflict and produce coherent data
+		//-------------------------------------------------------------------------- 	
+		assign 	CoherentData = FromDecData;
+		
+		wire	[ORAML-1:0]		GentryLeaf;	  		
+		Counter	#(			.Width(					ORAML))
+			gentry_leaf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				RW_W_DoneAlarm),
+							.In(					{ORAML{1'bx}}),
+							.Count(					GentryLeaf)
+						);
+		
+		
+		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
 		//-------------------------------------------------------------------------- 	
 		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
@@ -236,6 +249,7 @@ module CoherenceController(
 		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash, BufP1_DOut[BktHSize_RawBits-1:0]}
 									: BufP1_DOut;
 		
+
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				3))
 			out_path_reg (	.Clock(					Clock),
@@ -334,9 +348,11 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//--------------------------------------------------------------------------
-		
-		reg [1:0] 	HdOfIStat;
-		
+	
+		reg  [`log2(ORAML+1)-1:0]	BktOfInterest;
+		reg  [ORAMZ-1:0]			ValidBitsReg;
+		reg	 [1:0] 	HdOfIStat;
+			
 		assign 	PathReady_IV = RW_R_DoneAlarm;
 		assign	BOIReady_IV = RO_R_DoneAlarm;
 		
@@ -397,6 +413,8 @@ module CoherenceController(
 						.OutReady(				HeaderOutReady)
 					);     
 	
+		// no coherent data
+		assign CoherentData = FromDecData;
 	
 		//	AES --> Stash 	
 		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}

@@ -14,6 +14,7 @@ module REWStatCtr(
 	RW_R_Ctr, RW_W_Ctr, RO_R_Ctr, RO_W_Ctr
 	);
 
+	parameter	USE_REW = 1;
 	parameter	ORAME = 0;
 	
 	// Most of these alarms aren't performance critical, so we can delay them by 1 (helps timing)
@@ -98,19 +99,27 @@ module REWStatCtr(
 	reg 	RW_or_RO_Post,
 			Read_or_Write_Post;
 	reg		Reset_Post;
+		
+	localparam	rw_access = 0,
+				ro_access = 1,
+				path_read = 0,
+				path_writeback = 1;
+		
+	task	State_Trans;
+		input	rw_or_ro, read_or_write;	
+		begin
+			RW_or_RO <= rw_or_ro;	
+			Read_or_Write <= read_or_write;
+		end	
+	endtask
 	
 	task Task_Init; 
-		begin
-			// Start from RW_R
-			RW_or_RO = 1'b0;	
-			Read_or_Write = 1'b0;
-		end
+		State_Trans(rw_access, path_read);	// Start from RW_R
     endtask
 	
 	`ifndef ASIC
 		initial begin
 			Task_Init;
-
 			Reset_Post = 1'b1;
 		end
 	`endif	
@@ -144,28 +153,30 @@ module REWStatCtr(
 			Task_Init;
 		end
 		
-		// RW_R --> RW_W
-		else if (RWAccess && Read && RW_R_Done) begin	
-			RW_or_RO <= 1'b0;
-			Read_or_Write <= 1'b1;
+		// RW_R -->	RW_W / RW_W
+		else if (RWAccess && Read && RW_R_Done) begin
+			if (USE_REW) 
+				State_Trans(rw_access, path_writeback);
+			else 
+				State_Trans(rw_access, path_writeback);
 		end
 		
 		// RW_W --> RO_R
 		else if (RWAccess && Writeback && RW_W_Done) begin
-			RW_or_RO <= 1'b1;
-			Read_or_Write <= 1'b0;
+			if (USE_REW) 
+				State_Trans(ro_access, path_read);
+			else 
+				State_Trans(rw_access, path_read);
 		end	
 		
 		// RO_R --> RO_W
 		else if (ROAccess && Read && RO_R_Done) begin
-			RW_or_RO <= 1'b1;
-			Read_or_Write <= 1'b1;
+			State_Trans(ro_access, path_writeback);
 		end	
 		
 		// RO_W --> E_RO_Accesses ? RW_R : RO_R
 		else if (ROAccess && Writeback && RO_W_Done) begin
-			RW_or_RO <= E_RO_Accesses ? 1'b0 : 1'b1;
-			Read_or_Write <= E_RO_Accesses ? 1'b0 : 1'b0;
+			State_Trans(E_RO_Accesses ? rw_access : ro_access, path_read);
 		end
 	end
 	

@@ -54,7 +54,6 @@ module PathORAMBackendInner(
 							ST_StartRead =			4'd3,
 							ST_StartStash =			4'd4,
 							ST_PathRead =			4'd5,
-							ST_StartWriteback =		4'd6,
 							ST_WBStash =			4'd7,
 							ST_PathWriteback =		4'd8;
 								
@@ -129,7 +128,7 @@ module PathORAMBackendInner(
 	
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, CSPathRead, 
-							CSPathWriteback, CSStartStash, CSWBStash, CSStartWriteback;
+							CSPathWriteback, CSStartStash, CSWBStash;
 
 	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy, AccessSkipsWriteback;
@@ -271,7 +270,6 @@ module PathORAMBackendInner(
 	assign	CSAppend =						CS == ST_Append;
 	assign	CSStartRead =					CS == ST_StartRead;
 	assign	CSStartStash =					CS == ST_StartStash;
-	assign	CSStartWriteback =				CS == ST_StartWriteback;
 //	assign	CSPathRead =					CS == ST_PathRead;
 	assign	CSWBStash =						CS == ST_WBStash;
 //	assign	CSPathWriteback =				CS == ST_PathWriteback;
@@ -280,9 +278,7 @@ module PathORAMBackendInner(
 	
 	assign	AppendQueued =							Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
 	assign	Command_InternalReady =					AppendQueued | (OperationComplete & 		~AccessIsDummy);
-
-	assign	AddrGen_InValid =						CSStartRead | CSStartWriteback;
-
+	
 	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we 
 	// don't want to start real accesses _earlier_ than dummy accesses
 	assign	Stash_AppendCmdValid =					CSIdle & DummyLeaf_Valid & Command_InternalValid & (Command_Internal == BECMD_Append) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
@@ -329,10 +325,7 @@ module PathORAMBackendInner(
 				if (Stash_CommandReady)
 					NS =							ST_PathRead;
 			ST_PathRead : 							
-				if (RW_R_DoneAlarm || RO_R_DoneAlarm)
-					NS =							ST_StartWriteback;
-			ST_StartWriteback :
-				if (AddrGen_InReady)
+				if (RW_R_DoneAlarm || RO_R_DoneAlarm)	// Path read complete
 					NS =							ST_WBStash;
 			ST_WBStash :
 				if (Stash_CommandReady)
@@ -347,45 +340,50 @@ module PathORAMBackendInner(
 	//	Basic/REW split control logic
 	//--------------------------------------------------------------------------
 	
+	// This module is not general enough to accommodate basic control flow as well	
+	REWStatCtr	#(		.USE_REW(				EnableREW),
+						.ORAME(					ORAME),
+						.Overlap(				0),
+						.RW_R_Chunk(			PathSize_DRBursts),
+						.RW_W_Chunk(			PathSize_DRBursts),
+						.RO_R_Chunk(			BktSize_DRBursts),
+						.RO_W_Chunk(			1))	
+							// A little hacky. Nothing needs to happen for this stage, 
+							// but adds 1 cycle bubble to allow CS transition
+						
+		rew_data_stat(	.Clock(					Clock),
+						.Reset(					Reset),
+						
+						.RW_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
+						.RW_W_Transfer(			DRAMWriteDataValid & DRAMWriteDataReady),
+						.RO_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
+						.RO_W_Transfer(			1'b1),	// no such stage
+					
+						.ROAccess(				ROAccess),
+						.RWAccess(				RWAccess),
+						.Read(					CSPathRead),
+						.Writeback(				CSPathWriteback),
+
+						.RW_R_DoneAlarm(		RW_R_DoneAlarm),
+						.RW_W_DoneAlarm(		RW_W_DoneAlarm),
+						.RO_R_DoneAlarm(		RO_R_DoneAlarm),
+						.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
+					);	
+	
+	
 	generate if (EnableREW) begin:REW_CONTROL
 		wire [ORAMU-1:0]	ROPAddr_Pre;
 		wire [ORAML-1:0]	ROLeaf_Pre;
 		wire				REWRoundDummy_Pre;	
 		
 		Counter	#(			.Width(					ORAML))
-				gentry_leaf(.Clock(					Clock),
+			gentry_leaf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				RW_W_DoneAlarm),
 							.In(					{ORAML{1'bx}}),
 							.Count(					GentryLeaf));	
-		
-		REWStatCtr	#(			.ORAME(					ORAME),
-								.Overlap(				0),
-								.RW_R_Chunk(			PathSize_DRBursts),
-								.RW_W_Chunk(			PathSize_DRBursts),
-								.RO_R_Chunk(			BktSize_DRBursts),
-								.RO_W_Chunk(			1))	// nothing needs to happen for this stage, a little hacky
-								
-			rew_stat		(	.Clock(					Clock),
-								.Reset(					Reset),
-								
-								.RW_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
-								.RW_W_Transfer(			DRAMWriteDataValid & DRAMWriteDataReady),
-								.RO_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
-								.RO_W_Transfer(			1'b1),	// no such stage
-							
-								.ROAccess(				ROAccess),
-								.RWAccess(				RWAccess),
-								.Read(					CSPathRead),
-								.Writeback(				CSPathWriteback),
-
-								.RW_R_DoneAlarm(		RW_R_DoneAlarm),
-								.RW_W_DoneAlarm(		RW_W_DoneAlarm),
-								.RO_R_DoneAlarm(		RO_R_DoneAlarm),
-								.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
-							);	
 									
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
 		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
@@ -416,6 +414,7 @@ module PathORAMBackendInner(
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 		
 		assign	ROAccess =							1'b0;
+		assign	RWAccess =							1'b1;
 		
 		always @( * ) begin
 			ROPAddr =								{ORAMU{1'bx}};
@@ -516,7 +515,41 @@ module PathORAMBackendInner(
 	//	Address generation & ORAM initialization
 	//--------------------------------------------------------------------------
 
-	assign	AddrGen_Leaf =							(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
+	wire Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
+	wire Addr_RW_R_DoneAlarm, Addr_RW_W_DoneAlarm, Addr_RO_R_DoneAlarm, Addr_RO_W_DoneAlarm;
+	wire Addr_Writing;
+	
+	// This module is not general enough to accommodate basic control flow as well	
+	REWStatCtr	#(		.USE_REW(				EnableREW),
+						.ORAME(					ORAME),
+						.Overlap(				0),
+						.RW_R_Chunk(			PathSize_DRBursts),
+						.RW_W_Chunk(			PathSize_DRBursts),
+						.RO_R_Chunk(			PathSize_DRBursts),
+						.RO_W_Chunk(			(ORAML+1) * BktHSize_DRBursts))	
+						
+		rew_addr_stat(	.Clock(					Clock),
+						.Reset(					Reset),
+						
+						.RW_R_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
+						.RW_W_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
+						.RO_R_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
+						.RO_W_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
+					
+						.ROAccess(				Addr_ROAccess),
+						.RWAccess(				Addr_RWAccess),
+						.Read(					Addr_PathRead),
+						.Writeback(				Addr_PathWriteback),
+						
+						.RW_R_DoneAlarm(		Addr_RW_R_DoneAlarm),
+						.RW_W_DoneAlarm(		Addr_RW_W_DoneAlarm),
+						.RO_R_DoneAlarm(		Addr_RO_R_DoneAlarm),
+						.RO_W_DoneAlarm(		Addr_RO_W_DoneAlarm)						
+					);	
+	
+	assign	AddrGen_Leaf =				(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
+	assign	Addr_Writing = 				Addr_PathWriteback && !Addr_RW_W_DoneAlarm && !Addr_RO_W_DoneAlarm;
+	assign	AddrGen_InValid =			CSStartRead || Addr_Writing;	
 	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -526,8 +559,8 @@ module PathORAMBackendInner(
 							.Reset(					Reset | DRAMInitializing),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					CSPathRead),
-							.BHIn(					ROAccess && CSPathWriteback),
+							.RWIn(					!Addr_Writing),
+							.BHIn(					Addr_ROAccess && Addr_Writing),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
@@ -550,8 +583,8 @@ module PathORAMBackendInner(
 		assign	AddrGen_DRAMCommandReady_Internal =	AddrGen_DRAMCommandReady;
 	end endgenerate
 							
-	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.  REW ORAM 
-	// uses gentry bucket version #s to determine whether a bucket is valid.
+	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.   
+	// REW ORAM uses gentry bucket version #s to determine whether a bucket is valid.
 	generate if (EnableREW) begin:AUTO_INIT
 		assign	DRAMInitComplete =					1'b1;
 		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
