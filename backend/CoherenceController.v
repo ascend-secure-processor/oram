@@ -180,8 +180,8 @@ module CoherenceController(
 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
-	assign HdOfInterest = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
-//	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
+//	assign HdOfInterest = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
+	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
 		
 	//--------------------------------------------------------------------------
@@ -387,8 +387,8 @@ module CoherenceController(
 						
 			if (HdOfInterest) begin
 				HdOfIStat <= 0;
-				BktOfInterest <=  Intersect ? LastHdOnPthCtr : HdOnPthCtr;
-				//BktOfInterest <=  HdOnPthCtr;
+				//BktOfInterest <=  Intersect ? LastHdOnPthCtr : HdOnPthCtr;
+				BktOfInterest <=  HdOnPthCtr;
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
 			
