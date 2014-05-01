@@ -41,6 +41,8 @@ module PathORAMBackend(
 	`include "PathORAMBackendLocal.vh"
 	`include "SHA3Local.vh"
 	
+	parameter				DebugAES =				0;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -92,21 +94,22 @@ module PathORAMBackend(
 	// Backend - CC
 
 	wire 	[DDRDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
-	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
-	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
+	(* mark_debug = "TRUE" *)	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
+	(* mark_debug = "TRUE" *)	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
 
+    wire                    DRAMInitComplete;
+	
 	// CC - AES
 
-    wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
-    wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
-    wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
+    (* mark_debug = "TRUE" *)	wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
+    (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
+	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 
 	// REW
 	
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
 	wire                    REWRoundDummy;
-    wire                    DRAMInitComplete;
 	
 	// integrity verification
 		
@@ -285,7 +288,8 @@ module PathORAMBackend(
 							.ORAMB(					ORAMB),
 							.ORAME(					ORAME),
 							.Overclock(				Overclock),
-							.EnableIV(				EnableIV))
+							.EnableIV(				EnableIV),
+							.DebugAES(				DebugAES))
 				aes(		.Clock(					Clock), 
 							.FastClock(				FastClock),
 				`ifdef ASIC
