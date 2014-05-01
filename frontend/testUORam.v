@@ -5,7 +5,7 @@
 module testUORam;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = `ifdef ORAML `ORAML `else 15 `endif;
+	parameter                   ORAML = `ifdef ORAML `ORAML `else 20 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
 	parameter					ORAMC =				10; 
 	parameter					ORAME =				5;
@@ -260,7 +260,7 @@ module testUORam;
 		end 
 	end
    
-	localparam  NN = 300;
+	localparam  NN = 400;
 	localparam	nn = 10;
 	localparam	nn2 = nn * 2;
 
