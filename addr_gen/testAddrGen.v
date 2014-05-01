@@ -72,7 +72,7 @@ module	testAddrGen;
 							.Ready(					AddrGen_InReady),
 							.RWIn(					1'b0),
 							.BHIn(					1'b0),
-							.leaf(					20'h600b4),
+							.leaf(					20'h4be34),
 							.CmdReady(				1'b1),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
 							.Cmd(					AddrGen_DRAMCommand_Internal), 

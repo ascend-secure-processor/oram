@@ -69,7 +69,8 @@ module AddrGenBktHead
   
   // adjust for the (possibly) shorter subtrees at the bottom 
   wire shortTreeAtBottom;
-  assign shortTreeAtBottom = (numST * L_st != ORAML) && currentLevel >= (numST-1) * L_st;
+  assign shortTreeAtBottom = (numST * L_st != ORAML+1) && currentLevel >= (numST-1) * L_st;
+    // short tree exists, iff ORAML+1 != multiple of numST * L_st 
   
   assign BktIdx = BktIdxInST + 
                 (
