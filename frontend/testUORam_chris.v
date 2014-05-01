@@ -26,11 +26,12 @@ module testUORam;
 
 	localparam					NN = 				780;
    
+    `include "SecurityLocal.vh" 
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
     `include "BucketLocal.vh"
     `include "DDR3SDRAMLocal.vh"
-
+    `include "BucketDRAMLocal.vh"
     wire Clock, FastClock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;

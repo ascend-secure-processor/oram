@@ -148,7 +148,7 @@ module IntegrityVerifier (
 			$display("Integrity verification results on Bucket %d", BucketID[Turn]);
 			if (Violation === 0) begin
 				if (!VersionNonzero)
-					$display("\tVersion is 0, no need to check");
+					$display("\tVersion is 0, no need to check hash for Bucket %d", BucketID[Turn]);
 				else
 					$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
 			end
@@ -166,7 +166,7 @@ module IntegrityVerifier (
 		
 		if (ConsumeHash && UpdateHash) begin
 			if (!VersionNonzero) begin
-				$display("\tVersion is 0, no need to update hash");
+				$display("\tVersion is 0, no need to update hash for Bucket %d", BucketID[Turn]);
 				if (BucketID[Turn] != TotalBucketD) begin
 					$display("\t Error: RW_W version 0 for Bucket %d", BucketID[Turn]);
 					$stop;

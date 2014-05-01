@@ -167,7 +167,7 @@ module CoherenceController(
 	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 	
 	
 	// invalidate the bit for the target block
-	wire HdOfInterest;
+	wire HdOfIFound;
 	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
 	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOfI, ValidBitsOut;
 	
@@ -180,8 +180,8 @@ module CoherenceController(
 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
-//	assign HdOfInterest = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
-	assign HdOfInterest = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
+	assign HdOfIFound = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
+//	assign HdOfIFound = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
 		
 	//--------------------------------------------------------------------------
@@ -224,10 +224,18 @@ module CoherenceController(
 		// Resolve conflict and produce coherent data
 		//-------------------------------------------------------------------------- 	
 		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr, LastHdOnPthCtr;
-		wire 						HdOfIWriteBack;
+		wire 						HdOfIUpdate, HdOfIWriteBack;
 		wire 						PthCtrEnable, HdCtrEnable;
 		
+		wire						BktOfIAccessedByIV;
 		wire						ConflictBktOfILookup, ConflictBktOfIOutValid;
+		
+		reg	[DDRDWidth-1:0]			HdOfI;
+		reg							BktOfIIntersect;
+		reg	[`log2(ORAML+1)-1:0]	BktOfIIdx;
+		
+		assign	BktOfIAccessedByIV = HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr;
+		assign	HdOfIUpdate = BktOfIAccessedByIV && HdOfIStat == 2 && IVWrite;
 		
 		assign	ConflictBktOfILookup = 1;
 		
@@ -254,14 +262,10 @@ module CoherenceController(
 		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
 		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
+			
+		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && LastHdOnPthCtr == BktOfIIdx;
+		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} : BufP1_DOut;
 		
-		reg [TrancateDigestWidth-1:0] BktOfINewHash;
-		
-		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && LastHdOnPthCtr == BktOfInterest;
-		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {BktOfINewHash, BufP1_DOut[BktHSize_RawBits-1:0]}
-									: BufP1_DOut;
-		
-
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				3))
 			out_path_reg (	.Clock(					Clock),
@@ -331,7 +335,7 @@ module CoherenceController(
 							: 0;							
 			
 		assign BufP1_Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )
-								: ROAccess ? (	PathRead ? 1'b1 : HdRW )
+								: ROAccess ? (	PathRead ? !ConflictHeaderLookup : HdRW )
 								: 0;
 						
 		assign BufP1_Address = RWAccess ?  (	PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
@@ -364,17 +368,16 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//--------------------------------------------------------------------------
-	
-		reg  [`log2(ORAML+1)-1:0]	BktOfInterest;
+
 		reg  [ORAMZ-1:0]			ValidBitsReg;
-		reg	 [1:0] 	HdOfIStat;
+		reg	 [2:0] 	HdOfIStat;
 			
 		assign 	PathReady_IV = RW_R_DoneAlarm;
 		assign	BOIReady_IV = RO_R_DoneAlarm;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = IVAddress;
+		assign  BufP2_Address = (HdOfIUpdate && BktOfIIntersect) ? OPthStartAddr + BktOfIIdx * BktSize_DRBursts : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
 		assign  DataToIV = (HdOfIStat != 1) ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsReg, BufP2_DOut[AESEntropy-1:0]};;
@@ -382,27 +385,29 @@ module CoherenceController(
 		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin
 		    if (Reset) begin
-		        HdOfIStat <= 3;
+		        HdOfIStat <= 7;
 		    end
 						
-			if (HdOfInterest) begin
+			if (HdOfIFound) begin
 				HdOfIStat <= 0;
-				//BktOfInterest <=  Intersect ? LastHdOnPthCtr : HdOnPthCtr;
-				BktOfInterest <=  HdOnPthCtr;
+				BktOfIIntersect <= Intersect;
+				BktOfIIdx <= Intersect ? LastHdOnPthCtr : HdOnPthCtr;
+//				BktOfIIdx <=  HdOnPthCtr;
+				HdOfI <= HeaderIn;
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
 			
 			// there should be 2 reads and 1 write
 			// 0 - found; 1 - have read once; 2 - have read twice; 3 - all set.		
-			else if (HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr) begin	
+			else if (BktOfIAccessedByIV) begin	
 				if (!IVWrite && HdOfIStat < 2)
 					HdOfIStat <= HdOfIStat + 1;
 				else
-					BktOfINewHash <= DataFromIV[DigestStart-1:DigestEnd];			
+					HdOfI[DigestStart-1:DigestEnd] <= DataFromIV[DigestStart-1:DigestEnd];			
 			end
 			
 			else if (HdOfIStat == 2 && PathRead)
-				HdOfIStat <= 3;
+				HdOfIStat <= 7;
 		end
 		
 	end else begin: NO_BUF
