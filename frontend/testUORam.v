@@ -13,8 +13,6 @@ module testUORam;
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter                   DDRAWidth_Sim =		`log2(ORAMZ) + ORAML + 2;
-    
     parameter                   NumValidBlock = 	1 << (ORAML - 1);
     parameter                   Recursion = 		3;
                    
@@ -25,11 +23,19 @@ module testUORam;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          1;
 	
+	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"
     `include "PLBLocal.vh" 
     `include "BucketLocal.vh"
+	`include "BucketDRAMLocal.vh"
     `include "DDR3SDRAMLocal.vh"
 
+	`include "SubTreeLocal.vh"
+		
+	localparam 					TreeInDQChunks =	`divceil(BktSize_RndBits, DDRDQWidth) * ( (1 << (ORAML + 1)) + numTotalST);
+	
+    parameter                   DDRAWidth_Sim =		`log2(TreeInDQChunks);
+    
     wire Clock, FastClock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
