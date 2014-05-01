@@ -27,8 +27,6 @@ module	testAddrGen;
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter                   DDRAWidth_Sim =		`log2(ORAMZ) + ORAML + 2;
-    
     parameter                   NumValidBlock = 	1 << (ORAML - 1);
     parameter                   Recursion = 		3;
                    
@@ -50,7 +48,7 @@ module	testAddrGen;
 	
 	ClockSource #(Freq) ClockF200Gen(.Enable(1'b1), .Clock(Clock));
 
-	wire	[DDRAWidth_Sim-1:0]	AddrGen_DRAMCommandAddress;
+	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
 	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 
@@ -60,7 +58,7 @@ module	testAddrGen;
 	wire	[ORAML-1:0]		AddrGen_Leaf;
 	wire					AddrGen_InReady, AddrGen_InValid;
 		
-	wire	[DDRAWidth_Sim-1:0]	AddrGen_DRAMCommandAddress_Internal;
+	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress_Internal;
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
 	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;											
 		
