@@ -145,8 +145,7 @@ module PathORAMTopTestbench;
 			$display("[%m @ %t] Received data = %x", $time, RecvData);
 	end
 	
-	ascend_vc707 #(			.UseMIG(				0))
-				CUT(		.sys_clk_p(				sys_clk_p),
+	ascend_vc707 CUT(		.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
 
 							.sys_rst(				sys_rst),
