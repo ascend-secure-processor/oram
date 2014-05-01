@@ -96,9 +96,9 @@ module REWStatCtr(
 	//		0	  1		0		1
 	reg 	RW_or_RO,	
 			Read_or_Write;
-	reg 	RW_or_RO_Post,
+	reg 	Reset_Post,
+			RW_or_RO_Post,
 			Read_or_Write_Post;
-	reg		Reset_Post;
 		
 	localparam	rw_access = 0,
 				ro_access = 1,

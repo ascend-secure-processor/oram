@@ -57,7 +57,7 @@ module PathORAMBackendInner(
 							ST_WBStash =			4'd7,
 							ST_PathWriteback =		4'd8;
 								
-	localparam				PRNGLWidth =			`divceil(ORAML, 8) * 8;
+	localparam				PRNGLWidth =			1 << `log2(ORAML);//`divceil(ORAML, 8) * 8;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
