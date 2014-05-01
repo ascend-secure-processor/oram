@@ -52,11 +52,15 @@ module ascend_vc707(
 	parameter				MemoryClockFreq =		200_000_000;
 	
 	/* 	Debugging.
-		UseMIG: 			use MIG or a simple synthesized DRAM for memory?
+	
+		TODO update descriptions
+	
 		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
-							ChipScope signals & meet timing */
-	parameter				UseMIG =				1; // NOTE: leave default to 1
-	parameter				SlowDownORAMClock =		0; // NOTE: set to 0 for performance run
+							ChipScope signals & meet timing
+		DebugDRAMTiming:		simulation/board will see exact same bandwidth read to AES */
+	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMTiming =		1; // NOTE: set to 0 for performance run
+	parameter				DebugAES =				1; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
 	parameter				GenHistogram = 			1;
@@ -65,7 +69,7 @@ module ascend_vc707(
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					10, // set to 31 for production
+							ORAML =					20, // set to 20 for vc707 board; set to 31 to test ASIC
 							ORAMZ =					5,
 							ORAMC =					10, // Stash capacity will always be 128 - 256
 							ORAME =					5;
@@ -79,10 +83,10 @@ module ascend_vc707(
 	parameter				EnableREW =				1;
 	parameter				EnableIV =				0;
 	
-    parameter				NumValidBlock = 		1024,
+    parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3;
 	
-    parameter				PLBCapacity = 			8192;
+    parameter				PLBCapacity = 			8192 << 3;
 	
 	`include "SecurityLocal.vh"
 	`include "BucketLocal.vh"
@@ -90,19 +94,7 @@ module ascend_vc707(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
-	
-	// Otherwise your simulator will crash hard
-	localparam				DDRAWidth_Sim =			(UseMIG) ? DDRAWidth : `log2(ORAMB * (ORAMZ + 1)) + ORAML + 1;
-		
-	`ifdef SIMULATION
-		initial begin
-			// More notes for the board test:
-			// 1.) Make sure to run a long enough simulation to test the gentry counter[ORAML-1:0] rollover case
-			$display("[%m @ %t] ERROR: Remember do simulate with L = 31 (from AES's perspective) ... somehow", $time);
-			//$stop;
-		end
-	`endif
-	
+
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
@@ -128,36 +120,36 @@ module ascend_vc707(
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PathORAM_PAddr;
 	(* mark_debug = "TRUE" *)	wire					PathORAM_CommandValid, PathORAM_CommandReady;
 	
-	(* mark_debug = "FALSE" *)	wire	[FEDWidth-1:0]	PathORAM_DataIn;
+	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_DataIn;
 	(* mark_debug = "TRUE" *)	wire					PathORAM_DataInValid, PathORAM_DataInReady;
 
-	(* mark_debug = "FALSE" *)	wire	[FEDWidth-1:0]	PathORAM_DataOut;
+	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	PathORAM_DataOut;
 	(* mark_debug = "TRUE" *)	wire 					PathORAM_DataOutValid, PathORAM_DataOutReady;
 	
 	// MIG/DDR3 DRAM
 	
 	wire					DDR3SDRAM_ResetDone;
 	
-	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
-	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address;
-	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
-	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
-	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
-	wire					DDR3SDRAM_DataOutValid;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
 
 	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
 	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address_MIG;
-	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
+	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
+	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 	
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
+	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
 	//------------------------------------------------------------------------------
 	// 	Clocking
@@ -238,7 +230,9 @@ module ascend_vc707(
 							.BEDWidth(				BEDWidth),
 							.NumValidBlock(         NumValidBlock), 
 							.Recursion(             Recursion), 
-							.PLBCapacity(           PLBCapacity))
+							.PLBCapacity(           PLBCapacity),
+							.DebugDRAMTiming(		DebugDRAMTiming),
+							.DebugAES(				DebugAES))
                 oram(		.Clock(					ORAMClock),
 							.FastClock(				AESClock),
 							.Reset(					ORAMReset),
@@ -338,7 +332,7 @@ module ascend_vc707(
 	
 	// This is needed only because MIG is bugged and will drop write data if we 
 	// present WriteCommands & WriteData out of sync with each other
-	// NOTE: this doesn't impact writeback performance
+	// NOTE: this workaround doesn't impact writeback performance
 	
 	initial begin
 		if (EnableREW == 0) $stop; // Create a stat counter for basic ORAM
@@ -379,8 +373,55 @@ module ascend_vc707(
 		MemoryReset <=								MemoryReset_Pre;						
 	end
 	
-	generate if (UseMIG == 1) begin:MIG
-		DDR3SDRAM DDR3SDRAMController(
+	`ifdef SIMULATION
+	
+	//
+	//	Fake MIG
+	//
+	
+	wire					MemoryClock_Bufg;
+	IBUFGDS	clk_f200_p(		.I(						sys_clk_p),
+							.IB(					sys_clk_n),
+							.O(						MemoryClock_Bufg));
+	BUFG 	clk_f200(		.I(						MemoryClock_Bufg),
+							.O(						MemoryClock));
+	assign	MemoryReset_Pre =						sys_rst;
+
+	assign	DDR3SDRAM_ResetDone =					~MemoryReset;
+	
+	SynthesizedRandDRAM	#(	.UWidth(				DDRDQWidth),
+							.AWidth(				DDRAWidth),
+							.DWidth(				DDRDWidth),
+							.BurstLen(				1),
+							.EnableMask(			1),
+							.Class1(				1),
+							.RLatency(				1),
+							.WLatency(				1))
+				fake_mig(	.Clock(					MemoryClock),
+							.Reset(					MemoryReset),
+
+							.CommandAddress(		DDR3SDRAM_Address_MIG),
+							.Command(				DDR3SDRAM_Command_MIG),
+							.CommandValid(			DDR3SDRAM_CommandValid_MIG),
+							.CommandReady(			DDR3SDRAM_CommandReady_MIG),
+
+							.DataIn(				DDR3SDRAM_WriteData_MIG),
+							.DataInMask(			DDR3SDRAM_WriteMask_MIG),
+							.DataInValid(			DDR3SDRAM_DataInValid_MIG),
+							.DataInReady(			DDR3SDRAM_DataInReady_MIG),
+
+							.DataOut(				DDR3SDRAM_ReadData_MIG),
+							.DataOutErrorChecked(	),
+							.DataOutErrorCorrected(	),
+							.DataOutValid(			DDR3SDRAM_DataOutValid_MIG),
+							.DataOutReady(			1'b1));
+	`else
+	
+	//
+	//	Real MIG
+	//	
+	
+	DDR3SDRAM DDR3SDRAMController(
 							// System interface
 							.sys_clk_p(				sys_clk_p),
 							.sys_clk_n(				sys_clk_n),
@@ -428,48 +469,7 @@ module ascend_vc707(
 							.app_sr_active(			), // not connected
 							.app_ref_ack(			), // not connected
 							.app_zq_ack(			)); // not connected
-	end else begin:SYNTH_DRAM
-		wire				MemoryClock_Bufg;
-		IBUFGDS	clk_f200_p(	.I(						sys_clk_p),
-							.IB(					sys_clk_n),
-							.O(						MemoryClock_Bufg));
-		BUFG 	clk_f200(	.I(						MemoryClock_Bufg),
-							.O(						MemoryClock));
-		assign	MemoryReset_Pre =					sys_rst;
-
-		assign	DDR3SDRAM_ResetDone =				~MemoryReset;
-		
-		SynthesizedRandDRAM	#(.InBufDepth(			36),
-							.UWidth(				8),
-							.AWidth(				DDRAWidth_Sim + 6),
-							.DWidth(				DDRDWidth),
-							.BurstLen(				1), // just for this module ...
-							.EnableMask(			1),
-							.Class1(				1),
-							.RLatency(				1),
-							.WLatency(				1))
-				fake_mig(	.Clock(					MemoryClock),
-							.Reset(					MemoryReset),
-
-							.Initialized(			),
-							.PoweredUp(				),
-
-							.CommandAddress(		{DDR3SDRAM_Address_MIG, 6'b000000}),
-							.Command(				DDR3SDRAM_Command_MIG),
-							.CommandValid(			DDR3SDRAM_CommandValid_MIG),
-							.CommandReady(			DDR3SDRAM_CommandReady_MIG),
-
-							.DataIn(				DDR3SDRAM_WriteData_MIG),
-							.DataInMask(			DDR3SDRAM_WriteMask_MIG),
-							.DataInValid(			DDR3SDRAM_DataInValid_MIG),
-							.DataInReady(			DDR3SDRAM_DataInReady_MIG),
-
-							.DataOut(				DDR3SDRAM_ReadData_MIG),
-							.DataOutErrorChecked(	),
-							.DataOutErrorCorrected(	),
-							.DataOutValid(			DDR3SDRAM_DataOutValid_MIG),
-							.DataOutReady(			1'b1));
-	end endgenerate
+	`endif
 	
 	//------------------------------------------------------------------------------
 endmodule
