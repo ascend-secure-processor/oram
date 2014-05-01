@@ -42,7 +42,11 @@ module PathORamTop(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh"
-
+	
+	// For debugging
+	parameter				DebugDRAMTiming =			0;
+	parameter				DebugAES =					0;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -99,8 +103,10 @@ module PathORamTop(
 
 	// Path buffer
 
+	wire					PathBuffer_OutReady_Pre, PathBuffer_OutValid_Pre;	
+	
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
-	wire	[DDRDWidth-1:0]	PathBuffer_OutData;	
+	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
 
 	//--------------------------------------------------------------------------
 	//	Simulation checks
@@ -113,8 +119,6 @@ module PathORamTop(
 			end
 		end
 	`endif
-	
-	// TODO do a check to make sure hash digest is at least as long as the security param in SecurityLocal.vh
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -167,7 +171,8 @@ module PathORamTop(
 							.EnableIV(				EnableIV),
 							
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							.DebugAES(				DebugAES))
 				back_end (	.Clock(					Clock),
 			                .FastClock(				FastClock),
 							.Reset(					Reset),
@@ -192,7 +197,7 @@ module PathORamTop(
 
 							.DRAMReadData(			PathBuffer_OutData),
 							.DRAMReadDataValid(		PathBuffer_OutValid),
-							.DRAMReadDataReady(		PathBuffer_OutReady),
+							.DRAMReadDataReady(		PathBuffer_OutReady_Pre),
 							
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
@@ -201,7 +206,36 @@ module PathORamTop(
 	//--------------------------------------------------------------------------
 	//	DRAM Read Interface
 	//--------------------------------------------------------------------------
-
+	
+	generate if (DebugDRAMTiming) begin:PRED_TIMING
+		wire	[PthBSTWidth-1:0] PthCnt;
+		wire				ReadStarted, ReadStopped;
+		
+		assign	ReadStopped =							ReadStarted & ~PathBuffer_OutValid_Pre;
+		
+		Register	#(			.Width(					1))
+					seen_first(	.Clock(					Clock),
+								.Reset(					Reset | ReadStopped),
+								.Set(					PathBuffer_OutValid_Pre),
+								.Enable(				1'b0),
+								.In(					1'bx),
+								.Out(					ReadStarted));
+		Counter		#(			.Width(					PthBSTWidth))
+					dbg_cnt(	.Clock(					Clock),
+								.Reset(					Reset | ReadStopped),
+								.Set(					1'b0),
+								.Load(					1'b0),
+								.Enable(				DRAMReadDataValid),
+								.In(					{PthBSTWidth{1'bx}}),
+								.Count(					PthCnt));
+								
+		assign	PathBuffer_OutValid =					PthCnt == PathSize_DRBursts & PathBuffer_OutValid_Pre;
+		assign	PathBuffer_OutReady =					PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
+	end else begin:NORMAL_TIMING
+		assign	PathBuffer_OutValid =					PathBuffer_OutValid_Pre;
+		assign	PathBuffer_OutReady =					PathBuffer_OutReady_Pre;	
+	end endgenerate	
+		
 	generate if (Overclock) begin:INBUF_BRAM
 		wire				PathBuffer_Full;
 		
@@ -212,7 +246,7 @@ module PathORamTop(
 							.rd_en(					PathBuffer_OutReady), 
 							.dout(					PathBuffer_OutData), 
 							.full(					PathBuffer_Full), 
-							.valid(					PathBuffer_OutValid));						
+							.valid(					PathBuffer_OutValid_Pre));						
 	end else begin:INBUF_LUTRAM
 		FIFORAM	#(			.Width(					DDRDWidth),
 							.Buffering(				PathSize_DRBursts))
@@ -222,7 +256,7 @@ module PathORamTop(
 							.InValid(				DRAMReadDataValid),
 							.InAccept(				PathBuffer_InReady),
 							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid),
+							.OutSend(				PathBuffer_OutValid_Pre),
 							.OutReady(				PathBuffer_OutReady));
 	end endgenerate
 
