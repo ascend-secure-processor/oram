@@ -31,12 +31,6 @@ module testUORam;
     `include "BucketLocal.vh"
     `include "DDR3SDRAMLocal.vh"
 
-	`include "SubTreeLocal.vh"
-		
-	localparam 					TreeInDQChunks =	`divceil(BktSize_RndBits, DDRDQWidth) * ( (1 << (ORAML + 1)) + numTotalST);
-	
-    parameter                   DDRAWidth_Sim =		`log2(TreeInDQChunks);
-	
     wire Clock, FastClock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
@@ -46,10 +40,10 @@ module testUORam;
     wire [FEDWidth-1:0] ReturnData;
 	reg  [FEDWidth-1:0] DataIn;
 	
-	reg	[DDRAWidth_Sim-1:0]	DDR3SDRAM_MAXAddress = 0;
+	reg	[DDRAWidth-1:0]	DDR3SDRAM_MAXAddress = 0;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address;
+	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 	
@@ -121,7 +115,7 @@ module testUORam;
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
                             .UWidth(				64),
-                            .AWidth(				DDRAWidth_Sim),
+                            .AWidth(				DDRAWidth),
                             .DWidth(				DDRDWidth),
                             .BurstLen(				1),
                             .EnableMask(			1),
