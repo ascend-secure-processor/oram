@@ -350,7 +350,7 @@ module PathORAMBackendInner(
 						.RW_R_Chunk(			PathSize_DRBursts),
 						.RW_W_Chunk(			PathSize_DRBursts),
 						.RO_R_Chunk(			BktSize_DRBursts),
-						.RO_W_Chunk(			1))	
+						.RO_W_Chunk(			2))	
 							// A little hacky. Nothing needs to happen for this stage, 
 							// but adds 1 cycle bubble to allow CS transition
 						

@@ -114,7 +114,7 @@ module REWStatCtr(
 	endtask
 	
 	task Task_Init; 
-		State_Trans(ro_access, path_read);	// Start from RW_R
+		State_Trans(rw_access, path_read);	// Start from RW_R
     endtask
 	
 	`ifndef ASIC
@@ -188,10 +188,11 @@ module REWStatCtr(
 		
 	`ifdef SIMULATION
 		initial begin
-			if ( !(ORAME && RW_R_Chunk && RW_W_Chunk && RO_R_Chunk && RO_W_Chunk) ) begin
-				$display("Error: parameter uninitialized.");
+			if ( !(ORAME && RW_R_Chunk > 1 && RW_W_Chunk > 1 && RO_R_Chunk > 1 && RO_W_Chunk > 1) ) begin
+				// TODO: CountAlarm cannot handle chunk <= 1
+				$display("Error: parameter uninitialized or unsupported.");
 				$finish;
-			end	
+			end
 		end
 	`endif
 	
