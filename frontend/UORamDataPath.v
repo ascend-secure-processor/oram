@@ -7,7 +7,9 @@ module UORamDataPath
     PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
     PPPRefillDataReady, PPPRefillDataValid, PPPRefillData,
     StoreDataReady, StoreDataValid, StoreData,
-    LoadDataReady, LoadDataValid, LoadData
+    LoadDataReady, LoadDataValid, LoadData,
+	
+	DumbRequest // to satisfy microblaze
 );
 
 	`include "UORAM.vh"; 
@@ -56,6 +58,8 @@ module UORamDataPath
     output LoadDataReady;
     input  LoadDataValid;
     input  [FEDWidth-1:0] LoadData;
+
+    input   DumbRequest;
 
     // PPPEvictBuffer
 	wire PPPEvictDataValid_Reg;
@@ -143,6 +147,42 @@ module UORamDataPath
                                     .In(        DataBlockReq && (Cmd == BECMD_Append || Cmd == BECMD_Update)),
                                     .Out(       ExpectingProgStore));                                           
     
+	// -------------- read non-existent block ----------------
+	wire	FakeAccess, FakeStoring, FakeLoading, FakeStoreEnd, FakeLoadEnd;
+	Register #(.Width(1)) 
+        FakeAccessReg 	(   .Clock(     Clock), 
+							.Reset(     Reset || (!FakeStoring && !FakeLoading)), 
+							.Set(       1'b0), 
+							.Enable(    SwitchReq), 
+							.In(        DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
+							.Out(       FakeAccess)); 
+									
+	CountAlarm #(		.Threshold(				FEORAMBChunks))
+		FakeProgStCtr (	.Clock(					Clock), 
+						.Reset(					Reset), 
+						.Enable(				StoreDataReady && StoreDataValid),
+						.Done(					FakeStoreEnd)
+					);
+					
+	CountAlarm #(		.Threshold(				FEORAMBChunks))
+		FakeProgLdCtr (	.Clock(					Clock), 
+						.Reset(					Reset), 
+						.Enable(				ReturnDataReady && ReturnDataValid),
+						.Done(					FakeLoadEnd)
+					);
+	
+	Register1b FakeStEndReg(   	.Clock(     Clock), 
+								.Reset(     Reset || FakeStoreEnd), 
+								.Set(       SwitchReq && DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)), 
+								.Out(       FakeStoring)); 
+							
+	Register1b FakeLdEndReg(   	.Clock(     Clock), 
+								.Reset(     Reset || FakeLoadEnd), 
+								.Set(       SwitchReq && DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)), 
+								.Out(       FakeLoading)); 		
+					
+	// ---------------------------------------------------------				
+	
 	CountAlarm #(		.Threshold(				FEORAMBChunks))
 		ProgCounter (	.Clock(					Clock), 
 						.Reset(					Reset), 
@@ -152,14 +192,14 @@ module UORamDataPath
 					);
 			     
     // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
-    assign StoreDataValid = ExpectingProgStore ? DataInValid : EvictFunnelOutValid;
+    assign StoreDataValid = FakeStoring || (ExpectingProgStore ? DataInValid : EvictFunnelOutValid);
     assign StoreData = ExpectingProgStore ? DataIn : EvictFunnelDOut;
     assign DataInReady = ExpectingProgStore && StoreDataReady;
   
     // if ExpectingDataBlock, backend ==> network; if ExpectingPosMapBlock, backend ==> PLB  
     assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
-    assign ReturnDataValid = ExpectingDataBlock && LoadDataValid;
+    assign ReturnDataValid = FakeLoading || (ExpectingDataBlock && LoadDataValid);
     assign ReturnData = LoadData;
 
 `ifdef SIMULATION   

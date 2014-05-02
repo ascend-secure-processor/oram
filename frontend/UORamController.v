@@ -190,7 +190,7 @@ module UORamController
     wire EvictionRequest, InitRequest, SwitchReq, DataBlockReq;
     assign DataBlockReq = QDepth == 0;
     assign EvictionRequest = PPPValid && PPPEvict;
-    assign InitRequest = DataBlockReq && PPPUnInitialized;
+    assign InitRequest = DataBlockReq && PPPUnInitialized;		// initialize data block
     assign CmdOutValid = Accessing && PPPValid && ((PPPHit && !PPPUnInit) || InitRequest || PPPEvict);
 
     // if EvictionRequest, write back a PosMap block; otherwise serve the next access in the queue  
@@ -285,6 +285,7 @@ module UORamController
                         .SwitchReq(         SwitchReq),
                         .DataBlockReq(      DataBlockReq),
                         .Cmd(               LastCmd),
+						.DumbRequest(		InitRequest),		// stupid read before write
                         .ExpectingProgramData(  ExpectingProgramData),
 
                         // IO interface with network

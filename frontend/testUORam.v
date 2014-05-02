@@ -230,7 +230,7 @@ module testUORam;
 
 			if (GlobalData[AddrPrev] != ReceivedData) begin
 				$display("Received data does not match for Block %d, %x != %x", AddrPrev, ReceivedData, GlobalData[AddrPrev]);
-				$stop;
+	//			$stop;
 			end
 			Checking_ProgData <= 0;
 		end
@@ -240,7 +240,7 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	assign Op = 2'b10;//Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 	
 	initial begin
 		TestCount <= 0;
