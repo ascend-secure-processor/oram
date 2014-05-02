@@ -84,7 +84,7 @@ module PathORAMTopTestbench;
 		if (InitWait == 250) Start <= 1'b1;
 	end
 	
-	Counter		#(			.Width(					TimeWidth))
+	/*Counter		#(			.Width(					TimeWidth))
 				rd_ret_cnt(	.Clock(					sys_clk_p),
 							.Reset(					sys_rst),
 							.Set(					1'b0),
@@ -124,7 +124,9 @@ module PathORAMTopTestbench;
 							.InAccept(				UARTShftDataInReady),
 							.OutData(				UARTDataIn),
 							.OutValid(				UARTDataInValid),
-							.OutReady(				UARTDataInReady));
+							.OutReady(				UARTDataInReady));*/
+							
+	assign	UARTDataInValid =						1'b0;
 	
 	UART		#(			.ClockFreq(				200_000_000), // this much match sys_clk_p freq
 							.Baud(					UARTBaud),
@@ -149,7 +151,7 @@ module PathORAMTopTestbench;
 							.InAccept(				UARTDataOutReady),
 							.OutData(				RecvData),
 							.OutValid(				RecvDataValid),
-							.OutReady(				1'b1));				
+							.OutReady(				1'b1));		
 				
 	always @(posedge sys_clk_p) begin
 		if (RecvDataValid)

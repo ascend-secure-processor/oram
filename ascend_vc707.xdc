@@ -740,3 +740,177 @@ set_max_delay -datapath_only -from [get_cells -hier -filter {NAME =~ *ddr3_infra
 ################################################################################
 # ChipScope cores
 ################################################################################
+
+create_debug_core u_ila_0 labtools_ila_v3
+set_property ALL_PROBE_SAME_MU true [get_debug_cores u_ila_0]
+set_property ALL_PROBE_SAME_MU_CNT 1 [get_debug_cores u_ila_0]
+set_property C_ADV_TRIGGER false [get_debug_cores u_ila_0]
+set_property C_DATA_DEPTH 1024 [get_debug_cores u_ila_0]
+set_property C_EN_STRG_QUAL false [get_debug_cores u_ila_0]
+set_property C_INPUT_PIPE_STAGES 0 [get_debug_cores u_ila_0]
+set_property C_TRIGIN_EN false [get_debug_cores u_ila_0]
+set_property C_TRIGOUT_EN false [get_debug_cores u_ila_0]
+set_property port_width 1 [get_debug_ports u_ila_0/clk]
+connect_debug_port u_ila_0/clk [get_nets [list SlowClock]]
+set_property port_width 7 [get_debug_ports u_ila_0/probe0]
+connect_debug_port u_ila_0/probe0 [get_nets [list {oram/back_end/bend_inner/stash_top/StashOccupancy[0]} {oram/back_end/bend_inner/stash_top/StashOccupancy[1]} {oram/back_end/bend_inner/stash_top/StashOccupancy[2]} {oram/back_end/bend_inner/stash_top/StashOccupancy[3]} {oram/back_end/bend_inner/stash_top/StashOccupancy[4]} {oram/back_end/bend_inner/stash_top/StashOccupancy[5]} {oram/back_end/bend_inner/stash_top/StashOccupancy[6]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe1]
+connect_debug_port u_ila_0/probe1 [get_nets [list {oram/back_end/AES_DRAMReadData[0]} {oram/back_end/AES_DRAMReadData[1]} {oram/back_end/AES_DRAMReadData[2]} {oram/back_end/AES_DRAMReadData[3]} {oram/back_end/AES_DRAMReadData[4]} {oram/back_end/AES_DRAMReadData[5]} {oram/back_end/AES_DRAMReadData[6]} {oram/back_end/AES_DRAMReadData[7]} {oram/back_end/AES_DRAMReadData[8]} {oram/back_end/AES_DRAMReadData[9]} {oram/back_end/AES_DRAMReadData[10]} {oram/back_end/AES_DRAMReadData[11]} {oram/back_end/AES_DRAMReadData[12]} {oram/back_end/AES_DRAMReadData[13]} {oram/back_end/AES_DRAMReadData[14]} {oram/back_end/AES_DRAMReadData[15]} {oram/back_end/AES_DRAMReadData[16]} {oram/back_end/AES_DRAMReadData[17]} {oram/back_end/AES_DRAMReadData[18]} {oram/back_end/AES_DRAMReadData[19]} {oram/back_end/AES_DRAMReadData[20]} {oram/back_end/AES_DRAMReadData[21]} {oram/back_end/AES_DRAMReadData[22]} {oram/back_end/AES_DRAMReadData[23]} {oram/back_end/AES_DRAMReadData[24]} {oram/back_end/AES_DRAMReadData[25]} {oram/back_end/AES_DRAMReadData[26]} {oram/back_end/AES_DRAMReadData[27]} {oram/back_end/AES_DRAMReadData[28]} {oram/back_end/AES_DRAMReadData[29]} {oram/back_end/AES_DRAMReadData[30]} {oram/back_end/AES_DRAMReadData[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe2]
+connect_debug_port u_ila_0/probe2 [get_nets [list {oram/back_end/AES_DRAMWriteData[0]} {oram/back_end/AES_DRAMWriteData[1]} {oram/back_end/AES_DRAMWriteData[2]} {oram/back_end/AES_DRAMWriteData[3]} {oram/back_end/AES_DRAMWriteData[4]} {oram/back_end/AES_DRAMWriteData[5]} {oram/back_end/AES_DRAMWriteData[6]} {oram/back_end/AES_DRAMWriteData[7]} {oram/back_end/AES_DRAMWriteData[8]} {oram/back_end/AES_DRAMWriteData[9]} {oram/back_end/AES_DRAMWriteData[10]} {oram/back_end/AES_DRAMWriteData[11]} {oram/back_end/AES_DRAMWriteData[12]} {oram/back_end/AES_DRAMWriteData[13]} {oram/back_end/AES_DRAMWriteData[14]} {oram/back_end/AES_DRAMWriteData[15]} {oram/back_end/AES_DRAMWriteData[16]} {oram/back_end/AES_DRAMWriteData[17]} {oram/back_end/AES_DRAMWriteData[18]} {oram/back_end/AES_DRAMWriteData[19]} {oram/back_end/AES_DRAMWriteData[20]} {oram/back_end/AES_DRAMWriteData[21]} {oram/back_end/AES_DRAMWriteData[22]} {oram/back_end/AES_DRAMWriteData[23]} {oram/back_end/AES_DRAMWriteData[24]} {oram/back_end/AES_DRAMWriteData[25]} {oram/back_end/AES_DRAMWriteData[26]} {oram/back_end/AES_DRAMWriteData[27]} {oram/back_end/AES_DRAMWriteData[28]} {oram/back_end/AES_DRAMWriteData[29]} {oram/back_end/AES_DRAMWriteData[30]} {oram/back_end/AES_DRAMWriteData[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 20 [get_debug_ports u_ila_0/probe3]
+connect_debug_port u_ila_0/probe3 [get_nets [list {oram/RemappedLeaf[0]} {oram/RemappedLeaf[1]} {oram/RemappedLeaf[2]} {oram/RemappedLeaf[3]} {oram/RemappedLeaf[4]} {oram/RemappedLeaf[5]} {oram/RemappedLeaf[6]} {oram/RemappedLeaf[7]} {oram/RemappedLeaf[8]} {oram/RemappedLeaf[9]} {oram/RemappedLeaf[10]} {oram/RemappedLeaf[11]} {oram/RemappedLeaf[12]} {oram/RemappedLeaf[13]} {oram/RemappedLeaf[14]} {oram/RemappedLeaf[15]} {oram/RemappedLeaf[16]} {oram/RemappedLeaf[17]} {oram/RemappedLeaf[18]} {oram/RemappedLeaf[19]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe4]
+connect_debug_port u_ila_0/probe4 [get_nets [list {oram/BEnd_PAddr[0]} {oram/BEnd_PAddr[1]} {oram/BEnd_PAddr[2]} {oram/BEnd_PAddr[3]} {oram/BEnd_PAddr[4]} {oram/BEnd_PAddr[5]} {oram/BEnd_PAddr[6]} {oram/BEnd_PAddr[7]} {oram/BEnd_PAddr[8]} {oram/BEnd_PAddr[9]} {oram/BEnd_PAddr[10]} {oram/BEnd_PAddr[11]} {oram/BEnd_PAddr[12]} {oram/BEnd_PAddr[13]} {oram/BEnd_PAddr[14]} {oram/BEnd_PAddr[15]} {oram/BEnd_PAddr[16]} {oram/BEnd_PAddr[17]} {oram/BEnd_PAddr[18]} {oram/BEnd_PAddr[19]} {oram/BEnd_PAddr[20]} {oram/BEnd_PAddr[21]} {oram/BEnd_PAddr[22]} {oram/BEnd_PAddr[23]} {oram/BEnd_PAddr[24]} {oram/BEnd_PAddr[25]} {oram/BEnd_PAddr[26]} {oram/BEnd_PAddr[27]} {oram/BEnd_PAddr[28]} {oram/BEnd_PAddr[29]} {oram/BEnd_PAddr[30]} {oram/BEnd_PAddr[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 2 [get_debug_ports u_ila_0/probe5]
+connect_debug_port u_ila_0/probe5 [get_nets [list {oram/BEnd_Cmd[0]} {oram/BEnd_Cmd[1]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 20 [get_debug_ports u_ila_0/probe6]
+connect_debug_port u_ila_0/probe6 [get_nets [list {oram/CurrentLeaf[0]} {oram/CurrentLeaf[1]} {oram/CurrentLeaf[2]} {oram/CurrentLeaf[3]} {oram/CurrentLeaf[4]} {oram/CurrentLeaf[5]} {oram/CurrentLeaf[6]} {oram/CurrentLeaf[7]} {oram/CurrentLeaf[8]} {oram/CurrentLeaf[9]} {oram/CurrentLeaf[10]} {oram/CurrentLeaf[11]} {oram/CurrentLeaf[12]} {oram/CurrentLeaf[13]} {oram/CurrentLeaf[14]} {oram/CurrentLeaf[15]} {oram/CurrentLeaf[16]} {oram/CurrentLeaf[17]} {oram/CurrentLeaf[18]} {oram/CurrentLeaf[19]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 64 [get_debug_ports u_ila_0/probe7]
+connect_debug_port u_ila_0/probe7 [get_nets [list {oram/LoadData[0]} {oram/LoadData[1]} {oram/LoadData[2]} {oram/LoadData[3]} {oram/LoadData[4]} {oram/LoadData[5]} {oram/LoadData[6]} {oram/LoadData[7]} {oram/LoadData[8]} {oram/LoadData[9]} {oram/LoadData[10]} {oram/LoadData[11]} {oram/LoadData[12]} {oram/LoadData[13]} {oram/LoadData[14]} {oram/LoadData[15]} {oram/LoadData[16]} {oram/LoadData[17]} {oram/LoadData[18]} {oram/LoadData[19]} {oram/LoadData[20]} {oram/LoadData[21]} {oram/LoadData[22]} {oram/LoadData[23]} {oram/LoadData[24]} {oram/LoadData[25]} {oram/LoadData[26]} {oram/LoadData[27]} {oram/LoadData[28]} {oram/LoadData[29]} {oram/LoadData[30]} {oram/LoadData[31]} {oram/LoadData[32]} {oram/LoadData[33]} {oram/LoadData[34]} {oram/LoadData[35]} {oram/LoadData[36]} {oram/LoadData[37]} {oram/LoadData[38]} {oram/LoadData[39]} {oram/LoadData[40]} {oram/LoadData[41]} {oram/LoadData[42]} {oram/LoadData[43]} {oram/LoadData[44]} {oram/LoadData[45]} {oram/LoadData[46]} {oram/LoadData[47]} {oram/LoadData[48]} {oram/LoadData[49]} {oram/LoadData[50]} {oram/LoadData[51]} {oram/LoadData[52]} {oram/LoadData[53]} {oram/LoadData[54]} {oram/LoadData[55]} {oram/LoadData[56]} {oram/LoadData[57]} {oram/LoadData[58]} {oram/LoadData[59]} {oram/LoadData[60]} {oram/LoadData[61]} {oram/LoadData[62]} {oram/LoadData[63]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 3 [get_debug_ports u_ila_0/probe8]
+connect_debug_port u_ila_0/probe8 [get_nets [list {DDR3SDRAM_Command[0]} {DDR3SDRAM_Command[1]} {DDR3SDRAM_Command[2]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 28 [get_debug_ports u_ila_0/probe9]
+connect_debug_port u_ila_0/probe9 [get_nets [list {DDR3SDRAM_Address[0]} {DDR3SDRAM_Address[1]} {DDR3SDRAM_Address[2]} {DDR3SDRAM_Address[3]} {DDR3SDRAM_Address[4]} {DDR3SDRAM_Address[5]} {DDR3SDRAM_Address[6]} {DDR3SDRAM_Address[7]} {DDR3SDRAM_Address[8]} {DDR3SDRAM_Address[9]} {DDR3SDRAM_Address[10]} {DDR3SDRAM_Address[11]} {DDR3SDRAM_Address[12]} {DDR3SDRAM_Address[13]} {DDR3SDRAM_Address[14]} {DDR3SDRAM_Address[15]} {DDR3SDRAM_Address[16]} {DDR3SDRAM_Address[17]} {DDR3SDRAM_Address[18]} {DDR3SDRAM_Address[19]} {DDR3SDRAM_Address[20]} {DDR3SDRAM_Address[21]} {DDR3SDRAM_Address[22]} {DDR3SDRAM_Address[23]} {DDR3SDRAM_Address[24]} {DDR3SDRAM_Address[25]} {DDR3SDRAM_Address[26]} {DDR3SDRAM_Address[27]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe10]
+connect_debug_port u_ila_0/probe10 [get_nets [list {DDR3SDRAM_WriteData[0]} {DDR3SDRAM_WriteData[1]} {DDR3SDRAM_WriteData[2]} {DDR3SDRAM_WriteData[3]} {DDR3SDRAM_WriteData[4]} {DDR3SDRAM_WriteData[5]} {DDR3SDRAM_WriteData[6]} {DDR3SDRAM_WriteData[7]} {DDR3SDRAM_WriteData[8]} {DDR3SDRAM_WriteData[9]} {DDR3SDRAM_WriteData[10]} {DDR3SDRAM_WriteData[11]} {DDR3SDRAM_WriteData[12]} {DDR3SDRAM_WriteData[13]} {DDR3SDRAM_WriteData[14]} {DDR3SDRAM_WriteData[15]} {DDR3SDRAM_WriteData[16]} {DDR3SDRAM_WriteData[17]} {DDR3SDRAM_WriteData[18]} {DDR3SDRAM_WriteData[19]} {DDR3SDRAM_WriteData[20]} {DDR3SDRAM_WriteData[21]} {DDR3SDRAM_WriteData[22]} {DDR3SDRAM_WriteData[23]} {DDR3SDRAM_WriteData[24]} {DDR3SDRAM_WriteData[25]} {DDR3SDRAM_WriteData[26]} {DDR3SDRAM_WriteData[27]} {DDR3SDRAM_WriteData[28]} {DDR3SDRAM_WriteData[29]} {DDR3SDRAM_WriteData[30]} {DDR3SDRAM_WriteData[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe11]
+connect_debug_port u_ila_0/probe11 [get_nets [list {DDR3SDRAM_ReadData[0]} {DDR3SDRAM_ReadData[1]} {DDR3SDRAM_ReadData[2]} {DDR3SDRAM_ReadData[3]} {DDR3SDRAM_ReadData[4]} {DDR3SDRAM_ReadData[5]} {DDR3SDRAM_ReadData[6]} {DDR3SDRAM_ReadData[7]} {DDR3SDRAM_ReadData[8]} {DDR3SDRAM_ReadData[9]} {DDR3SDRAM_ReadData[10]} {DDR3SDRAM_ReadData[11]} {DDR3SDRAM_ReadData[12]} {DDR3SDRAM_ReadData[13]} {DDR3SDRAM_ReadData[14]} {DDR3SDRAM_ReadData[15]} {DDR3SDRAM_ReadData[16]} {DDR3SDRAM_ReadData[17]} {DDR3SDRAM_ReadData[18]} {DDR3SDRAM_ReadData[19]} {DDR3SDRAM_ReadData[20]} {DDR3SDRAM_ReadData[21]} {DDR3SDRAM_ReadData[22]} {DDR3SDRAM_ReadData[23]} {DDR3SDRAM_ReadData[24]} {DDR3SDRAM_ReadData[25]} {DDR3SDRAM_ReadData[26]} {DDR3SDRAM_ReadData[27]} {DDR3SDRAM_ReadData[28]} {DDR3SDRAM_ReadData[29]} {DDR3SDRAM_ReadData[30]} {DDR3SDRAM_ReadData[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 2 [get_debug_ports u_ila_0/probe12]
+connect_debug_port u_ila_0/probe12 [get_nets [list {PathORAM_Command[0]} {PathORAM_Command[1]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 32 [get_debug_ports u_ila_0/probe13]
+connect_debug_port u_ila_0/probe13 [get_nets [list {PathORAM_PAddr[0]} {PathORAM_PAddr[1]} {PathORAM_PAddr[2]} {PathORAM_PAddr[3]} {PathORAM_PAddr[4]} {PathORAM_PAddr[5]} {PathORAM_PAddr[6]} {PathORAM_PAddr[7]} {PathORAM_PAddr[8]} {PathORAM_PAddr[9]} {PathORAM_PAddr[10]} {PathORAM_PAddr[11]} {PathORAM_PAddr[12]} {PathORAM_PAddr[13]} {PathORAM_PAddr[14]} {PathORAM_PAddr[15]} {PathORAM_PAddr[16]} {PathORAM_PAddr[17]} {PathORAM_PAddr[18]} {PathORAM_PAddr[19]} {PathORAM_PAddr[20]} {PathORAM_PAddr[21]} {PathORAM_PAddr[22]} {PathORAM_PAddr[23]} {PathORAM_PAddr[24]} {PathORAM_PAddr[25]} {PathORAM_PAddr[26]} {PathORAM_PAddr[27]} {PathORAM_PAddr[28]} {PathORAM_PAddr[29]} {PathORAM_PAddr[30]} {PathORAM_PAddr[31]}]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe14]
+connect_debug_port u_ila_0/probe14 [get_nets [list oram/back_end/AES_DRAMReadDataValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe15]
+connect_debug_port u_ila_0/probe15 [get_nets [list oram/back_end/AES_DRAMWriteDataReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe16]
+connect_debug_port u_ila_0/probe16 [get_nets [list oram/back_end/AES_DRAMWriteDataValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe17]
+connect_debug_port u_ila_0/probe17 [get_nets [list back_end/AES_DRAMReadDataReady_orig]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe18]
+connect_debug_port u_ila_0/probe18 [get_nets [list oram/back_end/BE_DRAMReadDataReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe19]
+connect_debug_port u_ila_0/probe19 [get_nets [list oram/back_end/BE_DRAMReadDataValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe20]
+connect_debug_port u_ila_0/probe20 [get_nets [list oram/back_end/BE_DRAMWriteDataReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe21]
+connect_debug_port u_ila_0/probe21 [get_nets [list oram/back_end/BE_DRAMWriteDataValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe22]
+connect_debug_port u_ila_0/probe22 [get_nets [list oram/BEnd_CmdReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe23]
+connect_debug_port u_ila_0/probe23 [get_nets [list oram/BEnd_CmdValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe24]
+connect_debug_port u_ila_0/probe24 [get_nets [list oram/back_end/bend_inner/stash_top/BlockNotFound]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe25]
+connect_debug_port u_ila_0/probe25 [get_nets [list oram/back_end/bend_inner/stash_top/BlockNotFoundValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe26]
+connect_debug_port u_ila_0/probe26 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_ROCommandIn]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe27]
+connect_debug_port u_ila_0/probe27 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_ROCommandInReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe28]
+connect_debug_port u_ila_0/probe28 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_ROCommandInValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe29]
+connect_debug_port u_ila_0/probe29 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_ROCommandOut]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe30]
+connect_debug_port u_ila_0/probe30 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_RODataOutReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe31]
+connect_debug_port u_ila_0/probe31 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_RODataOutValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe32]
+connect_debug_port u_ila_0/probe32 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_RWCommandInReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe33]
+connect_debug_port u_ila_0/probe33 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_RWCommandInValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe34]
+connect_debug_port u_ila_0/probe34 [get_nets [list oram/back_end/AES.REW_AES.aes/Core_RWDataOutValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe35]
+connect_debug_port u_ila_0/probe35 [get_nets [list DDR3SDRAM_CommandReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe36]
+connect_debug_port u_ila_0/probe36 [get_nets [list DDR3SDRAM_CommandValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe37]
+connect_debug_port u_ila_0/probe37 [get_nets [list DDR3SDRAM_DataInReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe38]
+connect_debug_port u_ila_0/probe38 [get_nets [list DDR3SDRAM_DataInValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe39]
+connect_debug_port u_ila_0/probe39 [get_nets [list DDR3SDRAM_DataOutValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe40]
+connect_debug_port u_ila_0/probe40 [get_nets [list oram/back_end/I1]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe41]
+connect_debug_port u_ila_0/probe41 [get_nets [list oram/LoadReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe42]
+connect_debug_port u_ila_0/probe42 [get_nets [list oram/LoadValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe43]
+connect_debug_port u_ila_0/probe43 [get_nets [list n_1_oram]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe44]
+connect_debug_port u_ila_0/probe44 [get_nets [list PathORAM_CommandReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe45]
+connect_debug_port u_ila_0/probe45 [get_nets [list PathORAM_CommandValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe46]
+connect_debug_port u_ila_0/probe46 [get_nets [list PathORAM_DataInReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe47]
+connect_debug_port u_ila_0/probe47 [get_nets [list PathORAM_DataInValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe48]
+connect_debug_port u_ila_0/probe48 [get_nets [list PathORAM_DataOutReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe49]
+connect_debug_port u_ila_0/probe49 [get_nets [list PathORAM_DataOutValid]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe50]
+connect_debug_port u_ila_0/probe50 [get_nets [list oram/back_end/bend_inner/StashAlmostFull]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe51]
+connect_debug_port u_ila_0/probe51 [get_nets [list oram/back_end/bend_inner/stash_top/StashOverflow]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe52]
+connect_debug_port u_ila_0/probe52 [get_nets [list oram/StoreReady]]
+create_debug_port u_ila_0 probe
+set_property port_width 1 [get_debug_ports u_ila_0/probe53]
+connect_debug_port u_ila_0/probe53 [get_nets [list oram/StoreValid]]
+set_property C_USER_SCAN_CHAIN 1 [get_debug_cores dbg_hub]

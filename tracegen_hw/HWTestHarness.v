@@ -343,13 +343,61 @@ module HWTestHarness(
 							.DataOutValid(			UARTDataOutValid), 
 							.DataOutReady(			UARTDataOutReady), 
 							.SIn(					UARTRX), 
-							.SOut(					UARTTX));
+							.SOut(					UARTTX));				
 						
 	//------------------------------------------------------------------------------
 	// 	[Send path] Clock crossing
 	//------------------------------------------------------------------------------
-						
-	FIFOShiftRound #(		.IWidth(				UARTWidth),
+
+	`ifdef SIMULATION
+		localparam			AC = 					10, 
+							Gap = 					3000,
+							Cycle = 				1000000000/SlowClockFreq;
+		
+		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
+		reg					CrossBufIn_DataInValid_Reg;	
+		integer 			i;
+		
+		task TASK_Command;
+			input	[BECMDWidth-1:0] 	In_Command;
+			input	[ORAMU-1:0]			In_PAddr;
+			
+			begin
+				CrossBufIn_DataInValid_Reg = 		1'b1;
+				CrossBufIn_DataIn_Reg =				{In_Command, In_PAddr, {DBaseWidth{1'b0}}, {TimeWidth{1'b0}}};
+				
+				while (~CrossBufIn_DataInReady) #(Cycle);
+				#(Cycle);
+				
+				CrossBufIn_DataInValid_Reg = 		1'b0;
+			end
+		endtask
+		
+		assign	UARTDataOutReady =					1'b1;
+		assign	CrossBufIn_DataInValid =			CrossBufIn_DataInValid_Reg;
+		assign	CrossBufIn_DataIn =					CrossBufIn_DataIn_Reg;
+		
+		initial begin
+			i = 0;
+			CrossBufIn_DataInValid_Reg = 			1'b0;
+			#(Cycle*5000);
+		
+			while (i < AC) begin
+				TASK_Command(BECMD_Update, i);
+				i = i + 1;
+				#(Cycle*Gap);
+			end
+			
+			i = 0;
+
+			while (i < AC) begin
+				TASK_Command(BECMD_Read, i);
+				i = i + 1;
+				#(Cycle*Gap);
+			end
+		end
+	`else
+		FIFOShiftRound #(	.IWidth(				UARTWidth),
 							.OWidth(				THPWidth),
 							.Reverse(				1))
 				tst_shift(	.Clock(					SlowClock),
@@ -359,8 +407,9 @@ module HWTestHarness(
 							.InAccept(				UARTDataOutReady),
 							.OutData(				CrossBufIn_DataIn),
 							.OutValid(				CrossBufIn_DataInValid),
-							.OutReady(				CrossBufIn_DataInReady));
-
+							.OutReady(				CrossBufIn_DataInReady));	
+	`endif
+							
 	assign	SlowCommand =							CrossBufIn_DataIn[THPWidth-1:THPWidth-TCMDWidth];
 	assign	SlowStartSignal =						SlowCommand == TCMD_Start;
 	
