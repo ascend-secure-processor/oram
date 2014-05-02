@@ -11,22 +11,12 @@
 module AESPathORAM(
 	Clock, Reset,
 
-	MIGOut,
-	MIGOutMask,
-	MIGOutValid,
-	MIGOutReady,
+	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	MIGIn,
-	MIGInValid,
+	BackendRData,	BackendRValid,	BackendRReady,
 
-	BackendRData,
-	BackendRValid,
-	BackendRReady,
-
-	BackendWData,
-	BackendWMask,
-	BackendWValid,
-	BackendWReady,
+	BackendWData,	BackendWValid,	BackendWReady,
 
 	DRAMInitDone
 	);
@@ -43,7 +33,8 @@ module AESPathORAM(
 	`include "BucketLocal.vh"
 
 	localparam W = DDRDWidth / AESWidth;
-	localparam D = 1; //AESDelay; TODO: this parameter is gone?
+	localparam D = 2; //AESDelay; TODO: this parameter is gone? 
+		// Note: D = 1 does not work
 
 	localparam FIFO_D = D;
 
@@ -62,14 +53,14 @@ module AESPathORAM(
 
 	// TODO don't push MIGAddr through AES module
 
-	output [DDRDWidth-1:0] MIGOut;
-	output [DDRMWidth-1:0] MIGOutMask;
-	output                 MIGOutValid;
-	input                  MIGOutReady;
+	output [DDRDWidth-1:0] DRAMWriteData;
+	output                 DRAMWriteDataValid;
+	input                  DRAMWriteDataReady;
 
 	//MIG -> AES
-	input [DDRDWidth-1:0]  MIGIn;
-	input                  MIGInValid;
+    input [DDRDWidth-1:0]	DRAMReadData;
+    input                   DRAMReadDataValid;
+    output                  DRAMReadDataReady;
 
 	//--------------------------------------------------------------------------
 	// AES <-> BackEnd
@@ -82,7 +73,6 @@ module AESPathORAM(
 
 	//BackEnd -> AES
 	input [DDRDWidth-1:0]  BackendWData;
-	input [DDRMWidth-1:0]  BackendWMask;
 	input                  BackendWValid;
 	output                 BackendWReady;
 
@@ -130,11 +120,6 @@ module AESPathORAM(
     wire                                           AESResDataOutValid;
     wire                                           AESResDataOutReady;
 
-    wire                                           PathBuffer_InReady;
-    wire [DDRDWidth-1:0]                           PathBuffer_OutData;
-    wire                                           PathBuffer_OutValid;
-    wire                                           PathBuffer_OutReady;
-
     wire                                           IsIV;
     reg                                            IVDone;
 
@@ -167,23 +152,12 @@ module AESPathORAM(
     wire                                           DataOutValid;
     wire                                           DataOutReady;
 
-    wire [DDRAWidth-1:0]                           MIGAddrOut; // TODO remove
-    wire [DDRCWidth-1:0]                           MIGCmdOut; // TODO remove
-    wire                                           MIGCmdOutValid; // TODO remove
-
-    wire [DDRMWidth-1:0]                           MIGMaskOut;
-
     //used for enc/dec
     wire                                           IsAESIV;
     reg                                            AESIVDone;
 
     wire [DDRDWidth-1:0]                           XorRes;
 
-    wire                                           DRAMCmdOutReady;
-    wire                                           WriteMaskReady;
-    wire                                           WriteMaskValid;
-
-    wire                                           PassThroughCmd;
     wire                                           PassThroughW;
     wire                                           PassThroughR;
 
@@ -193,7 +167,6 @@ module AESPathORAM(
     reg [31:0]                                     numinp;
     reg [31:0]                                     numencdata;
     reg [31:0]                                     numdata;
-    reg [31:0]                                     nummask;
     reg [31:0]                                     numaesin;
     reg [31:0]                                     numaesout;
 
@@ -205,7 +178,6 @@ module AESPathORAM(
         if (Reset) begin
             numinp <= 0;
             numdata <= 0;
-            nummask <= 0;
             numencdata <= 0;
             numaesin <= 0;
             numaesout <= 0;
@@ -214,10 +186,8 @@ module AESPathORAM(
               numinp <= numinp + 1;
             if (DataOutValid)
               numencdata <= numencdata + 1;
-            if (PathBuffer_OutValid & PathBuffer_OutReady)
+            if (DRAMReadDataValid & DRAMReadDataReady)
               numdata <= numdata + 1;
-            if (IVDataOutValid & AESDWDataInAccept)
-              nummask <= nummask + 1;
             if (AESResDataOutValid & AESResDataOutReady)
               numaesout <= numaesout + 1;
         end
@@ -229,13 +199,9 @@ module AESPathORAM(
 
     assign Key = {(AESWidth){1'b1}};
     assign KeyValid = 1;
-
-    assign PassThroughCmd = 0; // TODO remove //~DRAMInitDone;//  |
-                            // (DRAMInitDone & (DRAMCmd == DDR3CMD_Read));
+          
     assign PassThroughW = 0; //~DRAMInitDone;
-    assign PassThroughR = 0; //~DRAMInitDone;//  |
-                          // ((DRAMCmd == DDR3CMD_Read) & DRAMCmdValid) |
-                          // (RW == PATH_READ);
+    assign PassThroughR = 0; //~DRAMInitDone; 
 
     always @( posedge Clock ) begin
         if (Reset) begin
@@ -268,41 +234,12 @@ module AESPathORAM(
           AESIVDone <= 1;
     end
 
-
     //------------------------------------------------------------------------------
     //  Check bucket
     //------------------------------------------------------------------------------
 
-    wire ReadGood = DRAMInitDone & PathBuffer_OutValid & PathBuffer_OutReady;
-    wire WriteGood = DRAMInitDone & BackendWValid & AESDataInAccept & WriteMaskReady;
-
-    generate
-        if (Overclock) begin:INBUF_BRAM
-	    wire PathBuffer_Full, PathBuffer_Empty;
-
-	    PathBuffer in_P_buf(.clk(Clock),
-			        .srst(Reset),
-			        .din(MIGIn),
-			        .wr_en(MIGInValid),
-			        .rd_en(PathBuffer_OutReady),
-			        .dout(PathBuffer_OutData),
-			        .full(PathBuffer_Full),
-			        .empty(PathBuffer_Empty));
-	    assign PathBuffer_InReady =	~PathBuffer_Full;
-	    assign PathBuffer_OutValid = ~PathBuffer_Empty;
-        end else begin:INBUF_LUTRAM
-            FIFORAM#(.Width(DDRDWidth),
-                     .Buffering(PathSize_DRBursts))
-            in_P_buf(.Clock(Clock),
-                     .Reset(Reset),
-                     .InData(MIGIn),
-                     .InValid(MIGInValid),
-                     .InAccept(PathBuffer_InReady), //debugging
-                     .OutData(PathBuffer_OutData),
-                     .OutSend(PathBuffer_OutValid),
-                     .OutReady(PathBuffer_OutReady));
-        end // block: INBUF_LUTRAM
-    endgenerate
+    wire ReadGood = DRAMInitDone & DRAMReadDataValid & DRAMReadDataReady;
+    wire WriteGood = DRAMInitDone & BackendWValid & AESDataInAccept;
 
     // Count where we are in a bucket (so we can determine when we are at a header)
     Counter#(.Width(BktBSTWidth))
@@ -343,31 +280,13 @@ module AESPathORAM(
     assign IVDeqTransition = (IVDeqCtr_Reset & IVDataOutValid & AESDWDataInAccept) |
                              (~InitDone);
 
-
-    //------------------------------------------------------------------------------
-    //	MIG CMD FIFO and MASK
-    //------------------------------------------------------------------------------
-
-    //used only for write
-    FIFORAM#(.Width(DDRMWidth),
-             .Buffering(FIFO_D))
-    mask_fifo (.Clock(Clock),
-               .Reset(Reset),
-               .InData(BackendWMask),
-               .InValid(BackendWValid),
-               .InAccept(WriteMaskReady),
-               .OutData(MIGMaskOut),
-               .OutSend(WriteMaskValid),
-               .OutReady(MIGOutReady & (RW == PATH_WRITE) & DataOutValid)
-               );
-
     //------------------------------------------------------------------------------
     //  IV and Data FIFO
     //------------------------------------------------------------------------------
 
-    assign DataIn = BackendWValid ? BackendWData : PathBuffer_OutData;
+    assign DataIn = BackendWValid ? BackendWData : DRAMReadData;
     //both should never be valid
-    assign DataInValid = (PathBuffer_OutValid  ^ (BackendWValid & BackendWReady));
+    assign DataInValid = (DRAMReadDataValid  ^ (BackendWValid & BackendWReady));
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
@@ -382,7 +301,7 @@ module AESPathORAM(
     assign AESDataIn = DataIn;
     assign AESDataInValid = DataInValid;
 
-    assign PathBuffer_OutReady = DataInReady;
+    assign DRAMReadDataReady = DataInReady && InitDone;
 
     //only remove IV when we are done with the bucket
     assign IVDataOutReady = IVDeqTransition;
@@ -524,7 +443,7 @@ module AESPathORAM(
                                          XorRes[AESEntropy-1:0];
 
     assign DataOutValid = AESDataOutValid & AESResDataOutValid;
-    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) | ((RW == PATH_WRITE) & MIGOutReady);
+    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) | ((RW == PATH_WRITE) & DRAMWriteDataReady);
 
     //------------------------------------------------------------------------------
     //  Path Counter
@@ -553,16 +472,13 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
 
     //BackendW related
-    assign MIGOut = PassThroughW ? BackendWData : DataOut ;
-    assign MIGOutMask = PassThroughW ? BackendWMask : MIGMaskOut;
-    assign MIGOutValid = PassThroughW ? BackendWValid :
-                         (RW == PATH_WRITE) & DataOutValid & WriteMaskValid;
-    assign BackendWReady = PassThroughW ? MIGOutReady :
-                           DataInReady & WriteMaskReady;
+    assign DRAMWriteData = PassThroughW ? BackendWData : DataOut ;
+    assign DRAMWriteDataValid = PassThroughW ? BackendWValid : (RW == PATH_WRITE) & DataOutValid;
+    assign BackendWReady = PassThroughW ? DRAMWriteDataReady : DataInReady;
 
     //BackendR related
-    assign BackendRData = PassThroughR ? MIGIn : DataOut;
-    assign BackendRValid = PassThroughR ? MIGInValid :
+    assign BackendRData = PassThroughR ? DRAMReadData : DataOut;
+    assign BackendRValid = PassThroughR ? DRAMReadDataValid :
                            (RW == PATH_READ) & DataOutValid;
 
 endmodule

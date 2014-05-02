@@ -5,7 +5,7 @@
 module testUORam;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = `ifdef ORAML `ORAML `else 20 `endif;
+	parameter                   ORAML = `ifdef ORAML `ORAML `else 13 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
 	parameter					ORAMC =				10; 
 	parameter					ORAME =				5;
@@ -16,7 +16,7 @@ module testUORam;
     parameter                   NumValidBlock = 	1 << (ORAML - 1);
     parameter                   Recursion = 		3;
                    
-    parameter                   PLBCapacity = 		8192 << 3; // in bits
+    parameter                   PLBCapacity = 		8192; // in bits
 
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
@@ -106,7 +106,7 @@ module testUORam;
 	//--------------------------------------------------------------------------
     parameter   InBufDepth = 6,
                 OutInitLat = 30,
-                OutBandWidth = 57;
+                OutBandWidth = 91;
 	
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
@@ -259,7 +259,7 @@ module testUORam;
 		end 
 	end
    
-	localparam  NN = 400;
+	localparam  NN = 1000;
 	localparam	nn = 10;
 	localparam	nn2 = nn * 2;
 
@@ -272,7 +272,7 @@ module testUORam;
 				AddrPrev <= AddrRand;
                 //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
 				TestCount <= TestCount + 1;
-				AddrRand <=  (TestCount / nn2) * nn2 + TestCount % nn;	   
+				AddrRand <=  (TestCount / nn2) * nn + TestCount % nn;	   
                 	   
 				if (AddrRand > NumValidBlock)
 					$finish;   

@@ -317,6 +317,7 @@ module PathORAMBackend(
 							.DRAMWriteData(			DRAMWriteData), 
 							.DRAMWriteDataValid(	DRAMWriteDataValid), 
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
+							
 		end else begin:BASIC_AES
 			AESPathORAM #(	.ORAMB(					ORAMB), // TODO which of these params are really needed?
 							.ORAMU(					ORAMU),
@@ -328,23 +329,21 @@ module PathORAMBackend(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 					aes(	.Clock(					Clock),
-							.Reset(					Reset),
-
-							.MIGOut(				DRAMWriteData),
-							.MIGOutMask(			),
-							.MIGOutValid(			DRAMWriteDataValid),
-							.MIGOutReady(			DRAMWriteDataReady),
-
-							.MIGIn(					DRAMReadData),
-							.MIGInValid(			DRAMReadDataValid),
-							.MIGInReady(			DRAMReadDataReady),
+							.Reset(					Reset),							
 							
+							.DRAMReadData(			DRAMReadData), 
+							.DRAMReadDataValid(		DRAMReadDataValid), 
+							.DRAMReadDataReady(		DRAMReadDataReady),
+							
+							.DRAMWriteData(			DRAMWriteData), 
+							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+							.DRAMWriteDataReady(	DRAMWriteDataReady),
+													
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
 							.BackendRReady(			AES_DRAMReadDataReady),
 							
 							.BackendWData(			AES_DRAMWriteData),
-							.BackendWMask(			),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady),
 
