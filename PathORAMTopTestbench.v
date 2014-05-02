@@ -93,15 +93,26 @@ module PathORAMTopTestbench;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 							
-													// Format:			 Cmd   	PAddr		DataBase	TimeDelay
-	assign	UARTShftDataIn =						(CmdCount == 0) ? 	{8'd0, 	32'h38c, 	32'h0, 		32'd0} : // update
-													(CmdCount == 1) ? 	{8'd0, 	32'h3f9, 	32'hf, 		32'd0} : 
-													(CmdCount == 2) ? 	{8'd0, 	32'h300, 	32'hff, 	32'd0} : 
-													(CmdCount == 3) ? 	{8'd2, 	32'h38c, 	32'h0, 		32'd0} : // read
-													(CmdCount == 4) ? 	{8'd2, 	32'h3f9, 	32'h0, 		32'd0} :
-													(CmdCount == 5) ? 	{8'd2, 	32'h300, 	32'h0, 		32'd0} :
-																		{8'hff, 32'h0, 		32'h0, 		32'd0}; // start
-	assign	UARTShftDataInValid =					Start & CmdCount < 7;
+													// Format:			 Cmd   	PAddr	DataBase	TimeDelay
+	assign	UARTShftDataIn =						(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
+													(CmdCount == 1) ? 	{8'd0, 	32'h1, 	32'hf, 		32'd0} : 
+													(CmdCount == 2) ? 	{8'd0, 	32'h2, 	32'hff, 	32'd0} : 
+													(CmdCount == 3) ? 	{8'd0, 	32'h3, 	32'h0, 		32'd0} :
+													(CmdCount == 4) ? 	{8'd0, 	32'h4, 	32'hf, 		32'd0} : 
+													(CmdCount == 5) ? 	{8'd0, 	32'h5, 	32'hff, 	32'd0} : 
+													(CmdCount == 6) ? 	{8'd0, 	32'h6, 	32'h0, 		32'd0} :
+													(CmdCount == 7) ? 	{8'd0, 	32'h7, 	32'hf, 		32'd0} : 
+													
+													(CmdCount == 8) ? 	{8'd2, 	32'h0, 	32'h0, 		32'd0} :
+													(CmdCount == 9) ? 	{8'd2, 	32'h1, 	32'h0, 		32'd0} :
+													(CmdCount == 10) ? 	{8'd2, 	32'h2, 	32'h0, 		32'd0} :
+													(CmdCount == 11) ? 	{8'd2, 	32'h3, 	32'h0, 		32'd0} :
+													(CmdCount == 12) ? 	{8'd2, 	32'h4, 	32'h0, 		32'd0} :
+													(CmdCount == 13) ? 	{8'd2, 	32'h5, 	32'h0, 		32'd0} :
+													(CmdCount == 14) ? 	{8'd2, 	32'h6, 	32'h0, 		32'd0} :
+													(CmdCount == 15) ? 	{8'd2, 	32'h7, 	32'h0, 		32'd0} :
+																		{8'hff, 32'h0, 	32'h0, 		32'd0}; // start
+	assign	UARTShftDataInValid =					Start & CmdCount < 17;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),

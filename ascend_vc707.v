@@ -59,8 +59,8 @@ module ascend_vc707(
 							ChipScope signals & meet timing
 		DebugDRAMTiming:		simulation/board will see exact same bandwidth read to AES */
 	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMTiming =		1; // NOTE: set to 0 for performance run
-	parameter				DebugAES =				1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMTiming =		0; // NOTE: set to 0 for performance run
+	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
 	parameter				GenHistogram = 			1;
@@ -94,7 +94,15 @@ module ascend_vc707(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
-
+	`include "SubTreeLocal.vh"
+		
+	localparam 				TreeInDQChunks =		`divceil(BktSize_RndBits, DDRDQWidth) * ( (1 << (ORAML + 1)) + numTotalST);
+	`ifdef SIMULATION
+	localparam				DDRAWidth_Top =			`log2(TreeInDQChunks);
+	`else
+	localparam				DDRAWidth_Top =			DDRAWidth;
+	`endif
+	
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
@@ -131,7 +139,7 @@ module ascend_vc707(
 	wire					DDR3SDRAM_ResetDone;
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command;
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Top-1:0]	DDR3SDRAM_Address;
 	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask;
 	
@@ -143,7 +151,7 @@ module ascend_vc707(
 	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
 	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address_MIG;
+	wire	[DDRAWidth_Top-1:0]	DDR3SDRAM_Address_MIG;
 	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 	
@@ -339,7 +347,8 @@ module ascend_vc707(
 	end
 	
 	// We need to specify when to tie the interfaces together
-	wire	PathRead, PathWriteback, ROAccess, RWAccess;
+	wire					PathRead, PathWriteback, ROAccess, RWAccess;
+	wire					ReadCmdTransfer, WriteCmdTransfer;
 	REWStatCtr	#(			.ORAME(					ORAME),
 							.RW_R_Chunk(			PathSize_DRBursts),
 							.RW_W_Chunk(			PathSize_DRBursts),
@@ -349,21 +358,24 @@ module ascend_vc707(
 				rw_stat(	.Clock(					MemoryClock),
 							.Reset(					MemoryReset),
 							
-							.RW_R_Transfer(			RWAccess & PathRead & 		DDR3SDRAM_DataOutValid_MIG),
-							.RW_W_Transfer(			RWAccess & PathWriteback & 	DDR3SDRAM_DataInValid_MIG & 	DDR3SDRAM_CommandReady_MIG),
-							.RO_R_Transfer(			ROAccess & PathRead & 		DDR3SDRAM_DataOutValid_MIG),
-							.RO_W_Transfer(			ROAccess & PathWriteback & 	DDR3SDRAM_DataInValid_MIG & 	DDR3SDRAM_CommandReady_MIG),
+							.RW_R_Transfer(			RWAccess & PathRead & 		ReadCmdTransfer),
+							.RW_W_Transfer(			RWAccess & PathWriteback & 	WriteCmdTransfer),
+							.RO_R_Transfer(			ROAccess & PathRead & 		ReadCmdTransfer),
+							.RO_W_Transfer(			ROAccess & PathWriteback & 	WriteCmdTransfer),
 
 							.Writeback(				PathWriteback),
 							.Read(					PathRead),
 							.ROAccess(				ROAccess),
 							.RWAccess(				RWAccess));
 	
+	assign	ReadCmdTransfer = 						DDR3SDRAM_CommandValid_MIG & DDR3SDRAM_CommandReady_MIG;
+	assign	WriteCmdTransfer =						DDR3SDRAM_CommandValid_MIG & DDR3SDRAM_CommandReady_MIG & DDR3SDRAM_DataInValid_MIG & DDR3SDRAM_DataInReady_MIG;
+	
 	assign	DDR3SDRAM_CommandValid_MIG =			DDR3SDRAM_CommandValid_MIG_Pre & 	((PathWriteback) ? 	DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG : 1'b1);
-	assign	DDR3SDRAM_DataInValid_MIG =				DDR3SDRAM_CommandValid_MIG_Pre & 						DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_CommandReady_MIG;
+	assign	DDR3SDRAM_DataInValid_MIG =				DDR3SDRAM_CommandValid_MIG_Pre & 						DDR3SDRAM_DataInValid_MIG_Pre & DDR3SDRAM_CommandReady_MIG & PathWriteback;
 	
 	assign	DDR3SDRAM_CommandReady_MIG_Pre =		DDR3SDRAM_CommandReady_MIG & 		((PathWriteback) ?	DDR3SDRAM_DataInValid_MIG_Pre &	DDR3SDRAM_DataInReady_MIG : 1'b1);
-	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 							DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG;
+	assign	DDR3SDRAM_DataInReady_MIG_Pre =			DDR3SDRAM_CommandReady_MIG & 							DDR3SDRAM_CommandValid_MIG_Pre & DDR3SDRAM_DataInReady_MIG & PathWriteback;
 	
 	//------------------------------------------------------------------------------
 	//	DDR3SDRAM (MIG7 or some synthetic memory)
@@ -375,9 +387,9 @@ module ascend_vc707(
 	
 	`ifdef SIMULATION
 	
-	//
+	// -------------------------------------------------------------------------
 	//	Fake MIG
-	//
+	// -------------------------------------------------------------------------
 	
 	wire					MemoryClock_Bufg;
 	IBUFGDS	clk_f200_p(		.I(						sys_clk_p),
@@ -390,7 +402,7 @@ module ascend_vc707(
 	assign	DDR3SDRAM_ResetDone =					~MemoryReset;
 	
 	SynthesizedRandDRAM	#(	.UWidth(				DDRDQWidth),
-							.AWidth(				DDRAWidth),
+							.AWidth(				DDRAWidth_Top),
 							.DWidth(				DDRDWidth),
 							.BurstLen(				1),
 							.EnableMask(			1),
@@ -417,9 +429,11 @@ module ascend_vc707(
 							.DataOutReady(			1'b1));
 	`else
 	
-	//
+	// -------------------------------------------------------------------------
 	//	Real MIG
-	//	
+	// -------------------------------------------------------------------------
+	
+	// We put MIG here so that the constraint file doesn't need to be changed
 	
 	DDR3SDRAM DDR3SDRAMController(
 							// System interface
