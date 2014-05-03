@@ -158,16 +158,24 @@ module REWStatCtr(
 		
 		// RW_R -->	RW_W / RW_W
 		else if (RWAccess && Read && RW_R_Done) begin
-			if (USE_REW) 
-				State_Trans(rw_access, path_writeback);
+			if (USE_REW) begin
+				if (DelayedWB)
+					State_Trans(ro_access, path_read);
+				else
+					State_Trans(rw_access, path_writeback);
+			end
 			else 
 				State_Trans(rw_access, path_writeback);
 		end
 		
 		// RW_W --> RO_R
 		else if (RWAccess && Writeback && RW_W_Done) begin
-			if (USE_REW) 
-				State_Trans(ro_access, path_read);
+			if (USE_REW) begin
+				if (DelayedWB)
+					State_Trans(rw_access, path_read);
+				else
+					State_Trans(ro_access, path_read);
+			end
 			else 
 				State_Trans(rw_access, path_read);
 		end	
@@ -179,7 +187,13 @@ module REWStatCtr(
 		
 		// RO_W --> E_RO_Accesses ? RW_R : RO_R
 		else if (ROAccess && Writeback && RO_W_Done) begin
-			State_Trans(E_RO_Accesses ? rw_access : ro_access, path_read);
+			if (E_RO_Accesses)
+				if (DelayedWB)
+					State_Trans(rw_access, path_writeback);
+				else
+					State_Trans(rw_access, path_read);
+			else
+				State_Trans(ro_access, path_read);
 		end
 	end
 	
