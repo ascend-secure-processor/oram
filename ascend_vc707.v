@@ -20,6 +20,7 @@ module ascend_vc707(
 			input			sys_clk_n,
 			input			sys_rst, // SW8
 
+	`ifndef SIMULATION
 			// DDR3 SDRAM
 			inout 	[63:0]	ddr3_dq,
 			inout 	[7:0]	ddr3_dqs_n,
@@ -36,7 +37,8 @@ module ascend_vc707(
 			output 	[0:0]	ddr3_cs_n,
 			output 	[7:0]	ddr3_dm,
 			output 	[0:0]	ddr3_odt,
-			
+	`endif
+	
 			// UART / Serial
 			output			uart_txd,
 			input			uart_rxd
@@ -54,7 +56,9 @@ module ascend_vc707(
 	/* 	Debugging.
 	
 		SlowORAMClock:		slow the ORAM controller down to make it easier to add 
-							ChipScope signals & meet timing */
+							ChipScope signals & meet timing *
+		
+		See PathORAMTop for more documentation */
 	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
@@ -108,7 +112,7 @@ module ascend_vc707(
 	
 	wire					MemoryClock; // always 200 Mhz (matches MIG)
 	wire					MemoryReset_Pre;
-	(* mark_debug = "TRUE" *)	reg						MemoryReset;
+	reg						MemoryReset;
 	
 	wire					ORAMClock; // Configurable (typically >= 100 Mhz, <= 200 Mhz)
 	wire					ORAMReset;
@@ -152,11 +156,11 @@ module ascend_vc707(
 	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
+	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
-	(* mark_debug = "TRUE" *)	wire					PathWriteback;			
+	wire					PathWriteback;			
 		
 	//------------------------------------------------------------------------------
 	// 	Clocking

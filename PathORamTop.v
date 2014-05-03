@@ -43,9 +43,13 @@ module PathORamTop(
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh"
 	
-	// For debugging
-	parameter				DebugDRAMReadTiming =	0; // Make DRAM reads arrive at times identical to simulation
-	parameter				DebugAES =				0; // Disable AES masks
+	/* Debugging.
+		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until PathBuffer 
+								is full.  This eliminates differences in MIG vs. 
+								simulation read timing.
+		DebugAES:				Disable AES masks. */
+	parameter				DebugDRAMReadTiming =	0; 
+	parameter				DebugAES =				0; 
 	
 	//--------------------------------------------------------------------------
 	//	System I/O

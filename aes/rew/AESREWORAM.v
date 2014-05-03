@@ -451,7 +451,7 @@ module AESREWORAM(
 	assign	CSROIdle =								CS_RO == ST_RO_Idle;
 	assign	CSROStartRead =							CS_RO == ST_RO_StartRead;
 	assign	CSROStartOp =							CSROStartRead | CS_RO == ST_RO_StartWrite;
-	assign	CSRORead =								CS_RO == ST_RO_Read; // TODO make name more general
+	assign	CSRORead =								CS_RO == ST_RO_Read;
 	assign	CSROROIReadCommand =					CS_RO == ST_RO_ROIReadCommand;
 	assign	CSROROIRead =							CS_RO == ST_RO_ROIRead;
 	assign	CSROWrite =								CS_RO == ST_RO_Write;
