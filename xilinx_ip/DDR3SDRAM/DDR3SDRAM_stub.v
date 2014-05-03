@@ -1,8 +1,8 @@
 // Copyright 1986-1999, 2001-2013 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2013.4 (win64) Build 353583 Mon Dec  9 17:49:19 MST 2013
-// Date        : Sat Apr 19 14:55:40 2014
-// Host        : running 64-bit Service Pack 1  (build 7601)
+// Date        : Fri May 02 17:35:22 2014
+// Host        : sinister running 64-bit Service Pack 1  (build 7601)
 // Command     : write_verilog -force -mode synth_stub C:/chip/oram/xilinx_ip/DDR3SDRAM/DDR3SDRAM_stub.v
 // Design      : DDR3SDRAM
 // Purpose     : Stub declaration of top-level module interface
