@@ -39,8 +39,7 @@ module CoherenceController(
 	ToEncData, ToEncDataValid, ToEncDataReady,
 	
 	ToStashData, ToStashDataValid, ToStashDataReady,
-	FromStashData, FromStashDataValid, FromStashDataReady,
-	
+	FromStashData, FromStashDataValid, FromStashDataReady, FromStashDataDone,
 	
 	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV,
 	PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV
@@ -73,7 +72,7 @@ module CoherenceController(
 	// All read path data from AES
 	input	[DDRDWidth-1:0]	FromDecData;
 	input					FromDecDataValid;
-	output					FromDecDataReady;
+	output					FromDecDataReady, FromStashDataDone;
 	
 	// All writeback path data to AES
 	output	[DDRDWidth-1:0]	ToEncData;
@@ -284,13 +283,19 @@ module CoherenceController(
 		
 		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
 		reg  PthRW, HdRW;
-		wire HdRW_Transition, PthRW_Transition;	
+		wire HdRW_Transition, PthRW_Transition;			
 		
 		wire FromDecDataTransfer, FromStashDataTransfer;
 		assign FromDecDataTransfer = FromDecDataReady && FromDecDataValid;
 		assign FromStashDataTransfer = FromStashDataReady && FromStashDataValid;
 		
-		assign PthCtrEnable = RWAccess && BufP1_Enable;
+		// RWAccessExtend: a hack to accept stash RW_W data
+		wire RWAccessExtend;
+		Register1b stash_wb (Clock, RWStashWB && PthRW_Transition, RW_R_DoneAlarm, RWStashWB);		
+		
+		assign RWAccessExtend = RWAccess || RWStashWB;
+		
+		assign PthCtrEnable = RWAccessExtend && BufP1_Enable;
 		CountAlarm #(		.Threshold(				PathSize_DRBursts))
 			blk_ctr (		.Clock(					Clock), 
 							.Reset(					Reset), 
@@ -308,7 +313,7 @@ module CoherenceController(
 							.Done(					HdRW_Transition)
 					);
 		
-		// 1 means read from DRAM,  write to buffer; 0 means write to DRAM, read from buffer
+		// 1 means write to buffer; 0 means read from buffer
 		always @(posedge Clock) begin
 			if (Reset) begin
 				PthRW <= 1'b1;
@@ -324,8 +329,11 @@ module CoherenceController(
 	
 		// TODO: How to clean up the following crap?
 		
-		assign BufP1_Enable = RWAccess ? 
-									(	PathRead ? FromDecDataTransfer
+		wire RW_PathRead;
+		assign	RW_PathRead = RWAccess && PathRead;
+		
+		assign BufP1_Enable = RWAccessExtend ? 
+									(	RW_PathRead ? FromDecDataTransfer
 										: PthRW ? FromStashDataTransfer 
 												: PathDone_IV && BufP1Reg_EmptyCount > 1)			// Send data to AES							
 							: ROAccess ? 
@@ -335,11 +343,11 @@ module CoherenceController(
 										: !HdRW && BOIDone_IV && BufP1Reg_EmptyCount > 1)		// Send headers to AES
 							: 0;							
 			
-		assign BufP1_Write = 	RWAccess ? 	(	PathRead ? 1'b1 : PthRW )
+		assign BufP1_Write = 	RWAccessExtend ? 	(	RW_PathRead ? 1'b1 : PthRW )
 								: ROAccess ? (	PathRead ? !ConflictHeaderLookup : HdRW )
 								: 0;
 						
-		assign BufP1_Address = RWAccess ?  (	PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
+		assign BufP1_Address = RWAccessExtend ?  (	RW_PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
 								: ROAccess ? (	PathRead ? 
 											(	BktOfIInValid ? OBktOfIStartAddr + RO_R_Ctr - RO_W_Chunk	// bucket of interest										     										  																								 		
 												: ConflictHeaderLookup ? OPthStartAddr + LastHdOnPthCtr * BktSize_DRBursts	// read header to resolve conflict
@@ -347,7 +355,7 @@ module CoherenceController(
 										: HdStartAddr + HdOnPthCtr)					// header write back								
 								: 0;
 								
-		assign BufP1_DIn = 	RWAccess ? 	(	PathRead ? FromDecData : FromStashData)							
+		assign BufP1_DIn = 	RWAccessExtend ? 	(	RW_PathRead ? FromDecData : FromStashData)							
 							: ROAccess ? (	BktOfIInValid ? FromDecData : HeaderIn) 
 							: 0;	
 		
@@ -364,7 +372,8 @@ module CoherenceController(
 		assign	ToEncDataValid = 		BufP1Reg_DOutValid;
 		assign	BufP1Reg_DOutReady = 	ToEncDataReady;
 		
-		assign	FromStashDataReady = 	RWAccess && PathWriteback;
+		assign	FromStashDataReady = 	RWAccessExtend;
+		assign	FromStashDataDone = 	RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV

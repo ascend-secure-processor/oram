@@ -181,6 +181,7 @@ module PathORAMBackend(
 	//----------------------------------------------------------------------
 	//	Integrity Verification (REW ORAM only)
 	//----------------------------------------------------------------------
+	wire	FromStashDataDone;
 	
 	generate if (EnableREW) begin:CC
 		CoherenceController #(.ORAMB(				ORAMB),
@@ -218,6 +219,7 @@ module PathORAMBackend(
 							.FromStashData(			BE_DRAMWriteData), 
 							.FromStashDataValid(	BE_DRAMWriteDataValid), 
 							.FromStashDataReady(	BE_DRAMWriteDataReady),
+							.FromStashDataDone(		FromStashDataDone),
 							
 							.PathReady_IV(			PathReady_IV),
 							.PathDone_IV(			PathDone_IV),
@@ -276,6 +278,8 @@ module PathORAMBackend(
 		assign	AES_DRAMWriteData = BE_DRAMWriteData;
 		assign  AES_DRAMWriteDataValid = BE_DRAMWriteDataValid;
 		assign	BE_DRAMWriteDataReady = AES_DRAMWriteDataReady;
+		
+		assign	FromStashDataDone = 1'b1;
 	end endgenerate
 	
 	//--------------------------------------------------------------------------

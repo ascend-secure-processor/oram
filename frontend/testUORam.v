@@ -23,7 +23,7 @@ module testUORam;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          1;
-	parameter					DelayedWB = 		0;
+	parameter					DelayedWB = 		1;
 	
 	
 	
