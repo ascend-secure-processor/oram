@@ -53,13 +53,10 @@ module ascend_vc707(
 	
 	/* 	Debugging.
 	
-		TODO update descriptions
-	
-		SlowDownORAMClock:	slow the ORAM controller down to make it easier to add 
-							ChipScope signals & meet timing
-		DebugDRAMTiming:		simulation/board will see exact same bandwidth read to AES */
-	parameter				SlowDownORAMClock =		1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMTiming =		1; // NOTE: set to 0 for performance run
+		SlowORAMClock:		slow the ORAM controller down to make it easier to add 
+							ChipScope signals & meet timing */
+	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
@@ -241,7 +238,7 @@ module ascend_vc707(
 							.NumValidBlock(         NumValidBlock), 
 							.Recursion(             Recursion), 
 							.PLBCapacity(           PLBCapacity),
-							.DebugDRAMTiming(		DebugDRAMTiming),
+							.DebugDRAMReadTiming(	DebugDRAMReadTiming),
 							.DebugAES(				DebugAES))
                 oram(		.Clock(					ORAMClock),
 							.FastClock(				AESClock),
@@ -277,7 +274,7 @@ module ascend_vc707(
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
 
-	generate if (SlowDownORAMClock) begin:SLOW_ORAM	
+	generate if (SlowORAMClock) begin:SLOW_ORAM	
 		wire				CommandBuf_Full, WriteDataBuf_Full;
 	
 		assign	ORAMClock =							SlowClock;

@@ -44,8 +44,8 @@ module PathORamTop(
 	`include "PLBLocal.vh"
 	
 	// For debugging
-	parameter				DebugDRAMTiming =			0;
-	parameter				DebugAES =					0;
+	parameter				DebugDRAMReadTiming =	0; // Make DRAM reads arrive at times identical to simulation
+	parameter				DebugAES =				0; // Disable AES masks
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -207,7 +207,7 @@ module PathORamTop(
 	//	DRAM Read Interface
 	//--------------------------------------------------------------------------
 	
-	generate if (DebugDRAMTiming) begin:PRED_TIMING
+	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
 		
