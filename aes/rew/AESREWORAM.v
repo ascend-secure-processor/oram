@@ -23,6 +23,8 @@
 //				-	On an REW W access (Backend -> DRAM):
 //						In:		Decrypted path
 //						Out:	Encrypted path
+//
+//	TODO: encrypt/decrypt IV hashes
 //==============================================================================
 module AESREWORAM(
 	Clock, FastClock, 
@@ -171,6 +173,12 @@ module AESREWORAM(
 	wire					BufferedROIVInValid, BufferedROIVInReady;
 	wire					BufferedROIVOutValid, BufferedROIVOutReady;	
 	
+	wire	[AESEntropy-1:0] WritebackROIVInData;
+	wire					WritebackROIVInValid;
+		
+	wire	[AESEntropy-1:0] BufferedROIVOutData_DWB;
+	wire					BufferedROIVOutValid_DWB, BufferedROIVOutReady_DWB;	
+	
 	wire	[AESEntropy-1:0] WritebackROIVOutData;
 	wire					WritebackROIVInReady, WritebackROIVOutValid, WritebackROIVOutReady;
 	
@@ -183,7 +191,7 @@ module AESREWORAM(
 	wire	[AESEntropy-1:0] RO_GentryIV, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
 	
-	wire	[AESEntropy-1:0] RO_ExternalIV, RO_UpdatedExternalIV, RW_UpdatedExternalIV;
+	wire	[AESEntropy-1:0] ExternalIV, ExternalIVIncrement, UpdatedExternalIV;
 	
 	wire					RO_LeafNextDirection;
 	wire	[AESEntropy-1:0] RO_IVIncrement, RO_IVNext;
@@ -256,7 +264,7 @@ module AESREWORAM(
 
 	wire	[BktHSize_ValidBits-1:0] RecomputedValidBits;
 	wire	[BigUWidth+BktHSize_ValidBits-1:0] RecomputedVU;
-	wire	[AESEntropy-1:0] UpdatedExternalIV;
+	wire	[AESEntropy-1:0] OutputExternalIV;
 	
 	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Read1, DataOut_Read, DataOut_Write;
 	wire					DataOutValid, DataOutReady;
@@ -381,7 +389,7 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: IV FIFO for header writebacks overflowed.", $time);
 				$stop;
 			end
-			if (BufferedROIVInValid & ~WritebackROIVInReady) begin
+			if (WritebackROIVInValid & ~WritebackROIVInReady) begin
 				$display("[%m @ %t] ERROR: External IV FIFO writebacks overflowed.", $time);
 				$stop;
 			end
@@ -412,6 +420,7 @@ module AESREWORAM(
 	// TODO merge some of the other count alarms in with this module
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
+							.DelayedWB(				DelayedWB),
 							.RW_R_Chunk(			RW_R_Chunk),
 							.RW_W_Chunk(			RW_W_Chunk),
 							.RO_R_Chunk(			RO_R_Chunk),
@@ -467,6 +476,8 @@ module AESREWORAM(
 			ST_RO_Idle :
 				if (DRAMReadDataValid)
 					NS_RO =							ST_RO_StartRead;
+				else if (DelayedWB & RWAccess & PathWriteback)
+					NS_RO =							ST_RO_StartWrite;
 			ST_RO_StartRead :
 				if (RO_BIDInReady)
 					NS_RO =							ST_RO_Read;
@@ -474,7 +485,10 @@ module AESREWORAM(
 				if (ROPathTransition & ROAccess)
 					NS_RO =							ST_RO_ROIReadCommand;
 				else if (ROPathTransition & RWAccess)
-					NS_RO =							ST_RO_StartWrite;
+					if (DelayedWB)
+						NS_RO =						ST_RO_Idle;
+					else	
+						NS_RO =						ST_RO_StartWrite;
 			ST_RO_ROIReadCommand : 
 				if (ROCommandTransfer)
 					NS_RO =							ST_RO_ROIReadLocked;
@@ -525,7 +539,7 @@ module AESREWORAM(
 							.Done(					RWWBPathTransition));							
 	assign	FinishWBIn =							(ROAccess) ? HWBPathTransition : RWWBPathTransition;
 
-	assign	RO_ExternalIV = 						DRAMReadData[AESEntropy-1:0];
+	assign	ExternalIV = 							DRAMReadData[AESEntropy-1:0];
 	
 	// Represents the actual gentry counter of blocks stored in memory
 	Counter		#(			.Width(					AESEntropy))
@@ -575,7 +589,7 @@ module AESREWORAM(
 							.BktIdx(				RO_BIDOut));
 
 
-/*
+/*  // TODO Chris:
 	// ideally BktIDGen should meet this purpose
 	
 	BktIDGen # 	(	.ORAML(		ORAML))
@@ -588,25 +602,26 @@ module AESREWORAM(
 	assign	RO_BIDOutValid = ???  ;
 */	
 							
-	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? RO_BIDOutValid : 1'b1;
+	assign	RO_BIDOutValid_Needed =					(RODRAMChunkIsHeader) ? 	RO_BIDOutValid : 1'b1;
 							
-	assign	Core_ROCommandIn =						(CSROROIReadCommand) ? 	PCMD_ROData : 	PCMD_ROHeader;
-	assign	Core_ROIVIn =							(CSRORead) ?			RO_ExternalIV :
-													(CSROROIReadCommand) ? 	ROI_GentryIV :
-																			BufferedROIVOutData;
-	assign	Core_ROBIDIn =							(CSROROIReadCommand) ? 	ROI_BID : 		RO_BIDOut;
+	assign	Core_ROCommandIn =						(CSROROIReadCommand) ? 		PCMD_ROData : 	PCMD_ROHeader;
+	assign	Core_ROIVIn =							(CSRORead) ?				ExternalIV :
+													(CSROROIReadCommand) ? 		ROI_GentryIV :
+													(DelayedWB & RWAccess) ? 	BufferedROIVOutData_DWB : 
+																				BufferedROIVOutData;
+	assign	Core_ROBIDIn =							(CSROROIReadCommand) ? 		ROI_BID : 		RO_BIDOut;
 	
-	assign	Core_ROCommandInValid =					(CSROROIReadCommand) ? 	ROI_HeaderValid : 
-													(CSROROIRead) ? 		1'b0 :
-													(CSROWrite) ? 			RO_BIDOutValid :
-																			DRAMReadDataValid & RO_BIDOutValid & 		BufferedDataInReady & 	RODRAMChunkIsHeader;
-	assign	BufferedDataInValid =					(CSROROIReadCommand) ? 	1'b0 : 
-													(CSROROIRead) ? 		1'b1 : 
-													(CSROWrite) ?			BEDataInValid_Inner : 
-																			DRAMReadDataValid &	RO_BIDOutValid_Needed & Core_ROCommandInReady;
+	assign	Core_ROCommandInValid =					(CSROROIReadCommand) ? 		ROI_HeaderValid : 
+													(CSROROIRead) ? 			1'b0 :
+													(CSROWrite) ? 				RO_BIDOutValid :
+																				DRAMReadDataValid & RO_BIDOutValid & 		BufferedDataInReady & 	RODRAMChunkIsHeader;
+	assign	BufferedDataInValid =					(CSROROIReadCommand) ? 		1'b0 : 
+													(CSROROIRead) ? 			1'b1 : 
+													(CSROWrite) ?				BEDataInValid_Inner : 
+																				DRAMReadDataValid &	RO_BIDOutValid_Needed & Core_ROCommandInReady;
 
-	assign	RO_BIDOutReady =						(CSROWrite) ?			Core_ROCommandInReady :
-																			DRAMReadDataValid & Core_ROCommandInReady & BufferedDataInReady &	RODRAMChunkIsHeader;
+	assign	RO_BIDOutReady =						(CSROWrite) ?				Core_ROCommandInReady :
+																				DRAMReadDataValid & Core_ROCommandInReady & BufferedDataInReady &	RODRAMChunkIsHeader;
 	
 	assign	DRAMReadDataReady =						CSRORead & Core_ROCommandInReady & BufferedDataInReady & RO_BIDOutValid_Needed;
 	
@@ -650,30 +665,64 @@ module AESREWORAM(
 	end endgenerate
 	
 	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
-	assign	BufferedROIVInValid =					Core_ROCommandInValid & CSRORead;
 	
 	//--------------------------------------------------------------------------
 	//	Intermediate external IV buffers
-	//--------------------------------------------------------------------------	
+	//--------------------------------------------------------------------------
 	
-	// If BucketNotYetWritten, RO_UpdatedExternalIV is XX on ROAccess so to make 
+	// If BucketNotYetWritten, ExternalIVIncrement is XX on ROAccess so to make 
 	// thing simple, we always just increment it by the same amount.  On A 
 	// RWAccess, we must set to something ...
-	assign	RO_UpdatedExternalIV =					RO_ExternalIV + ROHeader_AESChunks;
-	assign	RW_UpdatedExternalIV =					(RWAccess & BucketNotYetWritten) ? {AESEntropy{1'b0}} : RO_UpdatedExternalIV;
+	assign	ExternalIVIncrement =					ExternalIV + ROHeader_AESChunks;
+	assign	UpdatedExternalIV =						(RWAccess & BucketNotYetWritten) ? {AESEntropy{1'b0}} : ExternalIVIncrement;
+	
+	assign	BufferedROIVInValid =					((DelayedWB) ? ROAccess : 1'b1) & Core_ROCommandInValid & CSRORead;
+	assign	BufferedROIVOutReady =					((DelayedWB) ? ROAccess : 1'b1) & CSROWrite & ROCommandTransfer;
 	
 	FIFORAM		#(			.Width(					AESEntropy),
 							.Buffering(				ORAML + 1))
-				hwb_ivc_buf(.Clock(					Clock),
+				ro_hwb_ivc(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				RW_UpdatedExternalIV),
+							.InData(				UpdatedExternalIV),
 							.InValid(				BufferedROIVInValid),
 							.InAccept(				BufferedROIVInReady),
 							.OutData(				BufferedROIVOutData),
 							.OutSend(				BufferedROIVOutValid),
 							.OutReady(				BufferedROIVOutReady));
 	
-	assign	BufferedROIVOutReady =					CSROWrite & ROCommandTransfer;
+	generate if (DelayedWB) begin:DELAYED_RW_WRITEBACK
+		wire	[AESEntropy-1:0] ExternalIVIncrement_DWB, UpdatedExternalIV_DWB;
+		wire				BufferedROIVInValid_DWB, BufferedROIVInReady_DWB;	
+		
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB) begin
+				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks overflowed.", $time);
+				$stop;				
+			end
+		end
+		`endif
+		
+		assign	ExternalIVIncrement_DWB =			ExternalIV + (ORAME * ROHeader_AESChunks);
+		assign	UpdatedExternalIV_DWB =				(BucketNotYetWritten) ? {AESEntropy{1'b0}} : ExternalIVIncrement_DWB;
+
+		assign	BufferedROIVInValid_DWB =			RWAccess & Core_ROCommandInValid & CSRORead;
+		assign	BufferedROIVOutReady_DWB =			RWAccess & CSROWrite & ROCommandTransfer;
+		
+		FIFORAM		#(		.Width(					AESEntropy),
+							.Buffering(				ORAML + 1))
+				rw_hwb_ivc(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				UpdatedExternalIV_DWB),
+							.InValid(				BufferedROIVInValid_DWB),
+							.InAccept(				BufferedROIVInReady_DWB),
+							.OutData(				BufferedROIVOutData_DWB),
+							.OutSend(				BufferedROIVOutValid_DWB),
+							.OutReady(				BufferedROIVOutReady_DWB));
+	end else begin:NORMAL_RW_WRITEBACKS
+		assign	BufferedROIVOutValid_DWB =			1'b0;
+		assign	BufferedROIVOutReady_DWB =			1'b0;
+	end endgenerate
 	
 	/* This is a "lazy" design -- we could have made hwb_ivc_buf a RAM and gone 
 	   through it twice.  Two comments to make us not care:
@@ -683,12 +732,16 @@ module AESREWORAM(
 		   first mask & hwb_ivc_buf writing the last command (= about 10 cycles 
 		   when L = 32). 
 	   NOTE 2: [ASIC] we should implement as RAM for ASIC ... */
+
+	assign	WritebackROIVInData =					(DelayedWB & RWAccess) ? BufferedROIVOutData_DWB : BufferedROIVOutData;
+	assign	WritebackROIVInValid =					(BufferedROIVOutValid_DWB & BufferedROIVOutReady_DWB) | (BufferedROIVOutValid & BufferedROIVOutReady);
+	   
 	FIFORAM		#(			.Width(					AESEntropy),
 							.Buffering(				ORAML + 1))
 				hwb_ivo_buf(.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BufferedROIVOutData),
-							.InValid(				BufferedROIVOutValid & BufferedROIVOutReady),
+							.InData(				WritebackROIVInData),
+							.InValid(				WritebackROIVInValid),
 							.InAccept(				WritebackROIVInReady),
 							.OutData(				WritebackROIVOutData),
 							.OutSend(				WritebackROIVOutValid),
@@ -864,10 +917,15 @@ module AESREWORAM(
 		NS_CO = 									CS_CO;
 		case (CS_CO)
 			ST_CO_Read :
-				if (StartROI & ROAccess)
+				if (DelayedWB & RWAccess & PathWriteback)
+					NS_CO =							ST_CO_Write; // TODO Hacky ... add an IDLE state
+				else if (StartROI & ROAccess)
 					NS_CO =							ST_CO_ROI;
 				else if (StartROI & RWAccess)
-					NS_CO =							ST_CO_Write;
+					if (DelayedWB)
+						NS_CO =						ST_CO_Read;
+					else
+						NS_CO =						ST_CO_Write;
 			ST_CO_ROI :
 				if (FinishROI)
 					NS_CO =							ST_CO_Write;
@@ -1048,10 +1106,10 @@ module AESREWORAM(
 	
 	// Writeback the IVs that we used to generate the new ROHeaderMasks to 
 	// memory
-	assign	UpdatedExternalIV =						(MaskIsHeader) ? WritebackROIVOutData : DataOut_Unmask[AESEntropy-1:0]; 
+	assign	OutputExternalIV =						(MaskIsHeader) ? WritebackROIVOutData : DataOut_Unmask[AESEntropy-1:0]; 
 	assign	DataOut_Write =							{
 														DataOut_Unmask[DDRDWidth-1:BktHVStart],
-														UpdatedExternalIV
+														OutputExternalIV
 													};
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
