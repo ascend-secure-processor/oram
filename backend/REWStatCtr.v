@@ -20,8 +20,11 @@ module REWStatCtr(
 	// Most of these alarms aren't performance critical, so we can delay them by 1 (helps timing)
 	parameter	LatchOutput = 1; 
 	
-	// whether we allow two phases to make progress together
+	// whether we allow two phases to make progress simultaneously 
 	parameter	Overlap = 0;
+	
+	// As it says
+	parameter	DelayedWB = 0;
 	
 	// chunks to be transferred at each stage
 	parameter	RW_R_Chunk = 0,

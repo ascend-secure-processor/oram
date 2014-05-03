@@ -136,6 +136,7 @@ module PathORAMBackend(
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
 							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
@@ -192,7 +193,8 @@ module PathORAMBackend(
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
-							.EnableIV(				EnableIV))
+							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB))
 							
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -289,7 +291,9 @@ module PathORAMBackend(
 							.ORAME(					ORAME),
 							.Overclock(				Overclock),
 							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
 							.DebugAES(				DebugAES))
+							
 				aes(		.Clock(					Clock), 
 							.FastClock(				FastClock),
 				`ifdef ASIC

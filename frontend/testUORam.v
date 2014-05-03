@@ -22,6 +22,7 @@ module testUORam;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          1;
+	parameter					DelayedWB = 		0;
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -66,6 +67,7 @@ module testUORam;
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
 							
                             .NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 

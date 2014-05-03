@@ -173,6 +173,7 @@ module PathORamTop(
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
 							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),

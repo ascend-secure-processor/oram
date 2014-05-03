@@ -126,6 +126,7 @@ module CoherenceController(
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
 							.Overlap(				0),
+							.DelayedWB(				DelayedWB),
 							.RW_R_Chunk(			RW_R_Chunk),
 							.RW_W_Chunk(			RW_W_Chunk),
 							.RO_R_Chunk(			RO_R_Chunk),

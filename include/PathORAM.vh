@@ -16,4 +16,6 @@
 
 							EnableREW =				0, // Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 
-							EnableIV =          	0; // Integrity verification
+							EnableIV =          	0, // Integrity verification
+							
+							DelayedWB = 			0;	// delayed write back to save SHA engines for integrity

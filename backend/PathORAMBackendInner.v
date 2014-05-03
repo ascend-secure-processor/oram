@@ -347,6 +347,7 @@ module PathORAMBackendInner(
 	REWStatCtr	#(		.USE_REW(				EnableREW),
 						.ORAME(					ORAME),
 						.Overlap(				0),
+						.DelayedWB(				DelayedWB),
 						.RW_R_Chunk(			PathSize_DRBursts),
 						.RW_W_Chunk(			PathSize_DRBursts),
 						.RO_R_Chunk(			BktSize_DRBursts),
