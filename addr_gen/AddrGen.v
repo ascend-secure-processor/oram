@@ -22,7 +22,7 @@ module AddrGen
 	`include "BucketDRAMLocal.vh"
 	
 	localparam ORAMLogL = `log2(ORAML) + 1; // TODO need plus one for Ready signal corner case (e.g., ORAML = 31); find a better solution?
-
+	
 	// =========================== in/out =========================
 	input Clock; 
 
@@ -109,5 +109,35 @@ module AddrGen
 					.Enable(	Enable),
 					.BktIdx(	BktIdx)			
 				);
+	
+`ifdef SIMULATION
+	localparam 	CheckAddrGen = 1;
+	integer bkt_i;
+	generate if (CheckAddrGen) begin:Check_Addr
+		localparam	NumBuckets = 1 << (ORAML+1);
+		
+		reg [DDRAWidth-1:0]	AddrMap [0:NumBuckets-1];
+		reg AddrMapValid [0:NumBuckets-1];
+		
+		always @(posedge Clock) begin
+			if (Reset) begin
+				for (bkt_i = 0; bkt_i < NumBuckets; bkt_i = bkt_i + 1)
+					AddrMapValid[bkt_i] <= 1'b0;
+			end
+			
+			else if (!BktCounter && CmdValid) begin
+				if (AddrMapValid[BktIdx])
+					if (AddrMap[BktIdx] != Addr) begin
+						$display("Wrong mapping for bucket %d, %x != %x", BktIdx, AddrMap[BktIdx], Addr);
+					end
+				else begin
+					AddrMap[BktIdx] <= Addr;
+					AddrMapValid[BktIdx] <= 1'b1;
+				end
+			end		
+		end
+		
+	end endgenerate
+`endif
 
 endmodule
