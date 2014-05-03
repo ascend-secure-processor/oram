@@ -107,8 +107,11 @@ module PosMapPLB
     wire [LeafWidth-1:0] PLBDIn, PLBDOut;
     wire [ORAML-1:0] PLBLeafIn, PLBLeafOut;
 
-    DM_Cache #( .DataWidth(LeafWidth), .LogLineSize(LogLeafInBlock), 
-                .Capacity(PLBCapacity), .AddrWidth(ORAMU), .ExtraTagWidth(ORAML)) 
+    DM_Cache #( .DataWidth(		LeafWidth), 
+				.LogLineSize(	LogLeafInBlock), 
+                .Capacity(		EnablePLB ? PLBCapacity : ORAMB), 
+				.AddrWidth(		ORAMU), 
+				.ExtraTagWidth(	ORAML)) 
         PLB (   .Clock(         Clock), 
                 .Reset(         Reset), 
                 .Ready(         PLBReady), 
@@ -127,6 +130,9 @@ module PosMapPLB
                 .ExtraTagOut(   PLBLeafOut)
             );
     
+	// How to disable PLB?
+	// 	.Reset(Reset || (!EnablePLB && PLBValid && PLBHit)) is wrong because there are still newly-initialized blocks in the PLB		
+	
     assign EvictDataOutValid = PLBEvict;
     assign EvictDataOut = PLBDOut;
                                                       

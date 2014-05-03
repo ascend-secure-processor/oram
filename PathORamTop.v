@@ -133,8 +133,10 @@ module PathORamTop(
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
 							.NumValidBlock( 		NumValidBlock), 
-							.Recursion(     		Recursion),  
+							.Recursion(     		Recursion),
+							.EnablePLB(				EnablePLB),
 							.PLBCapacity(   		PLBCapacity)) 
+							
 				front_end(	.Clock(             	Clock), 
 							.Reset(					Reset), 
 							

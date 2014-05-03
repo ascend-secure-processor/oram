@@ -15,7 +15,8 @@ module testUORam;
 	
     parameter                   NumValidBlock = 	1 << (ORAML - 1);
     parameter                   Recursion = 		3;
-                   
+     
+	parameter					EnablePLB = 		0;
     parameter                   PLBCapacity = 		8192; // in bits
 
 	parameter					Overclock = 		1;
@@ -23,6 +24,8 @@ module testUORam;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          1;
 	parameter					DelayedWB = 		0;
+	
+	
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -68,9 +71,10 @@ module testUORam;
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
-							
+										
                             .NumValidBlock(         NumValidBlock), 
                             .Recursion(             Recursion), 
+							.EnablePLB(				EnablePLB),
                             .PLBCapacity(           PLBCapacity))
                             
             ORAM    (		.Clock(					Clock),

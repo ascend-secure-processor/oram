@@ -99,17 +99,6 @@ module UORamController
 							.OutSend(				DataInValid_Internal),
 							.OutReady(				DataInReady_Internal));	
 
-/*							
-	FIFORegister #(			.Width(					BECMDWidth + ORAMU))
-				in_C_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				{CmdIn, 			ProgAddrIn}),
-							.InValid(				CmdInValid),
-							.InAccept(				CmdInReady),
-							.OutData(				{CmdIn_Internal, 	ProgAddrIn_Internal}),
-							.OutSend(				CmdInValid_Internal),
-							.OutReady(				CmdInReady_Internal));	
-*/
 	assign CmdIn_Internal = CmdIn;
 	assign ProgAddrIn_Internal = ProgAddrIn;
 	assign CmdInValid_Internal = CmdInValid;
@@ -127,8 +116,7 @@ module UORamController
     
     wire Preparing, Accessing;
     wire RefillStarted, ExpectingProgramData;
-    
-       
+        
     // ================================== PosMapPLB ============================
     wire PPPCmdReady, PPPCmdValid;
     wire [1:0] PPPCmd;
@@ -144,7 +132,8 @@ module UORamController
                 .ORAMB(             ORAMB), 
                 .NumValidBlock(     NumValidBlock), 
                 .Recursion(         Recursion), 
-                .PLBCapacity(       PLBCapacity)) 
+                .EnablePLB(			EnablePLB),
+				.PLBCapacity(       PLBCapacity)) 
         PPP (   .Clock(             Clock), 
                 .Reset(             Reset), 
                 .CmdReady(          PPPCmdReady), 
@@ -167,14 +156,23 @@ module UORamController
  
     wire PPPMiss, PPPUnInitialized;
     wire PPPLookup, PPPInitRefill;
-      
-    assign PPPMiss = PPPValid && !PPPHit;
+
+	wire FakePLBMiss;	// hack to mimic recursive ORAM
+	assign FakePLBMiss = !EnablePLB && Preparing && PPPValid && QDepth < Recursion - 1;     
+	 
+    assign PPPMiss = PPPValid && (!PPPHit || FakePLBMiss);
     assign PPPUnInitialized = PPPValid && PPPHit && PPPUnInit;
     
     assign PPPRefill = Accessing && (PPPRefillDataValid || PPPInitRefill);    
     assign PPPCmdValid = PPPLookup || (PPPRefill && !RefillStarted);
-    assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill) : CacheWrite;//Preparing ? CacheRead : CacheWrite;
+    assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill) 
+						: (Preparing && !EnablePLB && QDepth < Recursion-1) ? CacheRead : CacheWrite;
+						// The PosMap entry that hits needs a CacheWrite; When PLB enabled, every lookup can hit, so need to use CacheWrite
+						// Ideally, PosMap entries that miss do not care about CacheRead vs. CacheWrite 
+						// But the hack we add to disable PLB require CacheRead to entries that should've missed but in fact hit
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
+	
+	
     
     assign CmdInReady_Internal = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
     assign PPPOutReady = Preparing ? PPPMiss : 
@@ -194,7 +192,9 @@ module UORamController
     assign CmdOutValid = Accessing && PPPValid && ((PPPHit && !PPPUnInit) || InitRequest || PPPEvict);
 
     // if EvictionRequest, write back a PosMap block; otherwise serve the next access in the queue  
-    assign CmdOut = (EvictionRequest || InitRequest) ? BECMD_Append : !DataBlockReq ? BECMD_ReadRmv : LastCmd;
+    assign CmdOut = (EvictionRequest || InitRequest) ? BECMD_Append 
+						: DataBlockReq ? LastCmd 
+						: EnablePLB ? BECMD_ReadRmv : BECMD_ReadRmv;
     assign AddrOut = EvictionRequest ? NumValidBlock + PPPAddrOut / LeafInBlock : AddrQ[QDepth];
     
     assign SwitchReq = (CmdOutReady && CmdOutValid && !EvictionRequest) || (!DataBlockReq && PPPUnInitialized);
@@ -205,13 +205,13 @@ module UORamController
     // front end control states
 	Register1b 	
 		PreparingReg(  	.Clock(     Clock), 
-						.Reset(     Reset || (PPPValid && PPPHit)), 
+						.Reset(     Reset || PPPValid && !PPPMiss), 	// due to our hack, Hit is no longer !Miss
 						.Set(       CmdInValid_Internal && CmdInReady_Internal), 
 						.Out(       Preparing));  	
 	Register1b 	
 		AccessingReg(  	.Clock(     Clock), 
 						.Reset(     Reset || (Accessing && SwitchReq && DataBlockReq)), 
-						.Set(       Preparing && PPPValid && PPPHit), 
+						.Set(       Preparing && PPPValid && !PPPMiss), 
 						.Out(       Accessing));							
     Register #(	.Width(1))
         RefillStartReg (.Clock(     Clock), 
@@ -237,7 +237,7 @@ module UORamController
                         .Out(       PPPLookup));                                                                       
     
     //(Preparing && PPPValid && PPPHit) || 
-
+	
     always @(posedge Clock) begin
        if (CmdInValid_Internal && CmdInReady_Internal) begin
             QDepth <= 0;                             
@@ -245,37 +245,41 @@ module UORamController
         end
         
         else if (Preparing) begin
-            if (PPPMiss) begin             // PPP (PLB) miss, look for the next PosMap block
+            if (PPPMiss) begin        // PPP (PLB) miss, look for the next PosMap block
                 QDepth <= QDepth + 1;
-                AddrQ[QDepth+1] = NumValidBlock + AddrQ[QDepth] / LeafInBlock;
-            
-	`ifdef SIMULATION
+                AddrQ[QDepth+1] = NumValidBlock + AddrQ[QDepth] / LeafInBlock;        
+		`ifdef SIMULATION
                 $display("\t\tPosMap Miss in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
+		`endif
             end
-	    else if (PPPValid && PPPHit) begin       // PPP hit, done                
+		`ifdef SIMULATION
+			else if (PPPValid && PPPHit) begin       // PPP hit, done                
                 $display("\t\tPosMap Hit  in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
-	`endif
-
+				if (!EnablePLB && QDepth < Recursion-1) begin
+					$display("Error: PLB still does its job when disabled.");
+					$stop;
+				end
             end
+		`endif
         end
         
         else if (Accessing) begin       
-            if (SwitchReq) begin                                          // sendint out or initializing the current one             
-	`ifdef SIMULATION
+            if (SwitchReq) begin	// sendint out or initializing the current one 
+				QDepth <= QDepth - 1;              
+		`ifdef SIMULATION
                 if (!DataBlockReq && PPPUnInitialized)
                     $display("\t\tInitialize Block %d", AddrQ[QDepth]);
                 else
                     $display("\t\tRequest Block %d", AddrQ[QDepth]);            
-	`endif
-                QDepth <= QDepth - 1;                       
+		`endif                             
             end
             
-	`ifdef SIMULATION
+		`ifdef SIMULATION
             else if (CmdOutReady && CmdOutValid && EvictionRequest) 
                 $display("\t\tEvict Block %d to leaf %d", AddrOut, NewLeaf);
-	`endif
+		`endif
         end
-    end            
+    end	
 
     // =================== data interface with network and backend ====================    
     UORamDataPath #(    .FEDWidth(          FEDWidth), 

@@ -1,2 +1,3 @@
-    parameter   PLBCapacity = 1024;     // in bits
+    parameter	EnablePLB = 1;
+	parameter   PLBCapacity = 1024;     // in bits
                 
