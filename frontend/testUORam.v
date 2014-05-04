@@ -10,22 +10,20 @@ module testUORam;
 	parameter					ORAMC =				10; 
 	parameter					ORAME =				5;
 	
-	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 32 `endif;
+	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 64 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter                   NumValidBlock = 	1 << (ORAML - 1);
+    parameter                   NumValidBlock = 	1 << ORAML;
     parameter                   Recursion = 		3;
-     
-	parameter					EnablePLB = 		0;
-    parameter                   PLBCapacity = 		8192; // in bits
+
+    parameter					EnablePLB = 		1;               
+    parameter                   PLBCapacity = 		8192 << 3; // in bits
 
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          1;
-	parameter					DelayedWB = 		1;
-	
-	
+	parameter					DelayedWB =			1;
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -112,7 +110,7 @@ module testUORam;
 	//--------------------------------------------------------------------------
     parameter   InBufDepth = 6,
                 OutInitLat = 30,
-                OutBandWidth = 91;
+                OutBandWidth = 57;
 	
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
@@ -236,7 +234,7 @@ module testUORam;
 
 			if (GlobalData[AddrPrev] != ReceivedData) begin
 				$display("Received data does not match for Block %d, %x != %x", AddrPrev, ReceivedData, GlobalData[AddrPrev]);
-	//			$stop;
+				$stop;
 			end
 			Checking_ProgData <= 0;
 		end
@@ -246,7 +244,7 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	assign Op = 2'b10;//Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 	
 	initial begin
 		TestCount <= 0;
@@ -265,7 +263,7 @@ module testUORam;
 		end 
 	end
    
-	localparam  NN = 1000;
+	localparam  NN = 100;
 	localparam	nn = 10;
 	localparam	nn2 = nn * 2;
 
@@ -278,7 +276,7 @@ module testUORam;
 				AddrPrev <= AddrRand;
                 //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
 				TestCount <= TestCount + 1;
-				AddrRand <=  (TestCount / nn2) * nn + TestCount % nn;	   
+				AddrRand <=  (TestCount / nn2) * nn2 + TestCount % nn;	   
                 	   
 				if (AddrRand > NumValidBlock)
 					$finish;   
