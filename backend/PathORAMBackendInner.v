@@ -322,7 +322,7 @@ module PathORAMBackendInner(
 				if (Stash_CommandReady)
 					NS = 							ST_Idle;
 			ST_StartRead : 
-				if (AddrGen_InReady)
+				if (AddrGen_InReady && !Addr_PathWriteback)
 					NS =							ST_StartStash;
 			ST_StartStash :
 				if (Stash_CommandReady)
@@ -520,7 +520,7 @@ module PathORAMBackendInner(
 
 	wire Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 	wire Addr_RW_R_DoneAlarm, Addr_RW_W_DoneAlarm, Addr_RO_R_DoneAlarm, Addr_RO_W_DoneAlarm;
-	wire Addr_Writing;
+	wire Addr_Writing_bubble;
 	
 	// This module is not general enough to accommodate basic control flow as well	
 	REWStatCtr	#(		.USE_REW(				EnableREW),
@@ -552,8 +552,8 @@ module PathORAMBackendInner(
 					);	
 	
 	assign	AddrGen_Leaf =				(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
-	assign	Addr_Writing = 				Addr_PathWriteback && !Addr_RW_W_DoneAlarm && !Addr_RO_W_DoneAlarm;
-	assign	AddrGen_InValid =			CSStartRead || Addr_Writing;	
+	assign	Addr_Writing_bubble =		Addr_RW_W_DoneAlarm || Addr_RO_W_DoneAlarm;
+	assign	AddrGen_InValid =			(CSStartRead || Addr_PathWriteback) && !Addr_Writing_bubble;	
 	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -563,8 +563,8 @@ module PathORAMBackendInner(
 							.Reset(					Reset | DRAMInitializing),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					!Addr_Writing),
-							.BHIn(					Addr_ROAccess && Addr_Writing),
+							.RWIn(					!Addr_PathWriteback),
+							.BHIn(					Addr_ROAccess && Addr_PathWriteback),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
