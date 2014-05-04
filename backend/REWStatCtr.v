@@ -32,6 +32,17 @@ module REWStatCtr(
 				RO_R_Chunk = 0,
 				RO_W_Chunk = 0;
 	
+	localparam	ROWWidth = (RO_W_Chunk > 0) ? `log2(RO_W_Chunk) : 0;
+	
+	`ifdef SIMULATION
+		initial begin
+			if ( !(ORAME && RW_R_Chunk > 1 && RW_W_Chunk > 1 && RO_R_Chunk > 1) ) begin
+				// TODO: CountAlarm cannot handle chunk <= 1
+				$display("Error: parameter uninitialized or unsupported.");
+				$finish;
+			end
+		end
+	`endif	
 	
 	input	Clock, Reset;
 		
@@ -51,7 +62,7 @@ module REWStatCtr(
 	output	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
 	output	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
 	output	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
-	output	[`log2(RO_W_Chunk)-1:0]		RO_W_Ctr;
+	output	[ROWWidth-1:0]				RO_W_Ctr;
 			
 	wire 	RW_R_Done, RW_W_Done, RO_R_Done, RO_W_Done;
 	wire	E_RO_Accesses;
@@ -80,13 +91,17 @@ module REWStatCtr(
 						.Done(					RO_R_Done)
 			);
 			
-	CountAlarm #(		.Threshold(				RO_W_Chunk))
+	generate if (ROWWidth > 0) begin
+		CountAlarm #(	.Threshold(				RO_W_Chunk))
 		ro_w_ctr (		.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				RO_W_Enable),
 						.Count(					RO_W_Ctr),
-						.Done(					RO_W_Done)
-			);		
+						.Done(					RO_W_Done));		
+	end else begin
+		assign	RO_W_Ctr =						0;
+		assign	RO_W_Done =						1'b1;
+	end endgenerate
 	
 	CountAlarm #(		.Threshold(				ORAME))
 	oram_e_ctr (		.Clock(					Clock), 
@@ -202,15 +217,5 @@ module REWStatCtr(
 	
 	assign Read = 		!Reset_Post && !Read_or_Write_Post;
 	assign Writeback =  !Reset_Post && Read_or_Write_Post;
-		
-	`ifdef SIMULATION
-		initial begin
-			if ( !(ORAME && RW_R_Chunk > 1 && RW_W_Chunk > 1 && RO_R_Chunk > 1 && RO_W_Chunk > 1) ) begin
-				// TODO: CountAlarm cannot handle chunk <= 1
-				$display("Error: parameter uninitialized or unsupported.");
-				$finish;
-			end
-		end
-	`endif
 	
 endmodule

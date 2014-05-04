@@ -114,24 +114,12 @@ module PathORAMBackendInner(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
-	// TODO clean this out
-	
 	// Control logic
 
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSInitialize, CSIdle, CSAppend, CSAccess;
 
-	wire					SetDummy, ClearDummy;
-	wire					AccessIsDummy, AccessSkipsWriteback;
-	
-	wire					AppendQueued, OperationComplete;
-	
 	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
-
-	// REW
-	wire					ROAccess, RWAccess;
-	wire 					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
-	wire	[ORAML-1:0]		GentryLeaf;	
 		
 	// Front-end interfaces
 	
@@ -300,8 +288,9 @@ module PathORAMBackendInner(
 	assign	Control_PAddr =							PAddr_Internal;
 	assign	Control_CurrentLeaf =					CurrentLeaf_Internal;
 	assign	Control_RemappedLeaf =					RemappedLeaf_Internal;
-	assign	Control_CommandValid =					Stash_AppendCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid;
-	assign	Command_InternalReady =					Command_InternalReady & (CSAppend | CSAccess);
+	assign	Control_CommandValid =					CSAppend | CSAccess;
+	
+	assign	Command_InternalReady =					Control_CommandReady & (CSAppend | CSAccess);
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -315,11 +304,11 @@ module PathORAMBackendInner(
 				if (DRAMInitComplete) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (		Control_CommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
+				if (Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
 					NS =							ST_Append;
-				else if (	Control_CommandReady & Stash_RdRmvCmdValid)
+				else if (Stash_RdRmvCmdValid)
 					NS =							ST_Access;
-				else if (	Control_CommandReady & Stash_UpdateCmdValid)
+				else if (Stash_UpdateCmdValid)
 					NS = 							ST_Access;
 			ST_Append :
 				if (Control_CommandReady) // When last chunk of data is appended
