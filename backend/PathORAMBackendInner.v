@@ -45,19 +45,11 @@ module PathORAMBackendInner(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
-	
-	localparam				STWidth =				4,
-							ST_Initialize =			4'd0,
-							ST_Idle =				4'd1,
-							ST_Append =				4'd2,
-							ST_StartRead =			4'd3,
-							ST_StartStash =			4'd4,
-							ST_PathRead =			4'd5,
-							ST_WBStash =			4'd7,
-							ST_PathWriteback =		4'd8;
-								
-	localparam				PRNGLWidth =			1 << `log2(ORAML);//`divceil(ORAML, 8) * 8;
+	localparam				STWidth =				2,
+							ST_Initialize =			2'd0,
+							ST_Idle =				2'd1,
+							ST_Append =				2'd2,
+							ST_Access =				2'd3;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -107,10 +99,10 @@ module PathORAMBackendInner(
 	//	REW Interface
 	//--------------------------------------------------------------------------
 	
-	output reg [ORAMU-1:0]	ROPAddr;
-	output reg [ORAML-1:0]	ROLeaf;
+	output  [ORAMU-1:0]		ROPAddr;
+	output  [ORAML-1:0]		ROLeaf;
 	output					ROStart;
-	output reg				REWRoundDummy;
+	output 					REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
 	//	Status Interface
@@ -122,26 +114,20 @@ module PathORAMBackendInner(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
+	// TODO clean this out
+	
 	// Control logic
-	
-	wire	[STCMDWidth-1:0] Stash_Command; 
-	wire					Stash_CommandValid, Stash_CommandReady;
-	
+
 	reg		[STWidth-1:0]	CS, NS;
-	wire					CSInitialize, CSIdle, CSAppend, CSStartRead, CSPathRead, 
-							CSPathWriteback, CSStartStash, CSWBStash;
+	wire					CSInitialize, CSIdle, CSAppend, CSAccess;
 
 	wire					SetDummy, ClearDummy;
 	wire					AccessIsDummy, AccessSkipsWriteback;
 	
 	wire					AppendQueued, OperationComplete;
 	
-	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid, Stash_WBCmdValid;
-	
-	wire	[ORAML-1:0]		DummyLeaf;
-	wire					DummyLeaf_Valid;
-	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;
-	
+	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
+
 	// REW
 	wire					ROAccess, RWAccess;
 	wire 					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
@@ -193,13 +179,32 @@ module PathORAMBackendInner(
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
 	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 	
-	wire	[ORAML-1:0]		AddrGen_Leaf;
-	wire					AddrGen_InReady, AddrGen_InValid;
-	
 	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress_Internal;
 	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
 	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;									
 
+	// TODO move this to the right place
+	
+
+	wire	[STCMDWidth-1:0] Stash_Command;
+	wire					Stash_CommandValid, Stash_CommandReady;
+
+	wire	[BECMDWidth-1:0] Stash_BECommand;
+	wire	[ORAMU-1:0]		Stash_PAddr;
+	wire	[ORAML-1:0]		Stash_CurrentLeaf;
+	wire	[ORAML-1:0]		Stash_RemappedLeaf;
+	wire					Stash_SkipWriteback, Stash_AccessIsDummy;	
+
+	wire	[BECMDWidth-1:0] Control_Command;
+	wire	[ORAMU-1:0]		Control_PAddr;
+	wire	[ORAML-1:0]		Control_CurrentLeaf; 
+	wire	[ORAML-1:0]		Control_RemappedLeaf; 
+	wire					Control_CommandValid, Control_CommandReady;	
+	
+	wire	[ORAML-1:0]		AddrGen_Leaf;
+	wire					AddrGen_InReady, AddrGen_InValid;	
+	wire					AddrGen_PathRead, AddrGen_HeaderOnly;
+		
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -229,7 +234,7 @@ module PathORAMBackendInner(
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 		
-			if (CSStartRead) StartedFirstAccess <= 1'b1;
+			if (CSAccess) StartedFirstAccess <= 1'b1;
 				
 			if (~CSInitialize & DRAMWriteDataValid & DRAMWriteDataReady)
 				WriteCount_Sim = WriteCount_Sim + 1;
@@ -241,7 +246,7 @@ module PathORAMBackendInner(
 		
 	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
-				if (CSStartRead)
+				if (CSAccess)
 					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, Command_Internal, AddrGen_Leaf);
 				if (CSAppend)
 					$display("[%m @ %t] Backend: start append", $time);
@@ -263,40 +268,40 @@ module PathORAMBackendInner(
 	`endif
 	
 	//--------------------------------------------------------------------------
+	//	Front-end commands
+	//--------------------------------------------------------------------------
+
+	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
+				cmd_reg(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				{Command,			PAddr, 			CurrentLeaf, 			RemappedLeaf}),
+							.InValid(				CommandValid),
+							.InAccept(				CommandReady),
+							.OutData(				{Command_Internal,	PAddr_Internal,	CurrentLeaf_Internal,	RemappedLeaf_Internal}),
+							.OutSend(				Command_InternalValid),
+							.OutReady(				Command_InternalReady));
+		
+	//--------------------------------------------------------------------------
 	//	Control logic
 	//--------------------------------------------------------------------------	
 
-	assign	CSInitialize =					CS == ST_Initialize;
-	assign	CSIdle =						CS == ST_Idle;
-	assign	CSAppend =						CS == ST_Append;
-	assign	CSStartRead =					CS == ST_StartRead;
-	assign	CSStartStash =					CS == ST_StartStash;
-//	assign	CSPathRead =					CS == ST_PathRead;
-	assign	CSWBStash =						CS == ST_WBStash;
-//	assign	CSPathWriteback =				CS == ST_PathWriteback;
-	
-	assign	ROStart = 						CSStartRead && ROAccess;				
-	
-	assign	OperationComplete = 			RO_W_DoneAlarm || RW_W_DoneAlarm;	
-	
-	assign	AppendQueued =					Stash_AppendCmdValid & Stash_CommandReady & ~Stash_DummyCmdValid;
-	assign	Command_InternalReady =			AppendQueued | (OperationComplete & 		~AccessIsDummy);
+	assign	CSInitialize =							CS == ST_Initialize;
+	assign	CSIdle =								CS == ST_Idle;
+	assign	CSAppend =								CS == ST_Append;
+	assign	CSAccess =								CS == ST_Access;
 	
 	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we 
 	// don't want to start real accesses _earlier_ than dummy accesses
-	assign	Stash_AppendCmdValid =					CSIdle & DummyLeaf_Valid & Command_InternalValid & (Command_Internal == BECMD_Append) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
-	assign	Stash_DummyCmdValid =					CSIdle & DummyLeaf_Valid & SetDummy;								
-	assign	Stash_RdRmvCmdValid = 					CSIdle & DummyLeaf_Valid & Command_InternalValid & ((Command_Internal == BECMD_Read) | (Command_Internal == BECMD_ReadRmv)) & 	(ReturnBuf_Space >= BlkSize_BEDChunks);
-	assign	Stash_UpdateCmdValid =					CSIdle & DummyLeaf_Valid & Command_InternalValid & ( Command_Internal == BECMD_Update) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
-	assign	Stash_WBCmdValid =						CSWBStash;
+	assign	Stash_AppendCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Append) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
+	assign	Stash_RdRmvCmdValid = 					CSIdle & Command_InternalValid & ((Command_Internal == BECMD_Read) | (Command_Internal == BECMD_ReadRmv)) & (ReturnBuf_Space >= BlkSize_BEDChunks);
+	assign	Stash_UpdateCmdValid =					CSIdle & Command_InternalValid & ( Command_Internal == BECMD_Update) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
 	
-	assign	Stash_Command =							(Stash_DummyCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid) ? 	STCMD_StartRead : // Order is important; prioritize dummy reads
-													(Stash_AppendCmdValid) ?												STCMD_Append :
-																															STCMD_StartWrite;
-
-	assign	AccessSkipsWriteback =					CSIdle & ROAccess & EnableREW;
-	
-	assign	Stash_CommandValid =					Stash_AppendCmdValid | Stash_DummyCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid | Stash_WBCmdValid;
+	assign	Control_Command =						Command_Internal;
+	assign	Control_PAddr =							PAddr_Internal;
+	assign	Control_CurrentLeaf =					CurrentLeaf_Internal;
+	assign	Control_RemappedLeaf =					RemappedLeaf_Internal;
+	assign	Control_CommandValid =					Stash_AppendCmdValid | Stash_RdRmvCmdValid | Stash_UpdateCmdValid;
+	assign	Command_InternalReady =					Command_InternalReady & (CSAppend | CSAccess);
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -310,152 +315,21 @@ module PathORAMBackendInner(
 				if (DRAMInitComplete) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (		Stash_CommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
-					NS =						ST_StartRead;
-				else if (	Stash_CommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
-					NS =						ST_Append;
-				else if (	Stash_CommandReady & Stash_RdRmvCmdValid)
-					NS =						ST_StartRead;
-				else if (	Stash_CommandReady & Stash_UpdateCmdValid)
-					NS = 						ST_StartRead;
+				if (		Control_CommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
+					NS =							ST_Append;
+				else if (	Control_CommandReady & Stash_RdRmvCmdValid)
+					NS =							ST_Access;
+				else if (	Control_CommandReady & Stash_UpdateCmdValid)
+					NS = 							ST_Access;
 			ST_Append :
-				if (Stash_CommandReady)
+				if (Control_CommandReady) // When last chunk of data is appended
 					NS = 							ST_Idle;
-			ST_StartRead : 
-				if (AddrGen_InReady && !Addr_PathWriteback)
-					NS =							ST_StartStash;
-			ST_StartStash :
-				if (Stash_CommandReady)
-					NS =							ST_PathRead;
-			ST_PathRead : 							
-				if (RW_R_DoneAlarm || RO_R_DoneAlarm)	// Path read complete
-					NS =							ST_WBStash;
-			ST_WBStash :
-				if (Stash_CommandReady)
-					NS =							ST_PathWriteback;				
-			ST_PathWriteback : 
-				if (OperationComplete)
+			ST_Access :   
+				if (Control_CommandReady) // At end of access
 					NS =							ST_Idle;
 		endcase
 	end
-	
-	//--------------------------------------------------------------------------
-	//	Basic/REW split control logic
-	//--------------------------------------------------------------------------
-	
-	// This module is not general enough to accommodate basic control flow as well	
-	REWStatCtr	#(		.USE_REW(				EnableREW),
-						.ORAME(					ORAME),
-						.Overlap(				0),
-						.RW_R_Chunk(			PathSize_DRBursts),
-						.RW_W_Chunk(			PathSize_DRBursts),
-						.RO_R_Chunk(			BktSize_DRBursts),
-						.RO_W_Chunk(			2))	
-							// A little hacky. Nothing needs to happen for this stage, 
-							// but adds 1 cycle bubble to allow CS transition
-						
-		rew_data_stat(	.Clock(					Clock),
-						.Reset(					Reset),
-						
-						.RW_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
-						.RW_W_Transfer(			DRAMWriteDataValid & DRAMWriteDataReady),
-						.RO_R_Transfer(			DRAMReadDataValid & DRAMReadDataReady),
-						.RO_W_Transfer(			1'b1),	// no such stage
-					
-						.ROAccess(				ROAccess),
-						.RWAccess(				RWAccess),
-						.Read(					CSPathRead),
-						.Writeback(				CSPathWriteback),
 
-						.RW_R_DoneAlarm(		RW_R_DoneAlarm),
-						.RW_W_DoneAlarm(		RW_W_DoneAlarm),
-						.RO_R_DoneAlarm(		RO_R_DoneAlarm),
-						.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
-					);	
-	
-	
-	generate if (EnableREW) begin:REW_CONTROL
-		wire [ORAMU-1:0]	ROPAddr_Pre;
-		wire [ORAML-1:0]	ROLeaf_Pre;
-		wire				REWRoundDummy_Pre;	
-		
-		Counter	#(			.Width(					ORAML))
-			gentry_leaf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				Addr_RW_W_DoneAlarm),
-							.In(					{ORAML{1'bx}}),
-							.Count(					GentryLeaf));	
-									
-		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
-		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
-		
-		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
-	
-		assign	ROPAddr_Pre =						PAddr_Internal;
-		assign	ROLeaf_Pre =						(REWRoundDummy) ? DummyLeaf : CurrentLeaf_Internal;
-		assign	REWRoundDummy_Pre =					AccessIsDummy;
-		
-		if (Overclock) begin
-			always @(posedge Clock) begin
-				ROPAddr <=							ROPAddr_Pre;
-				ROLeaf <=							ROLeaf_Pre;
-				REWRoundDummy <=					REWRoundDummy_Pre;
-			end
-		end else begin
-			always @( * ) begin
-				ROPAddr =							ROPAddr_Pre;
-				ROLeaf =							ROLeaf_Pre;
-				REWRoundDummy =						REWRoundDummy_Pre;
-			end		
-		end
-	end else begin:BASIC_CONTROL
-		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
-		assign	SetDummy =							CSIdle & StashAlmostFull;
-		
-		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
-		
-		assign	ROAccess =							1'b0;
-		assign	RWAccess =							1'b1;
-		
-		always @( * ) begin
-			ROPAddr =								{ORAMU{1'bx}};
-			ROLeaf =								{ORAML{1'bx}};
-			REWRoundDummy =							1'b0;
-		end
-	end endgenerate
-
-	Register	#(			.Width(					1))
-				dummy_reg(	.Clock(					Clock),
-							.Reset(					Reset | ClearDummy),
-							.Set(					SetDummy),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					AccessIsDummy));
-	
-	PRNG 		#(			.RandWidth(				PRNGLWidth),	
-							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
-				leaf_gen(	.Clock(					Clock), 
-							.Reset(					Reset),
-							.RandOutReady(			OperationComplete),
-							.RandOutValid(			DummyLeaf_Valid),
-							.RandOut(				DummyLeaf_Wide));
-	
-	//--------------------------------------------------------------------------
-	//	Front-end commands
-	//--------------------------------------------------------------------------
-
-	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
-				cmd_reg(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				{Command,			PAddr, 			CurrentLeaf, 			RemappedLeaf}),
-							.InValid(				CommandValid),
-							.InAccept(				CommandReady),
-							.OutData(				{Command_Internal,	PAddr_Internal,	CurrentLeaf_Internal,	RemappedLeaf_Internal}),
-							.OutSend(				Command_InternalValid),
-							.OutReady(				Command_InternalReady));
-	
 	//--------------------------------------------------------------------------
 	//	Front-end stores
 	//--------------------------------------------------------------------------	
@@ -515,45 +389,65 @@ module PathORAMBackendInner(
 							.OutReady(				LoadReady));
 							
 	//--------------------------------------------------------------------------
-	//	Address generation & ORAM initialization
+	//	Stash & AddrGen Control
 	//--------------------------------------------------------------------------
 
-	wire Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
-	wire Addr_RW_R_DoneAlarm, Addr_RW_W_DoneAlarm, Addr_RO_R_DoneAlarm, Addr_RO_W_DoneAlarm;
-	wire Addr_Writing_bubble;
+	BackendInnerControl #(	.ORAMB(					ORAMB),
+							.ORAMU(					ORAMU),
+							.ORAML(					ORAML),
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
+							
+							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
+							
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth))
+				control(	.Clock(					Clock), 
+							.Reset(					Reset | DRAMInitializing),
+
+							.Command(				Control_Command), 
+							.PAddr(					Control_PAddr), 
+							.CurrentLeaf(			Control_CurrentLeaf), 
+							.RemappedLeaf(			Control_RemappedLeaf), 
+							.CommandValid(			Control_CommandValid), 
+							.CommandReady(			Control_CommandReady),
+
+							.AddrGenLeaf(			AddrGen_Leaf),	
+							.AddrGenRead(			AddrGen_PathRead), 
+							.AddrGenHeader(			AddrGen_HeaderOnly), 
+							.AddrGenInValid(		AddrGen_InValid), 
+							.AddrGenInReady(		AddrGen_InReady),
+							
+							.StashCommand(			Stash_Command),
+							.StashCommandValid(		Stash_CommandValid), 
+							.StashCommandReady(		Stash_CommandReady),
+
+							.StashBECommand(		Stash_BECommand),
+							.StashPAddr(			Stash_PAddr),
+							.StashCurrentLeaf(		Stash_CurrentLeaf),
+							.StashRemappedLeaf(		Stash_RemappedLeaf),
+							.StashSkipWriteback(	Stash_SkipWriteback),
+							.StashAccessIsDummy(	Stash_AccessIsDummy),
+							
+							.DataReadTransfer(		DRAMReadDataValid & DRAMReadDataReady),
+							.DataWriteTransfer(		DRAMWriteDataValid & DRAMWriteDataReady),
+							.AddrTransfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
+							
+							.StashAlmostFull(		StashAlmostFull),
+														
+							.ROPAddr(				ROPAddr), 
+							.ROLeaf(				ROLeaf), 
+							.ROStart(				ROStart), 
+							.REWRoundDummy(			REWRoundDummy));
 	
-	// This module is not general enough to accommodate basic control flow as well	
-	REWStatCtr	#(		.USE_REW(				EnableREW),
-						.ORAME(					ORAME),
-						.Overlap(				0),
-						.DelayedWB(				DelayedWB),
-						.RW_R_Chunk(			PathSize_DRBursts),
-						.RW_W_Chunk(			PathSize_DRBursts),
-						.RO_R_Chunk(			PathSize_DRBursts),
-						.RO_W_Chunk(			(ORAML+1) * BktHSize_DRBursts))	
-						
-		rew_addr_stat(	.Clock(					Clock),
-						.Reset(					Reset),
-						
-						.RW_R_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
-						.RW_W_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
-						.RO_R_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
-						.RO_W_Transfer(			AddrGen_DRAMCommandValid_Internal & AddrGen_DRAMCommandReady_Internal),
-					
-						.ROAccess(				Addr_ROAccess),
-						.RWAccess(				Addr_RWAccess),
-						.Read(					Addr_PathRead),
-						.Writeback(				Addr_PathWriteback),
-						
-						.RW_R_DoneAlarm(		Addr_RW_R_DoneAlarm),
-						.RW_W_DoneAlarm(		Addr_RW_W_DoneAlarm),
-						.RO_R_DoneAlarm(		Addr_RO_R_DoneAlarm),
-						.RO_W_DoneAlarm(		Addr_RO_W_DoneAlarm)						
-					);	
-	
-	assign	AddrGen_Leaf =				(SetDummy | (AccessIsDummy & ~ClearDummy)) ? DummyLeaf : CurrentLeaf_Internal;
-	assign	Addr_Writing_bubble =		Addr_RW_W_DoneAlarm || Addr_RO_W_DoneAlarm;
-	assign	AddrGen_InValid =			(CSStartRead || Addr_PathWriteback) && !Addr_Writing_bubble;	
+	//--------------------------------------------------------------------------
+	//	AddrGen
+	//--------------------------------------------------------------------------	
 	
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -563,8 +457,8 @@ module PathORAMBackendInner(
 							.Reset(					Reset | DRAMInitializing),
 							.Start(					AddrGen_InValid), 
 							.Ready(					AddrGen_InReady),
-							.RWIn(					!Addr_PathWriteback),
-							.BHIn(					Addr_ROAccess && Addr_PathWriteback),
+							.RWIn(					AddrGen_PathRead),
+							.BHIn(					AddrGen_HeaderOnly),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady_Internal),
 							.CmdValid(				AddrGen_DRAMCommandValid_Internal),
@@ -586,9 +480,15 @@ module PathORAMBackendInner(
 		assign	AddrGen_DRAMCommandValid =			AddrGen_DRAMCommandValid_Internal;
 		assign	AddrGen_DRAMCommandReady_Internal =	AddrGen_DRAMCommandReady;
 	end endgenerate
-							
+	
+	//--------------------------------------------------------------------------
+	//	DRAM Initialization
+	//--------------------------------------------------------------------------
+				
 	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.   
-	// REW ORAM uses gentry bucket version #s to determine whether a bucket is valid.
+	// REW ORAM uses gentry bucket version #s to determine whether a bucket is 
+	// valid; thus no initialization is necessary.
+	
 	generate if (EnableREW) begin:AUTO_INIT
 		assign	DRAMInitComplete =					1'b1;
 		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
@@ -614,8 +514,7 @@ module PathORAMBackendInner(
 							.Done(					DRAMInitComplete));
 	end endgenerate
 	
-	assign	DRAMInitializing =						~DRAMInitComplete;
-
+	assign	DRAMInitializing =						~DRAMInitComplete;								
 	
 	//--------------------------------------------------------------------------
 	//	StashTop
@@ -636,12 +535,12 @@ module PathORAMBackendInner(
 							.CommandValid(			Stash_CommandValid), 
 							.CommandReady(			Stash_CommandReady),
 							
-							.BECommand(				Command_Internal),
-							.PAddr(					PAddr_Internal),
-							.CurrentLeaf(			AddrGen_Leaf),
-							.RemappedLeaf(			RemappedLeaf_Internal),
-							.AccessSkipsWriteback(	AccessSkipsWriteback),
-							.AccessIsDummy(			SetDummy),
+							.BECommand(				Stash_BECommand),
+							.PAddr(					Stash_PAddr),
+							.CurrentLeaf(			Stash_CurrentLeaf),
+							.RemappedLeaf(			Stash_RemappedLeaf),
+							.AccessSkipsWriteback(	Stash_SkipWriteback),
+							.AccessIsDummy(			Stash_AccessIsDummy),
 							
 							.FEReadData(			Stash_ReturnData),
 							.FEReadDataValid(		Stash_ReturnDataValid),
