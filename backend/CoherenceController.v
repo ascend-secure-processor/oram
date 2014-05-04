@@ -378,8 +378,7 @@ module CoherenceController(
 								: 0;
 								
 		assign BufP1_DIn = 	RWAccessExtend ? 	(	RW_PathRead ? FromDecData : FromStashData)							
-							: ROAccess ? (	BktOfIOutValid ? 
-												(BktOfIIntersect ? BufP1_DOut : FromDecData)
+							: ROAccess ? (	BktOfIOutValid ? (BktOfIIntersect ? BufP1_DOut : FromDecData)												
 											: HeaderIn) 
 							: 0;	
 		
@@ -430,7 +429,6 @@ module CoherenceController(
 				HdOfIStat <= 0;
 				BktOfIIntersect <= Intersect;
 				BktOfIIdx <= Intersect ? LastHdOnPthCtr : HdOnPthCtr;
-//				BktOfIIdx <=  HdOnPthCtr;
 				HdOfI <= HeaderIn;
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
@@ -530,7 +528,7 @@ module ConflictTracker (
 	
 	
 	wire	[ORAML:0]		IntersectionIn, IntersectionShift;	
-	assign	IntersectionIn = {(GentryLeaf - 1) ^ ROLeaf, 1'b0};	// TODO: move back to no -1
+	assign	IntersectionIn = {GentryLeaf ^ ROLeaf, 1'b0};
 	
 	ShiftRegister #(		.PWidth(				ORAML+1),
 							.Reverse(				1),
