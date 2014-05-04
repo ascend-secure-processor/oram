@@ -8,7 +8,11 @@
 //==============================================================================
 //	Module:		PathORAMBackendInnerControl
 //	Desc:		Controls the stash and addr gen & manages background evictions / 
-//				strange writeback patterns like delayed RW writeback
+//				strange writeback patterns / optimizations like delayed RW 
+//				writeback.
+//
+//				The original reason this module was created was to make sending 
+//				_different_ sequences of commands to stash/addr gen easier.
 //==============================================================================
 module BackendInnerControl(
 	Clock, Reset,
@@ -54,13 +58,14 @@ module BackendInnerControl(
 	localparam				STWidth =				4,
 							ST_Idle =				4'd0,
 							ST_Append =				4'd1,
-							ST_AddrGenRead =		4'd2,
-							ST_StashRead =			4'd3,
-							ST_Read =				4'd4,
-							ST_AddrGenWrite =		4'd5,
-							ST_StashWrite =			4'd6,
-							ST_Write =				4'd7,
-							ST_AddrGenWrite_DWB =	4'd8;	
+							ST_AppendWait =			4'd2,
+							ST_AddrGenRead =		4'd3,
+							ST_StashRead =			4'd4,
+							ST_Read =				4'd5,
+							ST_AddrGenWrite =		4'd6,
+							ST_StashWrite =			4'd7,
+							ST_Write =				4'd8,
+							ST_AddrGenWrite_DWB =	4'd9;	
 	
 	localparam				PRNGLWidth =			1 << `log2(ORAML);
 	
@@ -128,15 +133,15 @@ module BackendInnerControl(
 	wire					RWAccess, ROAccess;
 	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 
-	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;	
-	wire 					Addr_RW_R_DoneAlarm, Addr_RW_W_DoneAlarm, Addr_RO_R_DoneAlarm, Addr_RO_W_DoneAlarm;
+	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
+	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
 	
-	wire					CSIdle, CSAppend, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
+	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
 						
-	wire					OperationComplete, AppendQueued;
+	wire					OperationComplete;
 	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
-	wire					AccessIsDummy;
+	wire					SetDummy, ClearDummy, AccessIsDummy;
 		
 	wire	[ORAML-1:0]		GentryLeaf;
 	wire	[ORAML-1:0]		DummyLeaf;
@@ -167,35 +172,46 @@ module BackendInnerControl(
 
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSAppend =								CS == ST_Append;
+	assign	CSAppendWait =							CS == ST_AppendWait;
 	assign	CSAddrGenRead =							CS == ST_AddrGenRead;
 	assign	CSAddrGenWrite =						CS == ST_AddrGenWrite;
 	assign	CSStashRead =							CS == ST_StashRead;
 	assign	CSStashWrite =							CS == ST_StashWrite;
+	assign	CSWrite =								CS == ST_Write;
 	
-	assign	OperationComplete = 					RO_W_DoneAlarm | RW_W_DoneAlarm;	
-	assign	AppendQueued =							Stash_AppendCmdValid & StashCommandReady & ~Stash_DummyCmdValid;
-	assign	CommandReady =							AppendQueued | (OperationComplete & ~AccessIsDummy);
+	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | RW_W_DoneAlarm;
+	assign	CommandReady =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
 		
-	assign	Stash_AppendCmdValid =					CSIdle & DummyLeaf_Valid & CommandValid & (Command == BECMD_Append);
-	assign	Stash_DummyCmdValid =					CSIdle & DummyLeaf_Valid & SetDummy;
-	assign	Stash_OtherCmdValid =					CSIdle & DummyLeaf_Valid & CommandValid & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
+	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandValid & (Command == BECMD_Append);
+	assign	Stash_DummyCmdValid =					DummyLeaf_Valid & AccessIsDummy & ~ClearDummy;
+	assign	Stash_OtherCmdValid =					DummyLeaf_Valid & CommandValid & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Idle;
 		else CS <= 									NS;
 	end
 	
+	// Implement all the hacky schemes in this FSM
+	
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
 			ST_Idle :
-				if (DelayedWB & Addr_RWAccess & Addr_PathWriteback)
+				if (		DelayedWB & Addr_RWAccess & Addr_PathWriteback)
 					NS =							ST_AddrGenWrite;
-				else if (	StashCommandReady & (Stash_DummyCmdValid | Stash_OtherCmdValid)) // stash capacity check gets higher priority than append
+				else if (	StashCommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
 					NS =							ST_AddrGenRead;
 				else if (	StashCommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
 					NS =							ST_Append;
+				else if (	StashCommandReady & Stash_OtherCmdValid) // otherwise do a normal access
+					NS =							ST_AddrGenRead;
+			//
+			// Append states
+			//
 			ST_Append :
+				if (StashCommandReady)
+					NS = 							ST_AppendWait;
+			ST_AppendWait : 
 				if (StashCommandReady)
 					NS = 							ST_Idle;
 			//
@@ -207,17 +223,19 @@ module BackendInnerControl(
 			ST_StashRead :
 				if (StashCommandReady)
 					NS =							ST_Read;
-			ST_Read : 					
-				if (RW_R_DoneAlarm | RO_R_DoneAlarm) // Path read complete
+			ST_Read : 
+				if (		(RW_R_DoneAlarm | RO_R_DoneAlarm) & DelayedWB & RWAccess)
+					NS =							ST_StashWrite;
+				else if (	 RW_R_DoneAlarm | RO_R_DoneAlarm)
 					NS =							ST_AddrGenWrite;
 			ST_AddrGenWrite :
-				if (AddrGenInReady & Addr_RWAccess & Addr_PathWriteback)
+				if (		AddrGenInReady & DelayedWB & Addr_RWAccess & Addr_PathWriteback)
 					NS =							ST_AddrGenWrite_DWB;
-				else if (AddrGenInReady)
+				else if (	AddrGenInReady)
 					NS =							ST_StashWrite;
 			ST_StashWrite :
 				if (StashCommandReady)
-					NS =							ST_Write;				
+					NS =							ST_Write;
 			ST_Write : 
 				if (OperationComplete)
 					NS =							ST_Idle;
@@ -241,7 +259,7 @@ module BackendInnerControl(
 							.RW_R_Chunk(			PathSize_DRBursts),
 							.RW_W_Chunk(			PathSize_DRBursts),
 							.RO_R_Chunk(			BktSize_DRBursts),
-							.RO_W_Chunk(			0)) // TODO change REWStatCounter
+							.RO_W_Chunk(			0))
 
 		rew_data_stat(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -258,7 +276,7 @@ module BackendInnerControl(
 							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
 							.RW_W_DoneAlarm(		RW_W_DoneAlarm),
 							.RO_R_DoneAlarm(		RO_R_DoneAlarm),
-							.RO_W_DoneAlarm(		RO_W_DoneAlarm));
+							.RO_W_DoneAlarm(		));
 
 	generate if (EnableREW) begin:REW_CONTROL
 		wire [ORAMU-1:0]	ROPAddr_Pre;
@@ -329,17 +347,17 @@ module BackendInnerControl(
 	//	Stash Interface
 	//--------------------------------------------------------------------------
 	
-	assign	StashCommand =							(Stash_DummyCmdValid | Stash_OtherCmdValid) ? 	STCMD_StartRead : // Order is important; prioritize dummy reads
-													(Stash_AppendCmdValid) ?						STCMD_Append :
-																									STCMD_StartWrite;
-	assign	StashCommandValid =						CSStashRead | CSStashWrite;
+	assign	StashCommand =							(CSStashRead & (Stash_DummyCmdValid | Stash_OtherCmdValid)) ? 	STCMD_StartRead : // Order is important; prioritize dummy reads
+													(CSAppend & Stash_AppendCmdValid) ?								STCMD_Append :
+																													STCMD_StartWrite;
+	assign	StashCommandValid =						CSAppend | CSStashRead | CSStashWrite;
 	
 	assign	StashBECommand =						Command;
 	assign	StashPAddr =							PAddr;
 	assign	StashCurrentLeaf =						(AccessIsDummy) ? DummyLeaf : CurrentLeaf;
 	assign	StashRemappedLeaf =						RemappedLeaf;
-	assign	StashSkipWriteback =					CSIdle & ROAccess & EnableREW;
-	assign	StashAccessIsDummy =					SetDummy;	
+	assign	StashSkipWriteback =					ROAccess & EnableREW;
+	assign	StashAccessIsDummy =					AccessIsDummy;	
 	
 	//--------------------------------------------------------------------------
 	//	AddrGen Interface
@@ -368,9 +386,9 @@ module BackendInnerControl(
 							.Read(					Addr_PathRead),
 							.Writeback(				Addr_PathWriteback),
 							
-							.RW_R_DoneAlarm(		Addr_RW_R_DoneAlarm),
+							.RW_R_DoneAlarm(		),
 							.RW_W_DoneAlarm(		Addr_RW_W_DoneAlarm),
-							.RO_R_DoneAlarm(		Addr_RO_R_DoneAlarm),
+							.RO_R_DoneAlarm(		),
 							.RO_W_DoneAlarm(		Addr_RO_W_DoneAlarm));	
 
 	assign	AddrGenLeaf =							StashCurrentLeaf;
