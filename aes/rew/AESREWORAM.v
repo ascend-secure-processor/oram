@@ -273,7 +273,7 @@ module AESREWORAM(
 	
 	// Derived signals / timing related
 	
-	reg						RWAccess_Delayed;
+	reg						RWWB_Delayed;
 
 	wire 	[DDRDWidth-1:0]	BEDataIn_Inner;
 	wire					BEDataInValid_Inner;
@@ -410,7 +410,7 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 
 	always @(posedge Clock) begin
-		RWAccess_Delayed <=							RWAccess;
+		RWWB_Delayed <=								RWAccess & PathWriteback;
 	end
 	
 	//--------------------------------------------------------------------------
@@ -547,7 +547,7 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				RWAccess_Delayed & ROAccess),
+							.Enable(				RWWB_Delayed & ROAccess),
 							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));	
 	
