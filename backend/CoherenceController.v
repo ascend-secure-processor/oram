@@ -159,13 +159,11 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 
-	wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
-	wire 	Intersect, ConflictHeaderLookup, ConflictHeaderOutValid;	
 	
-	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;	 	
-	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
-	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 	
-	
+	wire 	HeaderInValid, Intersect, ConflictHeaderLookup, ConflictHeaderOutValid;	
+		
+	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
+		
 	// invalidate the bit for the target block
 	wire HdOfIFound;
 	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
@@ -181,8 +179,33 @@ module CoherenceController(
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
 	assign HdOfIFound = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
-//	assign HdOfIFound = HeaderInValid && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
+	
+	reg		BktOfIIntersect;
+	wire 	BktOfIStage, BktOfIStageDone, HeaderInBkfOfI, BktOfIInValid, ConflictBktOfILookup, ConflictBktOfIOutValid;		
+	wire	BktOfIOutValid, BktOfIHdOutValid;
+
+	localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
+	wire	[BktCtrAWidth-1:0]		BktOfIOffset;	
+	 
+	CountAlarm #(		.Threshold(				BktSize_DRBursts))
+		bktofI_ctr (	.Clock(					Clock), 
+						.Reset(					Reset), 
+						.Enable(				BktOfIOutValid),
+						.Count(					BktOfIOffset),
+						.Done(					BktOfIStageDone)
+				);
+
+	Register1b	bktofI_stage (Clock, Reset || BktOfIStageDone, HeaderInBkfOfI, BktOfIStage);					
+					
+	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
+	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 					
+	
+	assign	ConflictBktOfILookup = BktOfIStage && BktOfIIntersect && !ConflictBktOfIOutValid;
+	Register	conf_bkt_out (Clock, Reset, 1'b0, 1'b1, ConflictBktOfILookup, ConflictBktOfIOutValid);
+	
+	assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
+	assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 0;
 		
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
@@ -228,20 +251,16 @@ module CoherenceController(
 		wire 						PthCtrEnable, HdCtrEnable;
 		
 		wire						BktOfIAccessedByIV;
-		wire						ConflictBktOfILookup, ConflictBktOfIOutValid;
 		
 		reg	[DDRDWidth-1:0]			HdOfI;
-		reg							BktOfIIntersect;
 		reg	[`log2(ORAML+1)-1:0]	BktOfIIdx;
 		
 		assign	BktOfIAccessedByIV = HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr;
 		assign	HdOfIUpdate = BktOfIAccessedByIV && HdOfIStat == 2 && IVWrite;
-		
-		assign	ConflictBktOfILookup = 1;
-		
+				
 		assign	LastHdOnPthCtr = (HdOnPthCtr + ORAML) % (ORAML+1);
 		
-		assign 	CoherentData = ConflictHeaderOutValid ? BufP1_DOut : FromDecData;
+		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
 				
 		ConflictTracker #(	.ORAML(ORAML))
 			conf_tracker(	.Clock(			Clock),
@@ -253,6 +272,7 @@ module CoherenceController(
 							.Intersect(		Intersect)
 						);
 		
+		
 		Register	conf_hd_in 	(Clock, Reset, 1'b0, 1'b1, ROAccess && PathRead && Intersect && HdCtrEnable, ConflictHeaderLookup);
 		Register	conf_hd_out (Clock, Reset, 1'b0, 1'b1, ConflictHeaderLookup, ConflictHeaderOutValid);
 		
@@ -262,6 +282,7 @@ module CoherenceController(
 		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
 		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		wire [1:0]				BufP1Reg_EmptyCount;
+		wire					BufP1Reg_DInValid_Pre;
 			
 		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && LastHdOnPthCtr == BktOfIIdx;
 		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} : BufP1_DOut;
@@ -278,11 +299,12 @@ module CoherenceController(
 							.OutSend(				BufP1Reg_DOutValid),
 							.OutReady(				BufP1Reg_DOutReady));
 		
+		assign	BufP1Reg_DInValid_Pre = BufP1_Enable && !BufP1_Write && !ConflictHeaderLookup && !ConflictBktOfILookup && !BktOfIOutValid;
 		Register #(	.Width(1))	// TODO: Read from P1 but not for AES? Yes, when delayed write back
-			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufP1_Enable && !BufP1_Write && !ConflictHeaderLookup,	BufP1Reg_DInValid);
+			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufP1Reg_DInValid_Pre,	BufP1Reg_DInValid);
 		
-		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
 		reg  PthRW, HdRW;
+		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
 		wire HdRW_Transition, PthRW_Transition;			
 		
 		wire FromDecDataTransfer, FromStashDataTransfer;
@@ -304,7 +326,7 @@ module CoherenceController(
 							.Done(					PthRW_Transition)
 					);
 		
-		assign HdCtrEnable = ROAccess && !RWAccessExtend && BufP1_Enable && !ConflictHeaderLookup && !BktOfIInValid;
+		assign HdCtrEnable = ROAccess && !RWAccessExtend && BufP1_Enable && !ConflictHeaderLookup && !ConflictBktOfILookup && !BktOfIOutValid;
 		CountAlarm #(		.Threshold(				ORAML + 1))
 			hd_ctr (		.Clock(					Clock), 
 							.Reset(					Reset), 
@@ -337,33 +359,35 @@ module CoherenceController(
 										: PthRW ? FromStashDataTransfer 
 												: PathDone_IV && BufP1Reg_EmptyCount > 1)			// Send data to AES							
 							: ROAccess ? 
-									(	PathRead ? (FromDecDataTransfer 					// header and BktOfI from Dec
-											|| ConflictHeaderLookup) 						// resolving conflict: read header and BktOfI
-											
+									(	PathRead ? (HeaderInValid || BktOfIOutValid				// header and BktOfI from somewhere
+											|| ConflictHeaderLookup  || ConflictBktOfILookup)	// resolving conflict: read header and BktOfI
 										: !HdRW && BOIDone_IV && BufP1Reg_EmptyCount > 1)		// Send headers to AES
 							: 0;							
 			
 		assign BufP1_Write = 	RWAccessExtend ? 	(	RW_PathRead ? 1'b1 : PthRW )
-								: ROAccess ? (	PathRead ? !ConflictHeaderLookup : HdRW )
+								: ROAccess ? (	PathRead ? !ConflictHeaderLookup && !ConflictBktOfILookup : HdRW )
 								: 0;
 						
 		assign BufP1_Address = RWAccessExtend ?  (	RW_PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
 								: ROAccess ? (	PathRead ? 
-											(	BktOfIInValid ? OBktOfIStartAddr + RO_R_Ctr - RO_W_Chunk	// bucket of interest										     										  																								 		
-												: ConflictHeaderLookup ? OPthStartAddr + LastHdOnPthCtr * BktSize_DRBursts	// read header to resolve conflict
-													: HdStartAddr + HdOnPthCtr)		// save header										
+											(	ConflictHeaderLookup ? OPthStartAddr + LastHdOnPthCtr * BktSize_DRBursts	// read header to resolve conflict	
+												: ConflictBktOfILookup ? OPthStartAddr + BktOfIIdx * BktSize_DRBursts + BktOfIOffset
+												: BktOfIOutValid ? OBktOfIStartAddr + BktOfIOffset	// bucket of interest		  
+												: HdStartAddr + HdOnPthCtr)		// save header										
 										: HdStartAddr + HdOnPthCtr)					// header write back								
 								: 0;
 								
 		assign BufP1_DIn = 	RWAccessExtend ? 	(	RW_PathRead ? FromDecData : FromStashData)							
-							: ROAccess ? (	BktOfIInValid ? FromDecData : HeaderIn) 
+							: ROAccess ? (	BktOfIOutValid ? 
+												(BktOfIIntersect ? BufP1_DOut : FromDecData)
+											: HeaderIn) 
 							: 0;	
 		
 		//	AES --> Stash  	
-		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
-											: FromDecData;
+		assign	ToStashData =			BktOfIHdOutValid ? {BufP1_DIn[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, BufP1_DIn[AESEntropy-1:0]}
+											: BufP1_DIn;
 											
-		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid : BktOfIInValid;
+		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid : BktOfIOutValid;
 											
 		assign	FromDecDataReady = 		ToStashDataReady && !ConflictHeaderLookup;
 
@@ -397,8 +421,12 @@ module CoherenceController(
 		    if (Reset) begin
 		        HdOfIStat <= 7;
 		    end
-						
-			if (HdOfIFound) begin
+			
+			if (ROStart) begin
+				BktOfIIntersect <= 1'b0;
+			end
+			
+			else if (HdOfIFound) begin
 				HdOfIStat <= 0;
 				BktOfIIntersect <= Intersect;
 				BktOfIIdx <= Intersect ? LastHdOnPthCtr : HdOnPthCtr;
