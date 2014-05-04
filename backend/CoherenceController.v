@@ -304,7 +304,7 @@ module CoherenceController(
 							.Done(					PthRW_Transition)
 					);
 		
-		assign HdCtrEnable = ROAccess && BufP1_Enable && !ConflictHeaderLookup && !BktOfIInValid;
+		assign HdCtrEnable = ROAccess && !RWAccessExtend && BufP1_Enable && !ConflictHeaderLookup && !BktOfIInValid;
 		CountAlarm #(		.Threshold(				ORAML + 1))
 			hd_ctr (		.Clock(					Clock), 
 							.Reset(					Reset), 
@@ -320,7 +320,7 @@ module CoherenceController(
 				HdRW <= 1'b1;
 			end
 			else begin 
-				if (RWAccess && PathWriteback && PthRW_Transition) 
+				if (RWAccessExtend && !RW_PathRead && PthRW_Transition) 
 					PthRW <= !PthRW;				
 				else if (ROAccess && HdRW_Transition) 
 					HdRW <= !HdRW;			

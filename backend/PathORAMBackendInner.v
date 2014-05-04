@@ -384,14 +384,14 @@ module PathORAMBackendInner(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				RW_W_DoneAlarm),
+							.Enable(				Addr_RW_W_DoneAlarm),
 							.In(					{ORAML{1'bx}}),
 							.Count(					GentryLeaf));	
 									
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
 		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
 		
-		assign	DummyLeaf =							(RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
+		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
 	
 		assign	ROPAddr_Pre =						PAddr_Internal;
 		assign	ROLeaf_Pre =						(REWRoundDummy) ? DummyLeaf : CurrentLeaf_Internal;
