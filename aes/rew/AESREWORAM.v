@@ -476,7 +476,7 @@ module AESREWORAM(
 			ST_RO_Idle :
 				if (DRAMReadDataValid)
 					NS_RO =							ST_RO_StartRead;
-				else if (DelayedWB & RWAccess & PathWriteback)
+				else if (BEDataInValid & DelayedWB & RWAccess & PathWriteback)
 					NS_RO =							ST_RO_StartWrite;
 			ST_RO_StartRead :
 				if (RO_BIDInReady)
@@ -530,15 +530,15 @@ module AESREWORAM(
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				hwb_cnt(	.Clock(					Clock), 
 							.Reset(					Reset | CSROStartOp), 
-							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.Enable(				BEDataInValid & BEDataInReady),
 							.Done(					HWBPathTransition));
 	CountAlarm 	#(			.Threshold(				PathSize_DRBursts))
 				rwwb_cnt(	.Clock(					Clock), 
 							.Reset(					Reset | CSROStartOp), 
-							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
+							.Enable(				BEDataInValid & BEDataInReady),
 							.Done(					RWWBPathTransition));							
 	assign	FinishWBIn =							(ROAccess) ? HWBPathTransition : RWWBPathTransition;
-
+	
 	assign	ExternalIV = 							DRAMReadData[AESEntropy-1:0];
 	
 	// Represents the actual gentry counter of blocks stored in memory
@@ -698,8 +698,13 @@ module AESREWORAM(
 		always @(posedge Clock) begin
 			if (BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks overflowed.", $time);
-				$stop;				
+				$stop;
 			end
+			
+			if (BufferedROIVInValid & BufferedROIVInValid_DWB) begin
+				$display("[%m @ %t] ERROR: illegal signal combination.", $time);
+				$stop;			
+			end			
 		end
 		`endif
 		
