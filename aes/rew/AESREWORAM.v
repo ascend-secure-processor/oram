@@ -547,7 +547,7 @@ module AESREWORAM(
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				RWWB_Delayed & ROAccess),
+							.Enable(				RWWB_Delayed & PathRead),
 							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));	
 	
@@ -696,19 +696,22 @@ module AESREWORAM(
 		
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
+			if (BufferedROIVOutReady_DWB & ~BufferedROIVOutValid_DWB) begin
+				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks didn't have data on a transfer.", $time);
+				$stop;
+			end
 			if (BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks overflowed.", $time);
 				$stop;
 			end
-			
 			if (BufferedROIVInValid & BufferedROIVInValid_DWB) begin
 				$display("[%m @ %t] ERROR: illegal signal combination.", $time);
 				$stop;			
 			end			
 		end
-		`endif
+	`endif
 		
-		assign	ExternalIVIncrement_DWB =			ExternalIV + (ORAME * ROHeader_AESChunks);
+		assign	ExternalIVIncrement_DWB =			ExternalIV + ((ORAME + 2) * ROHeader_AESChunks);
 		assign	UpdatedExternalIV_DWB =				(BucketNotYetWritten) ? {AESEntropy{1'b0}} : ExternalIVIncrement_DWB;
 
 		assign	BufferedROIVInValid_DWB =			RWAccess & Core_ROCommandInValid & CSRORead;
