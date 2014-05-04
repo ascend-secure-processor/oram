@@ -20,7 +20,7 @@
 							
 							// *** NOTA BENE *** if you change the REWMaskFIFO depth, you must change this to match
 							MaskFIFODepth =			512,
-							InFlightMaskLimit =		`divceil(MaskFIFODepth, RWBkt_MaskChunks) - 1,
+							InFlightMaskLimit =		`divceil(MaskFIFODepth, RWBkt_MaskChunks) - 1 - 1, // -1 to get divfloor(); -1 because we tick the mask count when the _header_ flit is read
 							IFMWidth =				`log2(InFlightMaskLimit);
 							
 	localparam				AESLatency =			21;	// based on tiny_aes + extra stages we add
