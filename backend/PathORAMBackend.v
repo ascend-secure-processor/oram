@@ -118,8 +118,10 @@ module PathORAMBackend(
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 
-	wire	[AESEntropy-1:0] ROIBV;
-	wire	[ORAML:0]		ROIBID;
+	wire	[AESEntropy-1:0] CC_ROIBV;
+	wire	[ORAML:0]		 CC_ROIBID;
+	wire	[AESEntropy-1:0] AES_ROIBV;
+	wire	[ORAML:0]		 AES_ROIBID;	
 
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
@@ -228,7 +230,10 @@ module PathORAMBackend(
 							.IVAddress(				IVAddress),
 							.DataFromIV(			DataFromIV),
 							.DataToIV(				DataToIV),
-
+							
+							.ROIBV(					CC_ROIBV),
+							.ROIBID(				CC_ROIBID),
+							
 							.BOIReady_IV(			BOIReady_IV), 
 							.BOIDone_IV(			BOIDone_IV)
 						);
@@ -253,8 +258,8 @@ module PathORAMBackend(
 								.BOIReady(			BOIReady_IV),
 								.BOIDone(			BOIDone_IV),
 								
-								.ROIBV(				ROIBV),
-								.ROIBID(			ROIBID)
+								.ROIBV(				CC_ROIBV),
+								.ROIBID(			CC_ROIBID)
 							);
 									
 			// TODO: debugging now
@@ -308,8 +313,8 @@ module PathORAMBackend(
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
 							
-							.ROIBVOut(				ROIBV),
-							.ROIBIDOut(				ROIBID),
+							.ROIBVOut(				AES_ROIBV),
+							.ROIBIDOut(				AES_ROIBID),
 														
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEDataOutValid(		AES_DRAMReadDataValid), 					

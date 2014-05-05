@@ -107,7 +107,7 @@ module IntegrityVerifier (
 	
 	assign ROIHeaderInValid = HeaderInValid && BucketID[LastTurn] == TotalBucketD;	
 	assign BktV = ROIHeaderInValid ? ROIBV : RWBV;
-	assign BktID = ROIHeaderInValid ? ROIBID : RWBID;
+	assign BktID = 0;//ROIHeaderInValid ? ROIBID : RWBID;
 	
 //	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  }
 	assign HashData = HeaderInValid ? {  {(TrancateDigestWidth-BIDWidth){1'b0}}, BktID, DataIn[BktHSize_RawBits-1:AESEntropy], BktV} 
@@ -145,7 +145,7 @@ module IntegrityVerifier (
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
 		if (ConsumeHash && CheckHash) begin
-			$display("Integrity verification results on Bucket %d", BucketID[Turn]);
+			$display("Integrity verification results on Bucket %d, version %d", BucketID[Turn], BucketHeader[Turn][AESEntropy-1:0]);
 			if (Violation === 0) begin
 				if (!VersionNonzero)
 					$display("\tVersion is 0, no need to check hash for Bucket %d", BucketID[Turn]);
@@ -155,6 +155,7 @@ module IntegrityVerifier (
 		
 			else if (Violation === 1) begin
 				$display("\tViolation : %x != %x", BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits], HashOut[Turn][DigestStart-1:DigestEnd]);
+				$display("\t\t header = %x", BucketHeader[Turn]);
 				$stop;
 			end
 			
@@ -173,7 +174,7 @@ module IntegrityVerifier (
 				end
 			end
 			else
-				$display("Updating Bucket %d hash to %x", BucketID[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
+				$display("Updating Bucket %d (with header %x) hash to \n\t\t %x", BucketID[Turn], BucketHeader[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
 		end
 				
 	end
