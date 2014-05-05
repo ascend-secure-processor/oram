@@ -349,7 +349,11 @@ module AESREWORAM(
 			
 			if (DataOutTransfer) begin
 				$display("[%m @ %t] Outputting mask: %x (ROAccess = %b, BOI = %b, Writing = %b) ", $time, Mask, ROAccess, CSCOROI, CSCOWrite);
-			end		
+			end
+			
+			if (ROI_FoundBucket) begin
+				$display("[%m @ %t] AES found bucket of interest: Gentry IV = %d, BID = %d, U = %x, V = %x", $time, BufferedIV, BufferedBID, DataOutU, DataOutV);
+			end
 		end		
 	`endif
 	
