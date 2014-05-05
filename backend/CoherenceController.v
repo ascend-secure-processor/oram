@@ -164,9 +164,12 @@ module CoherenceController(
 	//-------------------------------------------------------------------------- 
 	
 	wire 	HeaderInValid, Intersect, ConflictHeaderLookup, ConflictHeaderOutValid;	
+	wire 	HeaderInBkfOfI, BktOfIInValid;	
 		
 	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
-		
+	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
+	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 
+	
 	// invalidate the bit for the target block
 	wire HdOfIFound;
 	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
@@ -177,40 +180,12 @@ module CoherenceController(
 		assign 	ValidBitsIn[j] = CoherentData[AESEntropy+j];
 		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == CoherentData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
 			// one hot signal that if a block is of interest
-	end 
-	
+	end 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
 	assign HdOfIFound = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
 	
-	reg		BktOfIIntersect;
-	wire 	BktOfIStage, BktOfIStageDone, BktOfIUpdate_CC, HeaderInBkfOfI, BktOfIInValid, ConflictBktOfILookup, ConflictBktOfIOutValid;		
-	wire	BktOfIOutValid, BktOfIHdOutValid;
-
-	localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
-	wire	[BktCtrAWidth-1:0]		BktOfIOffset;	
-	 
-	CountAlarm #(		.Threshold(				BktSize_DRBursts))
-		bktofI_ctr (	.Clock(					Clock), 
-						.Reset(					Reset), 
-						.Enable(				BktOfIOutValid),
-						.Count(					BktOfIOffset),
-						.Done(					BktOfIStageDone)
-				);
-
-	Register1b	bktofI_stage (Clock, Reset || BktOfIStageDone, HeaderInBkfOfI, BktOfIStage);
-	Register	bktofIdone_dl (Clock, Reset, 1'b0, 1'b1, BktOfIStageDone && BktOfIIntersect, BktOfIUpdate_CC);	
-					
-	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
-	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 					
-	
-	assign	ConflictBktOfILookup = (HeaderInBkfOfI || BktOfIStage) && BktOfIIntersect && BktOfIInValid;
-	Register	conf_bkt_out (Clock, Reset, 1'b0, 1'b1, ConflictBktOfILookup, ConflictBktOfIOutValid);
-	
-	assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
-	assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 0;
-		
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
@@ -249,15 +224,17 @@ module CoherenceController(
 		
 		//--------------------------------------------------------------------------
 		// Resolve conflict and produce coherent data
-		//-------------------------------------------------------------------------- 	
-		wire [`log2(ORAML+1)-1:0]	HdOnPthCtr, LastHdOnPthCtr;
-		wire 						HdOfIUpdate, HdOfIWriteBack;
-		wire 						PthCtrEnable, HdCtrEnable;
+		//-------------------------------------------------------------------------- 
+		localparam	ORAMLogL = `log2(ORAML+1);
 		
-		wire						BktOfIAccessedByIV;
+		wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr, IntersectCtr;
+		wire 					HdOfIUpdate, HdOfIWriteBack;
+		wire 					PthCtrEnable, HdCtrEnable;
 		
-		reg	[DDRDWidth-1:0]			HdOfI;
-		reg	[`log2(ORAML+1)-1:0]	BktOfIIdx;
+		wire					BktOfIAccessedByIV;
+		
+		reg	[DDRDWidth-1:0]		HdOfI;
+		reg	[ORAMLogL-1:0]		BktOfIIdx;
 		
 		assign	BktOfIAccessedByIV = HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr;
 		assign	HdOfIUpdate = BktOfIAccessedByIV && HdOfIStat == 2 && IVWrite;
@@ -266,20 +243,56 @@ module CoherenceController(
 		
 		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
 				
-		wire	[ORAML-1:0]		GentryLeaf;		
+		wire	[ORAML-1:0]		GentryLeaf;			
+		Counter	#(				.Width(					ORAML))
+			gentry_leaf(		.Clock(					Clock),
+								.Reset(					Reset),
+								.Set(					1'b0),
+								.Load(					1'b0),
+								.Enable(				RW_W_DoneAlarm),
+								.In(					{ORAML{1'bx}}),
+								.Count(					GentryLeaf)
+							);
+		
 		ConflictTracker #(	.ORAML(ORAML))
 			conf_tracker(	.Clock(			Clock),
 							.Reset(			Reset),
 							.ROStart(		ROStart),
 							.ROLeaf(		ROLeaf),
-							.GentryInc(		RW_W_DoneAlarm),
+							.GentryLeaf(	GentryLeaf),
 							.IntersectInc(	ConflictHeaderOutValid),
 							.Intersect(		Intersect),
-							.GentryLeaf(	GentryLeaf)
+							.IntersectCtr(	IntersectCtr)
 						);
 		
 		assign	ConflictHeaderLookup = ROAccess && PathRead && Intersect && HdCtrEnable;
 		Register	conf_hd_out (Clock, Reset, 1'b0, 1'b1, ConflictHeaderLookup, ConflictHeaderOutValid);
+		
+		wire		BktOfIIntersect;
+		Register #(.Width(1)) boi_intersect (Clock, ROStart, 1'b0, HdOfIFound, Intersect, BktOfIIntersect);
+		
+		wire 	BktOfIStage, BktOfIStageDone, BktOfIUpdate_CC, ConflictBktOfILookup, ConflictBktOfIOutValid;		
+		wire	BktOfIOutValid, BktOfIHdOutValid;
+
+		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
+		wire	[BktCtrAWidth-1:0]		BktOfIOffset;	
+		 
+		CountAlarm #(		.Threshold(				BktSize_DRBursts))
+			bktofI_ctr (	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				BktOfIOutValid),
+							.Count(					BktOfIOffset),
+							.Done(					BktOfIStageDone)
+					);
+
+		Register1b	bktofI_stage (Clock, Reset || BktOfIStageDone, HeaderInBkfOfI, BktOfIStage);
+		Register	bktofIdone_dl (Clock, Reset, 1'b0, 1'b1, BktOfIStageDone && BktOfIIntersect, BktOfIUpdate_CC);	
+						
+		assign	ConflictBktOfILookup = BktOfIIntersect && BktOfIInValid;
+		Register	conf_bkt_out (Clock, Reset, 1'b0, 1'b1, ConflictBktOfILookup, ConflictBktOfIOutValid);
+		
+		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
+		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 0;
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
@@ -290,7 +303,9 @@ module CoherenceController(
 		wire					BufP1Reg_DInValid_Pre;
 			
 		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && LastHdOnPthCtr == BktOfIIdx;
-		assign 	BufP1Reg_DIn =  (HdOfIWriteBack) ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} : BufP1_DOut;
+		assign 	BufP1Reg_DIn =  LastHdOnPthCtr < IntersectCtr ?  {DDRDWidth{1'b0}}
+								: HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
+								: BufP1_DOut;
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				3))
@@ -465,14 +480,9 @@ module CoherenceController(
 		    if (Reset) begin
 		        HdOfIStat <= 7;
 		    end
-			
-			if (ROStart) begin
-				BktOfIIntersect <= 1'b0;
-			end
-			
+					
 			else if (HdOfIFound) begin
 				HdOfIStat <= 0;
-				BktOfIIntersect <= Intersect;
 				BktOfIIdx <= Intersect ? LastHdOnPthCtr : HdOnPthCtr;
 				HdOfI <= HeaderIn;
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
@@ -535,7 +545,8 @@ module CoherenceController(
 		assign  HeaderOutReady = 		ROAccess && PathWriteback && ToEncDataReady;
 		
 		assign	FromStashDataReady = 	!ROAccess && ToEncDataReady;
-
+		assign	FromStashDataDone = 	RW_W_DoneAlarm;
+		
 	end endgenerate
 
 endmodule
@@ -549,28 +560,19 @@ endmodule
 
 module ConflictTracker (
 	Clock, Reset, 
-	ROStart, ROLeaf,
-	GentryInc, IntersectInc,
-	Intersect, GentryLeaf
+	ROStart, ROLeaf, GentryLeaf,
+	IntersectInc,
+	Intersect, IntersectCtr
 );
 	parameter	ORAML = 0;
-
-	input 	Clock, Reset, ROStart, GentryInc, IntersectInc;
-	input 	[ORAML-1:0]		ROLeaf;
+	localparam	ORAMLogL = `log2(ORAML+1);
 	
-	output	Intersect;
-	output	[ORAML-1:0]		GentryLeaf;	
+	input 	Clock, Reset, ROStart, IntersectInc;
+	input 	[ORAML-1:0]		ROLeaf, GentryLeaf;
 	
-	Counter	#(				.Width(					ORAML))
-		gentry_leaf(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				GentryInc),
-							.In(					{ORAML{1'bx}}),
-							.Count(					GentryLeaf)
-						);
-		
+	output	Intersect;	
+	output	[ORAMLogL-1:0]	IntersectCtr;	
+	
 	wire	[ORAML:0]		IntersectionIn, IntersectionShift;	
 	assign	IntersectionIn = {GentryLeaf ^ ROLeaf, 1'b0};
 	
@@ -586,6 +588,16 @@ module ConflictTracker (
 							.POut(					IntersectionShift));
 	
 	assign	Intersect = !IntersectionShift[0];
+			
+	Counter	#(				.Width(					ORAMLogL))
+		intersect_ctr(		.Clock(					Clock),
+							.Reset(					ROStart),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				Intersect && IntersectInc),
+							.In(					{ORAMLogL{1'bx}}),
+							.Count(					IntersectCtr)
+						);
 	
 endmodule
 	

@@ -22,8 +22,8 @@ module testUORam;
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
-    parameter					EnableIV =          1;
-	parameter					DelayedWB =			1;
+    parameter					EnableIV =          0;
+	parameter					DelayedWB =			0;
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"

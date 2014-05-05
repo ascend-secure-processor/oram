@@ -137,7 +137,7 @@ module IntegrityVerifier (
 	assign VersionNonzero = (BucketHeader[Turn][AESEntropy-1:0] > 64'b0);
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && CheckHash && BOIFromCC && VersionNonzero &&
+	assign Violation = ConsumeHash && CheckHash && !BOIFromCC && VersionNonzero &&
 		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
 	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
