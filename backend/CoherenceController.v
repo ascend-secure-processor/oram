@@ -42,7 +42,7 @@ module CoherenceController(
 	FromStashData, FromStashDataValid, FromStashDataReady, FromStashDataDone,
 	
 	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV, ROIBV, ROIBID,
-	PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV
+	PathReady_IV, PathDone_IV, BOIReady_IV, BOIFromCC, BOIDone_IV
 );
 		
 	//--------------------------------------------------------------------------
@@ -105,7 +105,7 @@ module CoherenceController(
 	output	[AESEntropy-1:0] 	ROIBV;
 	output	[ORAML:0]			ROIBID;
 	
-	output  					PathReady_IV, BOIReady_IV;
+	output  					PathReady_IV, BOIReady_IV, BOIFromCC;
 	input						PathDone_IV, BOIDone_IV;
 	
 	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
@@ -205,7 +205,7 @@ module CoherenceController(
 	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
 	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 					
 	
-	assign	ConflictBktOfILookup = BktOfIStage && BktOfIIntersect && BktOfIInValid;
+	assign	ConflictBktOfILookup = (HeaderInBkfOfI || BktOfIStage) && BktOfIIntersect && BktOfIInValid;
 	Register	conf_bkt_out (Clock, Reset, 1'b0, 1'b1, ConflictBktOfILookup, ConflictBktOfIOutValid);
 	
 	assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
@@ -388,9 +388,9 @@ module CoherenceController(
 											: HeaderIn) 
 							: 0;	
 		
-		//	AES --> Stash  	
-		assign	ToStashData =			BktOfIHdOutValid ? {BufP1_DIn[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, BufP1_DIn[AESEntropy-1:0]}
-											: BufP1_DIn;
+		//	AES --> Stash 
+		assign	ToStashData =			BktOfIHdOutValid ? {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, CoherentData[AESEntropy-1:0]}
+											: CoherentData;
 											
 		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid : BktOfIOutValid;
 											
@@ -402,7 +402,7 @@ module CoherenceController(
 		assign	BufP1Reg_DOutReady = 	ToEncDataReady;
 		
 		assign	FromStashDataReady = 	RWAccessExtend;
-		assign	FromStashDataDone = 	RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
+		assign	FromStashDataDone = 	!RWAccess && RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
@@ -413,6 +413,7 @@ module CoherenceController(
 			
 		assign 	PathReady_IV = RW_R_DoneAlarm;
 		assign	BOIReady_IV = RO_R_DoneAlarm;
+		assign	BOIFromCC = BktOfIIntersect;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
@@ -458,7 +459,6 @@ module CoherenceController(
 								.In(					ROIBV_Pre),
 								.Out(					ROIBV)
 						);
-		
 		
 		// hacky solution to pass the two versions of bucket of interest to IV	
 		always @(posedge Clock) begin

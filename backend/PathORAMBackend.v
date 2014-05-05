@@ -234,7 +234,8 @@ module PathORAMBackend(
 							.ROIBV(					CC_ROIBV),
 							.ROIBID(				CC_ROIBID),
 							
-							.BOIReady_IV(			BOIReady_IV), 
+							.BOIReady_IV(			BOIReady_IV),
+							.BOIFromCC(				BOIFromCC),
 							.BOIDone_IV(			BOIDone_IV)
 						);
 							
@@ -256,6 +257,7 @@ module PathORAMBackend(
 								.PathReady(			PathReady_IV),
 								.PathDone(			PathDone_IV),
 								.BOIReady(			BOIReady_IV),
+								.BOIFromCC(			BOIFromCC),
 								.BOIDone(			BOIDone_IV),
 								
 								.ROIBV(				CC_ROIBV),

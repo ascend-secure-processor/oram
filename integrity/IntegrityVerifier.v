@@ -11,7 +11,7 @@
 module IntegrityVerifier (
 	Clock, Reset,
 	Request, Write, Address, DataIn, DataOut,	// RAM interface
-	PathReady, PathDone, BOIReady, BOIDone,
+	PathReady, PathDone, BOIReady, BOIFromCC, BOIDone, 
 	ROIBV, ROIBID
 );
 
@@ -41,7 +41,7 @@ module IntegrityVerifier (
 	input  	[DDRDWidth-1:0]  DataIn;
 	output 	[DDRDWidth-1:0]  DataOut;
 	
-	input  	PathReady, BOIReady;
+	input  	PathReady, BOIReady, BOIFromCC;
 	output 	PathDone, BOIDone;
 	
 	input	[AESEntropy-1:0] ROIBV;
@@ -130,7 +130,7 @@ module IntegrityVerifier (
 	assign ConsumeHash = HashOutValid[Turn];
 	assign CheckHash = ConsumeHash && 
 						(BktOnPathDone < TotalBucketD / 2 
-						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
+						|| (BktOfIDone == 1 && !BOIFromCC));		// first task is to update the hash, second is to check against the old hash
 	
 	assign UpdateHash = ConsumeHash && !CheckHash;
 	

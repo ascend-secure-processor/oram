@@ -372,7 +372,7 @@ module AESREWORAM(
 			
 			if (~CSROWrite & BufferedDataOutValid & MaskIsHeader & ^DataOutV === 1'bx) begin // TODO use better signal than CSROWrite
 				$display("[%m @ %t] ERROR: Valid bit was X.", $time);
-				$stop;	
+			//	$stop;	
 			end
 
 			if (ROIDataInValid & ~ROIDataInReady) begin
