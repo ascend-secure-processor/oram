@@ -23,7 +23,11 @@ module testUORam;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
     parameter					EnableIV =          0;
-	parameter					DelayedWB =			0;
+	parameter					DelayedWB =			EnableIV;
+
+	localparam  NN = 100;
+	localparam	nn = 10;
+	localparam	nn2 = nn * 2;	
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"
@@ -262,10 +266,6 @@ module testUORam;
 			GlobalData[i] <= 0;
 		end 
 	end
-   
-	localparam  NN = 100;
-	localparam	nn = 10;
-	localparam	nn2 = nn * 2;
 
     always @(posedge Clock) begin
         if (!Reset && CmdInReady) begin

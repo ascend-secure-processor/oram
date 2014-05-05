@@ -123,6 +123,8 @@ module PathORAMBackend(
 	wire	[AESEntropy-1:0] AES_ROIBV;
 	wire	[ORAML:0]		 AES_ROIBID;	
 
+	wire					FromStashDataDone;
+		
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
 	//--------------------------------------------------------------------------
@@ -183,7 +185,6 @@ module PathORAMBackend(
 	//----------------------------------------------------------------------
 	//	Integrity Verification (REW ORAM only)
 	//----------------------------------------------------------------------
-	wire	FromStashDataDone;
 	
 	generate if (EnableREW) begin:CC
 		CoherenceController #(.ORAMB(				ORAMB),

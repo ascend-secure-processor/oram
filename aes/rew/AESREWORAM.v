@@ -1125,7 +1125,7 @@ module AESREWORAM(
 													};
 	
 	// Standard RV FIFO arbitration: 3 input sources -> 1 output source
-	assign	DataOutValid =							 BDataValid_Needed & 	ROMaskValid_Needed & RMMaskValid_Needed & 	(RMMask_Needed | ROIMask_Needed | ROMask_Needed);
+	assign	DataOutValid =							 BDataValid_Needed & 		ROMaskValid_Needed & RMMaskValid_Needed & 	(RMMask_Needed | ROIMask_Needed | ROMask_Needed);
 
 	// We split these signals apart to help meet timing (using DRAMWriteDataReady_Pre when you don't need to is DISASTROUS for timing)
 	assign	BufferedDataOutReady_Read =				 							ROMaskValid_Needed & RMMaskValid_Needed;
