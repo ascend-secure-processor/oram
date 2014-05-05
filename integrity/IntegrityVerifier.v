@@ -130,14 +130,14 @@ module IntegrityVerifier (
 	assign ConsumeHash = HashOutValid[Turn];
 	assign CheckHash = ConsumeHash && 
 						(BktOnPathDone < TotalBucketD / 2 
-						|| (BktOfIDone == 1 && !BOIFromCC));		// first task is to update the hash, second is to check against the old hash
+						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
 	
 	assign UpdateHash = ConsumeHash && !CheckHash;
 	
 	assign VersionNonzero = (BucketHeader[Turn][AESEntropy-1:0] > 64'b0);
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && CheckHash && VersionNonzero &&
+	assign Violation = ConsumeHash && CheckHash && BOIFromCC && VersionNonzero &&
 		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
 	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
