@@ -83,6 +83,7 @@ module ascend_vc707(
 	parameter				EnableAES =				1;
 	parameter				EnableREW =				1;
 	parameter				EnableIV =				0;
+	parameter				DelayedWB =				EnableIV;
 	
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3;
@@ -237,6 +238,7 @@ module ascend_vc707(
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
+							.DelayedWB(				DelayedWB),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
 							.NumValidBlock(         NumValidBlock), 
