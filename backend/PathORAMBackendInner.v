@@ -187,7 +187,7 @@ module PathORAMBackendInner(
 	wire	[ORAMU-1:0]		Control_PAddr;
 	wire	[ORAML-1:0]		Control_CurrentLeaf; 
 	wire	[ORAML-1:0]		Control_RemappedLeaf; 
-	wire					Control_CommandValid, Control_CommandReady;	
+	wire					Control_CommandReq, Control_CommandDone;	
 	
 	wire	[ORAML-1:0]		AddrGen_Leaf;
 	wire					AddrGen_InReady, AddrGen_InValid;	
@@ -288,9 +288,9 @@ module PathORAMBackendInner(
 	assign	Control_PAddr =							PAddr_Internal;
 	assign	Control_CurrentLeaf =					CurrentLeaf_Internal;
 	assign	Control_RemappedLeaf =					RemappedLeaf_Internal;
-	assign	Control_CommandValid =					CSAppend | CSAccess;
+	assign	Control_CommandReq =					CSAppend | CSAccess;
 	
-	assign	Command_InternalReady =					Control_CommandReady & (CSAppend | CSAccess);
+	assign	Command_InternalReady =					Control_CommandDone & (CSAppend | CSAccess);
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Initialize;
@@ -311,10 +311,10 @@ module PathORAMBackendInner(
 				else if (Stash_UpdateCmdValid)
 					NS = 							ST_Access;
 			ST_Append :
-				if (Control_CommandReady) // When last chunk of data is appended
+				if (Control_CommandDone) // When last chunk of data is appended
 					NS = 							ST_Idle;
 			ST_Access :   
-				if (Control_CommandReady) // At end of access
+				if (Control_CommandDone) // At end of access
 					NS =							ST_Idle;
 		endcase
 	end
@@ -354,6 +354,8 @@ module PathORAMBackendInner(
 	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
 	// NOTE: this should come before the shifter because the Stash ReturnData path 
 	// doesn't have backpressure
+	//
+	// Note: if we assume a bit more about the FE-BE interface, this can go away
 	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				BlkSize_BEDChunks))
 				ld_buf(		.Clock(					Clock),
@@ -403,8 +405,8 @@ module PathORAMBackendInner(
 							.PAddr(					Control_PAddr), 
 							.CurrentLeaf(			Control_CurrentLeaf), 
 							.RemappedLeaf(			Control_RemappedLeaf), 
-							.CommandValid(			Control_CommandValid), 
-							.CommandReady(			Control_CommandReady),
+							.CommandRequest(		Control_CommandReq),
+							.CommandDone(			Control_CommandDone),
 
 							.AddrGenLeaf(			AddrGen_Leaf),	
 							.AddrGenRead(			AddrGen_PathRead), 

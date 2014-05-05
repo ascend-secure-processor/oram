@@ -218,29 +218,29 @@ module PathORamTop(
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
 		
-		assign	ReadStopped =							ReadStarted & ~PathBuffer_OutValid_Pre;
+		assign	ReadStopped =						ReadStarted & ~PathBuffer_OutValid_Pre;
 		
-		Register	#(			.Width(					1))
-					seen_first(	.Clock(					Clock),
-								.Reset(					Reset | ReadStopped),
-								.Set(					PathBuffer_OutValid_Pre),
-								.Enable(				1'b0),
-								.In(					1'bx),
-								.Out(					ReadStarted));
-		Counter		#(			.Width(					PthBSTWidth))
-					dbg_cnt(	.Clock(					Clock),
-								.Reset(					Reset | ReadStopped),
-								.Set(					1'b0),
-								.Load(					1'b0),
-								.Enable(				DRAMReadDataValid),
-								.In(					{PthBSTWidth{1'bx}}),
-								.Count(					PthCnt));
+		Register #(			.Width(					1))
+				seen_first(	.Clock(					Clock),
+							.Reset(					Reset | ReadStopped),
+							.Set(					PathBuffer_OutValid_Pre),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ReadStarted));
+		Counter	 #(			.Width(					PthBSTWidth))
+				dbg_cnt(	.Clock(					Clock),
+							.Reset(					Reset | ReadStopped),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DRAMReadDataValid),
+							.In(					{PthBSTWidth{1'bx}}),
+							.Count(					PthCnt));
 								
-		assign	PathBuffer_OutValid =					PthCnt == PathSize_DRBursts & PathBuffer_OutValid_Pre;
-		assign	PathBuffer_OutReady =					PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
+		assign	PathBuffer_OutValid =				PthCnt == PathSize_DRBursts & PathBuffer_OutValid_Pre;
+		assign	PathBuffer_OutReady =				PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
 	end else begin:NORMAL_TIMING
-		assign	PathBuffer_OutValid =					PathBuffer_OutValid_Pre;
-		assign	PathBuffer_OutReady =					PathBuffer_OutReady_Pre;	
+		assign	PathBuffer_OutValid =				PathBuffer_OutValid_Pre;
+		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
 	end endgenerate	
 		
 	generate if (Overclock) begin:INBUF_BRAM

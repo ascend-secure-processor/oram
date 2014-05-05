@@ -18,7 +18,7 @@ module BackendInnerControl(
 	Clock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf, 
-	CommandValid, CommandReady,
+	CommandRequest, CommandDone,
 
 	AddrGenRead, AddrGenHeader, AddrGenLeaf,	
 	AddrGenInValid, AddrGenInReady,
@@ -83,8 +83,8 @@ module BackendInnerControl(
 	input	[ORAMU-1:0]		PAddr;
 	input	[ORAML-1:0]		CurrentLeaf; 
 	input	[ORAML-1:0]		RemappedLeaf; 
-	input					CommandValid;
-	output					CommandReady;
+	input					CommandRequest;
+	output					CommandDone;
 	
 	//--------------------------------------------------------------------------
 	//	AddrGen Interface
@@ -141,7 +141,7 @@ module BackendInnerControl(
 	wire					OperationComplete;
 	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
-	wire					SetDummy, ClearDummy, AccessIsDummy;
+	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
 		
 	wire	[ORAML-1:0]		GentryLeaf;
 	wire	[ORAML-1:0]		DummyLeaf;
@@ -180,11 +180,11 @@ module BackendInnerControl(
 	assign	CSWrite =								CS == ST_Write;
 	
 	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | RW_W_DoneAlarm;
-	assign	CommandReady =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
-		
-	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandValid & (Command == BECMD_Append);
-	assign	Stash_DummyCmdValid =					DummyLeaf_Valid & AccessIsDummy & ~ClearDummy;
-	assign	Stash_OtherCmdValid =					DummyLeaf_Valid & CommandValid & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
+	assign	CommandDone =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
+	
+	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandRequest & (Command == BECMD_Append);
+	assign	Stash_DummyCmdValid =					DummyLeaf_Valid & AccessIsDummy;
+	assign	Stash_OtherCmdValid =					DummyLeaf_Valid & CommandRequest & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Idle;
@@ -300,7 +300,7 @@ module BackendInnerControl(
 		assign	ROStart = 							CSAddrGenRead & ROAccess;	
 		
 		assign	ROPAddr_Pre =						PAddr;
-		assign	ROLeaf_Pre =						(REWRoundDummy) ? DummyLeaf : CurrentLeaf;
+		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
 		assign	REWRoundDummy_Pre =					AccessIsDummy;
 		if (Overclock) begin
 			always @(posedge Clock) begin
@@ -333,7 +333,8 @@ module BackendInnerControl(
 							.Set(					SetDummy),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					AccessIsDummy));
+							.Out(					AccessIsDummy_Reg));
+	assign	AccessIsDummy =							AccessIsDummy_Reg & ~ClearDummy;
 	
 	PRNG 		#(			.RandWidth(				PRNGLWidth),	
 							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
@@ -386,9 +387,7 @@ module BackendInnerControl(
 							.Read(					Addr_PathRead),
 							.Writeback(				Addr_PathWriteback),
 							
-							.RW_R_DoneAlarm(		),
 							.RW_W_DoneAlarm(		Addr_RW_W_DoneAlarm),
-							.RO_R_DoneAlarm(		),
 							.RO_W_DoneAlarm(		Addr_RO_W_DoneAlarm));	
 
 	assign	AddrGenLeaf =							StashCurrentLeaf;
