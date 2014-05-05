@@ -121,7 +121,7 @@ module BackendInnerControl(
 
 	output reg [ORAMU-1:0]	ROPAddr;
 	output reg [ORAML-1:0]	ROLeaf;
-	output					ROStart;
+	output					ROStart; // TODO making this a pulse would be a bit cleaner
 	output reg				REWRoundDummy;
 	
 	//--------------------------------------------------------------------------
@@ -130,15 +130,15 @@ module BackendInnerControl(
 
 	reg		[STWidth-1:0]	CS, NS;
 
-	wire					RWAccess, ROAccess;
+	wire					RWAccess, ROAccess, PathRead, PathWriteback;
 	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 
 	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
 	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
 	
 	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
-						
-	wire					OperationComplete;
+
+	wire					AddrRWDone, DataRWDone, OperationComplete;
 	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
 	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
@@ -179,7 +179,16 @@ module BackendInnerControl(
 	assign	CSStashWrite =							CS == ST_StashWrite;
 	assign	CSWrite =								CS == ST_Write;
 	
-	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | RW_W_DoneAlarm;
+	Register1b arwd(  		.Clock(     			Clock), 
+							.Reset(     			Reset | OperationComplete), 
+							.Set(       			Addr_RW_W_DoneAlarm), 
+							.Out(       			AddrRWDone));
+	Register1b drwd(  		.Clock(     			Clock), 
+							.Reset(     			Reset | OperationComplete), 
+							.Set(       			RW_W_DoneAlarm), 
+							.Out(       			DataRWDone));
+	
+	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | (AddrRWDone & DataRWDone);
 	assign	CommandDone =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
 	
 	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandRequest & (Command == BECMD_Append);
@@ -270,8 +279,8 @@ module BackendInnerControl(
 						
 							.ROAccess(				ROAccess),
 							.RWAccess(				RWAccess),
-							.Read(					),
-							.Writeback(				),
+							.Read(					PathRead), // debugging
+							.Writeback(				PathWriteback), // debugging
 
 							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
 							.RW_W_DoneAlarm(		RW_W_DoneAlarm),
