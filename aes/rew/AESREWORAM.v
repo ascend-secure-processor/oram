@@ -237,6 +237,8 @@ module AESREWORAM(
 	wire	[BigUWidth-1:0]	ROI_U;
 	wire	[BigVWidth-1:0]	ROI_V;
 	
+	wire					ROIInfoReset, ROIInfoEnable;
+	
 	wire	[DDRDWidth-1:0]	ROIData;
 	wire					ROIDataInValid, ROIDataInReady;	
 	wire					ROIDataValid, ROIDataReady;
@@ -1019,11 +1021,33 @@ module AESREWORAM(
 							.In(					1'bx),
 							.Out(					ROI_BucketLoaded));
 	
+	generate if (Overclock) begin:INFO_ROIBUFF
+		Register #(			.Width(					1),
+							.Initial(				1'b1))
+				roi_is_gate(.Clock(					Clock),
+							.Reset(					ROI_HeaderLoad),
+							.Set(					Reset |	FinishWBOut),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ROIInfoEnable));
+
+		Register #(			.Width(					1))
+				roi_ir_dly(	.Clock(					Clock),
+							.Reset(					Reset),						
+							.Set(					1'b0),
+							.Enable(				1'b1),
+							.In(					ROI_NotFoundBucket),
+							.Out(					ROIInfoReset));							
+	end else begin:INFO_ROIPASS
+		assign	ROIInfoReset =						ROI_NotFoundBucket;
+		assign	ROIInfoEnable =						ROI_HeaderLoad;
+	end endgenerate
+	
 	Register	#(			.Width(					AESEntropy + BIDWidth + BigUWidth + BigVWidth))
 				roi_info(	.Clock(					Clock),
-							.Reset(					ROI_NotFoundBucket), // If we don't find the block of interest, we have to send a VersionNumber == 0
+							.Reset(					ROIInfoReset), // If we don't find the block of interest, we have to send a VersionNumber == 0
 							.Set(					1'b0),
-							.Enable(				ROI_HeaderLoad),
+							.Enable(				ROIInfoEnable),
 							.In(					{BufferedIV, 		BufferedBID,	DataOutU, 	DataOutV}),
 							.Out(					{ROI_GentryIV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
