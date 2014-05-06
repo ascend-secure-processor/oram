@@ -21,11 +21,6 @@
 //				memory and must be followed by a Sync command.
 //		Sync - 	Reconstruct the stash pointer memory
 //
-//
-//	Major TODO: Change SYNC operation to either be faster for RO access, or 
-//				adopt the alternate implementation (below)
-//
-//
 //	Alternate implementation:
 //		Replace linked list with an ORAMC bit wide bitvector (similar to StashC).
 //		Pros: 
@@ -60,12 +55,15 @@ module StashCore(
 	OutData, OutPAddr, OutLeaf, OutValid,
 
 	OutScanPAddr, OutScanLeaf, OutScanSAddr, OutScanAdd, 
-	OutScanValid, OutScanStreaming,
+	OutScanValid, OutScanDone, OutScanStreaming,
+	
 	InScanSAddr, InScanAccepted, InScanAdd,
-	InScanValid, InScanStreaming,
+	InScanValid, InScanDone, InScanStreaming,
 	
 	StashAlmostFull, StashOverflow,	StashOccupancy,
 
+	ROAccess,
+	
 	CancelPushCommand, SyncComplete
 	);
 	
@@ -154,12 +152,14 @@ module StashCore(
 	output	[SEAWidth-1:0]	OutScanSAddr;
 	output					OutScanAdd;
 	output					OutScanValid;
+	output					OutScanDone;
 	output					OutScanStreaming;
 
 	input	[SEAWidth-1:0]	InScanSAddr;
 	input					InScanAccepted;
 	input					InScanAdd;
 	input					InScanValid;
+	input					InScanDone;
 	input					InScanStreaming;
 	
 	//--------------------------------------------------------------------------
@@ -170,6 +170,8 @@ module StashCore(
 	output					StashOverflow;	
 	output	[SEAWidth-1:0] 	StashOccupancy;
 
+	input					ROAccess;
+	
 	//--------------------------------------------------------------------------
 	//	Stash internal signals
 	//--------------------------------------------------------------------------
@@ -231,6 +233,9 @@ module StashCore(
 	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;
 	wire					StashC_WE;
 	
+	wire	[ENWidth-1:0]	StashC_RODataOut, StashC_RODataOut_Delayed;
+	wire	[SEAWidth-1:0]	StashC_ROAddress;	
+	
 	wire					CSPushing_FirstTransferred;
 	
 	// Chunk counting
@@ -245,12 +250,12 @@ module StashCore(
 	wire 	[SEAWidth-1:0]	UsedListHead_New, FreeListHead_New;
 	
 	// Scan/Dump
-	
+
 	wire	[SEAWidth-1:0]	StashWalk;
 	wire					SWTerminator_Finished, SWTerminator_Empty, StashWalk_Terminator;
 	wire					OutScanValidPush, OutScanValidDump;
 	
-	wire					StillWalkingStash, PrepareDumpStop, DumpCompleted;
+	wire					StillWalkingStash, DumpStop, DumpStop_Reg, DumpStop_Pass;
 	
 	// Syncing
 	
@@ -270,8 +275,7 @@ module StashCore(
 	// Derived signals
 
 	reg		[SEAWidth-1:0] 	StashWalk_Delayed;
-	reg						CSDumping_Delayed, CSSyncing_Delayed,
-							InScanValid_Delayed, FirstChunk_Transfer_Delayed;
+	reg						CSDumping_Delayed, CSSyncing_Delayed, FirstChunk_Transfer_Delayed;
 	wire					CSPushing_FirstCycle, CSDumping_FirstCycle, 
 							CSSyncing_FirstCycle;
 
@@ -288,7 +292,6 @@ module StashCore(
 			StashWalk_Delayed = 1'b0;
 			CSDumping_Delayed = 1'b0;
 			CSSyncing_Delayed = 1'b0;
-			InScanValid_Delayed = 1'b0;
 			FirstChunk_Transfer_Delayed = 1'b0;
 		end
 	`endif	
@@ -357,8 +360,9 @@ module StashCore(
 			end
 			
 			if (^OutScanValidDump === 1'bx | 
-				^PrepareDumpStop === 1'bx |
+				^DumpStop === 1'bx |
 				^InScanValid === 1'bx |
+				^InScanDone === 1'bx |
 				^InValid === 1'bx |
 				^InCommandValid === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
@@ -392,7 +396,7 @@ module StashCore(
 	`ifdef SIMULATION_VERBOSE_STASH
 					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
-					if (StashC.Mem[MS_pt] == EN_Free) begin
+					if (~ROAccess & StashC.Mem[MS_pt] == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$stop;
 					end
@@ -405,16 +409,17 @@ module StashCore(
 						$stop;
 					end
 				end
+				
 				// If you want to get really verbose ...
-				/*
+				
 				MS_pt = FreeListHead;
 				i = 0;
 	`ifdef SIMULATION_VERBOSE_STASH
-				$display("\tFreeListHead = %d", MS_pt);
+	//			$display("\tFreeListHead = %d", MS_pt);
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
+	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
@@ -422,12 +427,11 @@ module StashCore(
 						$display("[ERROR] no terminator (FreeList)");
 						$stop;
 					end
-				end	
-				*/
+				end
 			end
 			
 			// Are the stash data structure / occupancy counts in Sync?
-			if (PerAccessReset) begin
+			if (~ROAccess & PerAccessReset) begin
 				MS_pt = UsedListHead;
 				i = 0;
 				while (MS_pt != SNULL) begin
@@ -541,7 +545,6 @@ module StashCore(
 		CSDumping_Delayed <=						CSDumping;
 		CSSyncing_Delayed <=						CSSyncing;
 		StashWalk_Delayed <=						StashWalk;
-		InScanValid_Delayed <=						InScanValid;
 		StashE_Address_Delayed <=					StashE_Address;
 	end
 
@@ -784,7 +787,7 @@ module StashCore(
 		used/free list while ScanTable is being scanned (hides latency and is 
 		simple to code).
 	*/
-
+	
 	assign	StashC_Address = 						(InScanStreaming) ? 	InScanSAddr : 
 													(CSHUpdate) ? 			InSAddr :
 													(CSReset) ? 			ResetCount : 
@@ -801,14 +804,15 @@ module StashCore(
 							.AWidth(				SEAWidth),
 							.RLatency(				Overclock),
 							.EnableInitial(			1),
-							.Initial(				{1 << SEAWidth{EN_Free}}))
-				StashC(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				1'b1),
-							.Write(					StashC_WE),
-							.Address(				StashC_Address),
-							.DIn(					StashC_DataIn),
-							.DOut(					StashC_DataOut));
+							.Initial(				{1 << SEAWidth{EN_Free}}),
+							.NPorts(				2))
+				StashC(		.Clock(					{2{Clock}}),
+							.Reset(					{2{Reset}}),
+							.Enable(				2'b11),
+							.Write(					{1'b0,				StashC_WE}),
+							.Address(				{StashC_ROAddress,	StashC_Address}),
+							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
+							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
 
 	//--------------------------------------------------------------------------
 	//	Element counting
@@ -838,9 +842,24 @@ module StashCore(
 	
 	assign	StashWalk = 							(CSDumping_FirstCycle) ? UsedListHead : StashP_DataOut;
 																							
-	assign	SWTerminator_Finished =					CSDumping & ~InScanValid & InScanValid_Delayed;
+	assign	SWTerminator_Finished =					CSDumping & InScanDone;
 	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & (UsedListHead == SNULL);
 	assign 	StashWalk_Terminator =					SWTerminator_Finished | SWTerminator_Empty;
+	
+	// This logic is for REW ORAM: we want to skip the Sync operation on RO 
+	// accesses and therefore need to tolerate invalid StashC entries.
+	assign	StashC_ROAddress =						StashWalk;
+	generate if (Overclock == 0) begin:OC_DUMP_DLY // Note: StashP read latency must always == StashC read latency
+		Register #(			.Width(					ENWidth))
+				ROdly(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				1'b1),
+							.In(					StashC_RODataOut),
+							.Out(					StashC_RODataOut_Delayed));
+	end else begin:OC_DUMP_PASS
+		assign	StashC_RODataOut_Delayed =			StashC_RODataOut;
+	end endgenerate
 	
 	assign	OutScanSAddr =							(CSPushing) ? FreeList_Resolved : StashWalk_Delayed;
 	assign	OutScanPAddr =							(CSPushing) ? InPAddr : OutPAddr;
@@ -851,22 +870,22 @@ module StashCore(
 	
 	assign	StillWalkingStash =						StashWalk_Delayed != SNULL;
 	
-	assign	PrepareDumpStop =						CSDumping_Delayed & CSDumping &
-													~StillWalkingStash & ~DumpCompleted;
+	assign	DumpStop =								CSDumping_Delayed & CSDumping & ~StillWalkingStash & ~DumpStop_Reg;
 	
 	Register	#(			.Width(					1))
 				dump_kill(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
-							.Set(					PrepareDumpStop),
+							.Set(					DumpStop),
 							.Enable(				1'b0),
 							.In(					1'bx),
-							.Out(					DumpCompleted));	
+							.Out(					DumpStop_Reg));	
+	assign	DumpStop_Pass =							DumpStop | DumpStop_Reg;
 	
 	assign	OutScanValidPush =						CSPushing & FirstChunk_Transfer_Write;
-	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & // wait a cycle for StashP's latency & don't overshoot
-													StillWalkingStash & ~DumpCompleted; // don't send end-of-list marker
+	assign	OutScanValidDump =						CSDumping_Delayed & CSDumping & StashC_RODataOut_Delayed & ~DumpStop_Pass;
 	assign	OutScanValid =							OutScanValidPush | OutScanValidDump;
-
+	assign	OutScanDone =							DumpStop_Pass;
+	
 	//--------------------------------------------------------------------------
 	//	StashC <-> StashP Sync
 	//--------------------------------------------------------------------------

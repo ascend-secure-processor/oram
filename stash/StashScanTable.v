@@ -17,10 +17,10 @@ module StashScanTable(
 	CurrentLeaf, IsWritebackCandidate,
 	
 	InScanLeaf, InScanPAddr, InScanSAddr, InScanAdd,
-	InScanValid, InScanStreaming,
+	InScanValid, InScanDone, InScanStreaming,
 	
 	OutScanSAddr, OutScanAccepted, OutScanAdd,
-	OutScanValid, OutScanStreaming,
+	OutScanValid, OutScanDone, OutScanStreaming,
 	
 	InDMAAddr, InDMAValid,
 	
@@ -59,12 +59,14 @@ module StashScanTable(
 	input	[SEAWidth-1:0]	InScanSAddr;
 	input					InScanAdd;
 	input					InScanValid;
+	input					InScanDone;
 	input					InScanStreaming;
 	
 	output	[SEAWidth-1:0]	OutScanSAddr;
 	output					OutScanAccepted;
 	output					OutScanAdd;
 	output					OutScanValid;
+	output					OutScanDone;
 	output					OutScanStreaming;
 	
 	//--------------------------------------------------------------------------
@@ -277,12 +279,12 @@ module StashScanTable(
 	//	Feed-forward retiming
 	//--------------------------------------------------------------------------
 
-	Pipeline	#(			.Width(					2),
+	Pipeline	#(			.Width(					3),
 							.Stages(				ScanTableLatency))
 				full_dly(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanAdd,	InScanStreaming}), 
-							.OutData(				{OutScanAdd,OutScanStreaming}));						
+							.InData(				{InScanDone, 	InScanAdd,	InScanStreaming}), 
+							.OutData(				{OutScanDone,	OutScanAdd,	OutScanStreaming}));						
 		
 	//--------------------------------------------------------------------------
 	//	Update bucket occupancy (feedback path)

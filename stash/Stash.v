@@ -71,7 +71,7 @@ module Stash(
 							ST_Turnaround1 =		4'd6,
 							ST_Turnaround2 =		4'd7,
 							ST_CoreSync =			4'd8,
-							ST_CoreSyncWait =		4'd9;
+							ST_ROReset =			4'd9;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -190,7 +190,7 @@ module Stash(
 	reg		[STWidth-1:0]	CS, NS;
 	wire					CSIdle, CSPathRead, CSPathWriteback, CSScan, 
 							CSEvict, CSTurnaround1, CSTurnaround2,
-							CSCoreSync, CSCoreSyncWait;
+							CSCoreSync, CSROReset;
 	reg						CSTurnaround1_Delayed;
 	wire					CSTurnaround1_FirstCycle;
 	
@@ -225,11 +225,11 @@ module Stash(
 	wire	[ORAMU-1:0]		Scan_PAddr;
 	wire	[ORAML-1:0]		Scan_Leaf;
 	wire	[SEAWidth-1:0]	Scan_SAddr;
-	wire					Scan_Add, Scan_LeafValid;
+	wire					Scan_Add, Scan_LeafValid, Scan_Done;
 	wire					Scan_Streaming;
 
 	wire	[SEAWidth-1:0]	Scanned_SAddr;
-	wire					Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid;
+	wire					Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid, Scanned_Done;
 	wire					Scanned_Streaming;
 	
 	wire	[SEAWidth-1:0]	OutDMAAddr;
@@ -384,7 +384,7 @@ module Stash(
 	//--------------------------------------------------------------------------
  	
 	assign	ResetDone =								Core_ResetDone & ScanTableResetDone;
-	assign	PerAccessReset =						(CSCoreSyncWait) ? Core_AccessComplete : Top_AccessComplete & Core_AccessComplete;
+	assign	PerAccessReset =						CSROReset | (Top_AccessComplete & Core_AccessComplete);
 	
 	assign	IsIdle =								CSIdle;
 	
@@ -418,12 +418,12 @@ module Stash(
 	assign	CSPathWriteback = 						CS == ST_PathWriteback;
 	assign	CSScan = 								CS == ST_Scan;
 	assign	CSEvict =								CS == ST_Evict;
-	assign	CSCoreSyncWait =						CS == ST_CoreSyncWait;
+	assign	CSROReset =								CS == ST_ROReset;
 	
 	assign	CSTurnaround1_FirstCycle =				CSTurnaround1 & CSTurnaround1_Delayed;
 	
-	assign	NormalWriteback = 						CSCoreSync & Core_CommandComplete & ~AccessSkipsWriteback;
-	assign	KillWriteback = 						CSCoreSync & Core_CommandComplete & AccessSkipsWriteback;
+	assign	NormalWriteback = 						CSTurnaround2 & Core_CommandComplete & ~AccessSkipsWriteback;
+	assign	KillWriteback = 						CSTurnaround2 & Core_CommandComplete & AccessSkipsWriteback;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -452,22 +452,21 @@ module Stash(
 				if (Core_CommandComplete)
 					NS =							ST_Turnaround2;
 			ST_Turnaround2 : 
-				if (Core_CommandComplete)
-					NS =							ST_CoreSync;
-			ST_CoreSync :
 				if (NormalWriteback)
-					NS =							ST_PathWriteback;
+					NS =							ST_CoreSync;
 				else if (KillWriteback)
-					NS =							ST_CoreSyncWait;					
+					NS =							ST_ROReset;
+			ST_CoreSync :
+				if (Core_CommandComplete)
+					NS =							ST_PathWriteback;			
 			ST_PathWriteback :
 				if (PerAccessReset) 
 					NS =							ST_Idle;
 			ST_Evict :
 				if (BlockEvictComplete)
 					NS =							ST_Idle;
-			ST_CoreSyncWait :
-				if (Core_AccessComplete)
-					NS =							ST_Idle;
+			ST_ROReset :
+				NS =								ST_Idle;
 		endcase
 	end
 		
@@ -574,8 +573,8 @@ module Stash(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
-							.Overclock(				Overclock),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							.Overclock(				Overclock))
 				core(		.Clock(					Clock), 
 							.Reset(					Reset),
 							.PerAccessReset(		PerAccessReset),
@@ -605,17 +604,20 @@ module Stash(
 							.OutScanSAddr(			Scan_SAddr),
 							.OutScanAdd(			Scan_Add),
 							.OutScanValid(			Scan_LeafValid),
+							.OutScanDone(			Scan_Done),
 							.OutScanStreaming(		Scan_Streaming),
 							
 							.InScanSAddr(			Scanned_SAddr),
 							.InScanAccepted(		Scanned_LeafAccepted),
 							.InScanAdd(				Scanned_Add),
 							.InScanValid(			Scanned_LeafValid),
+							.InScanDone(			Scanned_Done),
 							.InScanStreaming(		Scanned_Streaming),
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
 							.StashOccupancy(		StashOccupancy),
+							.ROAccess(				AccessSkipsWriteback),
 							
 							.CancelPushCommand(		StartWriteback_Pass),
 							.SyncComplete(			Core_AccessComplete));
@@ -648,12 +650,14 @@ module Stash(
 							.InScanSAddr(			Scan_SAddr),
 							.InScanAdd(				Scan_Add),
 							.InScanValid(			Scan_LeafValid),
+							.InScanDone(			Scan_Done),
 							.InScanStreaming(		Scan_Streaming),
 							
 							.OutScanSAddr(			Scanned_SAddr),
 							.OutScanAccepted(		Scanned_LeafAccepted),
 							.OutScanAdd(			Scanned_Add),
 							.OutScanValid(			Scanned_LeafValid),
+							.OutScanDone(			Scanned_Done),
 							.OutScanStreaming(		Scanned_Streaming),
 							
 							.InDMAAddr(				BlocksReading),
