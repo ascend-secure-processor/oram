@@ -338,8 +338,8 @@ module CoherenceController(
 		Register #(.Width(1)) pth_rw (Clock, 1'b0, Reset, RWAccessExtend && !RW_PathRead && PthRW_Transition, !PthRW, PthRW);
 		Register #(.Width(1)) hd_rw  (Clock, 1'b0, Reset, ROAccess && HdRW_Transition, !HdRW, HdRW);
 		
-		reg	[DDRDWidth-1:0]		HdOfI;
-		reg	[ORAMLogL-1:0]		BktOfIIdx;
+		wire	[DDRDWidth-1:0]		HdOfI;
+		wire	[ORAMLogL-1:0]		BktOfIIdx;
 		wire	HdOfIWriteBack;
 		
 		Register #(.Width(ORAMLogL))
@@ -446,7 +446,7 @@ module CoherenceController(
 					);	
 		
 		Register #(.Width(DDRDWidth))
-			boi_id_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
+			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
 		
 		BkfOfIDetector	#(		.Width(			DDRDWidth),
 								.ValidBitStart(	AESEntropy),
