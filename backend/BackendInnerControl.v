@@ -188,7 +188,7 @@ module BackendInnerControl(
 							.Set(       			RW_W_DoneAlarm), 
 							.Out(       			DataRWDone));
 	
-	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | (AddrRWDone & DataRWDone);
+	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | ( (DelayedWB == 1 | AddrRWDone) & DataRWDone);
 	assign	CommandDone =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
 	
 	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandRequest & (Command == BECMD_Append);
