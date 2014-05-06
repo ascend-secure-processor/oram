@@ -227,8 +227,9 @@ module PathORAMBackendInner(
 			if (~CSInitialize & DRAMWriteDataValid & DRAMWriteDataReady)
 				WriteCount_Sim = WriteCount_Sim + 1;
 				
-			if (StartedFirstAccess & CSIdle & (WriteCount_Sim % PathSize_DRBursts)) begin
-				$display("[%m @ %t] We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
+			if (StartedFirstAccess & DRAMReadDataValid & DRAMReadDataReady & (WriteCount_Sim % PathSize_DRBursts)) begin
+				// Whenever we are doing reads, we should have written the right amount back
+				$display("[%m @ %t] ERROR: We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
 				$stop;
 			end
 		
