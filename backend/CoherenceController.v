@@ -166,7 +166,7 @@ module CoherenceController(
 	wire HdOfIDetect, HdOfIFound, HdOfIHasBeenFound;
 	wire [DDRDWidth-1:0]	CoherentData, CoherentDataOfI, HeaderIn;
 
-	BkfOfIDetector	#(		.Width(			DDRDWidth),
+	BkfOfIDetector	#(		.DWidth(		DDRDWidth),
 							.ValidBitStart(	AESEntropy),
 							.ValidBitEnd(	AESEntropy+ORAMZ),
 							.AddrStart(		BktHUStart),
@@ -448,7 +448,7 @@ module CoherenceController(
 		Register #(.Width(DDRDWidth))
 			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
 		
-		BkfOfIDetector	#(		.Width(			DDRDWidth),
+		BkfOfIDetector	#(		.DWidth(		DDRDWidth),
 								.ValidBitStart(	AESEntropy),
 								.ValidBitEnd(	AESEntropy+ORAMZ),
 								.AddrStart(		BktHUStart),
