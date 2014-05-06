@@ -120,11 +120,7 @@ module CoherenceController(
 				RO_R_Chunk = (ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
 				RO_W_Chunk = (ORAML+1) * BktHSize_DRBursts;
 	
-	wire	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
-	wire	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
 	wire	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
-	wire	[`log2(RO_W_Chunk)-1:0]		RO_W_Ctr;
-	
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
 							.Overlap(				0),
@@ -147,10 +143,7 @@ module CoherenceController(
 							.Read(					PathRead),
 							.Writeback(				PathWriteback),
 							
-							.RW_R_Ctr(				RW_R_Ctr),
-							.RW_W_Ctr(				RW_W_Ctr),
 							.RO_R_Ctr(				RO_R_Ctr),
-							.RO_W_Ctr(				RO_W_Ctr),
 
 							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
 							.RW_W_DoneAlarm(		RW_W_DoneAlarm),
@@ -162,29 +155,32 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 	
-	wire	Intersect;
+	wire	HeaderCmpValid;
 	wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
-	wire 	ConflictHeaderLookup, ConflictHeaderOutValid, HeaderOutValid_CC;
 		
 	assign 	HeaderInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
 	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
 	assign	BktOfIInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 
 		
 	// invalidate the bit for the target block
-	wire HdOfIFound;
-	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
-	wire [ORAMZ-1:0]        ValidBitsIn, ValidBitsOfI, ValidBitsOut;
-	
-	genvar j;
-	for (j = 0; j < ORAMZ; j = j + 1) begin: VALID_BIT
-		assign 	ValidBitsIn[j] = CoherentData[AESEntropy+j];
-		assign	ValidBitsOfI[j] = ValidBitsIn[j] && ROAccess && (!REWRoundDummy && ROPAddr == CoherentData[BktHUStart + (j+1)*ORAMU - 1: BktHUStart + j*ORAMU]);
-			// one hot signal that if a block is of interest
-	end 	
-	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
-	
-	assign HdOfIFound = HeaderOutValid_CC && !REWRoundDummy && (| ValidBitsOfI);
-	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
+	wire HdOfIDetect, HdOfIFound, HdOfIHasBeenFound;
+	wire [DDRDWidth-1:0]	CoherentData, CoherentDataOfI, HeaderIn;
+
+	BkfOfIDetector	#(		.Width(			DDRDWidth),
+							.ValidBitStart(	AESEntropy),
+							.ValidBitEnd(	AESEntropy+ORAMZ),
+							.AddrStart(		BktHUStart),
+							.AWidth(		ORAMU))
+		vb_update_1	(		.Enable(		ROAccess && !REWRoundDummy),
+							.AddrOfI(		ROPAddr),
+							.DataIn(		CoherentData),
+							.DataOut(		HeaderIn),
+							.DataOfI(		CoherentDataOfI),
+							.Detect(		HdOfIDetect)
+					);
+		
+	assign HdOfIFound = HeaderCmpValid && HdOfIDetect;
+	Register1b bkt_ofi_found	(Clock,	ROStart, HdOfIFound, HdOfIHasBeenFound);
 	
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
@@ -237,35 +233,26 @@ module CoherenceController(
 							.In(		{HeaderInValid, 	HeaderInBkfOfI, 	BktOfIInValid,		FromDecData}),
 							.Out(		{HeaderInValid_dl, 	HeaderInBkfOfI_dl, 	BktOfIInValid_dl,	FromDecData_dl})
 						); 
-			
+		
 		localparam	ORAMLogL = `log2(ORAML+1);
 		
-		wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr, IntersectCtr;
-		wire 					HdOfIUpdate, HdOfIWriteBack;
-		wire 					PthCtrEnable, HdCtrEnable;
+		wire 	Intersect, ConflictHeaderLookup, ConflictHeaderOutValid;
+		wire	BktOfIIntersect, BktOfIUpdate_CC, ConflictBktOfILookup, ConflictBktOfIOutValid;		
+		wire	BktOfIOutValid, BktOfIHdOutValid;		
+		wire 	[ORAMLogL-1:0]	IntersectCtr;
 		
-		wire					BktOfIAccessedByIV;
-		
-		reg	[DDRDWidth-1:0]		HdOfI;
-		reg	[ORAMLogL-1:0]		BktOfIIdx;
-		
-		assign	BktOfIAccessedByIV = HdOfIStat < 3 && IVRequest && IVAddress == OBktOfIStartAddr;
-		assign	HdOfIUpdate = BktOfIAccessedByIV && HdOfIStat == 2 && IVWrite;
-				
-		assign	LastHdOnPthCtr = (HdOnPthCtr + ORAML) % (ORAML+1);
-		
-		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData_dl;
-				
-		wire	[ORAML-1:0]		GentryLeaf;			
-		Counter	#(				.Width(					ORAML))
+		wire	[AESEntropy-1:0]	GentryVersion;	
+		wire	[ORAML-1:0]			GentryLeaf;			
+		Counter	#(				.Width(					AESEntropy))
 			gentry_leaf(		.Clock(					Clock),
 								.Reset(					Reset),
 								.Set(					1'b0),
 								.Load(					1'b0),
 								.Enable(				RW_W_DoneAlarm),
-								.In(					{ORAML{1'bx}}),
-								.Count(					GentryLeaf)
+								.In(					{AESEntropy{1'bx}}),
+								.Count(					GentryVersion)
 							);
+		assign	GentryLeaf = GentryVersion[ORAML-1:0];
 		
 		ConflictTracker #(	.ORAML(ORAML))
 			conf_tracker(	.Clock(			Clock),
@@ -277,9 +264,8 @@ module CoherenceController(
 							.Intersect(		Intersect),
 							.IntersectCtr(	IntersectCtr)
 						);
-		
-		wire	BktOfIIntersect, BktOfIUpdate_CC, ConflictBktOfILookup, ConflictBktOfIOutValid;		
-		wire	BktOfIOutValid, BktOfIHdOutValid;
+
+		Register #(.Width(1)) boi_intersect (Clock, ROStart, 1'b0, HdOfIFound, Intersect, BktOfIIntersect);
 		
 		assign	ConflictHeaderLookup = Intersect && HeaderInValid;
 		assign	ConflictBktOfILookup = BktOfIIntersect && BktOfIInValid;
@@ -289,60 +275,42 @@ module CoherenceController(
 						{ConflictHeaderOutValid, ConflictBktOfIOutValid} 
 					);
 		
+		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
+						
 		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
 		wire	[BktCtrAWidth-1:0]		BktOfIOffset;			
 		assign	BktOfIOffset = RO_R_Ctr - (ORAML+1) * BktHSize_DRBursts;
-		
-		Register #(.Width(1)) boi_intersect (Clock, ROStart, 1'b0, HdOfIFound, Intersect, BktOfIIntersect);
-		Register #(.Width(1)) boi_update (Clock, Reset, 1'b0, 1'b1, BktOfIIntersect && BOIReady_IV, BktOfIUpdate_CC);	
+				
+		Register #(.Width(1)) boi_update (Clock, Reset, 1'b0, 1'b1, BktOfIIntersect && HeaderInBkfOfI, BktOfIUpdate_CC);
+	`ifdef SIMULATION		
+		always @(posedge Clock) begin
+			if (BktOfIUpdate_CC && HeaderInBkfOfI) begin
+				$display("Error: CC needs one idle cycle after header of bucket of interest!");
+				$stop;
+			end
+		end
+	`endif
 			// update BktOfI header in CC rather late than early.
 			// too early --> Stash receives no valid block
 			// too late --> IV takes the old header data
 		
-		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid_dl;
-		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 1;
+		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
+		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == BktOfIIntersect;
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
 		//-------------------------------------------------------------------------- 	
-		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
-		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
-		wire [1:0]				BufP1Reg_EmptyCount;
-		wire					BufP1Reg_DInValid_Pre;
-			
-		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIStat == 2 && LastHdOnPthCtr == BktOfIIdx;
-		assign 	BufP1Reg_DIn =  LastHdOnPthCtr < IntersectCtr ?  {DDRDWidth{1'b0}}
-								: HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
-								: BufP1_DOut;
-		
-		FIFORAM #(			.Width(					DDRDWidth),
-							.Buffering(				3))
-			out_path_reg (	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				BufP1Reg_DIn),
-							.InValid(				BufP1Reg_DInValid),
-							.InAccept(				BufP1Reg_DInReady),
-							.InEmptyCount(			BufP1Reg_EmptyCount),
-							.OutData(				BufP1Reg_DOut),
-							.OutSend(				BufP1Reg_DOutValid),
-							.OutReady(				BufP1Reg_DOutReady));
-							
-		assign	BufP1Reg_DInValid_Pre = PathWriteback && BufP1_Enable;
-		Register #(	.Width(1))	// TODO: Read from P1 but not for AES? Yes, when delayed write back
-			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	BufP1Reg_DInValid_Pre,	BufP1Reg_DInValid);
-		
-		reg  PthRW, HdRW;
+	
+		// Port control signals
+		wire  					PthRW, HdRW;
+		wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr;
 		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
-		wire HdRW_Transition, PthRW_Transition;			
-		
-		wire FromDecDataTransfer, FromStashDataTransfer;
-		assign FromDecDataTransfer = FromDecDataReady && FromDecDataValid;
-		assign FromStashDataTransfer = FromStashDataReady && FromStashDataValid;
-		
+		wire 					PthCtrEnable, HdCtrEnable;
+		wire 					HdRW_Transition, PthRW_Transition;			
+					
 		// RWAccessExtend: a hack to accept stash RW_W data
 		wire RWAccessExtend;
-		Register1b stash_wb (Clock, RWStashWB && PthRW_Transition, RW_R_DoneAlarm, RWStashWB);		
-		
+		Register1b stash_wb (Clock, RWStashWB && PthRW_Transition, RW_R_DoneAlarm, RWStashWB);			
 		assign RWAccessExtend = RWAccess || RWStashWB;
 		
 		assign PthCtrEnable = RWAccessExtend && BufP1_Enable;
@@ -362,25 +330,52 @@ module CoherenceController(
 							.Count(					HdOnPthCtr),
 							.Done(					HdRW_Transition)
 					);
-		
-		// 1 means write to buffer; 0 means read from buffer
-		always @(posedge Clock) begin
-			if (Reset) begin
-				PthRW <= 1'b1;
-				HdRW <= 1'b1;
-			end
-			else begin 
-				if (RWAccessExtend && !RW_PathRead && PthRW_Transition) 
-					PthRW <= !PthRW;				
-				else if (ROAccess && HdRW_Transition) 
-					HdRW <= !HdRW;			
-			end
-		end
-	
-		// TODO: How to clean up the following crap?
+		assign	LastHdOnPthCtr = (HdOnPthCtr + ORAML) % (ORAML+1);
 		
 		wire RW_PathRead;
-		assign	RW_PathRead = RWAccess && PathRead;
+		assign	RW_PathRead = RWAccess && PathRead;		
+		// 1 means write to buffer; 0 means read from buffer	// Note initial value is 1'b1 !!
+		Register #(.Width(1)) pth_rw (Clock, 1'b0, Reset, RWAccessExtend && !RW_PathRead && PthRW_Transition, !PthRW, PthRW);
+		Register #(.Width(1)) hd_rw  (Clock, 1'b0, Reset, ROAccess && HdRW_Transition, !HdRW, HdRW);
+		
+		reg	[DDRDWidth-1:0]		HdOfI;
+		reg	[ORAMLogL-1:0]		BktOfIIdx;
+		wire	HdOfIWriteBack;
+		
+		Register #(.Width(ORAMLogL))
+			boi_id_reg (Clock, 1'b0, 1'b0, HdOfIFound, 		Intersect ? LastHdOnPthCtr : HdOnPthCtr,	BktOfIIdx);
+			
+		assign	HdOfIWriteBack = ROAccess && PathWriteback && HdOfIHasBeenFound && LastHdOnPthCtr == BktOfIIdx;
+		
+		// output buffer to tolerate random delay and ensure full bandwidth
+		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
+		wire 					BufP1Reg_DInValid, BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
+		wire [1:0]				BufP1Reg_EmptyCount;
+		wire					BufP1Reg_DInValid_Pre;
+			
+		assign 	BufP1Reg_DIn =  LastHdOnPthCtr < IntersectCtr ?  {DDRDWidth{1'b0}}
+								: HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
+								: BufP1_DOut;
+		
+		FIFORAM #(			.Width(					DDRDWidth),
+							.Buffering(				3))
+			out_path_reg (	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				BufP1Reg_DIn),
+							.InValid(				BufP1Reg_DInValid),
+							.InAccept(				BufP1Reg_DInReady),
+							.InEmptyCount(			BufP1Reg_EmptyCount),
+							.OutData(				BufP1Reg_DOut),
+							.OutSend(				BufP1Reg_DOutValid),
+							.OutReady(				BufP1Reg_DOutReady));
+							
+		Register #(	.Width(1))	// TODO: Read from P1 but not for AES? Yes, when delayed write back
+			to_enc_valid ( Clock, Reset, 1'b0, 1'b1, 	PathWriteback && BufP1_Enable,	BufP1Reg_DInValid);
+		
+		// TODO: How to clean up the following crap?		
+		wire FromDecDataTransfer, FromStashDataTransfer;
+		assign FromDecDataTransfer = FromDecDataReady && FromDecDataValid;
+		assign FromStashDataTransfer = FromStashDataReady && FromStashDataValid;
 		
 		assign BufP1_Enable = RWAccessExtend ? 
 									(	RW_PathRead ? FromDecDataTransfer
@@ -410,14 +405,12 @@ module CoherenceController(
 								
 		assign BufP1_DIn = 	RWAccessExtend ? 	(	RW_PathRead ? FromDecData : FromStashData)							
 							: ROAccess ? (	BktOfIInValid ? FromDecData
-											: BktOfIUpdate_CC ? HdOfI
-											: HeaderIn) 
+											: BktOfIUpdate_CC ? HeaderIn : HeaderIn) 
 							: 0;	
 		
 		//	AES --> Stash 
-		assign	ToStashData =			BktOfIHdOutValid ? {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, CoherentData[AESEntropy-1:0]}
-											: CoherentData;
-											
+		assign	ToStashData =			BktOfIHdOutValid ? CoherentDataOfI : CoherentData;
+																					
 		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid : BktOfIOutValid;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
@@ -432,86 +425,51 @@ module CoherenceController(
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
-		//--------------------------------------------------------------------------
-
-		reg  [ORAMZ-1:0]			ValidBitsReg;
-		reg	 [2:0] 	HdOfIStat;
-			
+		//--------------------------------------------------------------------------				
 		assign 	PathReady_IV = RW_R_DoneAlarm;
 		assign	BOIReady_IV = RO_R_DoneAlarm;
 		assign	BOIFromCC = BktOfIIntersect;
 		
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BktOfIIntersect) ? IVAddress - (ORAML+1-BktOfIIdx) * BktSize_DRBursts : IVAddress;
+		assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BktOfIIntersect) ? IVAddress - OBktOfIStartAddr + BktOfIStartAddr : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		assign  DataToIV = (HdOfIStat != 1) ? BufP2_DOut : {BufP2_DOut[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsReg, BufP2_DOut[AESEntropy-1:0]};;
+		wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st;
+		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && IVRequest && IVAddress == OBktOfIStartAddr;		
+		CountAlarm #(		.Threshold(				3),
+							.IThreshold(			1))
+			boi_by_IV (		.Clock(					Clock), 
+							.Reset(					ROStart), 
+							.Enable(				BktOfIAccessedByIV),
+							.Intermediate(			BktOfIAccessedByIV_1st)
+					);	
 		
-		assign	ROIBID = 0;
+		Register #(.Width(DDRDWidth))
+			boi_id_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
 		
-		wire	[AESEntropy-1:0]	ROIBV_Pre, ROIBV_Next;
-	//	wire	HeaderOutValid_CC;
+		BkfOfIDetector	#(		.Width(			DDRDWidth),
+								.ValidBitStart(	AESEntropy),
+								.ValidBitEnd(	AESEntropy+ORAMZ),
+								.AddrStart(		BktHUStart),
+								.AWidth(		ORAMU))
+			vb_update_2	(		.Enable(		BktOfIAccessedByIV_1st),
+								.AddrOfI(		ROPAddr),
+								.DataIn(		BufP2_DOut),
+								.DataOut(		DataToIV)
+						);
 		
-		assign	HeaderOutValid_CC = Intersect ? ConflictHeaderOutValid : HeaderInValid_dl;
-		assign	ROIBV_Next = ROStart ? (GentryLeaf + 1) : ((ROIBV_Pre + 1 - RO_LeafNextDirection) / 2);
-		
-		Register	#(			.Width(					AESEntropy))
-				ro_gentry(		.Clock(					Clock),
-								.Reset(					1'b0),
-								.Set(					1'b0),
-								.Enable(				ROStart | HeaderOutValid_CC),
-								.In(					ROIBV_Next),
-								.Out(					ROIBV_Pre)
+		assign	HeaderCmpValid = Intersect ? ConflictHeaderOutValid : HeaderInValid;		
+		ROISeedGenerator	#(	.ORAML(			ORAML))				
+				roi_vid	(		.Clock(			Clock),
+								.ROStart(		ROStart),
+								.ROLeaf(		ROLeaf),
+								.GentryVersion(	GentryVersion + 1),
+								.Enable(		HeaderCmpValid && !HdOfIFound && !HdOfIHasBeenFound),	
+								.ROIBV(			ROIBV), 
+								.ROIBID(		ROIBID)
 							);
-								
-		ShiftRegister #(		.PWidth(				ORAML),
-								.Reverse(				1),
-								.SWidth(				1))
-				ro_L_shft(		.Clock(					Clock), 
-								.Reset(					1'b0), 
-								.Load(					ROStart),
-								.Enable(				HeaderOutValid_CC), 
-								.PIn(					ROLeaf),
-								.SIn(					1'b0),
-								.SOut(					RO_LeafNextDirection)
-						);
-		
-		Register	#(			.Width(					AESEntropy))
-			roi_v_out	(		.Clock(					Clock),
-								.Reset(					ROStart),
-								.Set(					1'b0),
-								.Enable(				HdOfIFound),
-								.In(					ROIBV_Pre),
-								.Out(					ROIBV)
-						);
-		
-		// hacky solution to pass the two versions of bucket of interest to IV	
-		always @(posedge Clock) begin
-		    if (Reset) begin
-		        HdOfIStat <= 7;
-		    end
 					
-			else if (HdOfIFound) begin
-				HdOfIStat <= 0;
-				BktOfIIdx <= LastHdOnPthCtr;
-				HdOfI <= HeaderIn;
-				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
-			end
-			
-			// there should be 2 reads and 1 write
-			// 0 - found; 1 - have read once; 2 - have read twice; 3 - all set.		
-			else if (BktOfIAccessedByIV) begin	
-				if (!IVWrite && HdOfIStat < 2)
-					HdOfIStat <= HdOfIStat + 1;
-				else
-					HdOfI[DigestStart-1:DigestEnd] <= DataFromIV[DigestStart-1:DigestEnd];			
-			end
-			
-			else if (HdOfIStat == 2 && PathRead)
-				HdOfIStat <= 7;
-		end
-		
 	end else begin: NO_BUF
 	
 		wire HeaderInReady, HeaderOutValid, HeaderOutReady;
@@ -538,14 +496,12 @@ module CoherenceController(
 					);     
 	
 		// no coherent problem
-		assign Intersect = 1'b0;
-		assign ConflictHeaderLookup = 1'b0;
-		assign ConflictHeaderOutValid = 1'b0;
+		assign HeaderCmpValid = HeaderInValid;
 		assign CoherentData = FromDecData;
 	
 		//	AES --> Stash 	
-		assign	ToStashData =			HeaderInBkfOfI ? {FromDecData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOfI, FromDecData[AESEntropy-1:0]}
-											: FromDecData;
+		assign	ToStashData =			HeaderInBkfOfI ? CoherentDataOfI : CoherentData;
+
 		assign	ToStashDataValid =		RWAccess ? FromDecDataValid : BktOfIInValid;
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
@@ -584,7 +540,8 @@ module ConflictTracker (
 	output	Intersect;	
 	output	[ORAMLogL-1:0]	IntersectCtr;	
 	
-	wire	[ORAML:0]		IntersectionIn, IntersectionShift;	
+	wire					IntersectionShift;
+	wire	[ORAML:0]		IntersectionIn;	
 	assign	IntersectionIn = {GentryLeaf ^ ROLeaf, 1'b0};
 	
 	ShiftRegister #(		.PWidth(				ORAML+1),
@@ -596,9 +553,9 @@ module ConflictTracker (
 							.Enable(				Intersect && IntersectInc), 
 							.PIn(					IntersectionIn),
 							.SIn(					1'b0),
-							.POut(					IntersectionShift));
+							.SOut(					IntersectionShift));
 	
-	assign	Intersect = !IntersectionShift[0];
+	assign	Intersect = ~IntersectionShift;
 			
 	Counter	#(				.Width(					ORAMLogL))
 		intersect_ctr(		.Clock(					Clock),
@@ -609,6 +566,41 @@ module ConflictTracker (
 							.In(					{ORAMLogL{1'bx}}),
 							.Count(					IntersectCtr)
 						);
-	
 endmodule
+
+//==============================================================================
+//	Helper module:		BkfOfIDetector
+//	Desc:		determine BktOfI and manipulate valid bits			
+//==============================================================================
+
+module	BkfOfIDetector (Enable, AddrOfI, DataIn, DataOut, DataOfI, Detect);
+
+	parameter	DWidth = 512;
+	parameter	ValidBitStart = 1, ValidBitEnd = 5;
+	parameter	AddrStart = 0;
+	parameter	AWidth = 0;
 	
+	localparam	NumValidBits = ValidBitEnd - ValidBitStart;
+	
+	input					Enable;
+	input	[AWidth-1:0]	AddrOfI;
+	input	[DWidth-1:0]	DataIn;
+	output					Detect;
+	output	[DWidth-1:0]	DataOut, DataOfI;
+		
+	wire [NumValidBits-1:0]		ValidBitsIn, ValidBitsOfI, ValidBitsOut;
+	
+	genvar j;
+	for (j = 0; j < NumValidBits; j = j + 1) begin
+		assign 	ValidBitsIn[j] = DataIn[ValidBitStart+j];
+		assign	ValidBitsOfI[j] = ValidBitsIn[j] && Enable && AddrOfI == DataIn[AddrStart + (j+1)*AWidth - 1: AddrStart + j*AWidth];
+			// one hot signal that if a block is of interest
+	end
+	
+	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
+	
+	assign DataOut = {DataIn[DWidth-1:ValidBitEnd], ValidBitsOut, DataIn[ValidBitStart-1:0]};
+	assign DataOfI = {DataIn[DWidth-1:ValidBitEnd], ValidBitsOfI, DataIn[ValidBitStart-1:0]};
+
+	assign Detect = Enable && (| ValidBitsOfI);
+endmodule

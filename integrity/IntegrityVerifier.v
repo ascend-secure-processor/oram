@@ -107,7 +107,7 @@ module IntegrityVerifier (
 	
 	assign ROIHeaderInValid = HeaderInValid && BucketID[LastTurn] == TotalBucketD;	
 	assign BktV = ROIHeaderInValid ? ROIBV : RWBV;
-	assign BktID = 0;//ROIHeaderInValid ? ROIBID : RWBID;
+	assign BktID = ROIHeaderInValid ? ROIBID : RWBID;
 	
 //	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  }
 	assign HashData = HeaderInValid ? {  {(TrancateDigestWidth-BIDWidth){1'b0}}, BktID, DataIn[BktHSize_RawBits-1:AESEntropy], BktV} 
