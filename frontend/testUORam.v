@@ -22,12 +22,17 @@ module testUORam;
 	parameter					Overclock = 		1;
 	parameter					EnableAES =			1;
 	parameter					EnableREW =			1;
+<<<<<<< .mine
+    parameter					EnableIV =          1;
+	parameter					DelayedWB =			1;
+=======
     parameter					EnableIV =          0;
 	parameter					DelayedWB =			EnableIV;
 
 	localparam  NN = 100;
 	localparam	nn = 10;
 	localparam	nn2 = nn * 2;	
+>>>>>>> .r3813
 	
 	`include "SecurityLocal.vh"
     `include "PathORAMBackendLocal.vh"

@@ -161,15 +161,15 @@ module CoherenceController(
 	
 	//--------------------------------------------------------------------------
 	// CC handles header write back
-	//-------------------------------------------------------------------------- 
-	
-	wire 	HeaderInValid, Intersect, ConflictHeaderLookup, ConflictHeaderOutValid;	
-	wire 	HeaderInBkfOfI, BktOfIInValid;	
+	//-------------------------------------------------------------------------- 	
+	wire	Intersect;
+	wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
+	wire 	ConflictHeaderLookup, ConflictHeaderOutValid;
 		
-	assign 	HeaderInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
+	assign 	HeaderInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
 	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
-	assign	BktOfIInValid = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 
-	
+	assign	BktOfIInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 
+		
 	// invalidate the bit for the target block
 	wire HdOfIFound;
 	wire [DDRDWidth-1:0]	CoherentData, HeaderIn;
@@ -225,6 +225,19 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Resolve conflict and produce coherent data
 		//-------------------------------------------------------------------------- 
+		wire 	HeaderInValid_dl, HeaderInBkfOfI_dl, BktOfIInValid_dl;
+		wire	[DDRDWidth-1:0]		FromDecData_dl;
+		
+		// delay these 3 signals by 1 cycle to match the case where CC resolves conflict
+		Register #(			.Width(		DDRDWidth + 3))
+			from_dec_dl (	.Clock(		Clock),
+							.Reset(		1'b0),
+							.Set(		1'b0),
+							.Enable(	1'b1),
+							.In(		{HeaderInValid, 	HeaderInBkfOfI, 	BktOfIInValid,		FromDecData}),
+							.Out(		{HeaderInValid_dl, 	HeaderInBkfOfI_dl, 	BktOfIInValid_dl,	FromDecData_dl})
+						); 
+			
 		localparam	ORAMLogL = `log2(ORAML+1);
 		
 		wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr, IntersectCtr;
@@ -265,34 +278,29 @@ module CoherenceController(
 							.IntersectCtr(	IntersectCtr)
 						);
 		
-		assign	ConflictHeaderLookup = ROAccess && PathRead && Intersect && HdCtrEnable;
-		Register	conf_hd_out (Clock, Reset, 1'b0, 1'b1, ConflictHeaderLookup, ConflictHeaderOutValid);
-		
-		wire		BktOfIIntersect;
-		Register #(.Width(1)) boi_intersect (Clock, ROStart, 1'b0, HdOfIFound, Intersect, BktOfIIntersect);
-		
-		wire 	BktOfIStage, BktOfIStageDone, BktOfIUpdate_CC, ConflictBktOfILookup, ConflictBktOfIOutValid;		
+		wire	BktOfIIntersect, BktOfIUpdate_CC, ConflictBktOfILookup, ConflictBktOfIOutValid;		
 		wire	BktOfIOutValid, BktOfIHdOutValid;
-
-		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
-		wire	[BktCtrAWidth-1:0]		BktOfIOffset;	
-		 
-		CountAlarm #(		.Threshold(				BktSize_DRBursts))
-			bktofI_ctr (	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Enable(				BktOfIOutValid),
-							.Count(					BktOfIOffset),
-							.Done(					BktOfIStageDone)
-					);
-
-		Register1b	bktofI_stage (Clock, Reset || BktOfIStageDone, HeaderInBkfOfI, BktOfIStage);
-		Register	bktofIdone_dl (Clock, Reset, 1'b0, 1'b1, BktOfIStageDone && BktOfIIntersect, BktOfIUpdate_CC);	
-						
+		
+		assign	ConflictHeaderLookup = Intersect && HeaderInValid;
 		assign	ConflictBktOfILookup = BktOfIIntersect && BktOfIInValid;
-		Register	conf_bkt_out (Clock, Reset, 1'b0, 1'b1, ConflictBktOfILookup, ConflictBktOfIOutValid);
+		Register #(		.Width(2)) 
+			conf_out (	Clock, Reset, 1'b0, 1'b1, 
+						{ConflictHeaderLookup, ConflictBktOfILookup},
+						{ConflictHeaderOutValid, ConflictBktOfIOutValid} 
+					);
+		
+		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
+		wire	[BktCtrAWidth-1:0]		BktOfIOffset;			
+		assign	BktOfIOffset = RO_R_Ctr - (ORAML+1) * BktHSize_DRBursts;
+		
+		Register #(.Width(1)) boi_intersect (Clock, ROStart, 1'b0, HdOfIFound, Intersect, BktOfIIntersect);
+		Register #(.Width(1)) boi_update (Clock, Reset, 1'b0, 1'b1, BktOfIIntersect && BOIReady_IV, BktOfIUpdate_CC);	
+			// update BktOfI header in CC rather late than early.
+			// too early --> Stash receives no valid block
+			// too late --> IV takes the old header data
 		
 		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
-		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 0;
+		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == BktOfIIntersect;
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
@@ -387,12 +395,15 @@ module CoherenceController(
 		assign BufP1_Write = 	RWAccessExtend ? 	(	RW_PathRead ? 1'b1 : PthRW )
 								: ROAccess ? (	PathRead ? !ConflictHeaderLookup && !ConflictBktOfILookup : HdRW )
 								: 0;
-						
+		
+		wire	[PathBufAWidth-1:0]		BktOfIStartAddr;
+		assign	BktOfIStartAddr = BktOfIIntersect ? OPthStartAddr + BktOfIIdx * BktSize_DRBursts : OBktOfIStartAddr;  // BktOfI from DRAM or from CC?
+		
 		assign BufP1_Address = RWAccessExtend ?  (	RW_PathRead ? IPthStartAddr + BlkOnPthCtr : OPthStartAddr + BlkOnPthCtr )
 								: ROAccess ? (	PathRead ? 
 											(	ConflictHeaderLookup ? OPthStartAddr + HdOnPthCtr * BktSize_DRBursts	// read header to resolve conflict	
-												: (ConflictBktOfILookup || BktOfIUpdate_CC) ? OPthStartAddr + BktOfIIdx * BktSize_DRBursts + BktOfIOffset
-												: BktOfIInValid ? OBktOfIStartAddr + BktOfIOffset	// bucket of interest
+												: BktOfIUpdate_CC ? BktOfIStartAddr
+												: BktOfIInValid ? BktOfIStartAddr + BktOfIOffset		// bucket of interest								
 												: HdStartAddr + HdOnPthCtr)		// save header										
 										: HdStartAddr + HdOnPthCtr)				// header write back								
 								: 0;
