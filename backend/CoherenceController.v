@@ -164,7 +164,7 @@ module CoherenceController(
 	//-------------------------------------------------------------------------- 	
 	wire	Intersect;
 	wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
-	wire 	ConflictHeaderLookup, ConflictHeaderOutValid;
+	wire 	ConflictHeaderLookup, ConflictHeaderOutValid, HeaderOutValid_CC;
 		
 	assign 	HeaderInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
 	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
@@ -183,7 +183,7 @@ module CoherenceController(
 	end 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	
-	assign HdOfIFound = (Intersect ? ConflictHeaderOutValid : HeaderInValid) && !REWRoundDummy && (| ValidBitsOfI);
+	assign HdOfIFound = HeaderOutValid_CC && !REWRoundDummy && (| ValidBitsOfI);
 	assign HeaderIn = {CoherentData[DDRDWidth-1:AESEntropy+ORAMZ], ValidBitsOut, CoherentData[AESEntropy-1:0]};
 	
 	//--------------------------------------------------------------------------
@@ -254,7 +254,7 @@ module CoherenceController(
 				
 		assign	LastHdOnPthCtr = (HdOnPthCtr + ORAML) % (ORAML+1);
 		
-		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
+		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData_dl;
 				
 		wire	[ORAML-1:0]		GentryLeaf;			
 		Counter	#(				.Width(					ORAML))
@@ -299,8 +299,8 @@ module CoherenceController(
 			// too early --> Stash receives no valid block
 			// too late --> IV takes the old header data
 		
-		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid;
-		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == BktOfIIntersect;
+		assign	BktOfIOutValid = BktOfIIntersect ? ConflictBktOfIOutValid : BktOfIInValid_dl;
+		assign	BktOfIHdOutValid = BktOfIOutValid && BktOfIOffset == 1;
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
@@ -451,9 +451,9 @@ module CoherenceController(
 		assign	ROIBID = 0;
 		
 		wire	[AESEntropy-1:0]	ROIBV_Pre, ROIBV_Next;
-		wire	HeaderOutValid_CC;
+	//	wire	HeaderOutValid_CC;
 		
-		assign	HeaderOutValid_CC = Intersect ? ConflictHeaderOutValid : HeaderInValid;
+		assign	HeaderOutValid_CC = Intersect ? ConflictHeaderOutValid : HeaderInValid_dl;
 		assign	ROIBV_Next = ROStart ? (GentryLeaf + 1) : ((ROIBV_Pre + 1 - RO_LeafNextDirection) / 2);
 		
 		Register	#(			.Width(					AESEntropy))
@@ -494,7 +494,7 @@ module CoherenceController(
 					
 			else if (HdOfIFound) begin
 				HdOfIStat <= 0;
-				BktOfIIdx <= Intersect ? LastHdOnPthCtr : HdOnPthCtr;
+				BktOfIIdx <= LastHdOnPthCtr;
 				HdOfI <= HeaderIn;
 				ValidBitsReg  <=  ValidBitsOut;		// save new valid bits
 			end
