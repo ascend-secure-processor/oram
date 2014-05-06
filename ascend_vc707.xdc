@@ -93,6 +93,18 @@ set_property SLEW SLOW [get_ports {led[7]}]
 set_property IOSTANDARD LVCMOS18 [get_ports {led[7]}]
 set_property PACKAGE_PIN AU39 [get_ports {led[7]}]
 
+# 5 push buttons
+set_property PACKAGE_PIN AP40 [get_ports GPIO_SW_S]
+set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_S]
+set_property PACKAGE_PIN AR40 [get_ports GPIO_SW_N]
+set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_N]
+set_property PACKAGE_PIN AV39 [get_ports GPIO_SW_C]
+set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_C]
+set_property PACKAGE_PIN AU38 [get_ports GPIO_SW_E]
+set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_E]
+set_property PACKAGE_PIN AW40 [get_ports GPIO_SW_W]
+set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_W]
+
 #######################################
 # DRAM
 #######################################

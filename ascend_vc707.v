@@ -12,8 +12,15 @@
 //	Desc: 		Top level module for the Ascend chip.
 //==============================================================================
 module ascend_vc707(
-			// GPIO
+			// GPIO LEDs
 			output	[7:0]	led,
+
+			// GPIO switches
+			input			GPIO_SW_S,
+			input			GPIO_SW_N,
+			input			GPIO_SW_C,
+			input			GPIO_SW_E,
+			input			GPIO_SW_W,
 
 			// System
 			input			sys_clk_p,
@@ -48,18 +55,13 @@ module ascend_vc707(
 	//	Constants
 	//------------------------------------------------------------------------------
 	
-	// uBlaze/caches/System
-	
-	parameter				SlowClockFreq =			100_000_000;
-	parameter				MemoryClockFreq =		200_000_000;
-	
 	/* 	Debugging.
 	
 		SlowORAMClock:		slow the ORAM controller down to make it easier to add 
 							ChipScope signals & meet timing *
 		
 		See PathORAMTop for more documentation */
-	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
+	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
@@ -70,25 +72,25 @@ module ascend_vc707(
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					20, // set to 20 for vc707 board; set to 31 to test ASIC
+							ORAML =					20, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
 							ORAMZ =					5,
 							ORAMC =					10, // Stash capacity will always be 128 - 256
 							ORAME =					5;
 
 	parameter				FEDWidth =				64,
 							BEDWidth =				512;
-								
+
+    parameter				NumValidBlock = 		1 << ORAML,
+							Recursion = 			3,							
+							EnablePLB = 			1,   
+							PLBCapacity = 			8192 << 3;
+		
 	parameter				Overclock =				1;
 	
 	parameter				EnableAES =				1;
 	parameter				EnableREW =				1;
 	parameter				EnableIV =				0;
 	parameter				DelayedWB =				EnableIV;
-	
-    parameter				NumValidBlock = 		1 << ORAML,
-							Recursion = 			3;
-	
-    parameter				PLBCapacity = 			8192 << 3;
 	
 	`include "SecurityLocal.vh"
 	`include "BucketLocal.vh"
@@ -104,6 +106,10 @@ module ascend_vc707(
 	`else
 	localparam				DDRAWidth_Top =			DDRAWidth;
 	`endif
+	
+	localparam				SlowClockFreq =			100_000_000,
+							MemoryClockFreq =		200_000_000,
+							ORAMClockFreq = 		(SlowORAMClock) ? SlowClockFreq : MemoryClockFreq;
 	
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
@@ -123,6 +129,11 @@ module ascend_vc707(
 	wire					SlowClock;
 	wire					MMCMF100Locked, SlowReset;
 	wire					MMCMF300Locked;
+	
+	// Test harness
+	
+	wire					Tester_ForceHistogramDumpPre;
+	reg						Tester_ForceHistogramDump;
 	
 	// ORAM
 	
@@ -187,9 +198,23 @@ module ascend_vc707(
 
 	assign	led[7] =								DDR3SDRAM_ResetDone;
 	
+	ButtonParse	#(			.Width(					1),
+							.DebWidth(				`log2(ORAMClockFreq / 100)), // Use a 10ms button parser (roughly)
+							.EdgeOutWidth(			1))
+					InBP(	.Clock(					ORAMClock),
+							.Reset(					ORAMReset),
+							.Enable(				1'b1),
+							.In(					GPIO_SW_C),
+							.Out(					Tester_ForceHistogramDumpPre));
+	
 	//------------------------------------------------------------------------------
 	// 	uBlaze core & caches
 	//------------------------------------------------------------------------------
+	
+	// We wish to reset the harness first, then dump the histogram
+	always @(posedge ORAMClock) begin
+		Tester_ForceHistogramDump <=				Tester_ForceHistogramDumpPre;
+	end
 	
 	HWTestHarness #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -202,7 +227,7 @@ module ascend_vc707(
 				tester(		.SlowClock(				SlowClock),
 							.FastClock(				ORAMClock),
 							.SlowReset(				SlowReset), 
-							.FastReset(				ORAMReset),
+							.FastReset(				ORAMReset | Tester_ForceHistogramDumpPre),
 							
 							.ORAMCommand(			PathORAM_Command),
 							.ORAMPAddr(				PathORAM_PAddr),
@@ -220,6 +245,8 @@ module ascend_vc707(
 							.UARTRX(				uart_rxd),
 							.UARTTX(				uart_txd),
 							
+							.ForceHistogramDump(	Tester_ForceHistogramDump),
+							
 							.ErrorReceiveOverflow(	led[0]),
 							.ErrorReceivePattern(	led[1]),	
 							.ErrorSendOverflow(		led[2]));
@@ -234,16 +261,21 @@ module ascend_vc707(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
+
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth),
+
+							.NumValidBlock(         NumValidBlock), 
+							.Recursion(             Recursion),
+							.EnablePLB(				EnablePLB),
+							.PLBCapacity(           PLBCapacity),
+
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
-							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),
-							.NumValidBlock(         NumValidBlock), 
-							.Recursion(             Recursion), 
-							.PLBCapacity(           PLBCapacity),
+
 							.DebugDRAMReadTiming(	DebugDRAMReadTiming),
 							.DebugAES(				DebugAES))
                 oram(		.Clock(					ORAMClock),
