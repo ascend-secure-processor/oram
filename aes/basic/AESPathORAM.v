@@ -33,8 +33,7 @@ module AESPathORAM(
 	`include "BucketLocal.vh"
 
 	localparam W = DDRDWidth / AESWidth;
-	localparam D = 2; //AESDelay; TODO: this parameter is gone? 
-		// Note: D = 1 does not work
+	localparam D = 12; 
 
 	localparam FIFO_D = D;
 
@@ -50,8 +49,6 @@ module AESPathORAM(
 	//--------------------------------------------------------------------------
 	// MIG <-> AES
 	//--------------------------------------------------------------------------
-
-	// TODO don't push MIGAddr through AES module
 
 	output [DDRDWidth-1:0] DRAMWriteData;
 	output                 DRAMWriteDataValid;
