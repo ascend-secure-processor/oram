@@ -56,6 +56,7 @@ module CoherenceController(
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
 	
+	parameter	BRAMLatency = 2;
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -201,9 +202,13 @@ module CoherenceController(
 		// 		port1 written by Stash, read and written by AES
 		//		port2 read and written by integrity verifier
 		//------------------------------------------------------------------------------------------------------
-		wire 					BufP1_Enable, BufP2_Enable, BufP1_Write, BufP2_Write;
-		wire [PathBufAWidth-1:0] 	BufP1_Address, BufP2_Address;
-		wire [DDRDWidth-1:0] 	BufP1_DIn, BufP2_DIn, BufP1_DOut, BufP2_DOut;
+		wire 					BufP1_Enable, BufP1_Write;
+		wire [PathBufAWidth-1:0] 	BufP1_Address;
+		wire [DDRDWidth-1:0] 	BufP1_DIn, BufP1_DOut_Pre, BufP1_DOut;
+
+		wire 					BufP2_Enable, BufP2_Write;
+		wire [PathBufAWidth-1:0] 	BufP2_Address;
+		wire [DDRDWidth-1:0] 	BufP2_DIn, BufP2_DOut_Pre, BufP2_DOut;
 		
 		RAM		#(          .DWidth(				DDRDWidth),     
                             .AWidth(				PathBufAWidth),
@@ -215,8 +220,12 @@ module CoherenceController(
                             .Write(					{BufP1_Write, BufP2_Write}),
                             .Address(				{BufP1_Address, BufP2_Address}),
                             .DIn(					{BufP1_DIn, BufP2_DIn}),
-                            .DOut(					{BufP1_DOut, BufP2_DOut})
+                            .DOut(					{BufP1_DOut, BufP2_DOut_Pre})
                         );     
+		
+		parameter	BRAMLatency = 2;
+		//Register1Pipe #(DDRDWidth)	bufP1_out_reg	(Clock,	BufP1_DOut_Pre, BufP1_DOut);
+		
 		
 		//--------------------------------------------------------------------------
 		// Resolve conflict and produce coherent data
@@ -269,19 +278,17 @@ module CoherenceController(
 		
 		assign	ConflictHeaderLookup = Intersect && HeaderInValid;
 		assign	ConflictBktOfILookup = BktOfIIntersect && BktOfIInValid;
-		Register #(		.Width(2)) 
-			conf_out (	Clock, Reset, 1'b0, 1'b1, 
-						{ConflictHeaderLookup, ConflictBktOfILookup},
-						{ConflictHeaderOutValid, ConflictBktOfIOutValid} 
-					);
-		
+		Register1Pipe #(	.Width(2))	
+			conf_out (	Clock,	  {ConflictHeaderLookup, ConflictBktOfILookup}, 	
+						          {ConflictHeaderOutValid, ConflictBktOfIOutValid});
+					 		
 		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
 						
 		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
 		wire	[BktCtrAWidth-1:0]		BktOfIOffset;			
 		assign	BktOfIOffset = RO_R_Ctr - (ORAML+1) * BktHSize_DRBursts;
 				
-		Register #(.Width(1)) boi_update (Clock, Reset, 1'b0, 1'b1, BktOfIIntersect && HeaderInBkfOfI, BktOfIUpdate_CC);
+		Register1Pipe #(.Width(1)) boi_update (Clock, BktOfIIntersect && HeaderInBkfOfI, BktOfIUpdate_CC);
 	`ifdef SIMULATION		
 		always @(posedge Clock) begin
 			if (BktOfIUpdate_CC && HeaderInBkfOfI) begin
@@ -435,18 +442,28 @@ module CoherenceController(
 		assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BktOfIIntersect) ? IVAddress - OBktOfIStartAddr + BktOfIStartAddr : IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st;
+		wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_Pre, BktOfIAccessedByIV_1st;
 		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && IVRequest && IVAddress == OBktOfIStartAddr;		
 		CountAlarm #(		.Threshold(				3),
 							.IThreshold(			1))
 			boi_by_IV (		.Clock(					Clock), 
 							.Reset(					ROStart), 
 							.Enable(				BktOfIAccessedByIV),
-							.Intermediate(			BktOfIAccessedByIV_1st)
+							.Intermediate(			BktOfIAccessedByIV_1st_Pre)
 					);	
 		
 		Register #(.Width(DDRDWidth))
 			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
+		
+		if (BRAMLatency == 1) begin
+			assign	{BktOfIAccessedByIV_1st, BufP2_DOut} = {BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre};
+		end else if (BRAMLatency == 2) begin
+			Register1Pipe #(DDRDWidth+1)	
+			bufP2_out_reg	(Clock,	{BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre}, 
+									{BktOfIAccessedByIV_1st, BufP2_DOut});
+		end else begin
+			initial $finish;
+		end
 		
 		BkfOfIDetector	#(		.DWidth(		DDRDWidth),
 								.ValidBitStart(	AESEntropy),

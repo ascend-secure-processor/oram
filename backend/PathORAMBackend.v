@@ -186,6 +186,7 @@ module PathORAMBackend(
 	//	Integrity Verification (REW ORAM only)
 	//----------------------------------------------------------------------
 	
+	localparam	BRAMLatency = 2;
 	generate if (EnableREW) begin:CC
 		CoherenceController #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
@@ -198,8 +199,9 @@ module PathORAMBackend(
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
-							.DelayedWB(				DelayedWB))
-							
+							.DelayedWB(				DelayedWB),
+							.BRAMLatency(			BRAMLatency))
+									
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
 									
@@ -244,7 +246,8 @@ module PathORAMBackend(
 			IntegrityVerifier #(.ORAMB(				ORAMB),
 								.ORAMU(				ORAMU),
 								.ORAML(				ORAML),
-								.ORAMZ(				ORAMZ))
+								.ORAMZ(				ORAMZ),
+								.BRAMLatency(		BRAMLatency))
 					
 				iv(				.Clock(				Clock),
 								.Reset(				Reset),

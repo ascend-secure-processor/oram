@@ -15,7 +15,7 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter NUMSHA3 = 3;
+	parameter	NUMSHA3 = 3;	
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
 	
     `include "PathORAM.vh"
@@ -25,7 +25,9 @@ module IntegrityVerifier (
 	`include "BucketDRAMLocal.vh"
 	`include "SHA3Local.vh"
 	`include "IVCCLocal.vh"
-
+	
+	parameter	BRAMLatency = 2;
+	
     localparam  AWidth = PathBufAWidth;
 	localparam  BktAWidth = `log2(ORAML+2) + 1;
 	localparam	BlkAWidth = `log2(BktSize_DRBursts + 1);
@@ -73,10 +75,21 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------
 	// Process and save headers
 	//------------------------------------------------------------------------------------ 	
-	wire DataInValid, HeaderInValid;
+	wire DataInValid_Pre, DataInValid, HeaderInValid;
 	wire [DDRDWidth-1:0] HashData;
 	
-	Register #(.Width(1)) 	RdData (Clock, Reset, 1'b0, 1'b1, 	Request && !Write, 	DataInValid);
+	generate if (BRAMLatency == 1) begin
+		Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid);
+	end else if (BRAMLatency == 2) begin
+		Register1Pipe #(1) 	RdData 		(Clock, Request && !Write,	DataInValid_Pre);
+		Register1Pipe #(1) 	RdData 		(Clock, DataInValid_Pre,	DataInValid);
+	end else begin
+		initial $finish;
+	end endgenerate
+	
+	//Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid_Pre);
+	//Register1Pipe #(1) 	RdData 		(Clock, DataInValid_Pre,	DataInValid);
+	
 	assign  HeaderInValid = DataInValid && BucketOffset[LastTurn] == 1;		// TODO: do not work for  header > 1
 
 	// Bucket ID and bucket version
@@ -266,7 +279,7 @@ module IntegrityVerifier (
 		end
     end
 	
-	assign LastTurn = (Turn + NUMSHA3 - 1) % NUMSHA3;
+	assign LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
 	//------------------------------------------------------------------------------------
 	// NUMSHA3 hash engines

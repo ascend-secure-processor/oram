@@ -65,16 +65,27 @@ module Keccak_WF (
 							.OutReady(				HashFunnelOutReady)
 						);
 	
+	// register at in/out to improve timing
+	wire	HashInValid_dl, HashOutValid_pre;
+	wire	[HashInWidth-1:0] 	HashIn_dl;
+	wire	[HashOutWidth-1:0]	HashOut_pre;
+	
+	Register1Pipe #(	.Width(HashInWidth+1))
+		hash_in_reg	(Clock,	{HashInValid, HashIn}, {HashInValid_dl, HashIn_dl});
+	Register1Pipe #(	.Width(HashOutWidth+1))
+		hash_out_reg	(Clock,	{HashOutValid_pre, HashOut_pre}, {HashOutValid, HashOut});
+	
+	// instantiate the hash engine
     keccak	
         HashEngine	(	    .clk(			Clock), 
 							.reset(			HashReset), 
-							.in(			HashIn), 
-							.in_ready(		HashInValid), 
+							.in(			HashIn_dl), 
+							.in_ready(		HashInValid_dl), 
 							.is_last(		LastChunk), 
 							.byte_num(		BytesInLastChunk), 
 							.buffer_full(	HashBufFull), 
-							.out(			HashOut), 
-							.out_ready(		HashOutValid)
+							.out(			HashOut_pre), 
+							.out_ready(		HashOutValid_pre)
 						);
 
     CountAlarm #	(	    .Threshold(HashChunkCount),
@@ -86,8 +97,7 @@ module Keccak_WF (
 							.Done(		    LastChunk)
 						);
 	
-	generate if (NumKeyChunk > 0) begin: HMAC
-		
+	generate if (NumKeyChunk > 0) begin: HMAC		
 		wire [LogNumKeyChunk-1:0] KeyChunkIdx;
 	
 		Counter		#(		.Width(			LogNumKeyChunk))
@@ -104,8 +114,7 @@ module Keccak_WF (
 	else begin : NO_HMAC
 		assign PrependingKey = 0;		
 	end endgenerate
-	
-	
+		
 	assign LastEmptyChunk = LastBut2Chunk && !BytesInLastChunk;
 	
 	assign HashIn = PrependingKey ? KeyChunk : HashFunnelOut;
