@@ -4,9 +4,7 @@
 
 module testFrontEnd;
 						
-	parameter					IVEntropyWidth =	64;
-
-    parameter					ORAMB =				512;
+	parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
 	parameter                   ORAML = `ifdef ORAML `ORAML `else 10 `endif;
 	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
@@ -18,7 +16,6 @@ module testFrontEnd;
     parameter                   NumValidBlock = 1024;
     parameter                   Recursion = 3;
                 
-    parameter                   LeafWidth = 32;         // in bits       
     parameter                   PLBCapacity = 1024;     // in bits
 
     `include "PathORAMBackendLocal.vh"

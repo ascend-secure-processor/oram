@@ -591,11 +591,11 @@ module	BkfOfIDetector (Enable, AddrOfI, DataIn, DataOut, DataOfI, Detect);
 	wire [NumValidBits-1:0]		ValidBitsIn, ValidBitsOfI, ValidBitsOut;
 	
 	genvar j;
-	for (j = 0; j < NumValidBits; j = j + 1) begin
+	generate for (j = 0; j < NumValidBits; j = j + 1) begin: VALIB_BIT
 		assign 	ValidBitsIn[j] = DataIn[ValidBitStart+j];
 		assign	ValidBitsOfI[j] = ValidBitsIn[j] && Enable && AddrOfI == DataIn[AddrStart + (j+1)*AWidth - 1: AddrStart + j*AWidth];
 			// one hot signal that if a block is of interest
-	end
+	end endgenerate
 	
 	assign ValidBitsOut = ValidBitsOfI ^ ValidBitsIn;    
 	

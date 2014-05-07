@@ -120,6 +120,19 @@ module IntegrityVerifier (
 	end
 	
 	//------------------------------------------------------------------------------------
+	// Remaining work status
+	//------------------------------------------------------------------------------------ 	
+	reg [BktAWidth-1:0] BktOnPathStarted, BktOnPathDone;
+	reg [1:0]			BktOfIStarted, BktOfIDone;
+	
+	wire				PendingWork;
+	
+	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
+	
+	assign PathDone = BktOnPathDone == TotalBucketD;
+	assign BOIDone = BktOfIDone == 2;
+	
+	//------------------------------------------------------------------------------------
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
@@ -184,18 +197,6 @@ module IntegrityVerifier (
 	assign Write = ConsumeHash && UpdateHash && VersionNonzero;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
 		
-	//------------------------------------------------------------------------------------
-	// Remaining work status
-	//------------------------------------------------------------------------------------ 	
-	reg [BktAWidth-1:0] BktOnPathStarted, BktOnPathDone;
-	reg [1:0]			BktOfIStarted, BktOfIDone;
-	
-	wire				PendingWork;
-	
-	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
-	
-	assign PathDone = BktOnPathDone == TotalBucketD;
-	assign BOIDone = BktOfIDone == 2;
 		
 	//------------------------------------------------------------------------------------
 	// Round robin scheduling for hash engines

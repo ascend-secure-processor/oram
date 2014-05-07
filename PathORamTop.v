@@ -243,7 +243,7 @@ module PathORamTop(
 		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
 	end endgenerate	
 		
-	generate if (Overclock) begin:INBUF_BRAM
+	generate if (UseBRAM) begin:INBUF_BRAM
 		wire				PathBuffer_Full;
 		
 		assign	PathBuffer_InReady =				~PathBuffer_Full;

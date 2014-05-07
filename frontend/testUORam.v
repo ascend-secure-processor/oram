@@ -31,11 +31,11 @@ module testUORam;
 
 	
 	`include "SecurityLocal.vh"
-    `include "PathORAMBackendLocal.vh"
-    `include "PLBLocal.vh" 
-    `include "BucketLocal.vh"
+	`include "DDR3SDRAMLocal.vh"
+	`include "PathORAMBackendLocal.vh"
+	`include "PLBLocal.vh" 
+	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
-    `include "DDR3SDRAMLocal.vh"
 	`include "SubTreeLocal.vh"
 		
 	localparam 					TreeInDQChunks =	`divceil(BktSize_RndBits, DDRDQWidth) * ( (1 << (ORAML + 1)) + numTotalST);
