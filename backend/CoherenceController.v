@@ -458,18 +458,20 @@ module CoherenceController(
 								.DataIn(		BufP2_DOut),
 								.DataOut(		DataToIV)
 						);
-		
 		assign	HeaderCmpValid = Intersect ? ConflictHeaderOutValid : HeaderInValid;		
+		
+		wire	[AESEntropy-1:0]	ROIBV_Pre;
 		ROISeedGenerator	#(	.ORAML(			ORAML))				
 				roi_vid	(		.Clock(			Clock),
 								.ROStart(		ROStart),
 								.ROLeaf(		ROLeaf),
 								.GentryVersion(	GentryVersion + 1),
 								.Enable(		HeaderCmpValid && !HdOfIFound && !HdOfIHasBeenFound),	
-								.ROIBV(			ROIBV), 
+								.ROIBV(			ROIBV_Pre), 
 								.ROIBID(		ROIBID)
 							);
-					
+		assign	ROIBV = HdOfIHasBeenFound ? ROIBV_Pre : {AESEntropy{1'b0}};
+		
 	end else begin: NO_BUF
 	
 		wire HeaderInReady, HeaderOutValid, HeaderOutReady;

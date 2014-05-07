@@ -42,7 +42,7 @@ module ROISeedGenerator(
 						.SOut(					RO_LeafNextDirection)
 					);
 					
-	assign	ROIBV_Next = ROStart ? GentryVersion : ((ROIBV + 1 - RO_LeafNextDirection) / 2);
+	assign	ROIBV_Next = ROStart ? GentryVersion : ((ROIBV + !RO_LeafNextDirection) / 2);
 
 	BktIDGen # 	(		.ORAML(		ORAML))
 		rw_bid 	(		.Clock(		Clock),

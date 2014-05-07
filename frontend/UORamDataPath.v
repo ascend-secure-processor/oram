@@ -193,14 +193,16 @@ module UORamDataPath
 			     
     // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = FakeStoring || (ExpectingProgStore ? DataInValid : EvictFunnelOutValid);
-    assign StoreData = ExpectingProgStore ? DataIn : EvictFunnelDOut;
+    assign StoreData = FakeStoring ? 0		// TODO: fake stuff
+						: ExpectingProgStore ? DataIn : EvictFunnelDOut;
     assign DataInReady = ExpectingProgStore && StoreDataReady;
   
     // if ExpectingDataBlock, backend ==> network; if ExpectingPosMapBlock, backend ==> PLB  
     assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = FakeLoading || (ExpectingDataBlock && LoadDataValid);
-    assign ReturnData = LoadData;
+    assign ReturnData = FakeLoading ? 0		// TODO: fake stuff 
+							: LoadData;
 
 `ifdef SIMULATION   
     always @(posedge Clock) begin
