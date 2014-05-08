@@ -70,8 +70,6 @@ module Keccak_WF (
 	wire	[HashInWidth-1:0] 	HashIn_dl;
 	wire	[HashOutWidth-1:0]	HashOut_pre;
 	
-	Register1Pipe #(	.Width(HashInWidth+1))
-		hash_in_reg	(Clock,	{HashInValid, HashIn}, {HashInValid_dl, HashIn_dl});
 	Register1Pipe #(	.Width(HashOutWidth+1))
 		hash_out_reg	(Clock,	{HashOutValid_pre, HashOut_pre}, {HashOutValid, HashOut});
 	
@@ -79,8 +77,8 @@ module Keccak_WF (
     keccak	
         HashEngine	(	    .clk(			Clock), 
 							.reset(			HashReset), 
-							.in(			HashIn_dl), 
-							.in_ready(		HashInValid_dl), 
+							.in(			HashIn), 
+							.in_ready(		HashInValid), 
 							.is_last(		LastChunk), 
 							.byte_num(		BytesInLastChunk), 
 							.buffer_full(	HashBufFull), 

@@ -15,7 +15,7 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter	NUMSHA3 = 3;	
+	parameter	NUMSHA3 = 2;	
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
 	
     `include "PathORAM.vh"
@@ -61,27 +61,26 @@ module IntegrityVerifier (
 		
 	// select one hash engine
 	reg  [LogNUMSHA3-1:0] Turn;
-	wire [LogNUMSHA3-1:0] LastTurn;
+	wire [LogNUMSHA3-1:0] LastTurn, NextTurn;
 	
 	//------------------------------------------------------------------------------------
 	// Request and address generation
 	//------------------------------------------------------------------------------------ 
-	assign Address = Write ? 
-		BucketID[Turn] * BktSize_DRBursts : 						//	updating hash for the previous set of buckets
-		BucketID[Turn] * BktSize_DRBursts + BucketOffset[Turn];		//  reading data from the current set of buckets
+	assign Address = BucketID[Turn] * BktSize_DRBursts + (BucketOffset[Turn] % BktSize_DRBursts);
+		// address pattern, chunk 0, 1, 2, ... BktSize_DRBursts - 1, 0
 		
-	assign Request = !Reset && (Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts )); 
-																											// can remove !DataInValid if we make Gentry always valid
+	assign Request = Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts && !DataInValid); 
+																					// when BRAMLatency >= NUMSHA3, it may break
 	//------------------------------------------------------------------------------------
 	// Process and save headers
 	//------------------------------------------------------------------------------------ 	
 	wire DataInValid_Pre, DataInValid, HeaderInValid;
 	wire [DDRDWidth-1:0] HashData;
 	
+	Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid_Pre);
 	generate if (BRAMLatency == 1) begin
-		Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid);
+		assign	DataInValid = DataInValid_Pre;
 	end else if (BRAMLatency == 2) begin
-		Register1Pipe #(1) 	RdData 		(Clock, Request && !Write,	DataInValid_Pre);
 		Register1Pipe #(1) 	RdData 		(Clock, DataInValid_Pre,	DataInValid);
 	end else begin
 		initial $finish;
@@ -153,9 +152,20 @@ module IntegrityVerifier (
 	wire ConsumeHash, VersionNonzero, Violation, CheckHash, UpdateHash; 
 	wire Idle;
 	
-	assign ConsumeHash = HashOutValid[Turn];
+	wire ConsumeHash_dl;
+	
+	//assign ConsumeHash = HashOutValid[Turn];
+	Register1Pipe #(1)	consume_hash (Clock, HashOutValid[NextTurn] && !ConsumeHash_dl, ConsumeHash);
+	
+	// This hack is necessary when NUMSHA3 == 2 AND we add 1-cycle delay at HashOutValid
+	generate if (NUMSHA3 == 2) begin
+		Register1Pipe #(1)	consume_hash_dl (Clock, ConsumeHash, ConsumeHash_dl);
+	end else begin
+		assign ConsumeHash_dl = 1'b0;
+	end endgenerate
+	
 	assign CheckHash = ConsumeHash && 
-						(BktOnPathDone < TotalBucketD / 2 
+						(BucketID[Turn] < TotalBucketD / 2 
 						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
 	
 	assign UpdateHash = ConsumeHash && !CheckHash;
@@ -207,7 +217,7 @@ module IntegrityVerifier (
 `endif
 	
 	// updating hash for the output path
-	assign Write = ConsumeHash && UpdateHash && VersionNonzero;		
+	assign Write = UpdateHash && VersionNonzero;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
 		
 		
@@ -279,7 +289,8 @@ module IntegrityVerifier (
 		end
     end
 	
-	assign LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
+	assign	NextTurn = (Turn + 1) % NUMSHA3;
+	assign	LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
 	//------------------------------------------------------------------------------------
 	// NUMSHA3 hash engines
