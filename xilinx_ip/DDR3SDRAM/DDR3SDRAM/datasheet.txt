@@ -41,7 +41,7 @@ Controller Options :
    Data Width                    : 64
    ECC                           : Disabled
    Data Mask                     : enabled
-   ORDERING                      : Strict
+   ORDERING                      : Normal
 
 AXI Parameters :
    Data Width                    : 512
@@ -68,7 +68,7 @@ System_Clock:
 
 System_Control: 
 	SignalName: sys_rst
-		PadLocation: AV40  Bank: 15
+		PadLocation: AV40(MRCC_P)  Bank: 15
 	SignalName: init_calib_complete
 		PadLocation: No connect  Bank: Select Bank
 	SignalName: tg_compare_error

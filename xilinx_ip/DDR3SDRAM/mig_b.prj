@@ -33,7 +33,7 @@
         <DeepMemory>1</DeepMemory>
         <DataMask>1</DataMask>
         <ECC>Disabled</ECC>
-        <Ordering>Strict</Ordering>
+        <Ordering>Normal</Ordering>
         <CustomPart>FALSE</CustomPart>
         <NewPartName></NewPartName>
         <RowAddress>14</RowAddress>

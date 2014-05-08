@@ -33,7 +33,7 @@
         <DeepMemory>1</DeepMemory>
         <DataMask>1</DataMask>
         <ECC>Disabled</ECC>
-        <Ordering>Strict</Ordering>
+        <Ordering>Normal</Ordering>
         <CustomPart>FALSE</CustomPart>
         <NewPartName></NewPartName>
         <RowAddress>14</RowAddress>
@@ -161,7 +161,7 @@
             <Pin PADName="E19/E18(CC_P/N)" Bank="38" name="sys_clk_p/n" />
         </System_Clock>
         <System_Control>
-            <Pin PADName="AV40" Bank="15" name="sys_rst" />
+            <Pin PADName="AV40(MRCC_P)" Bank="15" name="sys_rst" />
             <Pin PADName="No connect" Bank="Select Bank" name="init_calib_complete" />
             <Pin PADName="No connect" Bank="Select Bank" name="tg_compare_error" />
         </System_Control>
