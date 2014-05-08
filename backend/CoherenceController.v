@@ -42,7 +42,7 @@ module CoherenceController(
 	FromStashData, FromStashDataValid, FromStashDataReady, FromStashDataDone,
 	
 	IVRequest, IVWrite, IVAddress, DataFromIV, DataToIV, ROIBV, ROIBID,
-	PathReady_IV, PathDone_IV, BOIReady_IV, BOIFromCC, BOIDone_IV
+	PathReady_IV, PathDone_IV, BOIReady_IV, BktOfIIdx, BOIFromCC, BOIDone_IV, BucketOfITurn
 );
 		
 	//--------------------------------------------------------------------------
@@ -57,6 +57,8 @@ module CoherenceController(
 	`include "SHA3Local.vh"
 	
 	parameter	BRAMLatency = 2;
+			
+	localparam	ORAMLogL = `log2(ORAML+1);
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -107,7 +109,8 @@ module CoherenceController(
 	output	[ORAML:0]			ROIBID;
 	
 	output  					PathReady_IV, BOIReady_IV, BOIFromCC;
-	input						PathDone_IV, BOIDone_IV;
+	output	[ORAMLogL-1:0]		BktOfIIdx;
+	input						PathDone_IV, BOIDone_IV, BucketOfITurn;
 	
 	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
 	
@@ -239,8 +242,6 @@ module CoherenceController(
 							.Out(		{HeaderInValid_dl, 	HeaderInBkfOfI_dl, 	BktOfIInValid_dl,	FromDecData_dl})
 						); 
 		
-		localparam	ORAMLogL = `log2(ORAML+1);
-		
 		wire 	Intersect; 
 		wire	BktOfIUpdate_CC, BktOfIUpdate_CC_Pre;
 		wire	ConflictHeaderLookup, ConflictHeaderOutValid, ConflictHeaderOutValid_Pre;
@@ -363,7 +364,7 @@ module CoherenceController(
 		Register #(.Width(1)) hd_rw  (Clock, 1'b0, Reset, ROAccess && HdRW_Transition, !HdRW, HdRW);
 		
 		wire	[DDRDWidth-1:0]		HdOfI;
-		wire	[ORAMLogL-1:0]		BktOfIIdx, BktOfIIdxIn;
+		wire	[ORAMLogL-1:0]		BktOfIIdxIn;
 		
 		assign	BktOfIIdxIn = Intersect ? LastHdOnPthCtr : HdOnPthCtr;
 		Register #(.Width(ORAMLogL))
@@ -453,7 +454,7 @@ module CoherenceController(
 		assign	ToEncDataValid = 		BufP1Reg_DOutValid;
 		assign	BufP1Reg_DOutReady = 	ToEncDataReady;
 		
-		assign	FromStashDataReady = 	RWAccessExtend;
+		assign	FromStashDataReady = 	1'b1;//RWAccessExtend;
 		assign	FromStashDataDone = 	!RWAccess && RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
 		
 		//--------------------------------------------------------------------------
@@ -464,11 +465,12 @@ module CoherenceController(
 	
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BOIFromCC) ? IVAddress - OBktOfIStartAddr + BktOfIStartAddr : IVAddress;
+		//assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BOIFromCC) ? IVAddress - OBktOfIStartAddr + BktOfIStartAddr : IVAddress;
+		assign	BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
 		wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_Pre, BktOfIAccessedByIV_1st;
-		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && IVRequest && IVAddress == OBktOfIStartAddr;		
+		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && BucketOfITurn && IVRequest && IVAddress == BktOfIStartAddr;		
 		CountAlarm #(		.Threshold(				3),
 							.IThreshold(			1))
 			boi_by_IV (		.Clock(					Clock), 

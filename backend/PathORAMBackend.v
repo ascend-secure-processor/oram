@@ -113,15 +113,16 @@ module PathORAMBackend(
 	
 	// integrity verification
 		
-	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV;
+	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn;
 	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 
 	wire	[AESEntropy-1:0] CC_ROIBV;
 	wire	[ORAML:0]		 CC_ROIBID;
-	wire	[AESEntropy-1:0] AES_ROIBV;
-	wire	[ORAML:0]		 AES_ROIBID;	
+	
+	localparam	ORAMLogL = `log2(ORAML+1);
+	wire	[ORAMLogL-1:0]	BktOfIIdx;
 
 	wire					FromStashDataDone;
 		
@@ -219,7 +220,8 @@ module PathORAMBackend(
 
 							.ToStashData(			BE_DRAMReadData),
 							.ToStashDataValid(		BE_DRAMReadDataValid), 
-							.ToStashDataReady(		BE_DRAMReadDataReady),
+							//.ToStashDataReady(		BE_DRAMReadDataReady),
+							.ToStashDataReady(		1'b1),
 
 							.FromStashData(			BE_DRAMWriteData), 
 							.FromStashDataValid(	BE_DRAMWriteDataValid), 
@@ -239,7 +241,9 @@ module PathORAMBackend(
 							
 							.BOIReady_IV(			BOIReady_IV),
 							.BOIFromCC(				BOIFromCC),
-							.BOIDone_IV(			BOIDone_IV)
+							.BktOfIIdx(				BktOfIIdx),
+							.BOIDone_IV(			BOIDone_IV),
+							.BucketOfITurn(			BucketOfITurn)
 						);
 							
 		 if (EnableIV) begin:INTEGRITY
@@ -262,7 +266,9 @@ module PathORAMBackend(
 								.PathDone(			PathDone_IV),
 								.BOIReady(			BOIReady_IV),
 								.BOIFromCC(			BOIFromCC),
+								.ROILevel(			BktOfIIdx),
 								.BOIDone(			BOIDone_IV),
+								.BucketOfITurn(		BucketOfITurn),
 								
 								.ROIBV(				CC_ROIBV),
 								.ROIBID(			CC_ROIBID)
@@ -318,9 +324,6 @@ module PathORAMBackend(
 				`endif
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
-							
-							.ROIBVOut(				AES_ROIBV),
-							.ROIBIDOut(				AES_ROIBID),
 														
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEDataOutValid(		AES_DRAMReadDataValid), 					

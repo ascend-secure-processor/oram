@@ -11,7 +11,8 @@
 module IntegrityVerifier (
 	Clock, Reset,
 	Request, Write, Address, DataIn, DataOut,	// RAM interface
-	PathReady, PathDone, BOIReady, BOIFromCC, BOIDone, 
+	PathReady, BOIReady, ROILevel, BOIFromCC, 
+	PathDone, BOIDone, BucketOfITurn,
 	ROIBV, ROIBID
 );
 
@@ -28,6 +29,8 @@ module IntegrityVerifier (
 	
 	parameter	BRAMLatency = 2;
 	
+	localparam	ORAMLogL = `log2(ORAML+1);
+		
     localparam  AWidth = PathBufAWidth;
 	localparam  BktAWidth = `log2(ORAML+2) + 1;
 	localparam	BlkAWidth = `log2(BktSize_DRBursts + 1);
@@ -44,61 +47,74 @@ module IntegrityVerifier (
 	output 	[DDRDWidth-1:0]  DataOut;
 	
 	input  	PathReady, BOIReady, BOIFromCC;
-	output 	PathDone, BOIDone;
+	output 	PathDone, BOIDone, BucketOfITurn;
 	
+	input	[ORAMLogL-1:0]	 ROILevel;
 	input	[AESEntropy-1:0] ROIBV;
 	input	[BIDWidth-1:0]	 ROIBID;
 	
-	// status and meta dat for hash engines
-	reg [BktAWidth-1:0] 	BucketID		[0:NUMSHA3-1];	
-	reg [BlkAWidth-1:0] 	BucketOffset	[0:NUMSHA3-1];
-	reg [DDRDWidth-1:0] 	BucketHeader 	[0:NUMSHA3-1];
+	// status and meta data for hash engines	
+	wire [BktAWidth-1:0] 	BucketIDTurn;
+	wire [BlkAWidth-1:0]	BucketOffsetTurn; 
+	wire [DDRDWidth-1:0]	BucketHeaderOut;
+	wire					BucketOfISIn;
 	
 	// hash IO internal variables
 	localparam HashByteCount = (BktSize_RawBits + 0) / 8;    	
-	
 	wire HashDataReady [0:NUMSHA3-1];
-		
-	// select one hash engine
-	reg  [LogNUMSHA3-1:0] Turn;
-	wire [LogNUMSHA3-1:0] LastTurn, NextTurn;
+			
+	// Round robin scheduling for hash engines
+	wire [LogNUMSHA3-1:0] Turn, LastTurn, NextTurn;
+	CountAlarm #(		.Threshold(		NUMSHA3))
+		turn_cnt (		.Clock(			Clock), 
+						.Reset(			Reset), 
+						.Enable(		1'b1),
+						.Count(			Turn)
+					);	
+	assign	NextTurn = (Turn + 1) % NUMSHA3;
+	assign	LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
 	//------------------------------------------------------------------------------------
 	// Request and address generation
 	//------------------------------------------------------------------------------------ 
-	assign Address = BucketID[Turn] * BktSize_DRBursts + (BucketOffset[Turn] % BktSize_DRBursts);
+	assign Address = BucketIDTurn * BktSize_DRBursts + (BucketOffsetTurn % BktSize_DRBursts);
 		// address pattern, chunk 0, 1, 2, ... BktSize_DRBursts - 1, 0
-		
-	assign Request = Write || (HashDataReady[Turn] && BucketOffset[Turn] < BktSize_DRBursts && !DataInValid); 
-																					// when BRAMLatency >= NUMSHA3, it may break
+	
+	// when BRAMLatency >= NUMSHA3, it may break
+	generate if (NUMSHA3 == 2)	
+		assign Request = Write || (!Reset && HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts && !DataInValid); 
+	else
+		assign Request = Write || (!Reset && HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts); 
+	endgenerate
+	
 	//------------------------------------------------------------------------------------
 	// Process and save headers
 	//------------------------------------------------------------------------------------ 	
-	wire DataInValid_Pre, DataInValid, HeaderInValid;
+	wire DataInValid,	DataInValid_Pre;
+	wire HeaderInValid, HeaderInValid_Pre;
+	wire ROIHeader, 	ROIHeader_Pre;
 	wire [DDRDWidth-1:0] HashData;
 	
-	Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid_Pre);
+	Register1Pipe #(1) 	rd_data_pre 	(Clock, Request && !Write, 	DataInValid_Pre);
+	Register1Pipe #(1) 	rd_hd_pre 		(Clock, BucketOffsetTurn == 0, 	HeaderInValid_Pre);	// TODO: do not work for  header > 1
+	Register1Pipe #(1) 	roi_hd_pre 		(Clock, BucketOfITurn, 	ROIHeader_Pre);
 	generate if (BRAMLatency == 1) begin
 		assign	DataInValid = DataInValid_Pre;
+		assign	HeaderInValid = DataInValid && HeaderInValid_Pre;
+		assign	ROIHeader = ROIHeader_Pre;
 	end else if (BRAMLatency == 2) begin
-		Register1Pipe #(1) 	RdData 		(Clock, DataInValid_Pre,	DataInValid);
+		Register1Pipe #(1) 	rd_data 	(Clock, DataInValid_Pre,	DataInValid);
+		Register1Pipe #(1) 	rd_hd 		(Clock, DataInValid_Pre && HeaderInValid_Pre,	HeaderInValid);
+		Register1Pipe #(1) 	roi_hd 		(Clock, ROIHeader_Pre,	ROIHeader);
 	end else begin
 		initial $finish;
 	end endgenerate
-	
-	//Register1Pipe #(1) 	RdDataPre 	(Clock, Request && !Write, 	DataInValid_Pre);
-	//Register1Pipe #(1) 	RdData 		(Clock, DataInValid_Pre,	DataInValid);
-	
-	assign  HeaderInValid = DataInValid && BucketOffset[LastTurn] == 1;		// TODO: do not work for  header > 1
 
 	// Bucket ID and bucket version
 	wire [AESEntropy-1:0] 	RWBV;
 	wire [BIDWidth-1:0]   	RWBID;
-	wire RWVIDValid, RWVIDReady, ROIHeaderInValid; 
-	
-	wire [AESEntropy-1:0] BktV;
-	wire [BIDWidth-1:0]   BktID;
-	
+	wire RWVIDValid, RWVIDReady; 
+		
 	GentrySeedGenerator	#(	.ORAML(					ORAML))				
 			gentry_rw	(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -107,54 +123,83 @@ module IntegrityVerifier (
 							.OutValid(				RWVIDValid), 
 							.OutReady(				RWVIDReady)
 						);
-	
+	assign RWVIDReady = HeaderInValid && !ROIHeader;
 	always @(posedge Clock) begin
-		if (HeaderInValid && !ROIHeaderInValid && !RWVIDValid) begin
+		if (HeaderInValid && !ROIHeader && !RWVIDValid) begin
 			$display("GentrySeedGenerator not valid. Really unlucky ... ");
 			$stop;
 		end
 	end
 	
-	assign RWVIDReady = HeaderInValid && !ROIHeaderInValid;
+	wire [AESEntropy-1:0] BktV;
+	wire [BIDWidth-1:0]   BktID;
 	
-	assign ROIHeaderInValid = HeaderInValid && BucketID[LastTurn] == TotalBucketD;	
-	assign BktV = ROIHeaderInValid ? ROIBV : RWBV;
-	assign BktID = ROIHeaderInValid ? ROIBID : RWBID;
+	assign BktV = ROIHeader ? ROIBV : RWBV;
+	assign BktID = ROIHeader ? ROIBID : RWBID;
 	
 //	assign HashData = HeaderInValid ? {  {TrancateDigestWidth{1'b0}}, DataIn[BktHSize_RawBits-1:AESEntropy], {AESEntropy{1'b0}}  }
 	assign HashData = HeaderInValid ? {  {(TrancateDigestWidth-BIDWidth){1'b0}}, BktID, DataIn[BktHSize_RawBits-1:AESEntropy], BktV} 
 						: DataIn;
 		// cannot include digest itself, nor header IV (since they change for every bucket on RO access).
 		
-	always @(posedge Clock) begin
-		if (!Reset && HeaderInValid)
-			BucketHeader[LastTurn] <= {DataIn[DDRDWidth-1:AESEntropy], BktV};					
-	end
-	
 	//------------------------------------------------------------------------------------
 	// Remaining work status
 	//------------------------------------------------------------------------------------ 	
-	reg [BktAWidth-1:0] BktOnPathStarted, BktOnPathDone;
-	reg [1:0]			BktOfIStarted, BktOfIDone;
+	wire 	[BktAWidth-1:0] 	BktOnPathStarted, BktOnPathDone;
+	wire 	[1:0]				BktOfIStarted, BktOfIDone;
+	wire						PendingWork, Idle, ConsumeHash;
 	
-	wire				PendingWork;
+	Counter	#(				.Width(					BktAWidth))
+		path_started	(	.Clock(					Clock),
+							.Reset(					PathReady),
+							.Set(					Reset),
+							.Load(					1'b0),
+							.Enable(				PendingWork && Idle && !BucketOfISIn),
+							.In(					{BktAWidth{1'bx}}),
+							.Count(					BktOnPathStarted)
+						);
+	Counter	#(				.Width(					BktAWidth))
+		path_done	(		.Clock(					Clock),
+							.Reset(					PathReady),
+							.Set(					Reset),
+							.Load(					1'b0),
+							.Enable(				ConsumeHash && !BucketOfITurn),
+							.In(					{BktAWidth{1'bx}}),
+							.Count(					BktOnPathDone)
+						);	
+
+	Counter	#(				.Width(					2))
+		boi_started		(	.Clock(					Clock),
+							.Reset(					BOIReady),
+							.Set(					Reset),
+							.Load(					1'b0),
+							.Enable(				PendingWork && Idle && BucketOfISIn),
+							.In(					{2{1'bx}}),
+							.Count(					BktOfIStarted)
+						);
+	Counter	#(				.Width(					2))
+		boi_done	(		.Clock(					Clock),
+							.Reset(					BOIReady),
+							.Set(					Reset),
+							.Load(					1'b0),
+							.Enable(				ConsumeHash && BucketOfITurn),
+							.In(					{2{1'bx}}),
+							.Count(					BktOfIDone)
+						);							
 	
 	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
 	
-	assign PathDone = BktOnPathDone == TotalBucketD;
-	assign BOIDone = BktOfIDone == 2;
+	assign PathDone = BktOnPathDone >= TotalBucketD;
+	assign BOIDone = BktOfIDone >= 2;
 	
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	wire ConsumeHash, VersionNonzero, Violation, CheckHash, UpdateHash; 
-	wire Idle;
+	wire VersionNonzero, Violation, CheckHash, UpdateHash; 
 	
 	wire ConsumeHash_dl;
-	
-	//assign ConsumeHash = HashOutValid[Turn];
 	Register1Pipe #(1)	consume_hash (Clock, HashOutValid[NextTurn] && !ConsumeHash_dl, ConsumeHash);
 	
 	// This hack is necessary when NUMSHA3 == 2 AND we add 1-cycle delay at HashOutValid
@@ -165,33 +210,90 @@ module IntegrityVerifier (
 	end endgenerate
 	
 	assign CheckHash = ConsumeHash && 
-						(BucketID[Turn] < TotalBucketD / 2 
+						(BucketIDTurn < TotalBucketD / 2 
 						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
 	
-	assign UpdateHash = ConsumeHash && !CheckHash;
-	
-	assign VersionNonzero = (BucketHeader[Turn][AESEntropy-1:0] > 64'b0);
+	assign UpdateHash = ConsumeHash && !CheckHash;	
+	assign VersionNonzero = (BucketHeaderOut[AESEntropy-1:0] > 64'b0);
 	
 	// checking hash for the input path
 	assign Violation = ConsumeHash && CheckHash && !BOIFromCC && VersionNonzero &&
-		BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
+		BucketHeaderOut[TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
-	assign Idle = BucketOffset[Turn] == BktSize_DRBursts + 1;
+	assign Idle = BucketOffsetTurn == BktSize_DRBursts + 1;
+		
+	// updating hash for the output path
+	assign Write = UpdateHash && VersionNonzero;		
+	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeaderOut[BktHSize_RawBits-1:0]};
 	
+	//------------------------------------------------------------------------------------
+	// maintain bucket information
+	//------------------------------------------------------------------------------------ 	
+	// BucketOffset shifts every cycle
+	wire	[BlkAWidth-1:0]		BucketOffsetSIn;
+	localparam [BlkAWidth-1:0]	BucketOffsetResetValue = BktSize_DRBursts + 1;							
+	ShiftRegister #(		.PWidth(				NUMSHA3 * BlkAWidth),
+							.SWidth(				BlkAWidth),
+							.ResetValue(			{NUMSHA3{BucketOffsetResetValue}}))
+		bkt_offset_turn	(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0),
+							.Enable(				1'b1), 
+							.SIn(					BucketOffsetSIn),
+							.SOut(					BucketOffsetTurn)
+					);
+	assign	BucketOffsetSIn = (PendingWork && Idle) ? 0
+								: (Request || ConsumeHash) ? BucketOffsetTurn + 1
+								: BucketOffsetTurn;
+					
+	// BucketID shifts every cycle			
+	wire	[BktAWidth-1:0]		BucketIDSIn;
+	ShiftRegister #(		.PWidth(				NUMSHA3 * (BktAWidth+1)),
+							.SWidth(				BktAWidth + 1))
+		bkt_id_turn	(		.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0),
+							.Enable(				1'b1), 
+							.SIn(					{BucketOfISIn, BucketIDSIn}),
+							.SOut(					{BucketOfITurn, BucketIDTurn})
+					);
+	assign	BucketOfISIn = (PendingWork && Idle) ? BktOfIStarted < 2 : BucketOfITurn;
+	assign	BucketIDSIn = (PendingWork && Idle) ? 
+								(BucketOfISIn ? 
+									(BOIFromCC ? TotalBucketD / 2 + ROILevel 
+									: TotalBucketD)			 
+								: BktOnPathStarted)
+							: BucketIDTurn;
+	
+	// BucketHeader has to be a FIFO; it cannot be implemented with ShiftRegister
+	wire	[DDRDWidth-1:0]		BucketHeaderIn;
+	FIFORAM	#(      	.Width(					DDRDWidth),     
+						.Buffering(				NUMSHA3))
+		bkt_hd_fifo  (	.Clock(					Clock),
+						.Reset(					Reset),
+						.InData(				BucketHeaderIn),
+						.InValid(				HeaderInValid),
+						.InAccept(				),
+						.OutData(				BucketHeaderOut),
+						.OutSend(				),
+						.OutReady(				ConsumeHash)
+					); 
+	assign	BucketHeaderIn = {DataIn[DDRDWidth-1:AESEntropy], BktV};
+		
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
 		if (ConsumeHash && CheckHash) begin
-			$display("Integrity verification results on Bucket %d, version %d", BucketID[Turn], BucketHeader[Turn][AESEntropy-1:0]);
+			$display("Integrity verification results on Bucket %d, version %d", BucketIDTurn, BucketHeaderOut[AESEntropy-1:0]);
 			if (Violation === 0) begin
 				if (!VersionNonzero)
-					$display("\tVersion is 0, no need to check hash for Bucket %d", BucketID[Turn]);
+					$display("\tVersion is 0, no need to check hash for Bucket %d", BucketIDTurn);
 				else
 					$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
 			end
 		
 			else if (Violation === 1) begin
-				$display("\tViolation : %x != %x", BucketHeader[Turn][TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits], HashOut[Turn][DigestStart-1:DigestEnd]);
-				$display("\t\t header = %x", BucketHeader[Turn]);
+				$display("\tViolation : %x != %x", BucketHeaderOut[TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits], HashOut[Turn][DigestStart-1:DigestEnd]);
+				$display("\t\t header = %x", BucketHeaderOut);
 				$stop;
 			end
 			
@@ -203,94 +305,22 @@ module IntegrityVerifier (
 		
 		if (ConsumeHash && UpdateHash) begin
 			if (!VersionNonzero) begin
-				$display("\tVersion is 0, no need to update hash for Bucket %d", BucketID[Turn]);
-				if (BucketID[Turn] != TotalBucketD) begin
-					$display("\t Error: RW_W version 0 for Bucket %d", BucketID[Turn]);
+				$display("\tVersion is 0, no need to update hash for Bucket %d", BucketIDTurn);
+				if (!BucketOfITurn) begin
+					$display("\t Error: RW_W version 0 for Bucket %d", BucketIDTurn);
 					$stop;
 				end
 			end
 			else
-				$display("Updating Bucket %d (with header %x) hash to \n\t\t %x", BucketID[Turn], BucketHeader[Turn], HashOut[Turn][DigestStart-1:DigestEnd]);
+				$display("Updating Bucket %d (with header %x) hash to \n\t\t %x", BucketIDTurn, BucketHeaderOut, HashOut[Turn][DigestStart-1:DigestEnd]);
 		end
-				
+		
+		if (BOIReady && !BOIDone)
+			$display("Error: RO bucket arrives so soon? Have not finished the last one");	
+		if (PathReady && !PathDone)
+			$display("Error: Have not finished the last path");			
 	end
 `endif
-	
-	// updating hash for the output path
-	assign Write = UpdateHash && VersionNonzero;		
-	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeader[Turn][BktHSize_RawBits-1:0]};
-		
-		
-	//------------------------------------------------------------------------------------
-	// Round robin scheduling for hash engines
-	//------------------------------------------------------------------------------------ 	
-	integer hashid = 0;
-	always @(posedge Clock) begin
-        if (Reset) begin
-            Turn <= 0;
-			BktOnPathStarted <= TotalBucketD;
-			BktOnPathDone <= TotalBucketD;
-			BktOfIStarted <= 2;
-			BktOfIDone <= 2;
-			
-            for (hashid = 0; hashid < NUMSHA3; hashid = hashid + 1)
-                BucketOffset[hashid] <= BktSize_DRBursts + 1;			
-        end
-		else begin
-			Turn <= (Turn + 1) % NUMSHA3;
-			
-			// asking for more input				
-			if (Request && !Write) begin							
-				BucketOffset[Turn] <= BucketOffset[Turn] + 1;			
-			end
-			
-			// dispatch work if there's any
-			if (PendingWork && Idle) begin	
-				BucketOffset[Turn] <= 0;
-				
-				if (BktOfIStarted < 2) begin			// prioritize RO bucket of interest
-					BucketID[Turn] <= TotalBucketD;
-					BktOfIStarted <= BktOfIStarted + 1;
-				end
-				else begin	
-					BucketID[Turn] <= BktOnPathStarted;
-					BktOnPathStarted <= BktOnPathStarted + 1;
-				end
-			end
-			
-			// mark idle and tick *Done
-			if (ConsumeHash) begin								
-				BucketOffset[Turn] <= BucketOffset[Turn] + 1;	// mark idle
-				
-				if (BucketID[Turn] == TotalBucketD)
-					BktOfIDone <= BktOfIDone + 1;
-				else
-					BktOnPathDone <= BktOnPathDone + 1;
-			end
-			
-			// bucket of ready done
-			if (BOIReady) begin
-				BktOfIStarted <= 0;
-				BktOfIDone <= 0;
-			end
-			
-			if (PathReady) begin
-				BktOnPathStarted <= 0;
-				BktOnPathDone <= 0;			
-			end
-			
-			`ifdef SIMULATION
-			if (BOIReady && !BOIDone)
-				$display("Error: RO bucket arrives so soon? Have not finished the last one");	
-			if (PathReady && !PathDone)
-				$display("Error: Have not finished the last path");	
-			`endif	
-			
-		end
-    end
-	
-	assign	NextTurn = (Turn + 1) % NUMSHA3;
-	assign	LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
 	//------------------------------------------------------------------------------------
 	// NUMSHA3 hash engines
