@@ -153,7 +153,7 @@ module PathORAMBackendInner(
 	// ORAM initialization
 	
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
-	(* mark_debug = "TRUE" *	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
 	(* mark_debug = "TRUE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
 	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
