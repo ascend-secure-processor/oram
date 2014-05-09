@@ -452,11 +452,11 @@ module CoherenceController(
 			Register1Pipe #(DDRDWidth)	to_stash_data2	(Clock,	ToStashData_Pre[1], ToStashData_Pre[2]);
 		end
 		
-		assign	ToStashData =			(ROAccess && BOIFromCC) ? ToStashData_Pre[0] : ToStashData_Pre[BRAMLatency];
+		assign	ToStashData =			(ROAccess && BOIFromCC) ? ToStashData_Pre[0] : ToStashData_Pre[0];
 																					
 		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid 
 											: BOIFromCC ? ConflictBktOfIOutValid
-											: BktOfIOutValid[BRAMLatency];
+											: BktOfIOutValid[0];
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
