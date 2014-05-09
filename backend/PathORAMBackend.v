@@ -97,7 +97,7 @@ module PathORAMBackend(
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
 
-    wire                    DRAMInitComplete;
+    (* mark_debug = "TRUE" *)	wire                    DRAMInitComplete;
 	
 	// CC - AES
 
@@ -124,7 +124,7 @@ module PathORAMBackend(
 	localparam	ORAMLogL = `log2(ORAML+1);
 	wire	[ORAMLogL-1:0]	BktOfIIdx;
 
-	wire					FromStashDataDone;
+	wire					FromStashDataDone; // TODO remove?
 		
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
@@ -150,7 +150,7 @@ module PathORAMBackend(
 							.Reset(					Reset),
 				`else
 							.Reset(					1'b0),
-				`endif			
+				`endif	
 							.Command(				Command),
 							.PAddr(					PAddr),
 							.CurrentLeaf(			CurrentLeaf),
@@ -288,15 +288,15 @@ module PathORAMBackend(
 		end
 		
 	end else begin: NO_CC
-		assign	BE_DRAMReadData = AES_DRAMReadData;
-		assign	BE_DRAMReadDataValid = AES_DRAMReadDataValid;
-		assign	AES_DRAMReadDataReady = BE_DRAMReadDataReady;
+		assign	BE_DRAMReadData = 					AES_DRAMReadData;
+		assign	BE_DRAMReadDataValid = 				AES_DRAMReadDataValid;
+		assign	AES_DRAMReadDataReady = 			BE_DRAMReadDataReady;
 		
-		assign	AES_DRAMWriteData = BE_DRAMWriteData;
-		assign  AES_DRAMWriteDataValid = BE_DRAMWriteDataValid;
-		assign	BE_DRAMWriteDataReady = AES_DRAMWriteDataReady;
+		assign	AES_DRAMWriteData = 				BE_DRAMWriteData;
+		assign  AES_DRAMWriteDataValid = 			BE_DRAMWriteDataValid;
+		assign	BE_DRAMWriteDataReady = 			AES_DRAMWriteDataReady;
 		
-		assign	FromStashDataDone = 1'b1;
+		assign	FromStashDataDone = 				1'b1;
 	end endgenerate
 	
 	//--------------------------------------------------------------------------
@@ -372,15 +372,46 @@ module PathORAMBackend(
 							.DRAMInitDone(			DRAMInitComplete));
 		end
 	end else begin:NO_AES
-		assign	DRAMWriteData = 					AES_DRAMWriteData;
-		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
-		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
-	
-		assign	AES_DRAMReadData =					DRAMReadData;
-		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
-		assign	DRAMReadDataReady = 				AES_DRAMReadDataReady;
+		if (EnableREW) begin:REW_AES_PASS
+			assign	DRAMWriteData = 				AES_DRAMWriteData;
+			assign	DRAMWriteDataValid =			AES_DRAMWriteDataValid;
+			assign	AES_DRAMWriteDataReady =		DRAMWriteDataReady;
+		
+			assign	AES_DRAMReadData =				DRAMReadData;
+			assign	AES_DRAMReadDataValid =			DRAMReadDataValid;
+			assign	DRAMReadDataReady = 			AES_DRAMReadDataReady;
+		end else begin:BASIC_AES_PASS
+			// We still want to model AES latencies
+
+			parameter		AESLatency =			21 + 8; // assuming tiny_aes
+			
+			AESPathORAMDelayModel #(.Width(			DDRDWidth),
+							.FWLatency(				AESLatency))
+				indelay(	.Clock(					Clock), 
+							.Reset(					Reset),
+
+							.DataIn(				DRAMReadData),
+							.DataInValid(			DRAMReadDataValid), 
+							.DataInReady(			DRAMReadDataReady),
+
+							.DataOut(				AES_DRAMReadData),
+							.DataOutValid(			AES_DRAMReadDataValid), 
+							.DataOutReady(			AES_DRAMReadDataReady));
+							
+			AESPathORAMDelayModel #(.Width(			DDRDWidth),
+							.FWLatency(				AESLatency))
+				outdelay(	.Clock(					Clock), 
+							.Reset(					Reset),
+
+							.DataIn(				AES_DRAMWriteData),
+							.DataInValid(			AES_DRAMWriteDataValid), 
+							.DataInReady(			AES_DRAMWriteDataReady),
+
+							.DataOut(				DRAMWriteData),
+							.DataOutValid(			DRAMWriteDataValid), 
+							.DataOutReady(			DRAMWriteDataReady));							
+		end
 	end endgenerate
-	
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

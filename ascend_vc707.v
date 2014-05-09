@@ -58,38 +58,43 @@ module ascend_vc707(
 	/* 	Debugging.
 	
 		SlowORAMClock:		slow the ORAM controller down to make it easier to add 
-							ChipScope signals & meet timing *
+							ChipScope signals & meet timing
 		
 		See PathORAMTop for more documentation */
-	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
+	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
 	parameter				GenHistogram = 			1;
 	
+	// CCS paper configurations
+	parameter				UnifiedExperiment =		0;
+	parameter				REWExperiment =			0;
+	parameter				REWIVExperiment =		0;
+	
 	// ORAM related
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					20, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
-							ORAMZ =					5,
-							ORAMC =					10, // Stash capacity will always be 128 - 256
+							ORAMZ =					(REWExperiment) ? 5 : 4,
+							ORAMC =					10,
 							ORAME =					5;
 
 	parameter				FEDWidth =				64,
 							BEDWidth =				512;
 
     parameter				NumValidBlock = 		1 << ORAML,
-							Recursion = 			3,							
-							EnablePLB = 			1,   
+							Recursion = 			3,
+							EnablePLB = 			UnifiedExperiment,   
 							PLBCapacity = 			8192 << 3;
 		
 	parameter				Overclock =				1;
 	
-	parameter				EnableAES =				1;
-	parameter				EnableREW =				1;
-	parameter				EnableIV =				1;
+	parameter				EnableAES =				REWExperiment;
+	parameter				EnableREW =				REWExperiment;
+	parameter				EnableIV =				REWIVExperiment;
 	parameter				DelayedWB =				EnableIV;
 	
 	`include "SecurityLocal.vh"
@@ -160,19 +165,19 @@ module ascend_vc707(
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid, DDR3SDRAM_DataInReady;
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid;
 
-	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
-	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
-	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	wire	[DDRAWidth_Top-1:0]	DDR3SDRAM_Address_MIG;
-	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth_Top-1:0]	DDR3SDRAM_Address_MIG;
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 
-	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
-	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
-	wire					DDR3SDRAM_DataOutValid_MIG;	
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
-	wire					PathWriteback;			
+	(* mark_debug = "TRUE" *)	wire					PathWriteback;
 		
 	//------------------------------------------------------------------------------
 	// 	Clocking
@@ -193,6 +198,11 @@ module ascend_vc707(
 	// 	GPIO
 	//------------------------------------------------------------------------------
 
+	// We wish to reset the harness first, then dump the histogram
+	always @(posedge ORAMClock) begin
+		Tester_ForceHistogramDump <=				Tester_ForceHistogramDumpPre;
+	end	
+	
 	// do something with this
 	assign	led[6:2] = 								0;
 
@@ -210,11 +220,6 @@ module ascend_vc707(
 	//------------------------------------------------------------------------------
 	// 	uBlaze core & caches
 	//------------------------------------------------------------------------------
-	
-	// We wish to reset the harness first, then dump the histogram
-	always @(posedge ORAMClock) begin
-		Tester_ForceHistogramDump <=				Tester_ForceHistogramDumpPre;
-	end
 	
 	HWTestHarness #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -368,7 +373,7 @@ module ascend_vc707(
 		assign	DDR3SDRAM_DataInReady = 			DDR3SDRAM_DataInReady_MIG_Pre;
 		
 		assign	DDR3SDRAM_ReadData =				DDR3SDRAM_ReadData_MIG;
-		assign	DDR3SDRAM_DataOutValid = 			DDR3SDRAM_DataOutValid_MIG;			
+		assign	DDR3SDRAM_DataOutValid = 			DDR3SDRAM_DataOutValid_MIG;
 	end endgenerate
 	
 	//------------------------------------------------------------------------------
@@ -412,6 +417,7 @@ module ascend_vc707(
 	assign	DDR3SDRAM_ResetDone =					~MemoryReset;
 	
 	SynthesizedRandDRAM	#(	.InBufDepth(			6), // Set to match MIG7
+							.InDataBufDepth(		16), // Set to match MIG7
 	                        .OutInitLat(			25), // Set to match MIG7
 	                        .OutBandWidth(			100), // Set to match MIG7
 							.UWidth(				DDRDQWidth),

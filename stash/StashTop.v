@@ -190,7 +190,6 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	wire					StashOverflow;
 	
 	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
-	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;
 
 	// Derived signals
 	
@@ -513,9 +512,7 @@ module StashTop(
 							
 							.StashAlmostFull(		StashAlmostFull),
 							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		StashOccupancy), // debugging
-							.BlockNotFound(			BlockNotFound), // debugging
-							.BlockNotFoundValid(	BlockNotFoundValid)); // debugging
+							.StashOccupancy(		StashOccupancy)); // debugging
 
 	//--------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters

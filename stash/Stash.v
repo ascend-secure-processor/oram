@@ -43,9 +43,7 @@ module Stash(
 	ReadData, ReadPAddr, ReadLeaf,
 	ReadOutValid, ReadOutReady, BlockReadComplete, PathReadComplete,
 	
-	StashAlmostFull, StashOverflow, StashOccupancy,
-	
-	BlockNotFound, BlockNotFoundValid
+	StashAlmostFull, StashOverflow, StashOccupancy
 	);
 
 	//--------------------------------------------------------------------------
@@ -173,11 +171,6 @@ module Stash(
 	output					StashOverflow;
 	output	[SEAWidth-1:0] 	StashOccupancy;
 	
-	// Indicates that on a read/rm/update; the requested block wasn't found
-	// THIS IS AN ERROR
-	output					BlockNotFound;
-	output					BlockNotFoundValid;
-	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
@@ -274,6 +267,10 @@ module Stash(
 	wire					ReturnInProgress;
 	wire	[SEAWidth-1:0]	CRUD_SAddr, Core_CommandSAddr;
 	
+	// Debugging
+	
+	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid, BlockNotFound_Error;	
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -290,6 +287,11 @@ module Stash(
 	
 	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
+	
+	Register1b 	bnvd(   	.Clock(     			Clock), 
+							.Reset(     			Reset), 
+							.Set(       			StopOnBlockNotFound && BlockNotFound && BlockNotFoundValid), 
+							.Out(					BlockNotFound_Error)); 	
 	
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
@@ -438,10 +440,11 @@ module Stash(
 			ST_Reset : 
 				if (Core_ResetDone) NS =			ST_Idle;
 			ST_Idle :
-				if (AccessStarted) 
-					NS =							ST_Scan;
-				else if (StartAppend)
-					NS =							ST_Evict;
+				if (~BlockNotFound_Error)
+					if (AccessStarted) 
+						NS =							ST_Scan;
+					else if (StartAppend)
+						NS =							ST_Evict;
 			ST_Scan :
 				if (ScanComplete_Conservative)
 					NS =			 				ST_PathRead;

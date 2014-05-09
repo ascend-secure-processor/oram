@@ -384,7 +384,7 @@ module HWTestHarness(
 		initial begin
 			i = 0;
 			CrossBufIn_DataInValid_Reg = 			1'b0;
-			#(Cycle*5000);
+			#(Cycle*1000);
 		
 			while (i < AC) begin
 				TASK_Command(BECMD_Update, i);
