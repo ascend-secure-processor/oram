@@ -156,16 +156,8 @@ module PosMapPLB
 							.Out(		Valid)
 						);
 	
-    always @(posedge Clock) begin
- /*       if (Reset) begin
-            Valid <= 0;                
-        end    
-        else if (Valid && OutReady) begin
-            Valid <= 0;
-        end
- */       
+    always @(posedge Clock) begin      
         if ((PosMapValid || PLBValid) && !Valid) begin
-           // Valid <= 1;
             Hit <= PPPHit;
             UnInit <= (PosMapValid && PosMapOut[ORAML] == 0) || (PLBValid && PLBHit && PLBDOut[ORAML] == 0);
             OldLeafOut <= PosMapValid ? PosMapOut[ORAML-1:0] : PLBDOut[ORAML-1:0];

@@ -260,7 +260,8 @@ module PathORAMBackendInner(
 	//	Front-end commands
 	//--------------------------------------------------------------------------
 
-	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2))
+	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2),
+							.BWLatency(				1))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				{Command,			PAddr, 			CurrentLeaf, 			RemappedLeaf}),
