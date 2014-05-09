@@ -7,69 +7,69 @@
 
 //==============================================================================
 //	Module:		PathORAMBackendInner
-//	Desc:		Stash, DRAM address and top level state machine that interfaces
+//	Desc:		Stash, DRAM address and top level state machine that interfaces 
 //				with the FrontEnd
 //==============================================================================
 module PathORAMBackendInner(
 	Clock, Reset,
 
-	Command, PAddr, CurrentLeaf, RemappedLeaf,
+	Command, PAddr, CurrentLeaf, RemappedLeaf, 
 	CommandValid, CommandReady,
 
-	LoadData,
+	LoadData, 
 	LoadValid, LoadReady,
 
 	StoreData,
 	StoreValid, StoreReady,
-
+	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, ROStart, REWRoundDummy,
-
+	ROPAddr, ROLeaf, ROStart, REWRoundDummy, 
+	
 	DRAMInitComplete
 	);
-
+		
 	//--------------------------------------------------------------------------
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
 
-	`include "SecurityLocal.vh"
+	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
 	`include "StashTopLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
-
+	
 	localparam				STWidth =				2,
 							ST_Initialize =			2'd0,
 							ST_Idle =				2'd1,
 							ST_Append =				2'd2,
 							ST_Access =				2'd3;
-
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
-
+		
   	input 					Clock, Reset;
-
+	
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
 	input	[BECMDWidth-1:0] Command;
 	input	[ORAMU-1:0]		PAddr;
-	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX
+	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX 
 	input	[ORAML-1:0]		RemappedLeaf;
 	input					CommandValid;
 	output 					CommandReady;
 
 	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
-
+	
 	output	[FEDWidth-1:0]	LoadData;
 	output					LoadValid;
 	input 					LoadReady;
@@ -77,7 +77,7 @@ module PathORAMBackendInner(
 	input	[FEDWidth-1:0]	StoreData;
 	input 					StoreValid;
 	output 					StoreReady;
-
+	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
 	//--------------------------------------------------------------------------
@@ -86,11 +86,11 @@ module PathORAMBackendInner(
 	output	[DDRCWidth-1:0]	DRAMCommand;
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
-
+	
 	input	[DDRDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
 	output					DRAMReadDataReady;
-
+	
 	output	[DDRDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
@@ -98,60 +98,60 @@ module PathORAMBackendInner(
 	//--------------------------------------------------------------------------
 	//	REW Interface
 	//--------------------------------------------------------------------------
-
+	
 	output  [ORAMU-1:0]		ROPAddr;
 	output  [ORAML-1:0]		ROLeaf;
 	output					ROStart;
 	output 					REWRoundDummy;
-
+	
 	//--------------------------------------------------------------------------
 	//	Status Interface
 	//--------------------------------------------------------------------------
 
 	output					DRAMInitComplete;
-
+								
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
-	//--------------------------------------------------------------------------
+	//-------------------------------------------------------------------------- 
 
 	// Control logic
 
-	reg		[STWidth-1:0]	CS, NS;
-	(* mark_debug = "TRUE" *) wire					CSInitialize, CSIdle, CSAppend, CSAccess;
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
+	wire					CSInitialize, CSIdle, CSAppend, CSAccess;
 
-	(* mark_debug = "TRUE" *) wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
-
+	(* mark_debug = "TRUE" *)	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
+		
 	// Front-end interfaces
+	
+	wire	[BECMDWidth-1:0] Command_Internal;
+	wire	[ORAMU-1:0]		PAddr_Internal;
+	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
+	(* mark_debug = "TRUE" *)	wire					Command_InternalValid, Command_InternalReady;
 
-	(* mark_debug = "TRUE" *) wire	[BECMDWidth-1:0] Command_Internal;
-	(* mark_debug = "TRUE" *) wire	[ORAMU-1:0]		PAddr_Internal;
-	(* mark_debug = "TRUE" *) wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
-	(* mark_debug = "TRUE" *) wire					Command_InternalValid, Command_InternalReady;
-
-	(* mark_debug = "TRUE" *) wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
-	(* mark_debug = "TRUE" *) wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
-
-	(* mark_debug = "TRUE" *) wire	[BEDWidth-1:0]	Store_ShiftBufData;
-	(* mark_debug = "TRUE" *) wire					Store_ShiftBufValid, Store_ShiftBufReady;
-
-	(* mark_debug = "TRUE" *) wire	[BEDWidth-1:0]	Load_ShiftBufData;
-	(* mark_debug = "TRUE" *) wire					Load_ShiftBufValid, Load_ShiftBufReady;
-
+	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
+	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
+		
+	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
+	(* mark_debug = "TRUE" *)	wire					Store_ShiftBufValid, Store_ShiftBufReady;
+	
+	wire	[BEDWidth-1:0]	Load_ShiftBufData;
+	(* mark_debug = "TRUE" *)	wire					Load_ShiftBufValid, Load_ShiftBufReady;
+		
 	// Stash
-
-	(* mark_debug = "TRUE" *) wire	[BEDWidth-1:0]	Stash_StoreData;
-	(* mark_debug = "TRUE" *) wire					Stash_StoreDataValid, Stash_StoreDataReady;
-
-	(* mark_debug = "TRUE" *) wire	[BEDWidth-1:0]	Stash_ReturnData;
-	(* mark_debug = "TRUE" *) wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
-
-	(* mark_debug = "TRUE" *) wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
-	(* mark_debug = "TRUE" *) wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
-
-	(* mark_debug = "TRUE" *)	(* mark_debug = "TRUE" *) wire					StashAlmostFull;
-
+	
+	wire	[BEDWidth-1:0]	Stash_StoreData;						
+	(* mark_debug = "TRUE" *)	wire					Stash_StoreDataValid, Stash_StoreDataReady;
+	
+	wire	[BEDWidth-1:0]	Stash_ReturnData;
+	(* mark_debug = "TRUE" *)	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
+	
+	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
+	(* mark_debug = "TRUE" *)	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
+	
+	(* mark_debug = "TRUE" *)	wire					StashAlmostFull;
+	
 	// ORAM initialization
-
+	
 	(* mark_debug = "TRUE" *) wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
 	(* mark_debug = "TRUE" *) wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
 	(* mark_debug = "TRUE" *) wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
@@ -401,7 +401,7 @@ module PathORAMBackendInner(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 				control(	.Clock(					Clock),
-							.Reset(					Reset | DRAMInitializing),
+							.Reset(					Reset),
 
 							.Command(				Control_Command),
 							.PAddr(					Control_PAddr),
@@ -447,7 +447,7 @@ module PathORAMBackendInner(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ))
 				addr_gen(	.Clock(					Clock),
-							.Reset(					Reset | DRAMInitializing),
+							.Reset(					Reset),
 							.Start(					AddrGen_InValid),
 							.Ready(					AddrGen_InReady),
 							.RWIn(					AddrGen_PathRead),
@@ -694,26 +694,27 @@ module BackendInnerControl(
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
-	reg		[STWidth-1:0]	CS, NS;
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 
-	(* mark_debug = "TRUE" *) wire					RWAccess, ROAccess, PathRead, PathWriteback;
-	(* mark_debug = "TRUE" *) wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
+	(* mark_debug = "TRUE" *)	wire					RWAccess, ROAccess, PathRead, PathWriteback;
+	(* mark_debug = "TRUE" *)	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 
-	(* mark_debug = "TRUE" *) wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;
-	(* mark_debug = "TRUE" *) wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
+	(* mark_debug = "TRUE" *)	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
+	(* mark_debug = "TRUE" *)	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
+	
+	(* mark_debug = "TRUE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
 
-	(* mark_debug = "TRUE" *) wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
-
-	(* mark_debug = "TRUE" *) wire					AddrRWDone, DataRWDone, OperationComplete;
-	(* mark_debug = "TRUE" *) wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
-
-	(* mark_debug = "TRUE" *) wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
-
-	(* mark_debug = "TRUE" *) wire	[ORAML-1:0]		GentryLeaf;
-	(* mark_debug = "TRUE" *) wire	[ORAML-1:0]		DummyLeaf;
-	(* mark_debug = "TRUE" *) wire					DummyLeaf_Valid;
-	(* mark_debug = "TRUE" *) wire	[PRNGLWidth-1:0] DummyLeaf_Wide;
-
+	(* mark_debug = "TRUE" *)	wire					AddrRWDone, DataRWDone, OperationComplete;
+	(* mark_debug = "TRUE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
+	
+	(* mark_debug = "TRUE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
+		
+	wire	[ORAML-1:0]		DummyLeaf;
+	wire					DummyLeaf_Valid;
+	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;	
+	
+	wire	[ORAML-1:0]		GentryLeaf;	
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------
@@ -729,7 +730,12 @@ module BackendInnerControl(
 	//--------------------------------------------------------------------------
 
 	`ifdef SIMULATION
-
+		always @(posedge Clock) begin 
+			if (DataReadTransfer & DataWriteTransfer) begin
+				$display("[%m @ %t] ERROR: Overlapping read/write transfers.  This could be a valid optimization (eh ... really?), but is more likely a control bug", $time);
+				$finish;			
+			end
+		end
 	`endif
 
 	//--------------------------------------------------------------------------
@@ -891,6 +897,8 @@ module BackendInnerControl(
 			end
 		end
 	end else begin:BASIC_CONTROL
+		assign	GentryLeaf =						{ORAML{1'bx}};
+	
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
 
@@ -898,7 +906,7 @@ module BackendInnerControl(
 
 		assign	ROStart =							1'b0;
 
-		always @( * ) begin
+		initial begin
 			ROPAddr =								{ORAMU{1'bx}};
 			ROLeaf =								{ORAML{1'bx}};
 			REWRoundDummy =							1'b0;
