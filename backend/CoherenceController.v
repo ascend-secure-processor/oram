@@ -184,7 +184,7 @@ module CoherenceController(
 					);
 		
 	assign HdOfIFound_Pre = HeaderCmpValid && HdOfIDetect;
-	Register1Pipe	hoi_found	(Clock,	HdOfIFound_Pre, HdOfIFound);
+	Pipeline #(.Width(1), .Stages(1))	hoi_found	(Clock,	1'b0, HdOfIFound_Pre, HdOfIFound);
 	Register1b bkt_ofi_found	(Clock,	ROStart, HdOfIFound_Pre, HdOfIHasBeenFound);
 	
 	//--------------------------------------------------------------------------
@@ -234,19 +234,17 @@ module CoherenceController(
 		wire	[DDRDWidth-1:0]		FromDecData_dl;
 		
 		// delay these 3 signals by 1 cycle to match the case where CC resolves conflict
-		Register #(			.Width(		DDRDWidth + 3))
-			from_dec_dl (	.Clock(		Clock),
-							.Reset(		1'b0),
-							.Set(		1'b0),
-							.Enable(	1'b1),
-							.In(		{HeaderInValid, 	HeaderInBkfOfI, 	BktOfIInValid,		FromDecData}),
-							.Out(		{HeaderInValid_dl, 	HeaderInBkfOfI_dl, 	BktOfIInValid_dl,	FromDecData_dl})
+		Pipeline #(		.Width(		DDRDWidth + 3),
+						.Stages(	BRAMLatency))
+			from_dec_dl (	Clock, 1'b0,
+							{HeaderInValid, 	HeaderInBkfOfI, 	BktOfIInValid,		FromDecData},
+							{HeaderInValid_dl, 	HeaderInBkfOfI_dl, 	BktOfIInValid_dl,	FromDecData_dl}
 						); 
 		
 		wire 	Intersect, Intersect_Pre; 
-		wire	BktOfIUpdate_CC, BktOfIUpdate_CC_Pre;
-		wire	ConflictHeaderLookup, ConflictHeaderOutValid, ConflictHeaderOutValid_Pre;
-		wire	ConflictBktOfILookup, ConflictBktOfIOutValid, ConflictBktOfIOutValid_Pre;			
+		wire	BktOfIUpdate_CC;
+		wire	ConflictHeaderLookup, ConflictHeaderOutValid;
+		wire	ConflictBktOfILookup, ConflictBktOfIOutValid;			
 		wire 	[ORAMLogL-1:0]	IntersectCtr;
 		
 		wire	[AESEntropy-1:0]	GentryVersion;	
@@ -273,40 +271,37 @@ module CoherenceController(
 							.IntersectCtr(	IntersectCtr)
 						);
 
-		Register1Pipe #(1)	intersect_dl	(Clock,	Intersect_Pre, Intersect);					
-		Register1b 			boi_intersect 	(Clock, ROStart, HdOfIFound && Intersect, BOIFromCC);
+		Pipeline #(.Width(1), .Stages(1))	
+			intersect_dl	(Clock,	1'b0, Intersect_Pre, Intersect);					
+		Register1b 		boi_intersect 	(Clock, ROStart, HdOfIFound && Intersect, BOIFromCC);
 		
 		assign	ConflictHeaderLookup = Intersect && HeaderInValid;
 		assign	ConflictBktOfILookup = BOIFromCC && BktOfIInValid;
-		Register1Pipe #(	.Width(2))	
-			conf_out (	Clock,	  {ConflictHeaderLookup, ConflictBktOfILookup}, 	
-						          {ConflictHeaderOutValid_Pre, ConflictBktOfIOutValid_Pre});
+		Pipeline #(	.Width(2), .Stages(BRAMLatency))	
+			conf_out_pipe (	Clock,	1'b0,
+						{ConflictHeaderLookup, ConflictBktOfILookup}, 			  
+						{ConflictHeaderOutValid, ConflictBktOfIOutValid}
+					);
 		
-		wire	BufP1Reg_DInValid, BufP1Reg_DInValid_Pre;
 		wire	DontCareHd, DontCareHd_Pre;
 		wire	HdOfIWriteBack, HdOfIWriteBack_Pre;
-		if (BRAMLatency == 1) begin
-			assign	BufP1_DOut = BufP1_DOut_Pre;
-			assign	{ConflictHeaderOutValid, ConflictBktOfIOutValid, BufP1Reg_DInValid, DontCareHd, BktOfIUpdate_CC, HdOfIWriteBack} 
-					= {ConflictHeaderOutValid_Pre, ConflictBktOfIOutValid_Pre, BufP1Reg_DInValid_Pre, DontCareHd_Pre, BktOfIUpdate_CC_Pre, HdOfIWriteBack_Pre};
-		end else if (BRAMLatency == 2) begin
-			Register1Pipe #(DDRDWidth)	
-				bufP1_out_reg	(Clock,	BufP1_DOut_Pre, BufP1_DOut);
-										
-			Register1Pipe #(6)							
-				conf_out_reg	(Clock,	{ConflictHeaderOutValid_Pre, ConflictBktOfIOutValid_Pre, BufP1Reg_DInValid_Pre, DontCareHd_Pre, BktOfIUpdate_CC_Pre, HdOfIWriteBack_Pre},
-										{ConflictHeaderOutValid, ConflictBktOfIOutValid, BufP1Reg_DInValid, DontCareHd, BktOfIUpdate_CC, HdOfIWriteBack});
-		end else begin
-			initial $finish;
-		end
+		Pipeline #(.Width(DDRDWidth), .Stages(BRAMLatency-1))
+			bufP1_out_pipe	(	Clock, 1'b0, BufP1_DOut_Pre, BufP1_DOut);
+		Pipeline #(.Width(2), .Stages(BRAMLatency-1))
+			hd_wb_pipe		(	Clock, 1'b0, 
+								{DontCareHd_Pre, HdOfIWriteBack_Pre}, 
+								{DontCareHd, HdOfIWriteBack}
+							);	
 	
 		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData;
 						
 		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
 		wire	[BktCtrAWidth-1:0]		BktOfIOffset;			
 		assign	BktOfIOffset = RO_R_Ctr - (ORAML+1) * BktHSize_DRBursts;
-				
-		Register1Pipe #(.Width(1)) boi_update (Clock, BOIFromCC && HeaderInBkfOfI, BktOfIUpdate_CC_Pre);
+		
+		Pipeline #(.Width(1), .Stages(BRAMLatency))
+			boi_update_pipe	(	Clock, 1'b0, BOIFromCC && HeaderInBkfOfI, BktOfIUpdate_CC);
+						
 	`ifdef SIMULATION		
 		always @(posedge Clock) begin
 			if (BktOfIUpdate_CC && HeaderInBkfOfI) begin
@@ -368,8 +363,8 @@ module CoherenceController(
 		
 		// output buffer to tolerate random delay and ensure full bandwidth
 		wire	[DDRDWidth-1:0]		HdOfI;
-		wire [DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
-		wire 					BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
+		wire 	[DDRDWidth-1:0] 	BufP1Reg_DIn, BufP1Reg_DOut;
+		wire 						BufP1Reg_DInReady, BufP1Reg_DOutValid, BufP1Reg_DOutReady;
 		
 		localparam				EmptyCWidth = `log2(2 + BRAMLatency + 1);
 		wire [EmptyCWidth-1:0]				BufP1Reg_EmptyCount;		
@@ -378,8 +373,10 @@ module CoherenceController(
 		assign 	BufP1Reg_DIn =  DontCareHd ?  {DDRDWidth{1'b0}}
 								: HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
 								: BufP1_DOut;
-								
-		Register1Pipe #(	.Width(1))	to_enc_valid (Clock, PathWriteback && BufP1_Enable,	BufP1Reg_DInValid_Pre);
+		
+		wire	BufP1Reg_DInValid;		
+		Pipeline #(	.Width(1), .Stages(BRAMLatency))	
+			to_enc_valid (Clock, 1'b0, PathWriteback && BufP1_Enable,	BufP1Reg_DInValid);
 		
 		FIFORAM #(			.Width(					DDRDWidth),
 							.Buffering(				2 + BRAMLatency))
@@ -438,25 +435,24 @@ module CoherenceController(
 							: 0;	
 		
 		//	AES --> Stash
-		wire	BktOfIOutValid [0:BRAMLatency], BktOfIHdOutValid;
-		wire	[DDRDWidth-1:0]		ToStashData_Pre	[0:BRAMLatency];
+		wire	BktOfIOutValid [0:1], BktOfIHdOutValid;
+		wire	[DDRDWidth-1:0]		ToStashData_Pre	[0:1];
 		
 		assign	BktOfIOutValid[0] = BOIFromCC ? ConflictBktOfIOutValid : BktOfIInValid;
 		assign	BktOfIHdOutValid = BktOfIOutValid[0] && BktOfIOffset == BOIFromCC;
 		assign	ToStashData_Pre[0] = 	BktOfIHdOutValid ? CoherentDataOfI : CoherentData;
 		
-		Register1Pipe #(1)	to_stash_valid1	(Clock,	BktOfIOutValid[0], BktOfIOutValid[1]);		
-		Register1Pipe #(DDRDWidth)	to_stash_data1	(Clock,	ToStashData_Pre[0], ToStashData_Pre[1]);	
-		if (BRAMLatency == 2) begin
-			Register1Pipe #(1)	to_stash_valid2	(Clock,	BktOfIOutValid[1], BktOfIOutValid[2]);
-			Register1Pipe #(DDRDWidth)	to_stash_data2	(Clock,	ToStashData_Pre[1], ToStashData_Pre[2]);
-		end
+		Pipeline #(.Width(DDRDWidth+1), .Stages(BRAMLatency))
+			to_stash_pipe	(	Clock, 1'b0, 
+								{BktOfIOutValid[0], ToStashData_Pre[0]},
+								{BktOfIOutValid[1], ToStashData_Pre[1]}
+							);
 		
 		assign	ToStashData =			RW_PathRead ? FromDecData
-											: BOIFromCC ? ToStashData_Pre[0] : ToStashData_Pre[BRAMLatency];
+											: BOIFromCC ? ToStashData_Pre[0] : ToStashData_Pre[1];
 																					
 		assign	ToStashDataValid = 		RW_PathRead ? FromDecDataValid 
-											: BOIFromCC ? ConflictBktOfIOutValid : BktOfIOutValid[BRAMLatency];
+											: BOIFromCC ? ConflictBktOfIOutValid : BktOfIOutValid[1];
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
@@ -491,16 +487,12 @@ module CoherenceController(
 		
 		Register #(.Width(DDRDWidth))
 			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
-		
-		if (BRAMLatency == 1) begin
-			assign	{BktOfIAccessedByIV_1st, BufP2_DOut} = {BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre};
-		end else if (BRAMLatency == 2) begin
-			Register1Pipe #(DDRDWidth+1)	
-				bufP2_out_reg	(Clock,	{BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre}, 
-										{BktOfIAccessedByIV_1st, BufP2_DOut});
-		end else begin
-			initial $finish;
-		end
+			
+		Pipeline #(.Width(DDRDWidth+1), .Stages(BRAMLatency-1))
+			bufP2_out_pipe	(	Clock, 1'b0, 
+								{BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre}, 
+								{BktOfIAccessedByIV_1st, BufP2_DOut}
+							);
 		
 		BkfOfIDetector	#(		.DWidth(		DDRDWidth),
 								.ValidBitStart(	AESEntropy),
@@ -518,7 +510,7 @@ module CoherenceController(
 		wire	ROIVID_Enable;
 		wire	[AESEntropy-1:0]	ROIBV_Pre;
 		
-		Register1Pipe #(1)	hd_cmp_dl	(Clock,	HeaderCmpValid, HeaderCmpValid_dl);
+		Pipeline #(.Width(1), .Stages(1))	hd_cmp_dl	(Clock,	1'b0, HeaderCmpValid, HeaderCmpValid_dl);
 		assign	ROIVID_Enable = 	HeaderCmpValid_dl && !HdOfIHasBeenFound;	
 		ROISeedGenerator	#(	.ORAML(			ORAML))				
 				roi_vid	(		.Clock(			Clock),

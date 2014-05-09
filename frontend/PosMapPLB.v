@@ -75,8 +75,8 @@ module PosMapPLB
     // PosMap control and input
     wire PosMapSelect, PosMapBusy, PosMapValid, PosMapInit;
       
-    Register1Pipe #(.Width(1))	PosMapValidReg 	(Clock, PosMapSelect, PosMapValid);
-    Register1Pipe #(.Width(1))	PosMapBusyReg	(Clock, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
+    Pipeline #(.Width(1), .Stages(1))	PosMapValidReg 	(Clock, 1'b0, PosMapSelect, PosMapValid);
+    Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, 1'b0, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
     
     wire InitEnd;
     wire [LogFinalPosMapEntry-1:0] InitAddr;

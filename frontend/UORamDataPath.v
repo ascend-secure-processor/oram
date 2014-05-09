@@ -68,8 +68,8 @@ module UORamDataPath
     (* mark_debug = "TRUE" *) wire EvictBufferOutReady, EvictBufferOutValid;
     (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] EvictBufferDOut;
 
-	Register1Pipe 	#(	.Width(LeafWidth + 1))
-		EvictReg	(	Clock,	 {PPPEvictDataValid, PPPEvictData}, {PPPEvictDataValid_Reg, PPPEvictData_Reg});
+	Pipeline 	#(	.Width(LeafWidth+1), .Stages(1))
+		EvictReg	(	Clock,	 1'b0,	{PPPEvictDataValid, PPPEvictData}, {PPPEvictDataValid_Reg, PPPEvictData_Reg});
 
     FIFORAM #(.Width(LeafWidth), .Buffering(LeafInBlock))
         EvictBuffer (   .Clock(Clock),

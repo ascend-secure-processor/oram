@@ -69,7 +69,8 @@ module Keccak_WF (
 	// register at in/out to improve timing
 	wire	HashOutValid_pre;
 	wire	[HashOutWidth-1:0]	HashOut_pre;	
-	Register1Pipe #(HashOutWidth)	hash_out_reg	(Clock,	HashOut_pre, HashOut);
+	Pipeline	#(.Width(HashOutWidth), .Stages(1))
+		hash_out_pipe	(Clock,	1'b0, HashOut_pre, HashOut);
 	Register1b	hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre, HashOutValid);
 
 	// instantiate the hash engine

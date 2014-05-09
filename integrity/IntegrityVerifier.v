@@ -82,9 +82,9 @@ module IntegrityVerifier (
 	
 	// when BRAMLatency >= NUMSHA3, it may break
 	generate if (NUMSHA3 == 2)	
-		assign Request = Write || (!Reset && HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts && !DataInValid); 
+		assign Request = Write || (HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts && !DataInValid); 
 	else
-		assign Request = Write || (!Reset && HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts); 
+		assign Request = Write || (HashDataReady[Turn] && BucketOffsetTurn < BktSize_DRBursts); 
 	endgenerate
 	
 	//------------------------------------------------------------------------------------
@@ -95,20 +95,13 @@ module IntegrityVerifier (
 	wire ROIHeader, 	ROIHeader_Pre;
 	wire [DDRDWidth-1:0] HashData;
 	
-	Register1Pipe #(1) 	rd_data_pre 	(Clock, Request && !Write, 	DataInValid_Pre);
-	Register1Pipe #(1) 	rd_hd_pre 		(Clock, BucketOffsetTurn == 0, 	HeaderInValid_Pre);	// TODO: do not work for  header > 1
-	Register1Pipe #(1) 	roi_hd_pre 		(Clock, BucketOfITurn, 	ROIHeader_Pre);
-	generate if (BRAMLatency == 1) begin
-		assign	DataInValid = DataInValid_Pre;
-		assign	HeaderInValid = DataInValid && HeaderInValid_Pre;
-		assign	ROIHeader = ROIHeader_Pre;
-	end else if (BRAMLatency == 2) begin
-		Register1Pipe #(1) 	rd_data 	(Clock, DataInValid_Pre,	DataInValid);
-		Register1Pipe #(1) 	rd_hd 		(Clock, DataInValid_Pre && HeaderInValid_Pre,	HeaderInValid);
-		Register1Pipe #(1) 	roi_hd 		(Clock, ROIHeader_Pre,	ROIHeader);
-	end else begin
-		initial $finish;
-	end endgenerate
+	assign	DataInValid_Pre = !Reset &&  Request && !Write;
+	assign	HeaderInValid_Pre = DataInValid_Pre && BucketOffsetTurn == 0;
+	Pipeline #(.Width(3), .Stages(BRAMLatency))
+		rd_valid_pipe	(	Clock, 1'b0, 
+							{DataInValid_Pre, HeaderInValid_Pre, BucketOfITurn},
+							{DataInValid, HeaderInValid, ROIHeader}
+						);
 
 	// Bucket ID and bucket version
 	wire [AESEntropy-1:0] 	RWBV;
@@ -198,7 +191,7 @@ module IntegrityVerifier (
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
 	wire VersionNonzero, Violation, CheckHash, UpdateHash; 	
-	Register1Pipe #(1)	consume_hash (Clock, HashOutValid[NextTurn], ConsumeHash);
+	Pipeline #(.Width(1), .Stages(1))	consume_hash (Clock, 1'b0, HashOutValid[NextTurn], ConsumeHash);
 
 	assign CheckHash = ConsumeHash && 
 						(BucketIDTurn < TotalBucketD / 2 

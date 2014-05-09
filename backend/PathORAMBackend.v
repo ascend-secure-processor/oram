@@ -193,8 +193,9 @@ module PathORAMBackend(
 	localparam	BRAMLatency = 2;
 	generate if (EnableREW) begin:CC
 	
-		Register1Pipe #(	ORAMU+ORAML+2) 
-				ro_info(	Clock,	{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
+		Pipeline #(.Width(ORAMU+ORAML+2), .Stages(1)) 
+			ro_info_pipe (	Clock,	1'b0,
+							{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
 							{ROStart_dl, REWRoundDummy_dl, ROPAddr_dl, ROLeaf_dl}
 						);
 	
