@@ -269,7 +269,9 @@ module Stash(
 	
 	// Debugging
 	
-	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid, BlockNotFound_Error;	
+	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;	
+	
+	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_Stash;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -288,11 +290,14 @@ module Stash(
 	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
 	
-	Register1b 	bnvd(   	.Clock(     			Clock), 
-							.Reset(     			Reset), 
-							.Set(       			StopOnBlockNotFound && BlockNotFound && BlockNotFoundValid), 
-							.Out(					BlockNotFound_Error)); 	
-	
+	Register1b 	errno1(Clock, Reset, StopOnBlockNotFound && BlockNotFound && BlockNotFoundValid, 	ERROR_BlockNotFound); 	
+	Register1b 	errno2(Clock, Reset, BlockReadCommit & ~OutHeaderValid, 							ERROR_ISC1);	
+	Register1b 	errno3(Clock, Reset, OutBufferInValid & ~OutBufferInReady, 							ERROR_ISC2);
+	Register1b 	errno4(Clock, Reset, OutHBufferInValid & ~OutHBufferInReady, 						ERROR_ISC3);
+	Register1b 	errno5(Clock, Reset, StashOverflow, 												ERROR_StashOverflow);
+
+	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_StashOverflow, ERROR_Stash);
+
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
 	`ifdef SIMULATION
@@ -308,15 +313,15 @@ module Stash(
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 			
-			if (BlockReadCommit & ~OutHeaderValid) begin
+			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 1 (HEADER lost)", $time);
 				$stop;			
 			end
-			if (OutBufferInValid & ~OutBufferInReady) begin
+			if (ERROR_ISC2) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 2 (DATA buffer overflow)", $time);
 				$stop;			
 			end
-			if (OutHBufferInValid & ~OutHBufferInReady) begin
+			if (ERROR_ISC3) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 3 (HEADER buffer overflow)", $time);
 				$stop;			
 			end			
@@ -334,7 +339,7 @@ module Stash(
 				$stop;
 			end			
 			
-			if (BlockNotFound & BlockNotFoundValid) begin
+			if (ERROR_BlockNotFound) begin
 				$display("[%m @ %t] ERROR: the FE block wasn't in ORAM/stash", $time);
 				if (StopOnBlockNotFound) $stop;
 			end
@@ -353,7 +358,7 @@ module Stash(
 			end
 	`endif
 	
-			if (StashOverflow) begin
+			if (ERROR_StashOverflow) begin
 				$display("[%m] ERROR: stash overflowed");
 				$stop;
 			end
@@ -440,7 +445,7 @@ module Stash(
 			ST_Reset : 
 				if (Core_ResetDone) NS =			ST_Idle;
 			ST_Idle :
-				if (~BlockNotFound_Error)
+				if (~ERROR_Stash)
 					if (AccessStarted) 
 						NS =							ST_Scan;
 					else if (StartAppend)

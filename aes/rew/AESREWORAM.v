@@ -60,11 +60,6 @@ module AESREWORAM(
 							RW_W_Chunk = 			PathSize_DRBursts,
 							RO_R_Chunk = 			(ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
 							RO_W_Chunk = 			(ORAML+1) * BktHSize_DRBursts;
-		
-	localparam				COSWidth =				2,
-							ST_CO_Read =			2'd0,
-							ST_CO_ROI =				2'd1,
-							ST_CO_Write =			2'd2;	
 	
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
 							BDWidth =				DDRDWidth + AESEntropy + BIDWidth + 1;
@@ -282,6 +277,10 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	DRAMWriteData_Pre; 
 	wire					DRAMWriteDataValid_Pre, DRAMWriteDataReady_Pre;
 
+	// debugging
+		
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_AES;
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -297,6 +296,17 @@ module AESREWORAM(
 	//	Simulation Checks
 	//--------------------------------------------------------------------------
 		
+	Register1b 	errno1(Clock, Reset, BufferedDataInValid & ~BufferedDataInReady & CSROROIRead, 	ERROR_OF1);	
+	Register1b 	errno2(Clock, Reset, BufferedROIVOutReady & ~BufferedROIVOutValid, 				ERROR_UF1);	
+	Register1b 	errno3(Clock, Reset, ROIDataInValid & ~ROIDataInReady, 							ERROR_OF2);	
+	Register1b 	errno4(Clock, Reset, ~ROIDataValid & ROIDataReady, 								ERROR_UF2);	
+	Register1b 	errno5(Clock, Reset, BufferedROIVInValid & ~BufferedROIVInReady, 				ERROR_OF3);
+	Register1b 	errno6(Clock, Reset, WritebackROIVInValid & ~WritebackROIVInReady, 				ERROR_OF4);
+	Register1b 	errno7(Clock, Reset, WritebackROIVOutReady & ~WritebackROIVOutValid, 			ERROR_UF3);
+	Register1b 	errno8(Clock, Reset, ROI_FoundBucket & ROI_NotFoundBucket, 						ERROR_ISC1);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1, ERROR_AES);
+	
 	`ifdef SIMULATION
 		initial begin	
 			if ((PathMaskBuffering * RWPath_MaskChunks) > 512) begin
@@ -359,11 +369,11 @@ module AESREWORAM(
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
 				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
 			end
-			if (BufferedDataInValid & ~BufferedDataInReady & CSROROIRead) begin // "may" happen because data_buf has no backpressure in this state but should never happen
+			if (ERROR_OF1) begin // "may" happen because data_buf has no backpressure in this state but should never happen
 				$display("[%m @ %t] ERROR: Data buffer overflow.", $time);
 			end
 			
-			if (BufferedROIVOutReady & ~BufferedROIVOutValid) begin
+			if (ERROR_UF1) begin
 				$display("[%m @ %t] ERROR: Header WB fifo didn't have data on a transfer.", $time);
 				$stop;
 			end
@@ -373,34 +383,34 @@ module AESREWORAM(
 				$stop;	
 			end
 
-			if (ROIDataInValid & ~ROIDataInReady) begin
+			if (ERROR_OF2) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO overflow.", $time);
 				$stop;
 			end
-			if (~ROIDataValid & ROIDataReady) begin
+			if (ERROR_UF2) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO didn't have data.", $time);
 				$stop;
 			end			
 			
 			if (DataOutTransfer	& MaskIsHeader & |(ROHeaderMask & RWBGHeaderMask)) begin
 				$display("[%m @ %t] ERROR: RO and RW masks overlapped on header flit.", $time);
-				$stop;			
+				$stop;
 			end
 			
-			if (BufferedROIVInValid & ~BufferedROIVInReady) begin
+			if (ERROR_OF3) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header writebacks overflowed.", $time);
 				$stop;
 			end
-			if (WritebackROIVInValid & ~WritebackROIVInReady) begin
+			if (ERROR_OF4) begin
 				$display("[%m @ %t] ERROR: External IV FIFO writebacks overflowed.", $time);
 				$stop;
 			end
-			if (WritebackROIVOutReady & ~WritebackROIVOutValid) begin
+			if (ERROR_UF3) begin
 				$display("[%m @ %t] ERROR: External IV FIFO didn't have data on a transfer.", $time);
 				$stop;
 			end
 			
-			if (ROI_FoundBucket & ROI_NotFoundBucket) begin
+			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: now this just doesn't make any goddamn sense does it?.", $time);
 				$stop;
 			end
@@ -492,12 +502,13 @@ module AESREWORAM(
 		NS_RO = 									CS_RO;
 		case (CS_RO)
 			ST_RO_Idle :
-				if (		DRAMReadDataValid & ROAccess & PathRead & ROStarted)
-					NS_RO =							ST_RO_StartRead;
-				else if (	DRAMReadDataValid & RWAccess & PathRead)
-					NS_RO =							ST_RO_StartRead;
-				else if (	RWAccess & PathWriteback & BEDataInValid & DelayedWB)
-					NS_RO =							ST_RO_StartWrite;
+				if (~ERROR_AES)
+					if (		DRAMReadDataValid & ROAccess & PathRead & ROStarted)
+						NS_RO =							ST_RO_StartRead;
+					else if (	DRAMReadDataValid & RWAccess & PathRead)
+						NS_RO =							ST_RO_StartRead;
+					else if (	RWAccess & PathWriteback & BEDataInValid & DelayedWB)
+						NS_RO =							ST_RO_StartWrite;
 			ST_RO_StartRead :
 				if (RO_BIDInReady)
 					NS_RO =							ST_RO_Read;
@@ -930,7 +941,12 @@ module AESREWORAM(
 			Bucket headers: 	X										X
 			Bucket payloads:											X
 	*/
-
+		
+	localparam				COSWidth =				2,
+							ST_CO_Read =			2'd0,
+							ST_CO_ROI =				2'd1,
+							ST_CO_Write =			2'd2;		
+	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 	assign	BufferedDataTransfer_Write =			BufferedDataOutValid & BufferedDataOutReady_Write;
 	assign	BufferedDataTransfer_Read =				BufferedDataOutValid & BufferedDataOutReady_Read;
