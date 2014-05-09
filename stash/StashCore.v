@@ -450,7 +450,7 @@ module StashCore(
 				i = 0;
 				while (MS_pt != SNULL) begin
 					PAddrTemp = StashH.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
-					if (PAddrTemp == InPAddr) begin
+					if (PAddrTemp == InPAddr && StashC.Mem[MS_pt] == EN_Used) begin
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
 						$stop;
 					end
