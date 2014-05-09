@@ -452,11 +452,11 @@ module CoherenceController(
 			Register1Pipe #(DDRDWidth)	to_stash_data2	(Clock,	ToStashData_Pre[1], ToStashData_Pre[2]);
 		end
 		
-		assign	ToStashData =			(ROAccess && BOIFromCC) ? ToStashData_Pre[0] : ToStashData_Pre[0];
+		assign	ToStashData =			RW_PathRead ? FromDecData
+											: BOIFromCC ? ToStashData_Pre[0] : ToStashData_Pre[BRAMLatency];
 																					
-		assign	ToStashDataValid = 		RWAccess ? FromDecDataValid 
-											: BOIFromCC ? ConflictBktOfIOutValid
-											: BktOfIOutValid[0];
+		assign	ToStashDataValid = 		RW_PathRead ? FromDecDataValid 
+											: BOIFromCC ? ConflictBktOfIOutValid : BktOfIOutValid[BRAMLatency];
 											
 		assign	FromDecDataReady = 		ToStashDataReady;
 
@@ -476,7 +476,6 @@ module CoherenceController(
 	
 		assign  BufP2_Enable = IVRequest;
 		assign  BufP2_Write = IVWrite;
-		//assign  BufP2_Address = (IVAddress >= OBktOfIStartAddr && BOIFromCC) ? IVAddress - OBktOfIStartAddr + BktOfIStartAddr : IVAddress;
 		assign	BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
