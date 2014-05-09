@@ -354,13 +354,14 @@ module HWTestHarness(
 	//------------------------------------------------------------------------------
 
 	`ifdef SIMULATION
-		localparam			AC = 					10, 
-							Gap = 					3000,
+		localparam			Rounds = 				1000,
+							AccessesPerRound =		20,
+							Gap = 					1000,
 							Cycle = 				1000000000/SlowClockFreq;
 		
 		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
 		reg					CrossBufIn_DataInValid_Reg;	
-		integer 			i;
+		integer 			i, nr;
 		
 		task TASK_Command;
 			input	[BECMDWidth-1:0] 	In_Command;
@@ -384,20 +385,24 @@ module HWTestHarness(
 		initial begin
 			i = 0;
 			CrossBufIn_DataInValid_Reg = 			1'b0;
+			
 			#(Cycle*1000);
 		
-			while (i < AC) begin
-				TASK_Command(BECMD_Update, i);
+			while (i < Rounds) begin
+				nr = 0;
+				while (nr < AccessesPerRound) begin
+					TASK_Command(BECMD_Update, i * AccessesPerRound + nr);
+					nr = nr + 1;
+					#(Cycle*Gap);
+				end
+				
+				nr = 0;
+				while (nr < AccessesPerRound) begin
+					TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
+					nr = nr + 1;
+					#(Cycle*Gap);
+				end
 				i = i + 1;
-				#(Cycle*Gap);
-			end
-			
-			i = 0;
-
-			while (i < AC) begin
-				TASK_Command(BECMD_Read, i);
-				i = i + 1;
-				#(Cycle*Gap);
 			end
 		end
 	`else

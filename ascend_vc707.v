@@ -71,7 +71,21 @@ module ascend_vc707(
 	// CCS paper configurations
 	parameter				UnifiedExperiment =		1;
 	parameter				REWExperiment =			1;
-	parameter				REWIVExperiment =		0;
+	parameter				REWIVExperiment =		1;
+	
+	`ifdef SIMULATION
+		initial begin
+			if ( UnifiedExperiment == 0 && REWExperiment == 1 ) begin
+				$display("[%m @ %t] ERROR: we aren't interested in this ...", $time);
+				$stop;			
+			end
+
+			if ( REWIVExperiment == 1 && REWExperiment == 0 ) begin
+				$display("[%m @ %t] ERROR: bogus params.", $time);
+				$stop;			
+			end
+		end
+	`endif
 	
 	// ORAM related
 	
@@ -115,7 +129,7 @@ module ascend_vc707(
 	localparam				SlowClockFreq =			100_000_000,
 							MemoryClockFreq =		200_000_000,
 							ORAMClockFreq = 		(SlowORAMClock) ? SlowClockFreq : MemoryClockFreq;
-	
+							
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
