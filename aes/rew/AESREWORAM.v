@@ -30,7 +30,7 @@ module AESREWORAM(
 	Clock, FastClock, 
 	Reset,
 
-	ROPAddr, ROLeaf,
+	ROPAddr, ROLeaf, ROStart,
 
 	ROIBVOut, ROIBIDOut,
 	
@@ -61,16 +61,6 @@ module AESREWORAM(
 							RO_R_Chunk = 			(ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
 							RO_W_Chunk = 			(ORAML+1) * BktHSize_DRBursts;
 		
-	localparam				ROSWidth =				3,
-							ST_RO_Idle =			3'd0,
-							ST_RO_StartRead =		3'd1,
-							ST_RO_Read =			3'd2, // Masks for RO headers
-							ST_RO_ROIReadCommand =	3'd3,
-							ST_RO_ROIReadLocked =	3'd4,
-							ST_RO_ROIRead =			3'd5, // Masks for bucket of interest
-							ST_RO_StartWrite =		3'd6, 
-							ST_RO_Write =			3'd7; // Masks for header writebacks
-
 	localparam				COSWidth =				2,
 							ST_CO_Read =			2'd0,
 							ST_CO_ROI =				2'd1,
@@ -91,6 +81,8 @@ module AESREWORAM(
 	
 	input	[ORAMU-1:0]		ROPAddr;
 	input	[ORAML-1:0]		ROLeaf;
+	
+	input					ROStart;
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -156,6 +148,10 @@ module AESREWORAM(
 	wire					DRAMReadTransfer, ROCommandTransfer;
 
 	wire	[AESEntropy-1:0] GentryCounter_MemoryConsistant;
+	
+	wire					ROStarted;
+	
+	wire	[ORAML-1:0]		CurrentLeaf;
 	
 	wire	[BDWidth-1:0]	BufferedDataIn_Wide, BufferedDataOut_Wide;
 	wire					BufferedDataInValid, BufferedDataInReady;
@@ -459,6 +455,16 @@ module AESREWORAM(
 	//	RO AES Input
 	//--------------------------------------------------------------------------
 
+	localparam				ROSWidth =				3,
+							ST_RO_Idle =			3'd0,
+							ST_RO_StartRead =		3'd1,
+							ST_RO_Read =			3'd2, // Masks for RO headers
+							ST_RO_ROIReadCommand =	3'd3,
+							ST_RO_ROIReadLocked =	3'd4,
+							ST_RO_ROIRead =			3'd5, // Masks for bucket of interest
+							ST_RO_StartWrite =		3'd6, 
+							ST_RO_Write =			3'd7; // Masks for header writebacks	
+	
 	// Generate the masks for RO headers and ROI buckets of interest
 	
 	assign	DRAMReadTransfer =						DRAMReadDataValid & DRAMReadDataReady;
@@ -476,13 +482,21 @@ module AESREWORAM(
 		else CS_RO <= 								NS_RO;
 	end
 
+	// To fix the case when ROStart gets pulsed when CS_RO is not yet in idle state
+	Register1b 	ro_started(	.Clock(     			Clock),
+							.Reset(     			Reset | CSROStartRead),
+							.Set(      				ROStart),
+							.Out(       			ROStarted));	
+	
 	always @( * ) begin
 		NS_RO = 									CS_RO;
 		case (CS_RO)
 			ST_RO_Idle :
-				if (DRAMReadDataValid)
+				if (		DRAMReadDataValid & ROAccess & PathRead & ROStarted)
 					NS_RO =							ST_RO_StartRead;
-				else if (BEDataInValid & DelayedWB & RWAccess & PathWriteback)
+				else if (	DRAMReadDataValid & RWAccess & PathRead)
+					NS_RO =							ST_RO_StartRead;
+				else if (	RWAccess & PathWriteback & BEDataInValid & DelayedWB)
 					NS_RO =							ST_RO_StartWrite;
 			ST_RO_StartRead :
 				if (RO_BIDInReady)
@@ -557,6 +571,8 @@ module AESREWORAM(
 							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));	
 	
+	assign	CurrentLeaf =							(ROAccess) ? ROLeaf : GentryCounter_MemoryConsistant[ORAML-1:0];
+	
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
 	assign	RO_IVIncrement =						RO_GentryIV + {{AESEntropy-1{1'b0}}, ~RO_LeafNextDirection};
 	assign	RO_IVNext = 							(CSROStartRead) ? GentryCounter_MemoryConsistant : {1'b0, RO_IVIncrement[AESEntropy-1:1]};
@@ -575,7 +591,7 @@ module AESREWORAM(
 							.Reset(					1'b0), 
 							.Load(					CSROStartRead),
 							.Enable(				CSRORead & ROCommandTransfer), 
-							.PIn(					ROLeaf),
+							.PIn(					CurrentLeaf),
 							.SIn(					1'b0),
 							.SOut(					RO_LeafNextDirection));
 											
@@ -589,7 +605,7 @@ module AESREWORAM(
 							.Ready(					RO_BIDInReady),
 							.RWIn(					1'b0), // don't care
 							.BHIn(					1'b1), // only send one command per bucket
-							.leaf(					ROLeaf),
+							.leaf(					CurrentLeaf),
 							.CmdValid(				RO_BIDOutValid),
 							.CmdReady(				RO_BIDOutReady),
 							.BktIdx(				RO_BIDOut));

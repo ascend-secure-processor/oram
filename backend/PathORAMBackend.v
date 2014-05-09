@@ -47,7 +47,7 @@ module PathORAMBackend(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					Clock, FastClock, Reset;
+	input 					Clock, FastClock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
@@ -193,8 +193,8 @@ module PathORAMBackend(
 	localparam	BRAMLatency = 2;
 	generate if (EnableREW) begin:CC
 	
-		Register1Pipe #(ORAMU+ORAML+2) 
-			ro_info 	(	Clock,	{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
+		Register1Pipe #(	ORAMU+ORAML+2) 
+				ro_info(	Clock,	{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
 							{ROStart_dl, REWRoundDummy_dl, ROPAddr_dl, ROLeaf_dl}
 						);
 	
@@ -333,7 +333,8 @@ module PathORAMBackend(
 				`endif
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
-														
+							.ROStart(				ROStart),
+							
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEDataOutValid(		AES_DRAMReadDataValid), 					
 
