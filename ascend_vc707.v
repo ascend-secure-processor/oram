@@ -69,8 +69,8 @@ module ascend_vc707(
 	parameter				GenHistogram = 			1;
 	
 	// CCS paper configurations
-	parameter				UnifiedExperiment =		0;
-	parameter				REWExperiment =			0;
+	parameter				UnifiedExperiment =		1;
+	parameter				REWExperiment =			1;
 	parameter				REWIVExperiment =		0;
 	
 	// ORAM related
