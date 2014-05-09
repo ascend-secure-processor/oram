@@ -53,26 +53,25 @@ module Keccak_WF (
 	
 	// Funnel --> HashEngine, controlled by a CounterAlarm
 	
-	FIFOShiftRound #(		.IWidth(				IWidth),
-							.OWidth(				HashInWidth))
-        HashInFunnel(	    .Clock(					Clock),
-							.Reset(					Reset || LastChunk),
-							.InData(				DataIn),
-							.InValid(				DataInValid),
-							.InAccept(				DataInReady),
-							.OutData(			    HashFunnelOut),
-							.OutValid(				HashFunnelOutValid),
-							.OutReady(				HashFunnelOutReady)
+	FIFOShiftRound #(		.IWidth(			IWidth),
+							.OWidth(			HashInWidth),
+							.Class1(			1))				// Hopefully this serves as a input Register
+        HashInFunnel(	    .Clock(				Clock),
+							.Reset(				Reset || LastChunk),
+							.InData(			DataIn),
+							.InValid(			DataInValid),
+							.InAccept(			DataInReady),
+							.OutData(			HashFunnelOut),
+							.OutValid(			HashFunnelOutValid),
+							.OutReady(			HashFunnelOutReady)
 						);
 	
 	// register at in/out to improve timing
-	wire	HashInValid_dl, HashOutValid_pre;
-	wire	[HashInWidth-1:0] 	HashIn_dl;
-	wire	[HashOutWidth-1:0]	HashOut_pre;
-	
-	Register1Pipe #(	.Width(HashOutWidth+1))
-		hash_out_reg	(Clock,	{HashOutValid_pre, HashOut_pre}, {HashOutValid, HashOut});
-	
+	wire	HashOutValid_pre;
+	wire	[HashOutWidth-1:0]	HashOut_pre;	
+	Register1Pipe #(HashOutWidth)	hash_out_reg	(Clock,	HashOut_pre, HashOut);
+	Register1b	hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre, HashOutValid);
+
 	// instantiate the hash engine
     keccak	
         HashEngine	(	    .clk(			Clock), 

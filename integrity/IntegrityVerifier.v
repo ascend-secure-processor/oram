@@ -197,18 +197,9 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	wire VersionNonzero, Violation, CheckHash, UpdateHash; 
-	
-	wire ConsumeHash_dl;
-	Register1Pipe #(1)	consume_hash (Clock, HashOutValid[NextTurn] && !ConsumeHash_dl, ConsumeHash);
-	
-	// This hack is necessary when NUMSHA3 == 2 AND we add 1-cycle delay at HashOutValid
-	generate if (NUMSHA3 == 2) begin
-		Register1Pipe #(1)	consume_hash_dl (Clock, ConsumeHash, ConsumeHash_dl);
-	end else begin
-		assign ConsumeHash_dl = 1'b0;
-	end endgenerate
-	
+	wire VersionNonzero, Violation, CheckHash, UpdateHash; 	
+	Register1Pipe #(1)	consume_hash (Clock, HashOutValid[NextTurn], ConsumeHash);
+
 	assign CheckHash = ConsumeHash && 
 						(BucketIDTurn < TotalBucketD / 2 
 						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash

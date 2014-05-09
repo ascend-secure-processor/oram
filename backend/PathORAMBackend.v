@@ -106,10 +106,13 @@ module PathORAMBackend(
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 
 	// REW
-	
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
-	wire                    REWRoundDummy;
+	wire                    ROStart, REWRoundDummy;
+
+	wire    [ORAMU-1:0]		ROPAddr_dl;
+	wire	[ORAML-1:0]		ROLeaf_dl;
+	wire                    ROStart_dl, REWRoundDummy_dl;
 	
 	// integrity verification
 		
@@ -189,6 +192,12 @@ module PathORAMBackend(
 	
 	localparam	BRAMLatency = 2;
 	generate if (EnableREW) begin:CC
+	
+		Register1Pipe #(ORAMU+ORAML+2) 
+			ro_info 	(	Clock,	{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
+							{ROStart_dl, REWRoundDummy_dl, ROPAddr_dl, ROLeaf_dl}
+						);
+	
 		CoherenceController #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -206,10 +215,10 @@ module PathORAMBackend(
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
 									
-							.ROPAddr(               ROPAddr),
-							.ROLeaf(				ROLeaf),
-							.ROStart(				ROStart),
-							.REWRoundDummy(			REWRoundDummy),
+							.ROPAddr(               ROPAddr_dl),
+							.ROLeaf(				ROLeaf_dl),
+							.ROStart(				ROStart_dl),
+							.REWRoundDummy(			REWRoundDummy_dl),
 							
 							.FromDecData(			AES_DRAMReadData), 
 							.FromDecDataValid(		AES_DRAMReadDataValid),
@@ -220,7 +229,7 @@ module PathORAMBackend(
 
 							.ToStashData(			BE_DRAMReadData),
 							.ToStashDataValid(		BE_DRAMReadDataValid), 
-							//.ToStashDataReady(		BE_DRAMReadDataReady),
+							//.ToStashDataReady(	BE_DRAMReadDataReady),
 							.ToStashDataReady(		1'b1),
 
 							.FromStashData(			BE_DRAMWriteData), 
@@ -244,8 +253,8 @@ module PathORAMBackend(
 							.BktOfIIdx(				BktOfIIdx),
 							.BOIDone_IV(			BOIDone_IV),
 							.BucketOfITurn(			BucketOfITurn)
-						);
-							
+						);		
+		
 		 if (EnableIV) begin:INTEGRITY
 			IntegrityVerifier #(.ORAMB(				ORAMB),
 								.ORAMU(				ORAMU),
