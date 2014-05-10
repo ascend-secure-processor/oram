@@ -215,11 +215,11 @@ module Stash(
 	
 	// ScanTable interface
 	
-	wire	[ORAMU-1:0]		Scan_PAddr;
-	wire	[ORAML-1:0]		Scan_Leaf;
-	wire	[SEAWidth-1:0]	Scan_SAddr;
-	wire					Scan_Add, Scan_LeafValid, Scan_Done;
-	wire					Scan_Streaming;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		Scan_PAddr;
+	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Scan_Leaf;
+	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	Scan_SAddr;
+	(* mark_debug = "TRUE" *)	wire					Scan_Add, Scan_LeafValid, Scan_Done;
+	(* mark_debug = "TRUE" *)	wire					Scan_Streaming;
 
 	wire	[SEAWidth-1:0]	Scanned_SAddr;
 	wire					Scanned_Add, Scanned_LeafAccepted, Scanned_LeafValid, Scanned_Done;

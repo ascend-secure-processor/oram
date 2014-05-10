@@ -127,17 +127,19 @@ module StashScanTable(
 	
 	// debugging
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_ISC1, ERROR_ISC2, ERROR_StashScanTable;
+	wire					InScanAdd_Dbg0, InScanAdd_Dbg1;
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_ISC1, ERROR_ISC2, ERROR_BADLEAF, ERROR_StashScanTable;
 	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
 	//--------------------------------------------------------------------------
-
-	Register1b 	errno1(Clock, Reset, ~DMAReady_Internal & DMAValid_Internal, 			ERROR_OF1);
-	Register1b 	errno2(Clock, Reset, (OutScanAccepted_Pre | InScanValid) & InDMAValid, 	ERROR_ISC1);
-	Register1b 	errno3(Clock, Reset, AccessComplete & |BCounts_Pre, 					ERROR_ISC2);
-
-	Register1b 	errANY(Clock, Reset, ERROR_OF1 | ERROR_ISC1 | ERROR_ISC2, 				ERROR_StashScanTable);
+	
+	Register1b 	errno1(Clock, Reset, ~DMAReady_Internal & DMAValid_Internal, 					ERROR_OF1);
+	Register1b 	errno2(Clock, Reset, (OutScanAccepted_Pre | InScanValid) & InDMAValid, 			ERROR_ISC1);
+	Register1b 	errno3(Clock, Reset, AccessComplete & |BCounts_Pre, 							ERROR_ISC2);
+	Register1b 	errno4(Clock, Reset, InScanAdd_Dbg1 & InScanValid_Dly1 & ~|CompatibleBuckets, 	ERROR_BADLEAF);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_OF1 | ERROR_ISC1 | ERROR_ISC2 | ERROR_BADLEAF,		ERROR_StashScanTable);
 	
 	`ifdef SIMULATION
 		integer ind;
@@ -200,6 +202,11 @@ module StashScanTable(
 				$finish;				
 			end
 			
+			if (ERROR_BADLEAF) begin
+				$display("[%m @ %t] ERROR: Block that is being added to the Stash has an incompatible leaf", $time);
+				$finish;					
+			end
+			
 	`ifndef SIMULATION_ASIC
 			if (~ResetDone_Delayed & ResetDone) begin
 				ind = 0;
@@ -230,21 +237,21 @@ module StashScanTable(
 	//							.Out(				Intersection));
 	assign	Intersection =							InLeafP1 ^ CurrentLeafP1;
 
-	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
+	Pipeline	#(			.Width(					3 + SEAWidth + ORAMLP1),
 							.Stages(				Overclock))
 				mpipe_1(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid,		IsWritebackCandidate,		InScanSAddr, 		Intersection}), 
-							.OutData(				{InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0,	Intersection_Dly}));	
+							.InData(				{InScanAdd,			InScanValid,		IsWritebackCandidate,		InScanSAddr, 		Intersection}), 
+							.OutData(				{InScanAdd_Dbg0,	InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0,	Intersection_Dly}));	
 	
 	assign	CommonSubpath = 						Intersection_Dly & -Intersection_Dly;
 	
-	Pipeline	#(			.Width(					2 + SEAWidth + ORAMLP1),
+	Pipeline	#(			.Width(					3 + SEAWidth + ORAMLP1),
 							.Stages(				Overclock))
 				mpipe_2(	.Clock(					Clock),
 							.Reset(					Reset), 
-							.InData(				{InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0, 	CommonSubpath}), 
-							.OutData(				{InScanValid_Dly1,	IsWritebackCandidate_Dly1,	InScanSAddr_Dly1,	CommonSubpath_Dly}));	
+							.InData(				{InScanAdd_Dbg0,	InScanValid_Dly0,	IsWritebackCandidate_Dly0,	InScanSAddr_Dly0, 	CommonSubpath}), 
+							.OutData(				{InScanAdd_Dbg1,	InScanValid_Dly1,	IsWritebackCandidate_Dly1,	InScanSAddr_Dly1,	CommonSubpath_Dly}));	
 	
 	assign	CompatibleBuckets =						CommonSubpath_Dly - 1;
 	
