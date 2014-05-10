@@ -494,11 +494,15 @@ module AESREWORAM(
 		else CS_RO <= 								NS_RO;
 	end
 
-	// To fix the case when ROStart gets pulsed when CS_RO is not yet in idle state
-	Register1b 	ro_started(	.Clock(     			Clock),
-							.Reset(     			Reset | CSROStartRead),
-							.Set(      				ROStartAESValid),
-							.Out(       			ROStarted));	
+	FIFORegister #(			.Width(					1),
+							.BWLatency(				1))
+				ro_start(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				1'bx),
+							.InValid(				ROStartAESValid),
+							.InAccept(				ROStartAESReady),
+							.OutSend(				ROStarted),
+							.OutReady(				FinishWBIn));	
 	
 	always @( * ) begin
 		NS_RO = 									CS_RO;

@@ -214,8 +214,8 @@ module PathORAMBackend(
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
 							
-							.ROCmdValid(				),	
-							.ROCmdReady(				),							
+							.ROCmdValid(			ROStartCCValid),	
+							.ROCmdReady(			ROStartCCReady),							
 							.ROPAddrIn(             ROPAddr),
 							.ROLeafIn(				ROLeaf),
 							.RODummyIn(				REWRoundDummy),
