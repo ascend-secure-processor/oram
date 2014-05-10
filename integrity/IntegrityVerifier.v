@@ -16,7 +16,7 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter	NUMSHA3 = 2;	
+	parameter	NUMSHA3 = 2;	// TODO 3
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));
 	
     `include "PathORAM.vh"

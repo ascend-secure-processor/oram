@@ -195,6 +195,7 @@ module HWTestHarness(
 							AccessesPerRound =		20,
 							
 							RandomRounds =			5000,
+							RandomAddrLimit =		10,
 							
 							SingleLocRounds =		17,
 							
@@ -250,11 +251,11 @@ module HWTestHarness(
 			i = 0;
 			while (i < RandomRounds) begin
 				if (RandOutValid) begin
-					TASK_Command(BECMD_Read, RandOut[ORAML-1:0]);
+					TASK_Command(BECMD_Read, RandOut[RandomAddrLimit-1:0]);
 					NumSent = NumSent + 1;
 					#(Cycle*Gap);
 					if (RandOut[0]) begin
-						TASK_Command(BECMD_Update, RandOut[ORAML-1:0]);
+						TASK_Command(BECMD_Update, RandOut[RandomAddrLimit-1:0]);
 						#(Cycle*Gap);
 					end
 					i = i + 1;
