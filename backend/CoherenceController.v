@@ -121,7 +121,7 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	// CC status control logic
 	//-------------------------------------------------------------------------- 
-	wire					ROStart, ROCmdValid_Internal;
+	wire					ROStart;
 	wire	[ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
     wire					RODummy;
@@ -134,10 +134,8 @@ module CoherenceController(
 						.InValid(		ROCmdValid),
 						.InAccept(		ROCmdReady),
 						.OutData(		{ROPAddr,	ROLeaf, RODummy}),
-						.OutSend(		ROCmdValid_Internal),
 						.OutReady(		RO_W_DoneAlarm)
-				);
-				
+				);				
 	Pipeline #(.Width(1), .Stages(1))	
 		ro_start (Clock, 	Reset, 	ROCmdReady && ROCmdValid,		ROStart);
 	

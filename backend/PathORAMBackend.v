@@ -297,6 +297,9 @@ module PathORAMBackend(
 		end
 		
 	end else begin: NO_CC
+		assign	ROStartCCReady = 					1'b1;
+		assign	FromStashDataDone = 				1'b1;
+		
 		assign	BE_DRAMReadData = 					AES_DRAMReadData;
 		assign	BE_DRAMReadDataValid = 				AES_DRAMReadDataValid;
 		assign	AES_DRAMReadDataReady = 			BE_DRAMReadDataReady;
@@ -304,8 +307,6 @@ module PathORAMBackend(
 		assign	AES_DRAMWriteData = 				BE_DRAMWriteData;
 		assign  AES_DRAMWriteDataValid = 			BE_DRAMWriteDataValid;
 		assign	BE_DRAMWriteDataReady = 			AES_DRAMWriteDataReady;
-		
-		assign	FromStashDataDone = 				1'b1;
 	end endgenerate
 	
 	//--------------------------------------------------------------------------
