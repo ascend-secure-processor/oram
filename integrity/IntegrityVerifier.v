@@ -120,7 +120,7 @@ module IntegrityVerifier (
 	always @(posedge Clock) begin
 		if (HeaderInValid && !ROIHeader && !RWVIDValid) begin
 			$display("GentrySeedGenerator not valid. Really unlucky ... ");
-			$stop;
+			$finish;
 		end
 	end
 	
@@ -287,12 +287,12 @@ module IntegrityVerifier (
 			else if (Violation === 1) begin
 				$display("\tViolation : %x != %x", BucketHeaderOut[TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits], HashOut[Turn][DigestStart-1:DigestEnd]);
 				$display("\t\t header = %x", BucketHeaderOut);
-				$stop;
+				$finish;
 			end
 			
 			else if (Violation === 1'bx) begin
 				$display("\tX bits in hash");
-				$stop;
+				$finish;
 			end	
 		end
 		
@@ -301,7 +301,7 @@ module IntegrityVerifier (
 				$display("\tVersion is 0, no need to update hash for Bucket %d", BucketIDTurn);
 				if (!BucketOfITurn) begin
 					$display("\t Error: RW_W version 0 for Bucket %d", BucketIDTurn);
-					$stop;
+					$finish;
 				end
 			end
 			else

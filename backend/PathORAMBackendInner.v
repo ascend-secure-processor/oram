@@ -219,7 +219,7 @@ module PathORAMBackendInner(
 		initial begin
 			if (BEDWidth > DDRDWidth) begin
 				$display("[%m @ %t] ERROR: BEDWidth should never be > DDRDWidth", $time);
-				$stop;
+				$finish;
 			end
 		end
 
@@ -234,7 +234,7 @@ module PathORAMBackendInner(
 			if (StartedFirstAccess & DRAMReadDataValid & DRAMReadDataReady & (WriteCount_Sim % PathSize_DRBursts)) begin
 				// Whenever we are doing reads, we should have written the right amount back
 				$display("[%m @ %t] ERROR: We wrote back %d blocks (not aligned to path length ...)", $time, WriteCount_Sim);
-				$stop;
+				$finish;
 			end
 
 	`ifdef SIMULATION_VERBOSE_BE

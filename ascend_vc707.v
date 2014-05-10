@@ -78,12 +78,12 @@ module ascend_vc707(
 		initial begin
 			if ( UnifiedExperiment == 0 && REWExperiment == 1 ) begin
 				$display("[%m @ %t] ERROR: we aren't interested in this ...", $time);
-				$stop;			
+				$finish;			
 			end
 
 			if ( REWIVExperiment == 1 && REWExperiment == 0 ) begin
 				$display("[%m @ %t] ERROR: bogus params.", $time);
-				$stop;			
+				$finish;			
 			end
 		end
 	`endif
@@ -93,7 +93,7 @@ module ascend_vc707(
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					20, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
-							ORAMZ =					(REWExperiment) ? 5 : 4,
+							ORAMZ =					(REWExperiment) ? 5 : $finish,
 							ORAMC =					10,
 							ORAME =					5;
 

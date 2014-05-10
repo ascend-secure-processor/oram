@@ -321,7 +321,7 @@ module CoherenceController(
 		always @(posedge Clock) begin
 			if (BktOfIUpdate_CC && HeaderInBkfOfI) begin
 				$display("Error: CC needs one idle cycle after header of bucket of interest!");
-				$stop;
+				$finish;
 			end
 		end
 	`endif

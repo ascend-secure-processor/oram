@@ -5,8 +5,8 @@
 module testUORam;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = `ifdef ORAML `ORAML `else 20 `endif; // don't change
-	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
+	parameter                   ORAML = `ifdef ORAML `ORAML `else 13 `endif; // don't change
+	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else $finish `endif;
 	parameter					ORAMC =				10; 
 	parameter					ORAME =				5;
 	

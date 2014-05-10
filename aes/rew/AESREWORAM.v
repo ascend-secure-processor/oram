@@ -316,12 +316,12 @@ module AESREWORAM(
 		initial begin	
 			if ((PathMaskBuffering * RWPath_MaskChunks) > 512) begin
 				$display("[%m @ %t] ERROR: The mask header FIFO is too shallow for the Mask data FIFO (sized @ 512x512).", $time);
-				$stop;
+				$finish;
 			end
 		
 			if (BktHSize_DRBursts > 1) begin
 				$display("[%m @ %t] ERROR: Not supported yet.", $time);
-				$stop;
+				$finish;
 			end		
 			
 			if (EnableIV) begin
@@ -380,44 +380,44 @@ module AESREWORAM(
 			
 			if (ERROR_UF1) begin
 				$display("[%m @ %t] ERROR: Header WB fifo didn't have data on a transfer.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (~CSROWrite & BufferedDataOutValid & MaskIsHeader & ^DataOutV === 1'bx) begin // TODO use better signal than CSROWrite
 				$display("[%m @ %t] ERROR: Valid bit was X.", $time);
-				$stop;	
+				$finish;	
 			end
 
 			if (ERROR_OF2) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO overflow.", $time);
-				$stop;
+				$finish;
 			end
 			if (ERROR_UF2) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO didn't have data.", $time);
-				$stop;
+				$finish;
 			end			
 			
 			if (DataOutTransfer	& MaskIsHeader & |(ROHeaderMask & RWBGHeaderMask)) begin
 				$display("[%m @ %t] ERROR: RO and RW masks overlapped on header flit.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (ERROR_OF3) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header writebacks overflowed.", $time);
-				$stop;
+				$finish;
 			end
 			if (ERROR_OF4) begin
 				$display("[%m @ %t] ERROR: External IV FIFO writebacks overflowed.", $time);
-				$stop;
+				$finish;
 			end
 			if (ERROR_UF3) begin
 				$display("[%m @ %t] ERROR: External IV FIFO didn't have data on a transfer.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: now this just doesn't make any goddamn sense does it?.", $time);
-				$stop;
+				$finish;
 			end
 		end
 	`endif
@@ -741,15 +741,15 @@ module AESREWORAM(
 		always @(posedge Clock) begin
 			if (BufferedROIVOutReady_DWB & ~BufferedROIVOutValid_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks didn't have data on a transfer.", $time);
-				$stop;
+				$finish;
 			end
 			if (BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks overflowed.", $time);
-				$stop;
+				$finish;
 			end
 			if (BufferedROIVInValid & BufferedROIVInValid_DWB) begin
 				$display("[%m @ %t] ERROR: illegal signal combination.", $time);
-				$stop;			
+				$finish;			
 			end			
 		end
 	`endif

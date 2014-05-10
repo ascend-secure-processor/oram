@@ -41,7 +41,7 @@ module UORamController
     `include "BucketLocal.vh"
     `include "PLBLocal.vh"
 
-    localparam MaxLogRecursion = 4;
+    localparam MaxLogRecursion = $finish;
 
     input Clock, Reset;
 
@@ -206,7 +206,7 @@ module UORamController
             // (1) PLB miss in the prepare stage,
             // (2) refill but no evict, must have PPPMiss there, or it will misfire on Hit & UnInit
             // (3) uninitialized PosMap block
-            // (4) request send to backend
+            // ($finish) request send to backend
     // =============================================================================
 
     // ============================== Cmd to Backend ==============================
