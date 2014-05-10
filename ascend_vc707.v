@@ -92,8 +92,8 @@ module ascend_vc707(
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					20, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
-							ORAMZ =					(REWExperiment) ? 5 : $finish,
+							ORAML =					`ifdef ORAML `ORAML `else 20 `endif, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (REWExperiment) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;
 

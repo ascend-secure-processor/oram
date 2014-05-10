@@ -187,6 +187,143 @@ module HWTestHarness(
 	(* mark_debug = "TRUE" *)	wire					ReceiveCrossDataOutValid, ReceiveCrossDataOutReady;
 
 	//------------------------------------------------------------------------------
+	// 	Input stimulus
+	//------------------------------------------------------------------------------	
+
+	`ifdef SIMULATION
+		localparam			Rounds = 				10,
+							AccessesPerRound =		20,
+							
+							RandomRounds =			10,
+							
+							SingleLocRounds =		17,
+							
+							Gap = 					0,
+							Cycle = 				1000000000/SlowClockFreq;
+		
+		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
+		reg					CrossBufIn_DataInValid_Reg;	
+		integer 			i, nr, total_expected;
+		integer				FinishedInput;
+		integer				NumSent, NumReceived;
+		
+		wire	[31:0]		RandOut;
+		wire				RandOutValid;
+		
+		task TASK_Command;
+			input	[BECMDWidth-1:0] 	In_Command;
+			input	[ORAMU-1:0]			In_PAddr;
+			
+			begin
+				CrossBufIn_DataInValid_Reg = 		1'b1;
+				CrossBufIn_DataIn_Reg =				{In_Command, In_PAddr, {DBaseWidth{1'b0}}, {TimeWidth{1'b0}}};
+				
+				while (~CrossBufIn_DataInReady) #(Cycle);
+				#(Cycle);
+				
+				CrossBufIn_DataInValid_Reg = 		1'b0;
+			end
+		endtask
+		
+		assign	UARTDataOutReady =					1'b1;
+		assign	CrossBufIn_DataInValid =			CrossBufIn_DataInValid_Reg;
+		assign	CrossBufIn_DataIn =					CrossBufIn_DataIn_Reg;
+		
+		PRNG 	#(			.RandWidth(				32),
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
+				leaf_gen(	.Clock(					SlowClock),
+							.Reset(					SlowReset),
+							.RandOutReady(			CrossBufIn_DataInValid & CrossBufIn_DataInReady),
+							.RandOutValid(			RandOutValid),
+							.RandOut(				RandOut));
+		
+		initial begin
+			FinishedInput = 						0;
+			NumSent =								0;
+			NumReceived =							0;
+			
+			CrossBufIn_DataInValid_Reg = 			1'b0;
+			
+			#(Cycle*1000);
+		
+			// Random accesses
+			i = 0;
+			while (i < RandomRounds) begin
+				if (RandOutValid) begin
+					TASK_Command(BECMD_Read, RandOut[ORAML-1:0]);
+					NumSent = NumSent + 1;
+					#(Cycle*Gap);
+					if (RandOut[0]) begin
+						TASK_Command(BECMD_Update, RandOut[ORAML-1:0]);
+						#(Cycle*Gap);
+					end
+					i = i + 1;
+				end
+				#(Cycle);
+			end
+			
+			// Mimic Albert's access pattern
+			i = 0;
+			while (i < SingleLocRounds) begin
+				nr = 0;
+				while (nr < AccessesPerRound) begin
+					TASK_Command(BECMD_Read, i);
+					NumSent = NumSent + 1;
+					TASK_Command(BECMD_Update, i);
+					nr = nr + 1;
+					#(Cycle*Gap);
+				end
+				i = i + 1;
+			end
+			
+			// Write -> Read groups of incrementing addrs
+			i = 0;
+			while (i < Rounds) begin
+				nr = 0;
+				while (nr < AccessesPerRound) begin
+					TASK_Command(BECMD_Update, i * AccessesPerRound + nr);
+					nr = nr + 1;
+					#(Cycle*Gap);
+				end
+				
+				nr = 0;
+				while (nr < AccessesPerRound) begin
+					TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
+					NumSent = NumSent + 1;
+					nr = nr + 1;
+					#(Cycle*Gap);
+				end
+				i = i + 1;
+			end
+			
+			FinishedInput =							1;
+		end
+		
+		always @(posedge FastClock) begin
+			if (HistogramWrite) begin
+				NumReceived = NumReceived + 1;
+			end
+			
+			if (FinishedInput && NumSent == NumReceived) begin
+				$display("ALL TESTS PASSED!");
+				$finish;
+			end
+		end
+	`else
+		FIFOShiftRound #(	.IWidth(				UARTWidth),
+							.OWidth(				THPWidth),
+							.Reverse(				1))
+				tst_shift(	.Clock(					SlowClock),
+							.Reset(					SlowReset),
+							.InData(				UARTDataOut),
+							.InValid(				UARTDataOutValid),
+							.InAccept(				UARTDataOutReady),
+							.OutData(				CrossBufIn_DataIn),
+							.OutValid(				CrossBufIn_DataInValid),
+							.OutReady(				CrossBufIn_DataInReady));	
+	`endif	
+	
+	//------------------------------------------------------------------------------
 	// 	[Receive path] Shifts & buffers
 	//------------------------------------------------------------------------------	
 
@@ -352,72 +489,6 @@ module HWTestHarness(
 	//------------------------------------------------------------------------------
 	// 	[Send path] Clock crossing
 	//------------------------------------------------------------------------------
-
-	`ifdef SIMULATION
-		localparam			Rounds = 				1000,
-							AccessesPerRound =		20,
-							Gap = 					1000,
-							Cycle = 				1000000000/SlowClockFreq;
-		
-		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
-		reg					CrossBufIn_DataInValid_Reg;	
-		integer 			i, nr;
-		
-		task TASK_Command;
-			input	[BECMDWidth-1:0] 	In_Command;
-			input	[ORAMU-1:0]			In_PAddr;
-			
-			begin
-				CrossBufIn_DataInValid_Reg = 		1'b1;
-				CrossBufIn_DataIn_Reg =				{In_Command, In_PAddr, {DBaseWidth{1'b0}}, {TimeWidth{1'b0}}};
-				
-				while (~CrossBufIn_DataInReady) #(Cycle);
-				#(Cycle);
-				
-				CrossBufIn_DataInValid_Reg = 		1'b0;
-			end
-		endtask
-		
-		assign	UARTDataOutReady =					1'b1;
-		assign	CrossBufIn_DataInValid =			CrossBufIn_DataInValid_Reg;
-		assign	CrossBufIn_DataIn =					CrossBufIn_DataIn_Reg;
-		
-		initial begin
-			i = 0;
-			CrossBufIn_DataInValid_Reg = 			1'b0;
-			
-			#(Cycle*1000);
-		
-			while (i < Rounds) begin
-				nr = 0;
-				while (nr < AccessesPerRound) begin
-					TASK_Command(BECMD_Update, i * AccessesPerRound + nr);
-					nr = nr + 1;
-					#(Cycle*Gap);
-				end
-				
-				nr = 0;
-				while (nr < AccessesPerRound) begin
-					TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
-					nr = nr + 1;
-					#(Cycle*Gap);
-				end
-				i = i + 1;
-			end
-		end
-	`else
-		FIFOShiftRound #(	.IWidth(				UARTWidth),
-							.OWidth(				THPWidth),
-							.Reverse(				1))
-				tst_shift(	.Clock(					SlowClock),
-							.Reset(					SlowReset),
-							.InData(				UARTDataOut),
-							.InValid(				UARTDataOutValid),
-							.InAccept(				UARTDataOutReady),
-							.OutData(				CrossBufIn_DataIn),
-							.OutValid(				CrossBufIn_DataInValid),
-							.OutReady(				CrossBufIn_DataInReady));	
-	`endif
 							
 	assign	SlowCommand =							CrossBufIn_DataIn[THPWidth-1:THPWidth-TCMDWidth];
 	assign	SlowStartSignal =						SlowCommand == TCMD_Start;
