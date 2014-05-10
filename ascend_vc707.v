@@ -62,7 +62,8 @@ module ascend_vc707(
 		
 		See PathORAMTop for more documentation */
 	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	1; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
@@ -147,7 +148,6 @@ module ascend_vc707(
 	
 	wire					SlowClock;
 	wire					MMCMF100Locked, SlowReset;
-	wire					MMCMF300Locked;
 	
 	// Test harness
 	
@@ -203,10 +203,14 @@ module ascend_vc707(
 							.locked(				MMCMF100Locked));
 	assign	SlowReset =								~MMCMF100Locked;
 
-	aes_clock	ultra( 		.clk_in1(				MemoryClock),
+	generate if (SlowAESClock) begin:SLOW_AES
+		assign	AESClock =							SlowClock;
+	end else begin:FAST_AES
+		aes_clock	ultra( 	.clk_in1(				MemoryClock),
 							.clk_out1(				AESClock),
 							.reset(					MemoryReset),
-							.locked(				MMCMF300Locked));
+							.locked(				));
+	end endgenerate
 	
 	//------------------------------------------------------------------------------
 	// 	GPIO

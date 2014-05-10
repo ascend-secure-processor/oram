@@ -16,8 +16,8 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter	NUMSHA3 = 3;	
-	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));	
+	parameter	NUMSHA3 = 2;	
+	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));
 	
     `include "PathORAM.vh"
 	
@@ -54,7 +54,7 @@ module IntegrityVerifier (
 	input	[BIDWidth-1:0]	 ROIBID;
 	
 	// status and meta data for hash engines	
-	wire [BktAWidth-1:0] 	BucketIDTurn;
+	(* mark_debug = "TRUE" *)	wire [BktAWidth-1:0] 	BucketIDTurn;
 	wire [BlkAWidth-1:0]	BucketOffsetTurn; 
 	wire [DDRDWidth-1:0]	BucketHeaderOut;
 	wire					BucketOfISIn;
@@ -92,7 +92,7 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	wire DataInValid,	DataInValid_Pre;
 	wire HeaderInValid, HeaderInValid_Pre;
-	wire ROIHeader, 	ROIHeader_Pre;
+	(* mark_debug = "TRUE" *)	wire ROIHeader;
 	wire [DDRDWidth-1:0] HashData;
 	
 	assign	DataInValid_Pre = !Reset &&  Request && !Write;
@@ -124,8 +124,8 @@ module IntegrityVerifier (
 		end
 	end
 	
-	wire [AESEntropy-1:0] BktV;
-	wire [BIDWidth-1:0]   BktID;
+	(* mark_debug = "TRUE" *)	wire [AESEntropy-1:0] BktV;
+	(* mark_debug = "TRUE" *)	wire [BIDWidth-1:0]   BktID;
 	
 	assign BktV = ROIHeader ? ROIBV : RWBV;
 	assign BktID = ROIHeader ? ROIBID : RWBID;
@@ -182,8 +182,8 @@ module IntegrityVerifier (
 	
 	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
 	
-	assign PathDone = BktOnPathDone >= TotalBucketD;
-	assign BOIDone = BktOfIDone >= 2;
+	assign PathDone = BktOnPathDone >= TotalBucketD && ~ERROR_IV;
+	assign BOIDone = BktOfIDone >= 2 && ~ERROR_IV;
 	
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash
@@ -264,6 +264,15 @@ module IntegrityVerifier (
 					); 
 	assign	BucketHeaderIn = {DataIn[DDRDWidth-1:AESEntropy], BktV};
 		
+	(* mark_debug = "TRUE" *)	wire			ERROR_IVVIOLATION, ERROR_ISC1, ERROR_ISC2, ERROR_RWWVersion, ERROR_IV;
+	
+	Register1b 	errno1(Clock, Reset, ConsumeHash && CheckHash && Violation, 							ERROR_IVVIOLATION);
+	Register1b 	errno2(Clock, Reset, BOIReady && !BOIDone, 												ERROR_ISC1);
+	Register1b 	errno3(Clock, Reset, PathReady && !PathDone, 											ERROR_ISC2);
+	Register1b 	errno4(Clock, Reset, ConsumeHash && UpdateHash && !VersionNonzero && !BucketOfITurn, 	ERROR_RWWVersion);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_IVVIOLATION | ERROR_ISC1 | ERROR_ISC2 | ERROR_RWWVersion, 	ERROR_IV);
+	
 `ifdef SIMULATION		
 	always @(posedge Clock) begin
 		if (ConsumeHash && CheckHash) begin
@@ -299,9 +308,9 @@ module IntegrityVerifier (
 				$display("Updating Bucket %d (with header %x) hash to \n\t\t %x", BucketIDTurn, BucketHeaderOut, HashOut[Turn][DigestStart-1:DigestEnd]);
 		end
 		
-		if (BOIReady && !BOIDone)
+		if (ERROR_ISC1)
 			$display("Error: RO bucket arrives so soon? Have not finished the last one");	
-		if (PathReady && !PathDone)
+		if (ERROR_ISC2)
 			$display("Error: Have not finished the last path");			
 	end
 `endif

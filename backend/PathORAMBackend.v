@@ -110,12 +110,12 @@ module PathORAMBackend(
 	wire	[ORAML-1:0]		ROLeaf;
 	wire                    REWRoundDummy;
 
-	wire					ROStartCCValid, ROStartAESValid;
-	wire					ROStartCCReady, ROStartAESReady;
+	(* mark_debug = "TRUE" *)	wire					ROStartCCValid, ROStartAESValid;
+	(* mark_debug = "TRUE" *)	wire					ROStartCCReady, ROStartAESReady;
 	
 	// integrity verification
 		
-	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn;
+	(* mark_debug = "TRUE" *)	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn, BOIFromCC;
 	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;

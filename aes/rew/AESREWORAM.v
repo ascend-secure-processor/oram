@@ -117,9 +117,12 @@ module AESREWORAM(
 	
 	wire					PathRead, ROAccess, RWAccess, PathWriteback;	
 	
+	wire	[ORAMU-1:0]		ROPAddr_Internal;
+	wire	[ORAML-1:0]		ROLeaf_Internal;	
+	
 	// AES Core
 	
-	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
+	(* mark_debug = "FALSE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
 	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
 	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
 	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInValid;
@@ -494,13 +497,14 @@ module AESREWORAM(
 		else CS_RO <= 								NS_RO;
 	end
 
-	FIFORegister #(			.Width(					1),
+	FIFORegister #(			.Width(					ORAMU + ORAML),
 							.BWLatency(				1))
 				ro_start(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				1'bx),
+							.InData(				{ROPAddr, 			ROLeaf}),
 							.InValid(				ROStartAESValid),
 							.InAccept(				ROStartAESReady),
+							.OutData(				{ROPAddr_Internal, 	ROLeaf_Internal}),
 							.OutSend(				ROStarted),
 							.OutReady(				FinishWBIn));	
 	
@@ -588,7 +592,7 @@ module AESREWORAM(
 							.In(					{AESEntropy{1'bx}}),
 							.Count(					GentryCounter_MemoryConsistant));	
 	
-	assign	CurrentLeaf =							(ROAccess) ? ROLeaf : GentryCounter_MemoryConsistant[ORAML-1:0];
+	assign	CurrentLeaf =							(ROAccess) ? ROLeaf_Internal : GentryCounter_MemoryConsistant[ORAML-1:0];
 	
 	// Adjust the gentry counter for each bucket on the RO path (this is the floor/ceiling logic)
 	assign	RO_IVIncrement =						RO_GentryIV + {{AESEntropy-1{1'b0}}, ~RO_LeafNextDirection};
@@ -634,7 +638,7 @@ module AESREWORAM(
 	BktIDGen # 	(	.ORAML(		ORAML))
 		bid 	(	.Clock(		Clock),
 					.ReStart(	CSROStartOp),
-					.leaf(		ROLeaf),
+					.leaf(		ROLeaf_Internal),
 					.Enable(	RO_BIDOutReady),
 					.BktIdx(	RO_BIDOut)			
 				);
@@ -1022,7 +1026,7 @@ module AESREWORAM(
 	assign	DataOutU =								DataOut_Read1[BigUWidth+BktHUStart-1:BktHUStart];
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BUCKET_OF_INTEREST
-		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
+		assign	ROI_UMatches[i] =					DataOutV[i] & (ROPAddr_Internal == DataOutU[ORAMU*(i+1)-1:ORAMU*i]);
 	end endgenerate
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & ROMaskBufOutValid & 	ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches;
