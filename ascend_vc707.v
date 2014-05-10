@@ -103,7 +103,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,   
-							PLBCapacity = 			8192 << 3;
+							PLBCapacity = 			64; // TODO 8192 << 3;
 		
 	parameter				Overclock =				1;
 	

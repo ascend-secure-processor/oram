@@ -191,10 +191,10 @@ module HWTestHarness(
 	//------------------------------------------------------------------------------	
 
 	`ifdef SIMULATION
-		localparam			Rounds = 				10,
+		localparam			Rounds = 				500,
 							AccessesPerRound =		20,
 							
-							RandomRounds =			10,
+							RandomRounds =			5000,
 							
 							SingleLocRounds =		17,
 							
