@@ -306,7 +306,7 @@ module Stash(
 		initial begin
 			if (StashOutBuffering < 2) begin
 				$display("[%m @ %t] ERROR (usage): StashOutBuffering must be >= 2", $time);
-				$stop;
+				$finish;
 			end
 		end
 		
@@ -315,58 +315,58 @@ module Stash(
 			
 			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 1 (HEADER lost)", $time);
-				$stop;			
+				$finish;			
 			end
 			if (ERROR_ISC2) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 2 (DATA buffer overflow)", $time);
-				$stop;			
+				$finish;			
 			end
 			if (ERROR_ISC3) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination 3 (HEADER buffer overflow)", $time);
-				$stop;			
+				$finish;			
 			end			
 
 			if (	(WriteInValid & WriteInReady & BlockWriteComplete) &
 					((^WriteLeaf === 1'bx) | (^WritePAddr === 1'bx))) begin
 				$display("[%m @ %t] ERROR: writing block with X paddr/leaf", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (	(ReadOutValid & ReadOutReady & BlockReadComplete) &
 					(ReadPAddr != DummyBlockAddress) & 
 					((^ReadLeaf === 1'bx) | (^ReadPAddr === 1'bx))) begin
 				$display("[%m @ %t] ERROR: reading block with X paddr/leaf", $time);
-				$stop;
+				$finish;
 			end			
 			
 			if (ERROR_BlockNotFound) begin
 				$display("[%m @ %t] ERROR: the FE block wasn't in ORAM/stash", $time);
-				if (StopOnBlockNotFound) $stop;
+				if (StopOnBlockNotFound) $finish;
 			end
 			
 	`ifndef SIMULATION_ASIC	
 			if (LookForBlock & BlockWasFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (LookForBlock & BlockWasFound & CSTurnaround1 &
 				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
-				$stop;
+				$finish;
 			end
 	`endif
 	
 			if (ERROR_StashOverflow) begin
 				$display("[%m] ERROR: stash overflowed");
-				$stop;
+				$finish;
 			end
 			
 			/* The StashTestbench abuses this by illegally filling the stash.  Re-enable for BackendTestbench
 			if (ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid)) begin
 				$display("[%m] ERROR: the scan took longer than our _conservative_ estimate");
-				$stop;
+				$finish;
 			end
 			*/
 			

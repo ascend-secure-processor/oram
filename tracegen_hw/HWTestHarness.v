@@ -194,12 +194,12 @@ module HWTestHarness(
 		initial begin
 			if ( (UARTWidth > DBaseWidth) | (DBaseWidth > FEDWidth) ) begin
 				$display("[%m @ %t] Illegal parameter settings", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (GenHistogram & HGAWidth > 12) begin
 				$display("[%m @ %t] recv_fifo may overflow --- make it deeper.", $time);
-				$stop;
+				$finish;
 			end			
 		end
 	`endif

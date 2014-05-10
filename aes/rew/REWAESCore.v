@@ -158,34 +158,34 @@ module REWAESCore(
 		initial begin
 			if ((AESEntropy + BIDWidth + PCCMDWidth) > 108) begin
 				$display("[%m @ %t] ERROR: Data is too wide for ro_I_fifo.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if ((AESWidth + PCCMDWidth) > 144) begin
 				$display("[%m @ %t] ERROR: Data is too wide for ro_O_fifo.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (AESWidth != 128) begin
 				$display("[%m @ %t] ERROR: width not supported.", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (DDRDWidth != 512) begin
 				$display("[%m @ %t] ERROR: you need to re-generate the REWMaskFIFO to change this width.", $time);
-				$stop;
+				$finish;
 			end
 		end
 		
 		always @(posedge FastClock) begin
 			if (ROFIFOFull & CommandOutIsRO) begin
 				$display("[%m @ %t] ERROR: AES RO out fifo overflow.", $time);
-				$stop;
+				$finish;
 			end
 			 
 			if (MaskFIFOFull & MaskFIFODataInValid) begin
 				$display("[%m @ %t] ERROR: AES RW out fifo overflow.", $time);
-				$stop;
+				$finish;
 			end			
 		end
 	`endif

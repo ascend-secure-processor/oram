@@ -20,7 +20,7 @@ module	PathORAMBackendTestbench;
 	`ifndef SIMULATION
 	initial begin
 		$display("[%m @ %t] ERROR: set SIMULATION macro", $time);
-		$stop;
+		$finish;
 	end
 	`endif
 
@@ -215,7 +215,7 @@ module	PathORAMBackendTestbench;
 				if (LoadValid & LoadReady) begin
 					if (LoadData !== Data) begin
 						$display("FAIL: Load data %d, expected %d", LoadData, Data);
-						$stop;
+						$finish;
 					end
 					Chunks = Chunks + 1;
 					if (Chunks == BlkSize_FEDChunks) begin
@@ -454,12 +454,12 @@ module	PathORAMBackendTestbench;
 		if ((AllowBlockNotFound == 1) & 
 			~CUT.stash.BlockNotFound & CUT.stash.BlockNotFoundValid) begin
 			$display("[%m @ %t] ERROR: we found a block (in the stash) when we shouldn't have", $time);
-			$stop;
+			$finish;
 		end
 		if ((AllowBlockNotFound != 1) & 
 			CUT.stash.BlockNotFound & CUT.stash.BlockNotFoundValid) begin
 			$display("[%m @ %t] ERROR: we didn't find the block (in the stash) that we were looking for", $time);
-			$stop;
+			$finish;
 		end
 
 		if ((TestsPASSED == 1) & (CommandsPASSED == 1)) begin

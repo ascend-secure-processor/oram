@@ -282,7 +282,7 @@ module UORamController
                 $display("\t\tPosMap Hit  in Block %d for Block %d", AddrQ[QDepth+1], AddrQ[QDepth]);
 				if (!EnablePLB && QDepth < Recursion-1) begin
 					$display("Error: PLB still does its job when disabled.");
-					$stop;
+					$finish;
 				end
             end
 		`endif

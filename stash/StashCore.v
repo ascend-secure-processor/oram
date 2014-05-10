@@ -322,7 +322,7 @@ module StashCore(
 			
 			if (StashCapacity < BlocksOnPath) begin
 				$display("[%m] ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
-				$stop;
+				$finish;
 			end
 		end
 		
@@ -350,13 +350,13 @@ module StashCore(
 			if (LS == ST_Dumping & ~CSSyncing & ~CSIdle & ~CSPushing) begin
 				// This is so the block count gets updated ...
 				$display("ERROR: must perform sync after dump");
-				$stop;
+				$finish;
 			end
 			*/
 			
 			if (StashH_WE & (^InPAddr === 1'bx | ^InLeaf === 1'bx)) begin
 				$display("[%m] ERROR: writing some X header into stash");
-				$stop;			
+				$finish;			
 			end
 			
 			if (^OutScanValidDump === 1'bx | 
@@ -366,22 +366,22 @@ module StashCore(
 				^InValid === 1'bx |
 				^InCommandValid === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
-				$stop;
+				$finish;
 			end
 
 			if (RemoveBlock & StashOccupancy == 0) begin
 				$display("[%m] ERROR: we removed a block from an empty stash");
-				$stop;			
+				$finish;			
 			end
 			
 			if (CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH) begin
 				$display("[%m] ERROR: both free/used list given same pointer during sync");
-				$stop;
+				$finish;
 			end
 			
 			if (WriteTransfer & StashE_Address == SNULL) begin
 				$display("[%m] ERROR: overwriting the SNULL entry");
-				$stop;
+				$finish;
 			end
 			
 	`ifndef SIMULATION_ASIC
@@ -398,7 +398,7 @@ module StashCore(
 	`endif
 					if (~ROAccess & StashC.Mem[MS_pt] == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
-						$stop;
+						$finish;
 					end
 					
 					MS_pt = StashP.Mem[MS_pt];
@@ -406,7 +406,7 @@ module StashCore(
 					
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (UsedList)");
-						$stop;
+						$finish;
 					end
 				end
 				
@@ -425,7 +425,7 @@ module StashCore(
 					i = i + 1;
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (FreeList)");
-						$stop;
+						$finish;
 					end
 				end
 			end
@@ -440,7 +440,7 @@ module StashCore(
 				end
 				if (i != StashOccupancy) begin
 					$display("FAIL: Stash occupancy %d != direct inspection Occupancy %d", StashOccupancy, i);
-					$stop;
+					$finish;
 				end	
 			end
 			
@@ -452,13 +452,13 @@ module StashCore(
 					PAddrTemp = StashH.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
 					if (PAddrTemp == InPAddr && StashC.Mem[MS_pt] == EN_Used) begin
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
-						$stop;
+						$finish;
 					end
 					MS_pt = StashP.Mem[MS_pt];
 					i = i + 1;
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (UsedList)");
-						$stop;
+						$finish;
 					end					
 				end
 			end

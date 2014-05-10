@@ -174,28 +174,28 @@ module StashScanTable(
 			end
 			if (LeafSet & (LeafThisAccess !== CurrentLeaf)) begin
 				$display("[%m @ %t] ERROR: ScanTable leaf changed during an access", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (~DMAReady_Internal & DMAValid_Internal) begin
 				$display("[%m @ %t] ERROR: ScanTable FIFO overflow", $time);
-				$stop;			
+				$finish;			
 			end
 			
 			if (IsWritebackCandidate & InScanValid & InScanLeaf &
 				((^CurrentLeaf === 1'bx) | (^InScanLeaf === 1'bx) | (^InScanSAddr === 1'bx))) begin
 				$display("[%m @ %t] ERROR: ScanTable got XX Current/Scan leaf or InScanSAddr", $time);
-				$stop;
+				$finish;
 			end
 			
 			if ( (OutScanAccepted_Pre | InScanValid) & InDMAValid ) begin
 				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
-				$stop;
+				$finish;
 			end
 			
 			if (AccessComplete & |BCounts_Pre) begin
 				$display("[%m @ %t] ERROR: ScanTable BCounts not reset", $time);
-				$stop;				
+				$finish;				
 			end
 			
 	`ifndef SIMULATION_ASIC
@@ -204,7 +204,7 @@ module StashScanTable(
 				while (ind != BlocksOnPath) begin
 					if (st_ram.Mem[ind] != SNULL) begin
 						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, st_ram.Mem[ind]);
-						$stop;
+						$finish;
 					end
 					//$display("OK %d", ScanTable.Mem[ind]);
 					ind = ind + 1;

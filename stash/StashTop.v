@@ -214,32 +214,32 @@ module StashTop(
 		always @(posedge Clock) begin
 			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
-				$stop;
+				$finish;
 			end
 			
 			if (OuterCount < InnerCount) begin
 				$display("[%m] ERROR: Stash received more blocks than BEndInner sent ...");
-				$stop;
+				$finish;
 			end
 			
 			if (CSIdle & CommandValid & (Command !== STCMD_StartRead & Command !== STCMD_Append) ) begin
 				$display("[%m] ERROR: Only start read commands/appends accepted at this time.");
-				$stop;
+				$finish;
 			end
 			
 			if (CSRead & CommandValid & Command !== STCMD_StartWrite) begin
 				$display("[%m] ERROR: Only start write command accepted at this time.");
-				$stop;				
+				$finish;				
 			end
 			
 			if (CommandValid & Command == STCMD_Append & BECommand != BECMD_Append) begin
 				$display("[%m] ERROR: Bogus command.");
-				$stop;
+				$finish;
 			end
 			
 			if (LatchBECommand & StashAlmostFull & ~AccessIsDummy) begin
 				$display("[%m] ERROR: We are about to perform a real access but the stash is almost full.");
-				$stop;			
+				$finish;			
 			end
 		end
 	`endif
@@ -531,7 +531,7 @@ module StashTop(
 		always @(posedge Clock) begin
 			if (~HeaderUpShift_InReady & WritebackBlockCommit) begin
 				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
-				$stop;
+				$finish;
 			end
 		end
 	`endif
