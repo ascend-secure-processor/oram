@@ -175,9 +175,8 @@ module PathORAMBackendInner(
 	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
 	(* mark_debug = "TRUE" *)	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;
 
-	// TODO move this to the right place
-
-
+	// Stash
+	
 	(* mark_debug = "TRUE" *)	wire	[STCMDWidth-1:0] Stash_Command;
 	(* mark_debug = "TRUE" *)	wire					Stash_CommandValid, Stash_CommandReady;
 
@@ -197,6 +196,10 @@ module PathORAMBackendInner(
 	(* mark_debug = "TRUE" *)	wire					AddrGen_InReady, AddrGen_InValid;
 	(* mark_debug = "TRUE" *)	wire					AddrGen_PathRead, AddrGen_HeaderOnly;
 
+	// debugging
+	
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_BEndInner;
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------
@@ -210,7 +213,10 @@ module PathORAMBackendInner(
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
-
+	
+	Register1b 	errno1(Clock, Reset, DRAMReadDataValid && ~DRAMReadDataReady, 	ERROR_OF1);	
+	Register1b 	errANY(Clock, Reset, ERROR_OF1, 								ERROR_BEndInner);
+	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
 		integer WriteCount_Sim = 0;
@@ -226,6 +232,11 @@ module PathORAMBackendInner(
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
 
+			if (ERROR_OF1) begin
+				$display("[%m @ %t] ERROR: BEnd needed backpressure!", $time);
+				$finish;			
+			end
+			
 			if (CSAccess) StartedFirstAccess <= 1'b1;
 
 			if (~CSInitialize & DRAMWriteDataValid & DRAMWriteDataReady)
@@ -310,12 +321,13 @@ module PathORAMBackendInner(
 				if (DRAMInitComplete)
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
-					NS =							ST_Append;
-				else if (Stash_RdRmvCmdValid)
-					NS =							ST_Access;
-				else if (Stash_UpdateCmdValid)
-					NS = 							ST_Access;
+				if (~ERROR_BEndInner)
+					if (Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
+						NS =							ST_Append;
+					else if (Stash_RdRmvCmdValid)
+						NS =							ST_Access;
+					else if (Stash_UpdateCmdValid)
+						NS = 							ST_Access;
 			ST_Append :
 				if (Control_CommandDone) // When last chunk of data is appended
 					NS = 							ST_Idle;

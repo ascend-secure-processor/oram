@@ -53,6 +53,8 @@ module IntegrityVerifier (
 	input	[AESEntropy-1:0] ROIBV;
 	input	[BIDWidth-1:0]	 ROIBID;
 	
+	(* mark_debug = "TRUE" *)	wire			ERROR_IVVIOLATION, ERROR_ISC1, ERROR_ISC2, ERROR_RWWVersion, ERROR_IV;	
+	
 	// status and meta data for hash engines	
 	(* mark_debug = "TRUE" *)	wire [BktAWidth-1:0] 	BucketIDTurn;
 	wire [BlkAWidth-1:0]	BucketOffsetTurn; 
@@ -263,8 +265,6 @@ module IntegrityVerifier (
 						.OutReady(				ConsumeHash)
 					); 
 	assign	BucketHeaderIn = {DataIn[DDRDWidth-1:AESEntropy], BktV};
-		
-	(* mark_debug = "TRUE" *)	wire			ERROR_IVVIOLATION, ERROR_ISC1, ERROR_ISC2, ERROR_RWWVersion, ERROR_IV;
 	
 	Register1b 	errno1(Clock, Reset, ConsumeHash && CheckHash && Violation, 							ERROR_IVVIOLATION);
 	Register1b 	errno2(Clock, Reset, BOIReady && !BOIDone, 												ERROR_ISC1);

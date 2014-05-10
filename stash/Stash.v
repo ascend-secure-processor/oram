@@ -240,8 +240,8 @@ module Stash(
 	wire					ReadingLastBlock;	
 	wire					BlockReadComplete_Internal;
 
-	wire	[STAWidth-1:0]	BlocksReading;
-	wire	[STAWidth-1:0] 	BlocksRead;
+	wire	[STAP1Width-1:0] BlocksReading;
+	wire	[STAP1Width-1:0] BlocksRead;
 	
 	wire					Core_AccessComplete, Top_AccessComplete;
 
@@ -752,29 +752,29 @@ module Stash(
 	assign	OutDMAReady =							CSPathWriteback & OutSpaceGate & Core_CommandReady;
 
 	// which block are we currently writing back?
-	Counter		#(			.Width(					STAWidth))
+	Counter		#(			.Width(					STAP1Width))
 				rd_st_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSPathWriteback & ~ReadingLastBlock),
-							.In(					{STAWidth{1'bx}}),
+							.In(					{STAP1Width{1'bx}}),
 							.Count(					BlocksReading));
-	CountCompare #(			.Width(					STAWidth),
+	CountCompare #(			.Width(					STAP1Width),
 							.Compare(				BlocksOnPath))
 				rd_st_cmp(	.Count(					BlocksReading), 
 							.TerminalCount(			ReadingLastBlock));
 					
 	// ticks at end of block read
-	Counter		#(			.Width(					STAWidth))
+	Counter		#(			.Width(					STAP1Width))
 				rd_ret_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CSPathWriteback & BlockReadComplete_Internal),
-							.In(					{STAWidth{1'bx}}),
+							.In(					{STAP1Width{1'bx}}),
 							.Count(					BlocksRead));
-	CountCompare #(			.Width(					STAWidth),
+	CountCompare #(			.Width(					STAP1Width),
 							.Compare(				BlocksOnPath))
 				rd_ret_cmp(	.Count(					BlocksRead), 
 							.TerminalCount(			Top_AccessComplete));

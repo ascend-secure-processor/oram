@@ -100,7 +100,7 @@ module StashScanTable(
 
 	wire	[BCLWidth-1:0]	BCounts, BCounts_New;
 
-	wire	[STAWidth-1:0]	ResetCount;
+	wire	[STAP1Width-1:0] ResetCount;
 	
 	// Pipelining
 	
@@ -125,24 +125,26 @@ module StashScanTable(
 	
 	wire	[SEAWidth-1:0]	DummyWire;
 	
+	// debugging
+	
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_ISC1, ERROR_ISC2, ERROR_StashScanTable;
+	
 	//--------------------------------------------------------------------------
 	//	Software debugging 
 	//--------------------------------------------------------------------------
 
+	Register1b 	errno1(Clock, Reset, ~DMAReady_Internal & DMAValid_Internal, 			ERROR_OF1);
+	Register1b 	errno2(Clock, Reset, (OutScanAccepted_Pre | InScanValid) & InDMAValid, 	ERROR_ISC1);
+	Register1b 	errno3(Clock, Reset, AccessComplete & |BCounts_Pre, 					ERROR_ISC2);
+
+	Register1b 	errANY(Clock, Reset, ERROR_OF1 | ERROR_ISC1 | ERROR_ISC2, 				ERROR_StashScanTable);
+	
 	`ifdef SIMULATION
 		integer ind;
 		reg ResetDone_Delayed;
 		
 		reg	LeafSet = 0;
 		reg	[ORAML-1:0]	LeafThisAccess;
-		wire [ORAMU-1:0] InScanPAddr_Dly;
-		
-		Pipeline	#(	.Width(					ORAMU),
-						.Stages(				Overclock))
-			sim_pipe(	.Clock(					Clock),
-						.Reset(					Reset), 
-						.InData(				InScanPAddr), 
-						.OutData(				InScanPAddr_Dly));
 		
 		always @(posedge Clock) begin
 			ResetDone_Delayed <= ResetDone;
@@ -177,7 +179,7 @@ module StashScanTable(
 				$finish;
 			end
 			
-			if (~DMAReady_Internal & DMAValid_Internal) begin
+			if (ERROR_OF1) begin
 				$display("[%m @ %t] ERROR: ScanTable FIFO overflow", $time);
 				$finish;			
 			end
@@ -188,12 +190,12 @@ module StashScanTable(
 				$finish;
 			end
 			
-			if ( (OutScanAccepted_Pre | InScanValid) & InDMAValid ) begin
+			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: ScanTable is multitasking", $time);
 				$finish;
 			end
 			
-			if (AccessComplete & |BCounts_Pre) begin
+			if (ERROR_ISC2) begin
 				$display("[%m @ %t] ERROR: ScanTable BCounts not reset", $time);
 				$finish;				
 			end
@@ -273,7 +275,7 @@ module StashScanTable(
 
 	assign 	OutScanAccepted_Pre =					IsWritebackCandidate_Dly2 & InScanValid_Dly2 & |HighestLevel_Onehot;
 	assign	OutScanSAddr_Pre =						InScanSAddr_Dly2;
-	assign	OutScanValid_Pre = 						InScanValid_Dly2;
+	assign	OutScanValid_Pre = 						~ERROR_StashScanTable & InScanValid_Dly2;
 	
 	//--------------------------------------------------------------------------
 	//	Feed-forward retiming
@@ -326,13 +328,13 @@ module StashScanTable(
 	//	Reset
 	//--------------------------------------------------------------------------
 	
-	Counter		#(			.Width(					STAWidth))
+	Counter		#(			.Width(					STAP1Width))
 				rst_cnt(	.Clock(					Clock),
 							.Reset(					Reset | PerAccessReset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				~ResetDone_Internal),
-							.In(					{STAWidth{1'bx}}),
+							.In(					{STAP1Width{1'bx}}),
 							.Count(					ResetCount));
 							
 	assign	ResetDone_Internal =					ResetCount == BlocksOnPath;

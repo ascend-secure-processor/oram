@@ -16,7 +16,8 @@
 	localparam					SHDWidth =			ORAMU + ORAML; // Stash header width
 
 	localparam					STAWidth =			`log2(BlocksOnPath); // ScanTable Address Width
-
+	localparam					STAP1Width =		STAWidth + 1;
+	
 	localparam					BCWidth =			`log2(ORAMZ) + 1; // need +1 to account for full buckets
 	localparam					BCLWidth =	 		ORAMLP1 * BCWidth; // bitvector of bucket counts
 			

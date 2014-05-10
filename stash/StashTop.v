@@ -40,7 +40,8 @@ module StashTop(
 	`include "BucketDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
+	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits,
+							PBEDP1Width = 			PBEDWidth + 1;
 
 	localparam				STWidth =				3,
 							ST_Initialize =			3'd0,
@@ -112,7 +113,7 @@ module StashTop(
 	reg		[STWidth-1:0]	CS, NS;	
 	wire					CSIdle, CSRead, CSStartWrite, CSWrite, CSAppend, CSUpdate;
 	
-	wire	[PBEDWidth-1:0]	InnerCount, OuterCount;
+	wire	[PBEDP1Width-1:0] InnerCount, OuterCount;
 
 	wire					LatchCommand, LatchBECommand;
 	
@@ -196,6 +197,10 @@ module StashTop(
 	reg						CSRead_Delayed, CSAppend_Delayed;
 	wire					CSRead_FirstCycle, CSAppend_FirstCycle;
 	
+	// debugging
+	
+	(* mark_debug = "TRUE" *)	wire					ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_ISC4, ERROR_SOF, ERROR_StashTop;
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -210,6 +215,14 @@ module StashTop(
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 	
+	Register1b 	errno1(Clock, Reset, OuterCount < InnerCount, 															ERROR_ISC1);
+	Register1b 	errno2(Clock, Reset, CSIdle & CommandValid & (Command !== STCMD_StartRead & Command !== STCMD_Append), 	ERROR_ISC2);
+	Register1b 	errno3(Clock, Reset, CSRead & CommandValid & Command !== STCMD_StartWrite, 								ERROR_ISC3);
+	Register1b 	errno4(Clock, Reset, CommandValid & Command == STCMD_Append & BECommand != BECMD_Append, 				ERROR_ISC4);
+	Register1b 	errno5(Clock, Reset, LatchBECommand & StashAlmostFull & ~AccessIsDummy, 								ERROR_SOF);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_SOF, 					ERROR_StashTop);
+	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
@@ -217,27 +230,27 @@ module StashTop(
 				$finish;
 			end
 			
-			if (OuterCount < InnerCount) begin
+			if (ERROR_ISC1) begin
 				$display("[%m] ERROR: Stash received more blocks than BEndInner sent ...");
 				$finish;
 			end
 			
-			if (CSIdle & CommandValid & (Command !== STCMD_StartRead & Command !== STCMD_Append) ) begin
+			if (ERROR_ISC2) begin
 				$display("[%m] ERROR: Only start read commands/appends accepted at this time.");
 				$finish;
 			end
 			
-			if (CSRead & CommandValid & Command !== STCMD_StartWrite) begin
+			if (ERROR_ISC3) begin
 				$display("[%m] ERROR: Only start write command accepted at this time.");
 				$finish;				
 			end
 			
-			if (CommandValid & Command == STCMD_Append & BECommand != BECMD_Append) begin
+			if (ERROR_ISC4) begin
 				$display("[%m] ERROR: Bogus command.");
 				$finish;
 			end
 			
-			if (LatchBECommand & StashAlmostFull & ~AccessIsDummy) begin
+			if (ERROR_SOF) begin
 				$display("[%m] ERROR: We are about to perform a real access but the stash is almost full.");
 				$finish;			
 			end
@@ -287,10 +300,11 @@ module StashTop(
 				if (ResetDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (CommandValid & Command == STCMD_Append)
-					NS =						 	ST_Append;
-				else if (CommandValid)
-					NS =						 	ST_Read;
+				if (~ERROR_StashTop)
+					if (CommandValid & Command == STCMD_Append)
+						NS =						 	ST_Append;
+					else if (CommandValid)
+						NS =						 	ST_Read;
 			ST_Read :
 				if (CommandValid)
 					NS =						 	ST_StartWriteback;
@@ -311,13 +325,13 @@ module StashTop(
 		endcase
 	end	
 	
-	Counter		#(			.Width(					PBEDWidth))
+	Counter		#(			.Width(					PBEDP1Width))
 				outer_cnt(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				DRAMReadDataValid & DRAMReadDataReady & ~ReadProcessingHeader & CSRead),
-							.In(					{PBEDWidth{1'bx}}),
+							.In(					{PBEDP1Width{1'bx}}),
 							.Count(					OuterCount));
 	
 	//--------------------------------------------------------------------------
@@ -438,13 +452,13 @@ module StashTop(
 	// count number of real/dummy blocks on path and signal the end of the path 
 	// read when we read a whole path's worth 	
 
-	Counter		#(			.Width(					PBEDWidth))
+	Counter		#(			.Width(					PBEDP1Width))
 				inner_cnt(	.Clock(					Clock),
 							.Reset(					Reset | CSIdle),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				DataDownShift_Transfer),
-							.In(					{PBEDWidth{1'bx}}),
+							.In(					{PBEDP1Width{1'bx}}),
 							.Count(					InnerCount));	
 	
 	//--------------------------------------------------------------------------
