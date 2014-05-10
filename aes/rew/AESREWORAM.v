@@ -323,11 +323,6 @@ module AESREWORAM(
 				$display("[%m @ %t] ERROR: Not supported yet.", $time);
 				$finish;
 			end		
-			
-			if (EnableIV) begin
-				$display("[%m @ %t] ERROR: Not supported yet.", $time);
-				//$finish;
-			end
 		end
 
 	`ifdef SIMULATION_VERBOSE_AES
