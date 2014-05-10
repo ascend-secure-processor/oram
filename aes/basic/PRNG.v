@@ -118,7 +118,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 		always @(posedge Clock) begin
 			if (!Reset && RandOutReady && !RandOutValid) begin
 				$display("Error : Run out of random bits");
-				$stop;
+				$finish;
 			end
 		end
 	`endif

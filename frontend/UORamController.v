@@ -41,7 +41,7 @@ module UORamController
     `include "BucketLocal.vh"
     `include "PLBLocal.vh"
 
-    localparam MaxLogRecursion = $finish;
+    localparam MaxLogRecursion = 4;
 
     input Clock, Reset;
 

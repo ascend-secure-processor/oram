@@ -20,7 +20,7 @@ module	StashTestbench;
 	`ifndef SIMULATION
 	initial begin
 		$display("[%m @ %t] ERROR: set SIMULATION macro", $time);
-		$stop;
+		$finish;
 	end
 	`endif
 
@@ -313,13 +313,13 @@ module	StashTestbench;
 					if (ReadData !== Data) begin
 						$display("FAIL: Stash read data %d, expected %d", ReadData[31:0], Data[31:0]);
 						#(Cycle*4); // helps us see where the problem actually occurs ...
-						$stop;
+						$finish;
 					end
 					//$display("OK: Stash read data %d, expected %d", ReadData, Data);
 					if (BlockReadComplete) begin
 						if (ReadPAddr !== PAddr || ReadLeaf !== Leaf) begin
 							$display("FAIL: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
-							$stop;
+							$finish;
 						end
 						//$display("OK: Stash read {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReadPAddr, ReadLeaf, PAddr, Leaf);
 						done = 1;
@@ -348,13 +348,13 @@ module	StashTestbench;
 				if (ReturnDataOutValid /* & ReturnDataOutReady */) begin
 					if (ReturnData !== Data) begin
 						$display("FAIL: Stash return data %d, expected %d [expected leaf/paddr = %x,%x]", ReturnData[31:0], Data[31:0], Leaf, PAddr);
-						$stop;
+						$finish;
 					end
 					//$display("OK: Stash return data %d, expected %d", ReturnData, Data);
 					if (BlockReturnComplete) begin
 						if (ReturnPAddr !== PAddr || ReturnLeaf !== Leaf) begin
 							$display("FAIL: Stash return {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReturnPAddr, ReturnLeaf, PAddr, Leaf);
-							$stop;
+							$finish;
 						end
 						//$display("OK: Stash return {PAddr,Leaf} = {%x,%x} expected {%x,%x}", ReturnPAddr, ReturnLeaf, PAddr, Leaf);
 						done = 1;
@@ -382,11 +382,11 @@ module	StashTestbench;
 					if (BlockReadComplete) begin
 						if (ReadPAddr !== DummyBlockAddress) begin
 							$display("FAIL: Stash read PAddr = %x, expected dummy block (saw %d out of %d)", ReadPAddr, sofar, Count);
-							$stop;
+							$finish;
 						end
 						if (chunks != NumChunks) begin
 							$display("FAIL: Stash read dummy block, wrong block size");
-							$stop;
+							$finish;
 						end
 						sofar = sofar + 1;
 						chunks = 0;
@@ -422,11 +422,11 @@ module	StashTestbench;
 		begin
 			if (Occupancy != StashOccupancy) begin
 				$display("FAIL: Stash occupancy %d, expected %d", StashOccupancy, Occupancy);
-				$stop;
+				$finish;
 			end
 			if ( ((StashOccupancy + BlocksOnPath) >= StashCapacity) != StashAlmostFull ) begin
 				$display("FAIL: StashAlmostFull = %b (%d >= %d)", StashAlmostFull, StashOccupancy + BlocksOnPath, StashCapacity);
-				$stop;
+				$finish;
 			end
 			$display("PASS: Test %d (occupancy expected = %d, Almost full? %b)", TestID, Occupancy, StashAlmostFull);
 			TestID = TestID + 1;

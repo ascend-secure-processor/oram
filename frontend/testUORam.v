@@ -239,7 +239,7 @@ module testUORam;
 
 			if (GlobalData[AddrPrev] != ReceivedData) begin
 				$display("Received data does not match for Block %d, %x != %x", AddrPrev, ReceivedData, GlobalData[AddrPrev]);
-				$stop;
+				$finish;
 			end
 			Checking_ProgData <= 0;
 		end
