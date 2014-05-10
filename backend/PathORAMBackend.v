@@ -113,10 +113,6 @@ module PathORAMBackend(
 	wire					ROStartCCValid, ROStartAESValid;
 	wire					ROStartCCReady, ROStartAESReady;
 	
-	wire    [ORAMU-1:0]		ROPAddr_dl;
-	wire	[ORAML-1:0]		ROLeaf_dl;
-	wire                    ROStart_dl, REWRoundDummy_dl;
-	
 	// integrity verification
 		
 	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn;
@@ -200,13 +196,7 @@ module PathORAMBackend(
 	
 	localparam	BRAMLatency = 2;
 	generate if (EnableREW) begin:CC
-	
-		Pipeline #(.Width(ORAMU+ORAML+2), .Stages(1)) 
-			ro_info_pipe (	Clock,	1'b0,
-							{ROStart, REWRoundDummy, ROPAddr, ROLeaf},
-							{ROStart_dl, REWRoundDummy_dl, ROPAddr_dl, ROLeaf_dl}
-						);
-	
+					
 		CoherenceController #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -223,11 +213,12 @@ module PathORAMBackend(
 									
 				cc(			.Clock(					Clock),
 							.Reset(					Reset),
-									
-							.ROPAddr(               ROPAddr_dl),
-							.ROLeaf(				ROLeaf_dl),
-							.ROStart(				ROStart_dl),
-							.REWRoundDummy(			REWRoundDummy_dl),
+							
+							.ROCmdValid(				),	
+							.ROCmdReady(				),							
+							.ROPAddrIn(             ROPAddr),
+							.ROLeafIn(				ROLeaf),
+							.RODummyIn(				REWRoundDummy),
 							
 							.FromDecData(			AES_DRAMReadData), 
 							.FromDecDataValid(		AES_DRAMReadDataValid),
