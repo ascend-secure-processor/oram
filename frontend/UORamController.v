@@ -104,20 +104,28 @@ module UORamController
 	assign CmdIn_Internal = CmdIn;
 	assign ProgAddrIn_Internal = AddrOutofRange ? 0 : ProgAddrIn;
 	assign CmdInValid_Internal = CmdInValid;
-	assign CmdInReady = CmdInReady_Internal;
+	assign CmdInReady = CmdInReady_Internal & ~ERROR_OutOfRange;
 
 	// check whether input is valid
 	assign	AddrOutofRange = ProgAddrIn >= NumValidBlock;
 
-	(* mark_debug = "TRUE" *) wire	[ORAMU+1:0] AddrOutofRangeReg;
-	Register #(	.Width(ORAMU+1))
-		addr_range_checker (Clock, Reset, 1'b0, CmdInReady && CmdInValid && AddrOutofRange,  {1'b1, ProgAddrIn}, AddrOutofRangeReg);
-
+	(* mark_debug = "TRUE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
+	(* mark_debug = "TRUE" *) wire			ERROR_OutOfRange;
+	
+	FIFORegister #(			.Width(					ORAMU))
+				ro_start(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				ProgAddrIn),
+							.InValid(				CmdInReady && CmdInValid && AddrOutofRange),
+							.OutData(				AddrOutofRangeAddr),
+							.OutSend(				ERROR_OutOfRange),
+							.OutReady(				1'b0));
+		
 	always @ (posedge Clock) begin
 		if (CmdInReady && CmdInValid) begin
 			if (AddrOutofRange) begin
 				$display("Error: Address Out of Range");
-				$finish;
+				//$finish;
 			end
 		end
 	end
