@@ -125,7 +125,7 @@ module UORamController
 		if (CmdInReady && CmdInValid) begin
 			if (AddrOutofRange) begin
 				$display("Error: Address Out of Range");
-				//$finish;
+				$finish;
 			end
 		end
 	end
