@@ -30,7 +30,8 @@ module AESREWORAM(
 	Clock, FastClock, 
 	Reset,
 
-	ROPAddr, ROLeaf, ROStart,
+	ROPAddr, ROLeaf,
+	ROStartAESValid, ROStartAESReady,
 
 	ROIBVOut, ROIBIDOut,
 	
@@ -77,7 +78,8 @@ module AESREWORAM(
 	input	[ORAMU-1:0]		ROPAddr;
 	input	[ORAML-1:0]		ROLeaf;
 	
-	input					ROStart;
+	input					ROStartAESValid;
+	output 					ROStartAESReady;
 	
 	//--------------------------------------------------------------------------
 	//	Backend Interface
@@ -495,7 +497,7 @@ module AESREWORAM(
 	// To fix the case when ROStart gets pulsed when CS_RO is not yet in idle state
 	Register1b 	ro_started(	.Clock(     			Clock),
 							.Reset(     			Reset | CSROStartRead),
-							.Set(      				ROStart),
+							.Set(      				ROStartAESValid),
 							.Out(       			ROStarted));	
 	
 	always @( * ) begin

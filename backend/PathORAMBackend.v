@@ -108,8 +108,11 @@ module PathORAMBackend(
 	// REW
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
-	wire                    ROStart, REWRoundDummy;
+	wire                    REWRoundDummy;
 
+	wire					ROStartCCValid, ROStartAESValid;
+	wire					ROStartCCReady, ROStartAESReady;
+	
 	wire    [ORAMU-1:0]		ROPAddr_dl;
 	wire	[ORAML-1:0]		ROLeaf_dl;
 	wire                    ROStart_dl, REWRoundDummy_dl;
@@ -182,8 +185,13 @@ module PathORAMBackend(
 							
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.ROStart(				ROStart),
 							.REWRoundDummy(			REWRoundDummy),
+							
+							.ROStartCCValid(		ROStartCCValid), 
+							.ROStartAESValid(		ROStartAESValid),
+							.ROStartCCReady(		ROStartCCReady), 
+							.ROStartAESReady(		ROStartAESReady),
+							
 							.DRAMInitComplete(		DRAMInitComplete));							
 	
 	//----------------------------------------------------------------------
@@ -334,7 +342,8 @@ module PathORAMBackend(
 				`endif
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf), 
-							.ROStart(				ROStart),
+							.ROStartAESValid(		ROStartAESValid),
+							.ROStartAESReady(		ROStartAESReady),
 							
 							.BEDataOut(				AES_DRAMReadData), 
 							.BEDataOutValid(		AES_DRAMReadDataValid), 					

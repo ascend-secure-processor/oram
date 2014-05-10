@@ -26,7 +26,9 @@ module PathORAMBackendInner(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, ROStart, REWRoundDummy, 
+	ROPAddr, ROLeaf, REWRoundDummy, 
+	ROStartCCValid, ROStartAESValid,
+	ROStartCCReady, ROStartAESReady,
 	
 	DRAMInitComplete
 	);
@@ -101,8 +103,10 @@ module PathORAMBackendInner(
 	
 	output  [ORAMU-1:0]		ROPAddr;
 	output  [ORAML-1:0]		ROLeaf;
-	output					ROStart;
 	output 					REWRoundDummy;
+	
+	output					ROStartCCValid, ROStartAESValid;
+	input					ROStartCCReady, ROStartAESReady;	
 	
 	//--------------------------------------------------------------------------
 	//	Status Interface
@@ -435,8 +439,12 @@ module PathORAMBackendInner(
 
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.ROStart(				ROStart),
-							.REWRoundDummy(			REWRoundDummy));
+							.REWRoundDummy(			REWRoundDummy),
+							
+							.ROStartCCValid(		ROStartCCValid), 
+							.ROStartAESValid(		ROStartAESValid),
+							.ROStartCCReady(		ROStartCCReady), 
+							.ROStartAESReady(		ROStartAESReady));
 
 	//--------------------------------------------------------------------------
 	//	AddrGen
@@ -605,7 +613,9 @@ module BackendInnerControl(
 
 	StashAlmostFull,
 
-	ROPAddr, ROLeaf, ROStart, REWRoundDummy
+	ROPAddr, ROLeaf, REWRoundDummy,
+	ROStartCCValid, ROStartAESValid,
+	ROStartCCReady, ROStartAESReady
 	);
 
 	//--------------------------------------------------------------------------
@@ -625,13 +635,15 @@ module BackendInnerControl(
 							ST_Idle =				4'd0,
 							ST_Append =				4'd1,
 							ST_AppendWait =			4'd2,
-							ST_AddrGenRead =		4'd3,
-							ST_StashRead =			4'd4,
-							ST_Read =				4'd5,
-							ST_AddrGenWrite =		4'd6,
-							ST_StashWrite =			4'd7,
-							ST_Write =				4'd8,
-							ST_AddrGenWrite_DWB =	4'd9;
+							ST_CCROStart =			4'd3,
+							ST_AESROStart =			4'd4,
+							ST_AddrGenRead =		4'd5,
+							ST_StashRead =			4'd6,
+							ST_Read =				4'd7,
+							ST_AddrGenWrite =		4'd8,
+							ST_StashWrite =			4'd9,
+							ST_Write =				4'd10,
+							ST_AddrGenWrite_DWB =	4'd11;
 
 	localparam				PRNGLWidth =			1 << `log2(ORAML);
 
@@ -687,7 +699,8 @@ module BackendInnerControl(
 
 	output reg [ORAMU-1:0]	ROPAddr;
 	output reg [ORAML-1:0]	ROLeaf;
-	output					ROStart; // TODO making this a pulse would be a bit cleaner
+	output					ROStartCCValid, ROStartAESValid;
+	input					ROStartCCReady, ROStartAESReady;
 	output reg				REWRoundDummy;
 
 	//--------------------------------------------------------------------------
@@ -767,6 +780,9 @@ module BackendInnerControl(
 	assign	Stash_DummyCmdValid =					DummyLeaf_Valid & AccessIsDummy;
 	assign	Stash_OtherCmdValid =					DummyLeaf_Valid & CommandRequest & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
 
+	assign	ROStartCCValid =						CS == ST_CCROStart;
+	assign	ROStartAESValid =						CS == ST_AESROStart;
+	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Idle;
 		else CS <= 									NS;
@@ -781,11 +797,17 @@ module BackendInnerControl(
 				if (		DelayedWB & Addr_RWAccess & Addr_PathWriteback)
 					NS =							ST_AddrGenWrite;
 				else if (	StashCommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
-					NS =							ST_AddrGenRead;
+					if (ROAccess)
+						NS =						ST_CCROStart;
+					else
+						NS =						ST_AddrGenRead;
 				else if (	StashCommandReady & Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
 					NS =							ST_Append;
 				else if (	StashCommandReady & Stash_OtherCmdValid) // otherwise do a normal access
-					NS =							ST_AddrGenRead;
+					if (ROAccess)
+						NS =						ST_CCROStart;
+					else
+						NS =						ST_AddrGenRead;
 			//
 			// Append states
 			//
@@ -798,6 +820,14 @@ module BackendInnerControl(
 			//
 			// Main access states
 			//
+			ST_CCROStart : 
+				if (ROStartCCReady && EnableAES == 1)
+					NS =							ST_AESROStart;
+				else if (ROStartCCReady)
+					NS =							ST_AddrGenRead;
+			ST_AESROStart : 
+				if (ROStartAESReady)
+					NS =							ST_AddrGenRead;
 			ST_AddrGenRead :
 				if (AddrGenInReady)
 					NS =							ST_StashRead;
@@ -878,8 +908,6 @@ module BackendInnerControl(
 
 		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
 
-		assign	ROStart = 							CSAddrGenRead & ROAccess;
-
 		assign	ROPAddr_Pre =						PAddr;
 		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
 		assign	REWRoundDummy_Pre =					AccessIsDummy;
@@ -904,8 +932,9 @@ module BackendInnerControl(
 
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 
-		assign	ROStart =							1'b0;
-
+		assign	ROStartCCValid =					1'b0;
+		assign	ROStartAESValid =					1'b0;
+		
 		initial begin
 			ROPAddr =								{ORAMU{1'bx}};
 			ROLeaf =								{ORAML{1'bx}};
