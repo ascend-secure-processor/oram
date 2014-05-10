@@ -254,7 +254,7 @@ module REWAESCore(
 							.Initial(				0))
 				roi_waste(	.Clock(					FastClock), 
 							.Reset(					1'b0), 
-							.Enable(				~ROCommandIsHeader & ROSend),
+							.Enable(				~RODataRestarted & ~ROCommandIsHeader & ROSend),
 							.Done(					RODataRestart));
 	Register #(				.Width(					1), // state machine to switch modes
 							.Initial(				0))

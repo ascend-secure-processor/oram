@@ -14,7 +14,7 @@
 							RWPath_MaskChunks =		RWBkt_MaskChunks * (ORAML + 1),
 							ROIWaitSteps =			`divceil(DDRDWidth, AESWidth) - RWBkt_AESChunks % `divceil(DDRDWidth, AESWidth),
 							
-							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWPayload_AESChunks)),
+							CIDWidth =				`max(`log2(ROHeader_AESChunks), `log2(RWPayload_AESChunks)) + 1, // + 1 for when it is a power of 2
 							BIDWidth =				ORAML + 1, // Bucket ID width = ORAML + 1, no wasted space in subtree scheme (TODO: add this param to addr gen as well)
 							SeedSpaceRemaining =	AESWidth - AESEntropy - BIDWidth - CIDWidth,
 							
