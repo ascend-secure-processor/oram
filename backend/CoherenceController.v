@@ -481,14 +481,14 @@ module CoherenceController(
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (ToEncDataValid) begin
-				if ((! ToEncData) === 1'bx && RWAccess && PathWriteback)	begin
+				if (^ToEncData === 1'bx && RWAccess && PathWriteback)	begin
 					$display("Error: xxx bits in ToEncData on RW_W");
 					$finish;
 				end
 			end
 			
 			if (FromStashDataValid) begin
-				if ((! FromStashData) === 1'bx)	begin
+				if (^FromStashData === 1'bx)	begin
 					$display("Error: xxx bits in ToEncData on RW_W");
 					$finish;
 				end
