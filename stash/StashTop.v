@@ -602,7 +602,7 @@ module StashTop(
 
 	assign	WritebackProcessingHeader =				BucketWritebackCtr < BktHSize_DRBursts;
 	
-	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'bx}},
+	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'b0}},
 														HeaderUpShift_Leaves,
 														HeaderUpShift_PAddrs,
 														{BktHWaste_ValidBits{1'b0}},

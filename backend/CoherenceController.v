@@ -114,7 +114,7 @@ module CoherenceController(
 	output	[ORAMLogL-1:0]		BktOfIIdx;
 	input						PathDone_IV, BOIDone_IV, BucketOfITurn;
 	
-	wire 	ROAccess, RWAccess, PathRead, PathWriteback;
+	wire 	ROAccess, RWAccess, PathRead, PathWriteback, RWAccessExtend;
 	
 	wire 	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
 	
@@ -144,7 +144,18 @@ module CoherenceController(
 				RO_R_Chunk = (ORAML+1) * BktHSize_DRBursts + BktSize_DRBursts,
 				RO_W_Chunk = (ORAML+1) * BktHSize_DRBursts;
 	
+	wire		RW_R_Enable,
+				RW_W_Enable,
+				RO_R_Enable,
+				RO_W_Enable;
+				
+	assign      RW_R_Enable = ToStashDataReady && ToStashDataValid;
+	assign      RW_W_Enable = ToEncDataValid && ToEncDataReady;
+	assign      RO_R_Enable = FromDecDataValid && FromDecDataReady;
+	assign	    RO_W_Enable = ToEncDataValid && ToEncDataReady;
+			
 	wire	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
+	
 	
 	REWStatCtr	#(			.ORAME(					ORAME),
 							.Overlap(				0),
@@ -173,7 +184,54 @@ module CoherenceController(
 							.RW_W_DoneAlarm(		RW_W_DoneAlarm),
 							.RO_R_DoneAlarm(		RO_R_DoneAlarm),
 							.RO_W_DoneAlarm(		RO_W_DoneAlarm)							
-						);
+						);	
+	
+`ifdef SIMULATION
+	always @(posedge Clock) begin
+		if (ROStart && !(ROAccess && PathRead)) begin
+			$display("Error: ROStart comes but not in the mood of RO_R");
+			$finish;
+		end		
+		
+		if (FromDecDataValid && !PathRead) begin
+			$display("Error: AES giving data but not in PathRead stage");
+			$finish;
+		end
+		//if (ToStashDataValid && !PathRead) begin
+		//	$display("Error: Giving Stash data but not in PathRead stage");
+		//	$finish;	This one does not hold
+		//end			
+		if (ToEncDataValid && !PathWriteback) begin
+			$display("Error: Giving AES data but not in PathWriteback stage");
+			$finish;
+		end
+		if (FromStashDataValid && !(DelayedWB ? RWAccessExtend && !RWAccess 
+												: RWAccess && PathWriteback)) begin
+			$display("Error: Stash giving data but not in PathWriteback stage");
+			$finish;
+		end
+		
+		if (RO_W_Enable > 0 && !BOIDone_IV) begin
+			$display("Error: Header write back starts before Integrity is done");
+			$finish;
+		end
+		
+		if (ToEncDataValid) begin
+			if (^ToEncData === 1'bx && RWAccess && PathWriteback)	begin
+				$display("Error: xxx bits in ToEncData on RW_W");
+				$finish;
+			end
+		end		
+		if (FromStashDataValid) begin
+			if (^FromStashData === 1'bx)	begin
+				$display("Error: xxx bits in FromStashData");
+				$finish;
+			end
+		end
+		
+	end
+`endif	
+
 	
 	//--------------------------------------------------------------------------
 	// CC handles header write back
@@ -219,14 +277,28 @@ module CoherenceController(
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
     generate if (EnableIV) begin: FULL_BUF
-		
+	
+	`ifdef SIMULATION	
 		initial begin
 			if (!EnableREW) begin
-				$display("Integrity verification without REW ORAM? Not supported.");
+				$display("Error: Integrity verification without REW ORAM NOT supported");
 				$finish;
 			end
 		end
 	
+		always @(posedge Clock) begin
+			if (ROAccess && PathWriteback && RO_W_Enable && !BOIDone_IV) begin
+				$display("Error: Header write back starts before Integrity is done");
+				$finish;
+			end
+			if (RWAccess && PathWriteback && RW_W_Enable && !PathDone_IV) begin
+				$display("Error: RW_W write back starts before Integrity is done");
+				$finish;
+			end			
+		end
+	`endif	
+	
+
 		`include "IVCCLocal.vh"
 		
 		//------------------------------------------------------------------------------------------------------
@@ -349,10 +421,8 @@ module CoherenceController(
 		wire 					PthCtrEnable, HdCtrEnable;
 		wire 					HdRW_Transition, PthRW_Transition;			
 					
-		// RWAccessExtend: a hack to accept stash RW_W data
-		wire RWAccessExtend;
 		Register1b stash_wb (Clock, RWStashWB && PthRW_Transition, RW_R_DoneAlarm, RWStashWB);			
-		assign RWAccessExtend = RWAccess || RWStashWB;
+		assign RWAccessExtend = RWAccess || RWStashWB;	// a hack to accept stash RW_W data
 		
 		assign PthCtrEnable = RWAccessExtend && BufP1_Enable;
 		CountAlarm #(		.Threshold(				PathSize_DRBursts))
@@ -476,26 +546,7 @@ module CoherenceController(
 		
 		assign	FromStashDataReady = 	1'b1;	//RWAccessExtend; Note: CC is always ready to accept Stash data
 		assign	FromStashDataDone = 	!RWAccess && RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
-		
-		
-	`ifdef SIMULATION
-		always @(posedge Clock) begin
-			if (ToEncDataValid) begin
-				if (^ToEncData === 1'bx && RWAccess && PathWriteback)	begin
-					$display("Error: xxx bits in ToEncData on RW_W");
-				//	$finish;
-				end
-			end
-			
-			if (FromStashDataValid) begin
-				if (^FromStashData === 1'bx)	begin
-					$display("Error: xxx bits in FromStash");
-				//	$finish;
-				end
-			end
-		end
-	`endif	
-		
+				
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
 		//--------------------------------------------------------------------------				
@@ -596,6 +647,7 @@ module CoherenceController(
 		assign	FromStashDataReady = 	!ROAccess && ToEncDataReady;
 		assign	FromStashDataDone = 	RW_W_DoneAlarm;
 		
+		assign	RWAccessExtend = RWAccess;
 	end endgenerate
 
 endmodule

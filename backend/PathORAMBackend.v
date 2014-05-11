@@ -229,7 +229,6 @@ module PathORAMBackend(
 
 							.ToStashData(			BE_DRAMReadData),
 							.ToStashDataValid(		BE_DRAMReadDataValid), 
-							//.ToStashDataReady(	BE_DRAMReadDataReady),
 							.ToStashDataReady(		1'b1),
 
 							.FromStashData(			BE_DRAMWriteData), 
@@ -254,7 +253,16 @@ module PathORAMBackend(
 							.BOIDone_IV(			BOIDone_IV),
 							.BucketOfITurn(			BucketOfITurn)
 						);		
-		
+			
+		`ifdef SIMULATION
+			always @(posedge Clock) begin
+				if (BE_DRAMReadDataValid && !BE_DRAMReadDataReady) begin
+					$display("Error: ToStashData Valid not Stash not ready");
+					$finish;
+				end
+			end
+		`endif	
+					
 		 if (EnableIV) begin:INTEGRITY
 			IntegrityVerifier #(.ORAMB(				ORAMB),
 								.ORAMU(				ORAMU),
