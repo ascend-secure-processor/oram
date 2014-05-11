@@ -195,11 +195,9 @@ module HWTestHarness(
 							AccessesPerRound =		20,
 							
 							RandomRounds =			5000,
-							RandomAddrLimit =		10,
 							
-							SingleLocRounds =		17,
-							
-							Gap = 					0,
+							SingleLocRounds =		20,
+
 							Cycle = 				1000000000/SlowClockFreq;
 		
 		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
@@ -207,6 +205,7 @@ module HWTestHarness(
 		integer 			i, nr, total_expected;
 		integer				FinishedInput;
 		integer				NumSent, NumReceived;
+		integer				Gap;
 		
 		wire	[31:0]		RandOut;
 		wire				RandOutValid;
@@ -242,59 +241,65 @@ module HWTestHarness(
 			FinishedInput = 						0;
 			NumSent =								0;
 			NumReceived =							0;
+									
+			Gap = 									1;
 			
 			CrossBufIn_DataInValid_Reg = 			1'b0;
 			
 			#(Cycle*1000);
 		
-			// Random accesses
-			i = 0;
-			while (i < RandomRounds) begin
-				if (RandOutValid) begin
-					TASK_Command(BECMD_Read, RandOut[RandomAddrLimit-1:0]);
-					NumSent = NumSent + 1;
-					#(Cycle*Gap);
-					if (RandOut[0]) begin
-						TASK_Command(BECMD_Update, RandOut[RandomAddrLimit-1:0]);
+			while (1) begin
+				// Random accesses
+				i = 0;
+				while (i < RandomRounds) begin
+					if (RandOutValid) begin
+						TASK_Command(BECMD_Read, RandOut[ORAML-1:0]);
+						NumSent = NumSent + 1;
+						#(Cycle*Gap);
+						if (RandOut[0]) begin
+							TASK_Command(BECMD_Update, RandOut[ORAML-1:0]);
+							#(Cycle*Gap);
+						end
+						i = i + 1;
+					end
+					#(Cycle);
+				end
+				
+				// Mimic Albert's access pattern
+				i = 0;
+				while (i < SingleLocRounds) begin
+					nr = 0;
+					while (nr < AccessesPerRound) begin
+						TASK_Command(BECMD_Read, i);
+						NumSent = NumSent + 1;
+						TASK_Command(BECMD_Update, i);
+						nr = nr + 1;
 						#(Cycle*Gap);
 					end
 					i = i + 1;
 				end
-				#(Cycle);
-			end
-			
-			// Mimic Albert's access pattern
-			i = 0;
-			while (i < SingleLocRounds) begin
-				nr = 0;
-				while (nr < AccessesPerRound) begin
-					TASK_Command(BECMD_Read, i);
-					NumSent = NumSent + 1;
-					TASK_Command(BECMD_Update, i);
-					nr = nr + 1;
-					#(Cycle*Gap);
-				end
-				i = i + 1;
-			end
-			
-			// Write -> Read groups of incrementing addrs
-			i = 0;
-			while (i < Rounds) begin
-				nr = 0;
-				while (nr < AccessesPerRound) begin
-					TASK_Command(BECMD_Update, i * AccessesPerRound + nr);
-					nr = nr + 1;
-					#(Cycle*Gap);
+				
+				// Write -> Read groups of incrementing addrs
+				i = 0;
+				while (i < Rounds) begin
+					nr = 0;
+					while (nr < AccessesPerRound) begin
+						TASK_Command(BECMD_Update, i * AccessesPerRound + nr);
+						nr = nr + 1;
+						#(Cycle*Gap);
+					end
+					
+					nr = 0;
+					while (nr < AccessesPerRound) begin
+						TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
+						NumSent = NumSent + 1;
+						nr = nr + 1;
+						#(Cycle*Gap);
+					end
+					i = i + 1;
 				end
 				
-				nr = 0;
-				while (nr < AccessesPerRound) begin
-					TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
-					NumSent = NumSent + 1;
-					nr = nr + 1;
-					#(Cycle*Gap);
-				end
-				i = i + 1;
+				Gap = Gap * 64;
 			end
 			
 			FinishedInput =							1;
