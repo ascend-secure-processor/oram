@@ -74,25 +74,11 @@ module ascend_vc707(
 	parameter				REWExperiment =			1;
 	parameter				REWIVExperiment =		`ifdef EnableIV `EnableIV `else 1 `endif;
 	
-	`ifdef SIMULATION
-		initial begin
-			if ( UnifiedExperiment == 0 && REWExperiment == 1 ) begin
-				$display("[%m @ %t] ERROR: we aren't interested in this ...", $time);
-				$finish;
-			end
-
-			if ( REWIVExperiment == 1 && REWExperiment == 0 ) begin
-				$display("[%m @ %t] ERROR: bogus params.", $time);
-				$finish;			
-			end
-		end
-	`endif
-	
 	// ORAM related
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					`ifdef ORAML `ORAML `else 15 `endif, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
+							ORAML =					`ifdef ORAML `ORAML `else 20 `endif, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (REWExperiment) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;
@@ -103,7 +89,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,
-							PLBCapacity = 			`ifdef PLBCapacity `else 512 `endif; // TODO 8192 << 3;
+							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 512 `endif; // TODO 8192 << 3;
 		
 	parameter				Overclock =				1;
 	
@@ -130,7 +116,23 @@ module ascend_vc707(
 	localparam				SlowClockFreq =			100_000_000,
 							MemoryClockFreq =		200_000_000,
 							ORAMClockFreq = 		(SlowORAMClock) ? SlowClockFreq : MemoryClockFreq;
-							
+					
+	`ifdef SIMULATION
+		initial begin
+			if ( UnifiedExperiment == 0 && REWExperiment == 1 ) begin
+				$display("[%m @ %t] ERROR: we aren't interested in this ...", $time);
+				$finish;
+			end
+
+			if ( REWIVExperiment == 1 && REWExperiment == 0 ) begin
+				$display("[%m @ %t] ERROR: bogus params.", $time);
+				$finish;			
+			end
+			
+			$display("Starting run: IV=%d, Z=%d,L=%d,PLB=%d", REWIVExperiment, ORAMZ, ORAML, PLBCapacity);
+		end
+	`endif
+					
 	//------------------------------------------------------------------------------
 	//	Wires & Regs
 	//------------------------------------------------------------------------------
