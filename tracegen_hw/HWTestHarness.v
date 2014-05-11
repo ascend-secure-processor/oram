@@ -44,10 +44,14 @@ module HWTestHarness(
 							// Should the test harness return confirmations that 
 							// accesses completed (=0), or should it generate a 
 							// histogram of access latencies (=1)?
-							GenHistogram =			1;
+							GenHistogram =			1,
+							
+							NumValidBlock =			1 << ORAML;
 
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
+	
+	localparam				NVWidth =				`log2(NumValidBlock);
 	
 	localparam				BlkSize_DBaseChunks = 	ORAMB / DBaseWidth;
 	localparam				BlkDBaseWidth =			`log2(BlkSize_DBaseChunks);
@@ -198,6 +202,8 @@ module HWTestHarness(
 							
 							SingleLocRounds =		20,
 
+							WaitThreshold =			100000, // Set to 2000 or something for a performance bug run
+							
 							Cycle = 				1000000000/SlowClockFreq;
 		
 		reg		[THPWidth-1:0] CrossBufIn_DataIn_Reg;
@@ -213,13 +219,25 @@ module HWTestHarness(
 		task TASK_Command;
 			input	[BECMDWidth-1:0] 	In_Command;
 			input	[ORAMU-1:0]			In_PAddr;
-			
+			integer 					CyclesWaited;
 			begin
 				CrossBufIn_DataInValid_Reg = 		1'b1;
-				CrossBufIn_DataIn_Reg =				{In_Command, In_PAddr, {DBaseWidth{1'b0}}, {TimeWidth{1'b0}}};
+				CrossBufIn_DataIn_Reg =				{In_Command, { {ORAMU-NVWidth{1'b0}}, In_PAddr[NVWidth-1:0] }, {DBaseWidth{1'b0}}, {TimeWidth{1'b0}}};
+				CyclesWaited =						0;
 				
-				while (~CrossBufIn_DataInReady) #(Cycle);
+				while (~CrossBufIn_DataInReady) begin
+					CyclesWaited = CyclesWaited + 1;
+					if (CyclesWaited > WaitThreshold) begin
+						$display("[%m] ERROR: ORAM has stalled.");
+						$finish;
+					end
+					#(Cycle);
+				end
 				#(Cycle);
+				
+				NumSent = NumSent + 1;
+				$display("[%m @ %t] Test harness sent (op=%d, addr=%x)", $time, In_Command, In_PAddr[NVWidth-1:0]);
+				$display("(read #%d)", NumSent);
 				
 				CrossBufIn_DataInValid_Reg = 		1'b0;
 			end
@@ -229,7 +247,7 @@ module HWTestHarness(
 		assign	CrossBufIn_DataInValid =			CrossBufIn_DataInValid_Reg;
 		assign	CrossBufIn_DataIn =					CrossBufIn_DataIn_Reg;
 		
-		PRNG 	#(			.RandWidth(				32),
+		PRNG 	#(			.RandWidth(				ORAMU),
 							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
 				leaf_gen(	.Clock(					SlowClock),
 							.Reset(					SlowReset),
@@ -249,29 +267,35 @@ module HWTestHarness(
 			#(Cycle*1000);
 		
 			while (1) begin
+			
+				//
 				// Random accesses
+				//
 				i = 0;
 				while (i < RandomRounds) begin
-					if (RandOutValid) begin
-						TASK_Command(BECMD_Read, RandOut[ORAML-1:0]);
-						NumSent = NumSent + 1;
+					while (~RandOutValid) #(Cycle);
+					
+					TASK_Command(BECMD_Read, RandOut);
+					#(Cycle*Gap);
+						
+					while (~RandOutValid) #(Cycle);
+					
+					if (RandOut[0]) begin
+						TASK_Command(BECMD_Update, RandOut);
 						#(Cycle*Gap);
-						if (RandOut[0]) begin
-							TASK_Command(BECMD_Update, RandOut[ORAML-1:0]);
-							#(Cycle*Gap);
-						end
-						i = i + 1;
 					end
-					#(Cycle);
+					
+					i = i + 1;
 				end
 				
+				//
 				// Mimic Albert's access pattern
+				//
 				i = 0;
 				while (i < SingleLocRounds) begin
 					nr = 0;
 					while (nr < AccessesPerRound) begin
 						TASK_Command(BECMD_Read, i);
-						NumSent = NumSent + 1;
 						TASK_Command(BECMD_Update, i);
 						nr = nr + 1;
 						#(Cycle*Gap);
@@ -279,7 +303,9 @@ module HWTestHarness(
 					i = i + 1;
 				end
 				
+				//
 				// Write -> Read groups of incrementing addrs
+				//
 				i = 0;
 				while (i < Rounds) begin
 					nr = 0;
@@ -292,7 +318,6 @@ module HWTestHarness(
 					nr = 0;
 					while (nr < AccessesPerRound) begin
 						TASK_Command(BECMD_Read, i * AccessesPerRound + nr);
-						NumSent = NumSent + 1;
 						nr = nr + 1;
 						#(Cycle*Gap);
 					end
@@ -302,12 +327,14 @@ module HWTestHarness(
 				Gap = Gap * 64;
 			end
 			
+			#(Cycle*WaitThreshold);
 			FinishedInput =							1;
 		end
 		
 		always @(posedge FastClock) begin
 			if (HistogramWrite) begin
 				NumReceived = NumReceived + 1;
+				$display("[%m @ %t] Test harness received read response #%d.", $time, NumReceived);
 			end
 			
 			if (FinishedInput && NumSent == NumReceived) begin
@@ -711,7 +738,7 @@ module HWTestHarness(
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ErrorReceiveOverflow));
-	
+
 	Register	#(			.Width(					1))
 				send_ovflw(	.Clock(					SlowClock),
 							.Reset(					SlowReset),

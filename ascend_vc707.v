@@ -61,9 +61,9 @@ module ascend_vc707(
 							ChipScope signals & meet timing
 		
 		See PathORAMTop for more documentation */
-	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
-	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	1; // NOTE: set to 0 for performance run
+	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
+	parameter				SlowAESClock =			0; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
@@ -78,7 +78,7 @@ module ascend_vc707(
 		initial begin
 			if ( UnifiedExperiment == 0 && REWExperiment == 1 ) begin
 				$display("[%m @ %t] ERROR: we aren't interested in this ...", $time);
-				$finish;			
+				$finish;
 			end
 
 			if ( REWIVExperiment == 1 && REWExperiment == 0 ) begin
@@ -102,8 +102,8 @@ module ascend_vc707(
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
-							EnablePLB = 			UnifiedExperiment,   
-							PLBCapacity = 			8192 << 3;
+							EnablePLB = 			UnifiedExperiment,
+							PLBCapacity = 			`ifdef PLBCapacity `else 512 `endif; // TODO 8192 << 3;
 		
 	parameter				Overclock =				1;
 	
@@ -222,7 +222,7 @@ module ascend_vc707(
 	end	
 	
 	// do something with this
-	assign	led[6:2] = 								0;
+	assign	led[6:3] = 								0;
 
 	assign	led[7] =								DDR3SDRAM_ResetDone;
 	
@@ -246,6 +246,7 @@ module ascend_vc707(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
 							.GenHistogram(			GenHistogram),
+							.NumValidBlock(			NumValidBlock),
 							.SlowClockFreq(			SlowClockFreq))
 				tester(		.SlowClock(				SlowClock),
 							.FastClock(				ORAMClock),
