@@ -61,9 +61,9 @@ module ascend_vc707(
 							ChipScope signals & meet timing
 		
 		See PathORAMTop for more documentation */
-	parameter				SlowORAMClock =			0; // NOTE: set to 0 for performance run
-	parameter				SlowAESClock =			0; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
+	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	1; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
