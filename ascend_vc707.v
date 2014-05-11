@@ -72,7 +72,7 @@ module ascend_vc707(
 	// CCS paper configurations
 	parameter				UnifiedExperiment =		1;
 	parameter				REWExperiment =			1;
-	parameter				REWIVExperiment =		1;
+	parameter				REWIVExperiment =		`ifdef EnableIV `EnableIV `else 1 `endif;
 	
 	`ifdef SIMULATION
 		initial begin
@@ -92,7 +92,7 @@ module ascend_vc707(
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					`ifdef ORAML `ORAML `else 20 `endif, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
+							ORAML =					`ifdef ORAML `ORAML `else 15 `endif, // set to 20 for vc707 board (when Z = 5, B = 512, MIG -> 1 GB DIMM); set to 31 to test ASIC
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (REWExperiment) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;
@@ -103,7 +103,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,   
-							PLBCapacity = 			512; // TODO 8192 << 3;
+							PLBCapacity = 			8192 << 3;
 		
 	parameter				Overclock =				1;
 	
