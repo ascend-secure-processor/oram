@@ -178,6 +178,8 @@ module UORamDataPath
 								.Set(       SwitchReq && DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
 								.Out(       FakeLoading));
 
+	localparam		FakeData = 32'hdeaf1234deaf5678;						
+								
 	// ---------------------------------------------------------
 
 	CountAlarm #(		.Threshold(				FEORAMBChunks))
@@ -190,7 +192,7 @@ module UORamDataPath
 
     // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = FakeStoring || (ExpectingProgStore ? DataInValid : EvictFunnelOutValid);
-    assign StoreData = FakeStoring ? 0		// TODO: fake stuff
+    assign StoreData = FakeStoring ? FakeData		// TODO: fake stuff
 						: ExpectingProgStore ? DataIn : EvictFunnelDOut;
     assign DataInReady = ExpectingProgStore && StoreDataReady;
 
@@ -198,7 +200,7 @@ module UORamDataPath
     assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = FakeLoading || (ExpectingDataBlock && LoadDataValid);
-    assign ReturnData = FakeLoading ? 0		// TODO: fake stuff
+    assign ReturnData = FakeLoading ? FakeData		// TODO: fake stuff
 							: LoadData;
 
 `ifdef SIMULATION
@@ -207,7 +209,7 @@ module UORamDataPath
             $display("Error: unexpected backend response");
             $finish;
         end
-        if (SwitchReq && ProgDataCounter > 0) begin
+        if (SwitchReq && ProgDataCounter) begin
             $display("Error: last packet transfer not finished");
             $finish;
         end

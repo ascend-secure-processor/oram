@@ -25,8 +25,8 @@ module testUORam;
     parameter					EnableIV =          1;
 	parameter					DelayedWB =			EnableIV;
 
-	localparam  NN = 800;
-	localparam	nn = 10;
+	localparam  NN = 10000;
+	localparam	nn = 100;
 	localparam	nn2 = nn * 2;	
 
 	

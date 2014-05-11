@@ -206,6 +206,15 @@ module CoherenceController(
 	Pipeline #(.Width(1), .Stages(1))	hoi_found	(Clock,	1'b0, HdOfIFound_Pre, HdOfIFound);
 	Register1b bkt_ofi_found	(Clock,	ROStart, HdOfIFound_Pre, HdOfIHasBeenFound);
 	
+`ifdef SIMULATION
+	always @(posedge Clock) begin
+		if (HdOfIHasBeenFound && HdOfIFound_Pre) begin
+			$display("Error: found another bucket of interest");
+			$finish;
+		end
+	end
+`endif	
+	
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
 	//-------------------------------------------------------------------------- 
@@ -443,7 +452,9 @@ module CoherenceController(
 								: 0;
 								
 		assign BufP1_DIn = 	RWAccessExtend ? 	(	RW_PathRead ? FromDecData : FromStashData)							
-							: ROAccess ? (	BktOfIInValid ? FromDecData : HeaderIn) 		
+							: ROAccess ? (	BktOfIInValid ? FromDecData 
+											: (HeaderCmpValid && Intersect) ? FromDecData_dl 	// save stale header from AES
+											: HeaderIn) 										// save fresh header (vb_updated) from AES
 							: 0;	
 		
 		//	AES --> Stash
@@ -451,7 +462,7 @@ module CoherenceController(
 		assign	BktOfIHdOutValid = 	BktOfIOutValid && BktOfIOffset == 1;
 
 		assign	ToStashData =			RW_PathRead ? FromDecData
-											:	!HdOfIHasBeenFound ?	{DDRDWidth{1'b0}}	//{CoherentData[DDRDWidth-1:BktHUStart], 8{1'b0},	CoherentData[AESEntropy-1:0]};	
+											:	!HdOfIHasBeenFound ? {CoherentData[DDRDWidth-1:BktHUStart], {ORAMZ{1'b0}}, CoherentData[AESEntropy-1:0]}	//	{DDRDWidth{1'b0}}	
 											:	BktOfIHdOutValid ? CoherentDataOfI : CoherentData;
 											
 		assign	ToStashDataValid = 		RW_PathRead ? FromDecDataValid : BktOfIOutValid; 
@@ -465,6 +476,25 @@ module CoherenceController(
 		
 		assign	FromStashDataReady = 	1'b1;	//RWAccessExtend; Note: CC is always ready to accept Stash data
 		assign	FromStashDataDone = 	!RWAccess && RWAccessExtend && !RW_PathRead && BlkOnPthCtr == PathSize_DRBursts - 1;
+		
+		
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (ToEncDataValid) begin
+				if ((! ToEncData) === 1'bx && RWAccess && PathWriteback)	begin
+					$display("Error: xxx bits in ToEncData on RW_W");
+					$finish;
+				end
+			end
+			
+			if (FromStashDataValid) begin
+				if ((! FromStashData) === 1'bx)	begin
+					$display("Error: xxx bits in ToEncData on RW_W");
+					$finish;
+				end
+			end
+		end
+	`endif	
 		
 		//--------------------------------------------------------------------------
 		// Port2 : read and written by IV
