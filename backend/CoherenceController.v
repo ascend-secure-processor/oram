@@ -462,7 +462,7 @@ module CoherenceController(
 		assign	BktOfIHdOutValid = 	BktOfIOutValid && BktOfIOffset == 1;
 
 		assign	ToStashData =			RW_PathRead ? FromDecData
-											:	!HdOfIHasBeenFound ? {CoherentData[DDRDWidth-1:BktHUStart], {ORAMZ{1'b0}}, CoherentData[AESEntropy-1:0]}	//	{DDRDWidth{1'b0}}	
+											:	!HdOfIHasBeenFound ? {DDRDWidth{1'b0}}	
 											:	BktOfIHdOutValid ? CoherentDataOfI : CoherentData;
 											
 		assign	ToStashDataValid = 		RW_PathRead ? FromDecDataValid : BktOfIOutValid; 
