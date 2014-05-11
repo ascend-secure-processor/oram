@@ -483,7 +483,7 @@ module CoherenceController(
 			if (ToEncDataValid) begin
 				if (^ToEncData === 1'bx && RWAccess && PathWriteback)	begin
 					$display("Error: xxx bits in ToEncData on RW_W");
-					$finish;
+				//	$finish;
 				end
 			end
 			
