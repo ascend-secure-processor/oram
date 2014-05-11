@@ -386,9 +386,10 @@ module AESREWORAM(
 				$finish;
 			end
 			
-			if (BufferedDataInValid && ~BucketNotYetWritten && (^DRAMReadData === 1'bx || 
-																^RO_GentryIV === 1'bx || 
-																^Core_ROBIDIn === 1'bx)) begin
+			if (BufferedDataInValid && ~BucketNotYetWritten && (	((EnableIV) ? DRAMReadData[DDRDWidth-1:BktHLStart+BigLWidth] === 1'bx : 1'b0) ||
+																	^DRAMReadData[BktHLStart+BigLWidth-1:0] === 1'bx || 
+																	^RO_GentryIV === 1'bx || 
+																	^Core_ROBIDIn === 1'bx)) begin
 				$display("[%m @ %t] ERROR: Header that has been written to memory before came back X.", $time);
 				$finish;			
 			end
