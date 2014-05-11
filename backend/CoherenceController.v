@@ -489,8 +489,8 @@ module CoherenceController(
 			
 			if (FromStashDataValid) begin
 				if (^FromStashData === 1'bx)	begin
-					$display("Error: xxx bits in ToEncData on RW_W");
-					$finish;
+					$display("Error: xxx bits in FromStash");
+				//	$finish;
 				end
 			end
 		end
