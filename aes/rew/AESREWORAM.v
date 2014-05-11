@@ -284,8 +284,11 @@ module AESREWORAM(
 
 	// debugging
 		
-	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_AES;
-	
+	(* mark_debug = "TRUE" *)	wire					FoundBOIThisAccess;	
+
+	(* mark_debug = "TRUE" *)	wire					ERROR_UF1_DWB, ERROR_OF1_DWB, ERROR_ISC1_DWB;
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_DUP1, ERROR_ISC2, ERROR_AES;
+
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -300,17 +303,22 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
 	//--------------------------------------------------------------------------
-		
-	Register1b 	errno1(Clock, Reset, BufferedDataInValid & ~BufferedDataInReady & CSROROIRead, 	ERROR_OF1);	
-	Register1b 	errno2(Clock, Reset, BufferedROIVOutReady & ~BufferedROIVOutValid, 				ERROR_UF1);	
-	Register1b 	errno3(Clock, Reset, ROIDataInValid & ~ROIDataInReady, 							ERROR_OF2);	
-	Register1b 	errno4(Clock, Reset, ~ROIDataValid & ROIDataReady, 								ERROR_UF2);	
-	Register1b 	errno5(Clock, Reset, BufferedROIVInValid & ~BufferedROIVInReady, 				ERROR_OF3);
-	Register1b 	errno6(Clock, Reset, WritebackROIVInValid & ~WritebackROIVInReady, 				ERROR_OF4);
-	Register1b 	errno7(Clock, Reset, WritebackROIVOutReady & ~WritebackROIVOutValid, 			ERROR_UF3);
-	Register1b 	errno8(Clock, Reset, ROI_FoundBucket & ROI_NotFoundBucket, 						ERROR_ISC1);
 	
-	Register1b 	errANY(Clock, Reset, ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1, ERROR_AES);
+	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
+		
+	Register1b 	errno1(Clock, Reset, 	BufferedDataInValid & ~BufferedDataInReady & CSROROIRead, 	ERROR_OF1);	
+	Register1b 	errno2(Clock, Reset, 	BufferedROIVOutReady & ~BufferedROIVOutValid, 				ERROR_UF1);	
+	Register1b 	errno3(Clock, Reset, 	ROIDataInValid & ~ROIDataInReady, 							ERROR_OF2);	
+	Register1b 	errno4(Clock, Reset, 	~ROIDataValid & ROIDataReady, 								ERROR_UF2);	
+	Register1b 	errno5(Clock, Reset, 	BufferedROIVInValid & ~BufferedROIVInReady, 				ERROR_OF3);
+	Register1b 	errno6(Clock, Reset, 	WritebackROIVInValid & ~WritebackROIVInReady, 				ERROR_OF4);
+	Register1b 	errno7(Clock, Reset, 	WritebackROIVOutReady & ~WritebackROIVOutValid, 			ERROR_UF3);
+	Register1b 	errno8(Clock, Reset, 	ROI_FoundBucket & ROI_NotFoundBucket, 						ERROR_ISC1);
+	Register1b 	errno9(Clock, Reset, 	FinishWBIn & ROIDataValid, 									ERROR_ISC2);	
+	Register1b 	errno10(Clock, Reset, 	FoundBOIThisAccess & ROI_FoundBucket, 						ERROR_DUP1);
+	
+	Register1b 	errANY(Clock, Reset, 	ERROR_UF1_DWB | ERROR_OF1_DWB | ERROR_ISC1_DWB | 
+										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1, ERROR_AES);
 	
 	`ifdef SIMULATION
 		initial begin	
@@ -378,6 +386,13 @@ module AESREWORAM(
 				$finish;
 			end
 			
+			if (BufferedDataInValid && ~BucketNotYetWritten && (^DRAMReadData === 1'bx || 
+																^RO_GentryIV === 1'bx || 
+																^Core_ROBIDIn === 1'bx)) begin
+				$display("[%m @ %t] ERROR: Header that has been written to memory before came back X.", $time);
+				$finish;			
+			end
+			
 			if (~CSROWrite & BufferedDataOutValid & MaskIsHeader & ^DataOutV === 1'bx) begin // TODO use better signal than CSROWrite
 				$display("[%m @ %t] ERROR: Valid bit was X.", $time);
 				$finish;	
@@ -389,6 +404,11 @@ module AESREWORAM(
 			end
 			if (ERROR_UF2) begin
 				$display("[%m @ %t] ERROR: Bucket of interest FIFO didn't have data.", $time);
+				$finish;
+			end
+			
+			if (ERROR_ISC2) begin
+				$display("[%m @ %t] ERROR: Bucket of interest FIFO still had data in it after access completed.", $time);
 				$finish;
 			end			
 			
@@ -413,6 +433,11 @@ module AESREWORAM(
 			if (ERROR_ISC1) begin
 				$display("[%m @ %t] ERROR: now this just doesn't make any goddamn sense does it?.", $time);
 				$finish;
+			end
+			
+			if (ERROR_DUP1) begin
+				$display("[%m @ %t] ERROR: found 2 buckets of interest on 1 path.", $time);
+				$finish;			
 			end
 		end
 	`endif
@@ -731,21 +756,25 @@ module AESREWORAM(
 	generate if (DelayedWB) begin:DELAYED_RW_WRITEBACK
 		wire	[AESEntropy-1:0] ExternalIVIncrement_DWB, UpdatedExternalIV_DWB;
 		wire				BufferedROIVInValid_DWB, BufferedROIVInReady_DWB;	
+
+		Register1b 	errno20(Clock, Reset, 	BufferedROIVOutReady_DWB & ~BufferedROIVOutValid_DWB, 	ERROR_UF1_DWB);
+		Register1b 	errno21(Clock, Reset, 	BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB, 	ERROR_OF1_DWB);
+		Register1b 	errno22(Clock, Reset, 	BufferedROIVInValid & BufferedROIVInValid_DWB, 			ERROR_ISC1_DWB);
 		
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (BufferedROIVOutReady_DWB & ~BufferedROIVOutValid_DWB) begin
+			if (ERROR_UF1_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks didn't have data on a transfer.", $time);
 				$finish;
 			end
-			if (BufferedROIVInValid_DWB & ~BufferedROIVInReady_DWB) begin
+			if (ERROR_OF1_DWB) begin
 				$display("[%m @ %t] ERROR: IV FIFO for header (DELAYED) writebacks overflowed.", $time);
 				$finish;
 			end
-			if (BufferedROIVInValid & BufferedROIVInValid_DWB) begin
+			if (ERROR_ISC1_DWB) begin
 				$display("[%m @ %t] ERROR: illegal signal combination.", $time);
 				$finish;			
-			end			
+			end
 		end
 	`endif
 		
@@ -768,6 +797,10 @@ module AESREWORAM(
 	end else begin:NORMAL_RW_WRITEBACKS
 		assign	BufferedROIVOutValid_DWB =			1'b0;
 		assign	BufferedROIVOutReady_DWB =			1'b0;
+		
+		assign	ERROR_UF1_DWB =						1'b0;
+		assign	ERROR_OF1_DWB =						1'b0;
+		assign	ERROR_ISC1_DWB =					1'b0;		
 	end endgenerate
 	
 	/* This is a "lazy" design -- we could have made hwb_ivc_buf a RAM and gone 
