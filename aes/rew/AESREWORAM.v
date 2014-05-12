@@ -133,23 +133,23 @@ module AESREWORAM(
 	// AES Core
 	
 	(* mark_debug = "FALSE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
-	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
-	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
-	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInValid;
-	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInReady;
+	(* mark_debug = "FALSE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
+	(* mark_debug = "FALSE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
+	(* mark_debug = "FALSE" *)	wire					Core_ROCommandInValid;
+	(* mark_debug = "FALSE" *)	wire					Core_ROCommandInReady;
 
-	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_RWIVIn;
-	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
-	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInValid; 
-	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInReady;
+	(* mark_debug = "FALSE" *)	wire	[AESEntropy-1:0] Core_RWIVIn;
+	(* mark_debug = "FALSE" *)	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
+	(* mark_debug = "FALSE" *)	wire					Core_RWCommandInValid; 
+	(* mark_debug = "FALSE" *)	wire					Core_RWCommandInReady;
 
-	(* mark_debug = "TRUE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
-	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
-	(* mark_debug = "TRUE" *)	wire					Core_RODataOutValid;
-	(* mark_debug = "TRUE" *)	wire					Core_RODataOutReady;
+	(* mark_debug = "FALSE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
+	(* mark_debug = "FALSE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
+	(* mark_debug = "FALSE" *)	wire					Core_RODataOutValid;
+	(* mark_debug = "FALSE" *)	wire					Core_RODataOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
-	(* mark_debug = "TRUE" *)	wire					Core_RWDataOutValid;	
+	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
+	(* mark_debug = "FALSE" *)	wire					Core_RWDataOutValid;	
 	
 	// RO header mask & bucket of interest seed generation
 

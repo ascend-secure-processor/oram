@@ -62,11 +62,11 @@ module UORamDataPath
     input   DumbRequest;
 
     // PPPEvictBuffer
-	(* mark_debug = "TRUE" *) wire PPPEvictDataValid_Reg;
-	(* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PPPEvictData_Reg;
+	(* mark_debug = "FALSE" *) wire PPPEvictDataValid_Reg;
+	(* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPEvictData_Reg;
 
-    (* mark_debug = "TRUE" *) wire EvictBufferOutReady, EvictBufferOutValid;
-    (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] EvictBufferDOut;
+    (* mark_debug = "FALSE" *) wire EvictBufferOutReady, EvictBufferOutValid;
+    (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] EvictBufferDOut;
 
 	Pipeline 	#(	.Width(LeafWidth+1), .Stages(1))
 		EvictReg	(	Clock,	 1'b0,	{PPPEvictDataValid, PPPEvictData}, {PPPEvictDataValid_Reg, PPPEvictData_Reg});
@@ -84,8 +84,8 @@ module UORamDataPath
 
 
     // Funnel for PPPEvictBuffer --> BackEnd
-    (* mark_debug = "TRUE" *) wire EvictFunnelOutValid;
-    (* mark_debug = "TRUE" *) wire [FEDWidth-1:0] EvictFunnelDOut;
+    (* mark_debug = "FALSE" *) wire EvictFunnelOutValid;
+    (* mark_debug = "FALSE" *) wire [FEDWidth-1:0] EvictFunnelDOut;
 
     FIFOShiftRound #(.IWidth(LeafWidth), .OWidth(FEDWidth))
         EvictFunnel (   .Clock(Clock),
@@ -99,7 +99,7 @@ module UORamDataPath
                     );
 
     // Funnel for LoadData --> PPPRefillData
-    (* mark_debug = "TRUE" *) wire RefillFunnelReady, RefillFunnelValid;
+    (* mark_debug = "FALSE" *) wire RefillFunnelReady, RefillFunnelValid;
 
     FIFOShiftRound #(.IWidth(FEDWidth), .OWidth(LeafWidth))
         RefillFunnel (  .Clock(Clock),
@@ -113,9 +113,9 @@ module UORamDataPath
                     );
 
     // control signal
-    (* mark_debug = "TRUE" *) wire ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
-    (* mark_debug = "TRUE" *) wire [LogFEORAMBChunks-1:0] ProgDataCounter;
-    (* mark_debug = "TRUE" *) wire DataReturnTransfer, DataInTransfer, ProgCounterInc, DataTransferEnd;
+    (* mark_debug = "FALSE" *) wire ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
+    (* mark_debug = "FALSE" *) wire [LogFEORAMBChunks-1:0] ProgDataCounter;
+    (* mark_debug = "FALSE" *) wire DataReturnTransfer, DataInTransfer, ProgCounterInc, DataTransferEnd;
 
     assign ExpectingProgramData =  ExpectingDataBlock || ExpectingProgStore;
     assign DataReturnTransfer = ReturnDataReady && ReturnDataValid;
@@ -145,7 +145,7 @@ module UORamDataPath
                                     .Out(       ExpectingProgStore));
 
 	// -------------- read non-existent block ----------------
-	(* mark_debug = "TRUE" *) wire	FakeAccess, FakeStoring, FakeLoading, FakeStoreEnd, FakeLoadEnd;
+	(* mark_debug = "FALSE" *) wire	FakeAccess, FakeStoring, FakeLoading, FakeStoreEnd, FakeLoadEnd;
 	Register #(.Width(1))
         FakeAccessReg 	(   .Clock(     Clock),
 							.Reset(     Reset || (!FakeStoring && !FakeLoading)),

@@ -84,7 +84,7 @@ module PathORAMTopTestbench;
 		if (InitWait == 250) Start <= 1'b1;
 	end
 	
-	/*Counter		#(			.Width(					TimeWidth))
+	Counter		#(			.Width(					TimeWidth))
 				rd_ret_cnt(	.Clock(					sys_clk_p),
 							.Reset(					sys_rst),
 							.Set(					1'b0),
@@ -93,8 +93,10 @@ module PathORAMTopTestbench;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 							
-													// Format:			 Cmd   	PAddr	DataBase	TimeDelay
-	assign	UARTShftDataIn =						(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
+													// CRUD Format:			Cmd   					PAddr		DataBase	TimeDelay
+													// Seed Format:			Cmd						Seed		AccessCount	Offset
+	assign	UARTShftDataIn =						{						TCMD_CmdLin_AddrRnd, 	32'hff, 	32'd2048, 	32'd1024};
+													/*(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
 													(CmdCount == 1) ? 	{8'd0, 	32'h1, 	32'hf, 		32'd0} : 
 													(CmdCount == 2) ? 	{8'd0, 	32'h2, 	32'hff, 	32'd0} : 
 													(CmdCount == 3) ? 	{8'd0, 	32'h3, 	32'h0, 		32'd0} :
@@ -111,8 +113,8 @@ module PathORAMTopTestbench;
 													(CmdCount == 13) ? 	{8'd2, 	32'h5, 	32'h0, 		32'd0} :
 													(CmdCount == 14) ? 	{8'd2, 	32'h6, 	32'h0, 		32'd0} :
 													(CmdCount == 15) ? 	{8'd2, 	32'h7, 	32'h0, 		32'd0} :
-																		{8'hff, 32'h0, 	32'h0, 		32'd0}; // start
-	assign	UARTShftDataInValid =					Start & CmdCount < 17;
+																		{8'hff, 32'h0, 	32'h0, 		32'd0}; */ // start
+	assign	UARTShftDataInValid =					Start & CmdCount < 1;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),
@@ -124,9 +126,7 @@ module PathORAMTopTestbench;
 							.InAccept(				UARTShftDataInReady),
 							.OutData(				UARTDataIn),
 							.OutValid(				UARTDataInValid),
-							.OutReady(				UARTDataInReady));*/
-							
-	assign	UARTDataInValid =						1'b0;
+							.OutReady(				UARTDataInReady));
 	
 	UART		#(			.ClockFreq(				200_000_000), // this much match sys_clk_p freq
 							.Baud(					UARTBaud),

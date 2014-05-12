@@ -72,7 +72,7 @@ module ascend_vc707(
 	// CCS paper configurations
 	parameter				UnifiedExperiment =		1;
 	parameter				REWExperiment =			1;
-	parameter				REWIVExperiment =		`ifdef EnableIV `EnableIV `else REWExperiment `endif;
+	parameter				REWIVExperiment =		`ifdef EnableIV `EnableIV `else 0 `endif;
 	
 	// ORAM related
 	

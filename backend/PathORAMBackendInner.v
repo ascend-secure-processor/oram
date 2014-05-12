@@ -123,78 +123,78 @@ module PathORAMBackendInner(
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 	wire					CSInitialize, CSIdle, CSAppend, CSAccess;
 
-	(* mark_debug = "TRUE" *)	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
+	(* mark_debug = "FALSE" *)	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
 		
 	// Front-end interfaces
 	
-	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] Command_Internal;
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PAddr_Internal;
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
-	(* mark_debug = "TRUE" *)	wire					Command_InternalValid, Command_InternalReady;
+	(* mark_debug = "FALSE" *)	wire	[BECMDWidth-1:0] Command_Internal;
+	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]		PAddr_Internal;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
+	(* mark_debug = "FALSE" *)	wire					Command_InternalValid, Command_InternalReady;
 
-	(* mark_debug = "TRUE" *)	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
-	(* mark_debug = "TRUE" *)	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
+	(* mark_debug = "FALSE" *)	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
+	(* mark_debug = "FALSE" *)	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
 		
-	(* mark_debug = "TRUE" *)	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
-	(* mark_debug = "TRUE" *)	wire					Store_ShiftBufValid, Store_ShiftBufReady;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
+	(* mark_debug = "FALSE" *)	wire					Store_ShiftBufValid, Store_ShiftBufReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[BEDWidth-1:0]	Load_ShiftBufData;
-	(* mark_debug = "TRUE" *)	wire					Load_ShiftBufValid, Load_ShiftBufReady;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Load_ShiftBufData;
+	(* mark_debug = "FALSE" *)	wire					Load_ShiftBufValid, Load_ShiftBufReady;
 		
 	// Stash
 	
-	(* mark_debug = "TRUE" *)	wire	[BEDWidth-1:0]	Stash_StoreData;						
-	(* mark_debug = "TRUE" *)	wire					Stash_StoreDataValid, Stash_StoreDataReady;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_StoreData;						
+	(* mark_debug = "FALSE" *)	wire					Stash_StoreDataValid, Stash_StoreDataReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[BEDWidth-1:0]	Stash_ReturnData;
-	(* mark_debug = "TRUE" *)	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_ReturnData;
+	(* mark_debug = "FALSE" *)	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
-	(* mark_debug = "TRUE" *)	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
+	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
+	(* mark_debug = "FALSE" *)	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
 	
-	(* mark_debug = "TRUE" *)	wire					StashAlmostFull;
+	(* mark_debug = "FALSE" *)	wire					StashAlmostFull;
 	
 	// ORAM initialization
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
-	(* mark_debug = "TRUE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
+	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
+	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
+	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
-	(* mark_debug = "TRUE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
+	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
+	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 
-	(* mark_debug = "TRUE" *)	wire					DRAMInitializing;
+	(* mark_debug = "FALSE" *)	wire					DRAMInitializing;
 
 	// Address generator
 
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
-	(* mark_debug = "TRUE" *)	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
+	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
+	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
+	(* mark_debug = "FALSE" *)	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 
-	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress_Internal;
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
-	(* mark_debug = "TRUE" *)	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;
+	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress_Internal;
+	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand_Internal;
+	(* mark_debug = "FALSE" *)	wire					AddrGen_DRAMCommandValid_Internal, AddrGen_DRAMCommandReady_Internal;
 
 	// Stash
 	
-	(* mark_debug = "TRUE" *)	wire	[STCMDWidth-1:0] Stash_Command;
-	(* mark_debug = "TRUE" *)	wire					Stash_CommandValid, Stash_CommandReady;
+	(* mark_debug = "FALSE" *)	wire	[STCMDWidth-1:0] Stash_Command;
+	(* mark_debug = "FALSE" *)	wire					Stash_CommandValid, Stash_CommandReady;
 
-	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] Stash_BECommand;
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		Stash_PAddr;
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Stash_CurrentLeaf;
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Stash_RemappedLeaf;
-	(* mark_debug = "TRUE" *)	wire					Stash_SkipWriteback, Stash_AccessIsDummy;
+	(* mark_debug = "FALSE" *)	wire	[BECMDWidth-1:0] Stash_BECommand;
+	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]		Stash_PAddr;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Stash_CurrentLeaf;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Stash_RemappedLeaf;
+	(* mark_debug = "FALSE" *)	wire					Stash_SkipWriteback, Stash_AccessIsDummy;
 
-	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] Control_Command;
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		Control_PAddr;
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Control_CurrentLeaf;
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Control_RemappedLeaf;
-	(* mark_debug = "TRUE" *)	wire					Control_CommandReq, Control_CommandDone;
+	(* mark_debug = "FALSE" *)	wire	[BECMDWidth-1:0] Control_Command;
+	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]		Control_PAddr;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Control_CurrentLeaf;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Control_RemappedLeaf;
+	(* mark_debug = "FALSE" *)	wire					Control_CommandReq, Control_CommandDone;
 
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		AddrGen_Leaf;
-	(* mark_debug = "TRUE" *)	wire					AddrGen_InReady, AddrGen_InValid;
-	(* mark_debug = "TRUE" *)	wire					AddrGen_PathRead, AddrGen_HeaderOnly;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		AddrGen_Leaf;
+	(* mark_debug = "FALSE" *)	wire					AddrGen_InReady, AddrGen_InValid;
+	(* mark_debug = "FALSE" *)	wire					AddrGen_PathRead, AddrGen_HeaderOnly;
 
 	// debugging
 	
@@ -721,24 +721,24 @@ module BackendInnerControl(
 
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 
-	(* mark_debug = "TRUE" *)	wire					RWAccess, ROAccess, PathRead, PathWriteback;
-	(* mark_debug = "TRUE" *)	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
+	(* mark_debug = "FALSE" *)	wire					RWAccess, ROAccess, PathRead, PathWriteback;
+	(* mark_debug = "FALSE" *)	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 
-	(* mark_debug = "TRUE" *)	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
-	(* mark_debug = "TRUE" *)	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
+	(* mark_debug = "FALSE" *)	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
+	(* mark_debug = "FALSE" *)	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
 	
-	(* mark_debug = "TRUE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
+	(* mark_debug = "FALSE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
 
-	wire					AddrRWDone, DataRWDone, OperationComplete;
-	(* mark_debug = "TRUE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
+	wire					AddrRWDone, DataRWDone, OperationComplete; // NOTE: do not add debug here; mysteriously causes the tools to fail @ impl
+	(* mark_debug = "FALSE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
-	(* mark_debug = "TRUE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
+	(* mark_debug = "FALSE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
 		
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		DummyLeaf;
-	(* mark_debug = "TRUE" *)	wire					DummyLeaf_Valid;
-	(* mark_debug = "TRUE" *)	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;	
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		DummyLeaf;
+	(* mark_debug = "FALSE" *)	wire					DummyLeaf_Valid;
+	(* mark_debug = "FALSE" *)	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;	
 	
-	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		GentryLeaf;	
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		GentryLeaf;	
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -902,9 +902,9 @@ module BackendInnerControl(
 							.RO_W_DoneAlarm(		));
 
 	generate if (EnableREW) begin:REW_CONTROL
-		(* mark_debug = "TRUE" *) wire [ORAMU-1:0]	ROPAddr_Pre;
-		(* mark_debug = "TRUE" *) wire [ORAML-1:0]	ROLeaf_Pre;
-		(* mark_debug = "TRUE" *) wire				REWRoundDummy_Pre;
+		(* mark_debug = "FALSE" *) wire [ORAMU-1:0]	ROPAddr_Pre;
+		(* mark_debug = "FALSE" *) wire [ORAML-1:0]	ROLeaf_Pre;
+		(* mark_debug = "FALSE" *) wire				REWRoundDummy_Pre;
 
 		Counter	#(			.Width(					ORAML))
 			gentry_leaf(	.Clock(					Clock),
@@ -963,13 +963,13 @@ module BackendInnerControl(
 							.Out(					AccessIsDummy_Reg));
 	assign	AccessIsDummy =							AccessIsDummy_Reg & ~ClearDummy;
 
-	PRNG 		#(			.RandWidth(				PRNGLWidth),
-							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
+	PRNG 		#(			.RandWidth(				PRNGLWidth)) 
 				leaf_gen(	.Clock(					Clock),
 							.Reset(					Reset),
 							.RandOutReady(			OperationComplete),
 							.RandOutValid(			DummyLeaf_Valid),
-							.RandOut(				DummyLeaf_Wide));
+							.RandOut(				DummyLeaf_Wide),
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73)); // TODO make dynamic
 
 	//--------------------------------------------------------------------------
 	//	Stash Interface

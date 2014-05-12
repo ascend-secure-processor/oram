@@ -187,7 +187,7 @@ module StashCore(
 
 	// Control
 	
-	reg		[STWidth-1:0]	CS, NS;
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 	wire					CSReset, CSIdle, CSPeaking, CSPushing, 
 							CSOverwriting, CSDumping, CSHUpdate, CSStartSync;
 
@@ -279,6 +279,10 @@ module StashCore(
 	wire					CSPushing_FirstCycle, CSDumping_FirstCycle, 
 							CSSyncing_FirstCycle;
 
+	// debugging
+	
+	(* mark_debug = "TRUE" *)	wire					ERROR_UF1, ERROR_ISC1, ERROR_ISC2, ERROR_StashCore;
+	
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------	
@@ -307,6 +311,12 @@ module StashCore(
 		3 - after sync, each list is of expected length
 	*/
 
+	Register1b 	errno1(Clock, Reset, RemoveBlock & StashOccupancy == 0, 						ERROR_UF1);
+	Register1b 	errno2(Clock, Reset, CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH, ERROR_ISC1);
+	Register1b 	errno3(Clock, Reset, WriteTransfer & StashE_Address == SNULL, 					ERROR_ISC2);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_UF1 | ERROR_ISC1 | ERROR_ISC2, 						ERROR_StashCore);
+	
 	`ifdef SIMULATION
 		reg [SEAWidth-1:0] 	MS_pt;
 		reg	[ORAMU-1:0]		PAddrTemp;
@@ -369,17 +379,17 @@ module StashCore(
 				$finish;
 			end
 
-			if (RemoveBlock & StashOccupancy == 0) begin
+			if (ERROR_UF1) begin
 				$display("[%m] ERROR: we removed a block from an empty stash");
 				$finish;			
 			end
 			
-			if (CSSyncing_FirstCycle & Sync_SettingULH == Sync_SettingFLH) begin
+			if (ERROR_ISC1) begin
 				$display("[%m] ERROR: both free/used list given same pointer during sync");
 				$finish;
 			end
 			
-			if (WriteTransfer & StashE_Address == SNULL) begin
+			if (ERROR_ISC2) begin
 				$display("[%m] ERROR: overwriting the SNULL entry");
 				$finish;
 			end
@@ -555,19 +565,20 @@ module StashCore(
 				if (ResetDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (InCommandValid) begin
-					if (InCommand == SCMD_Push & ~CancelPushCommand)
-						NS =						ST_Pushing;
-					if (InCommand == SCMD_Overwrite)
-						NS =						ST_Overwriting;
-					if (InCommand == SCMD_Peak)
-						NS =						ST_Peaking;
-					if (InCommand == SCMD_Dump)
-						NS =						ST_Dumping;
-					if (InCommand == SCMD_UpdateHeader)
-						NS =						ST_UpdatingHeader;
-					if (InCommand == SCMD_Sync)
-						NS =						ST_StartSync;
+				if (~ERROR_StashCore)
+					if (InCommandValid) begin
+						if (InCommand == SCMD_Push & ~CancelPushCommand)
+							NS =						ST_Pushing;
+						if (InCommand == SCMD_Overwrite)
+							NS =						ST_Overwriting;
+						if (InCommand == SCMD_Peak)
+							NS =						ST_Peaking;
+						if (InCommand == SCMD_Dump)
+							NS =						ST_Dumping;
+						if (InCommand == SCMD_UpdateHeader)
+							NS =						ST_UpdatingHeader;
+						if (InCommand == SCMD_Sync)
+							NS =						ST_StartSync;
 				end
 			ST_Pushing :
 				if (ContinuePush)

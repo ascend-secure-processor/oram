@@ -43,6 +43,8 @@ module PathORAMBackend(
 	
 	parameter				DebugAES =				0;
 	
+	localparam				ORAMLogL = 				`log2(ORAML+1);
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -97,7 +99,7 @@ module PathORAMBackend(
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
 
-    (* mark_debug = "TRUE" *)	wire                    DRAMInitComplete;
+    (* mark_debug = "FALSE" *)	wire                    DRAMInitComplete;
 	
 	// CC - AES
 
@@ -116,14 +118,13 @@ module PathORAMBackend(
 	// integrity verification
 		
 	(* mark_debug = "TRUE" *)	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn, BOIFromCC;
-	wire 					IVRequest, IVWrite;
+	(* mark_debug = "TRUE" *)	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
 	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
 
 	wire	[AESEntropy-1:0] CC_ROIBV;
 	wire	[ORAML:0]		 CC_ROIBID;
 	
-	localparam	ORAMLogL = `log2(ORAML+1);
 	wire	[ORAMLogL-1:0]	BktOfIIdx;
 
 	wire					FromStashDataDone; // TODO remove?

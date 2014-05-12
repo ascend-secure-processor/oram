@@ -110,7 +110,7 @@ module StashTop(
 	
 	wire					EvictGate, UpdateGate;
 	
-	reg		[STWidth-1:0]	CS, NS;	
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;	
 	wire					CSIdle, CSRead, CSStartWrite, CSWrite, CSAppend, CSUpdate;
 	
 	wire	[PBEDP1Width-1:0] InnerCount, OuterCount;

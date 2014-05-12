@@ -48,6 +48,7 @@ module HWTestHarness(
 							
 							NumValidBlock =			1 << ORAML;
 
+	`include "SecurityLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "TestHarnessLocal.vh"
 	
@@ -107,93 +108,94 @@ module HWTestHarness(
 	
 	// Receive pipeline
 	
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
-	(* mark_debug = "TRUE" *)	wire				CrossBufOut_DataInValid_Pre, CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0]	CrossBufOut_DataIn;
+	(* mark_debug = "FALSE" *)	wire				CrossBufOut_DataInValid_Pre, CrossBufOut_DataInValid, CrossBufOut_DataInReady, CrossBufOut_Full;
 	
-	(* mark_debug = "TRUE" *)	wire	[BlkUARTWidth-1:0] BlkKeepCount;
-	(* mark_debug = "TRUE" *)	wire				BlkKeepTerminal, BlkKeepTerminal_Pre;
+	(* mark_debug = "FALSE" *)	wire	[BlkUARTWidth-1:0] BlkKeepCount;
+	(* mark_debug = "FALSE" *)	wire				BlkKeepTerminal, BlkKeepTerminal_Pre;
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
-	(* mark_debug = "TRUE" *)	wire				DataOutActualValid;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] DataOutActual, DataOutExpected;
+	(* mark_debug = "FALSE" *)	wire				DataOutActualValid;
 
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
-	(* mark_debug = "TRUE" *)	wire				DataOutActual_BaseValid;	
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] DataOutActual_Base;
+	(* mark_debug = "FALSE" *)	wire				DataOutActual_BaseValid;	
 	
-	(* mark_debug = "TRUE" *)	wire				MismatchReceivePattern;
+	(* mark_debug = "FALSE" *)	wire				MismatchReceivePattern;
 		
-	(* mark_debug = "TRUE" *)	wire	[BlkDBaseWidth-1:0] ReceiveChunkID;
-	(* mark_debug = "TRUE" *)	wire				ReceiveBlockComplete_Pre, ReceiveBlockComplete;
+	(* mark_debug = "FALSE" *)	wire	[BlkDBaseWidth-1:0] ReceiveChunkID;
+	(* mark_debug = "FALSE" *)	wire				ReceiveBlockComplete_Pre, ReceiveBlockComplete;
 
 	// UART
 	
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0]	UARTDataIn;
-	(* mark_debug = "TRUE" *)	wire				UARTDataInValid, UARTDataInReady;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0]	UARTDataIn;
+	(* mark_debug = "FALSE" *)	wire				UARTDataInValid, UARTDataInReady;
 
-	(* mark_debug = "TRUE" *)	wire	[UARTWidth-1:0] UARTDataOut;
-	(* mark_debug = "TRUE" *)	wire				UARTDataOutValid, UARTDataOutReady;
+	(* mark_debug = "FALSE" *)	wire	[UARTWidth-1:0] UARTDataOut;
+	(* mark_debug = "FALSE" *)	wire				UARTDataOutValid, UARTDataOutReady;
 	
 	// Send pipeline
 	
-	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0] CrossBufIn_DataIn;
-	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0] CrossBufIn_DataOut;
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataInValid, CrossBufIn_DataInReady;	
+	(* mark_debug = "FALSE" *)	wire	[THPWidth-1:0] CrossBufIn_DataIn;
+	(* mark_debug = "FALSE" *)	wire	[THPWidth-1:0] CrossBufIn_DataOut;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_DataInValid, CrossBufIn_DataInReady;	
 	
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_Full, CrossBufIn_DataOutValid;
-	(* mark_debug = "TRUE" *)	wire				CrossBufIn_DataOutReady;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_Full, CrossBufIn_DataOutValid;
+	(* mark_debug = "FALSE" *)	wire				CrossBufIn_DataOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	SlowCommand, FastCommand;
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]	FastPAddr;
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] FastDataBase;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	FastTimeDelay;
+	(* mark_debug = "FALSE" *)	wire	[TCMDWidth-1:0]	FastCommand;
+	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]	FastPAddr;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] FastDataBase;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	FastTimeDelay;
 	
-	(* mark_debug = "TRUE" *)	wire				TimeGate;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	PacketAge;
+	(* mark_debug = "FALSE" *)	wire				TimeGate;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	PacketAge;
 	
-	(* mark_debug = "TRUE" *)	wire				StartGate, SlowStartSignal;
-	(* mark_debug = "TRUE" *)	wire				FastStartSignal;
-	(* mark_debug = "TRUE" *)	wire				FastStartSignal_Pre, StarCrossEmpty;
+	(* mark_debug = "FALSE" *)	wire				StartGate, SlowStartSignal;
+	(* mark_debug = "FALSE" *)	wire				FastStartSignal;
+	(* mark_debug = "FALSE" *)	wire				FastStartSignal_Pre, StarCrossEmpty;
 		
-	(* mark_debug = "TRUE" *)	wire				BurstComplete;
-	(* mark_debug = "TRUE" *)	wire				ORAMRegInValid, ORAMRegInReady;
-	(* mark_debug = "TRUE" *)	wire				ORAMRegOutValid, ORAMRegOutReady;
+	(* mark_debug = "FALSE" *)	wire				BurstComplete;
+	(* mark_debug = "FALSE" *)	wire				ORAMRegInValid, ORAMRegInReady;
+	(* mark_debug = "FALSE" *)	wire				ORAMRegOutValid, ORAMRegOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire				ORAMCommandTransfer;	
+	(* mark_debug = "FALSE" *)	wire				ORAMCommandTransfer;	
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] ORAMDataBase;
-	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	ORAMTimeDelay;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] ORAMDataBase;
+	(* mark_debug = "FALSE" *)	wire	[TimeWidth-1:0]	ORAMTimeDelay;
 	
-	(* mark_debug = "TRUE" *)	wire				WriteCommandValid;
-	(* mark_debug = "TRUE" *)	wire				ORAMDataSendValid, ORAMDataSendReady;
-	(* mark_debug = "TRUE" *)	wire				WriteGate_Pre, WriteGate;
+	(* mark_debug = "FALSE" *)	wire				WriteCommandValid;
+	(* mark_debug = "FALSE" *)	wire				ORAMDataSendValid, ORAMDataSendReady;
+	(* mark_debug = "FALSE" *)	wire				WriteGate_Pre, WriteGate;
 	
-	(* mark_debug = "TRUE" *)	wire				SendBlockComplete;
-	(* mark_debug = "TRUE" *)	wire	[BlkDBaseWidth-1:0] SendChunkID;
+	(* mark_debug = "FALSE" *)	wire				SendBlockComplete;
+	(* mark_debug = "FALSE" *)	wire	[BlkDBaseWidth-1:0] SendChunkID;
 
 	// Histogram generation
 	
-	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	ORAMDataOut_Post;
-	(* mark_debug = "TRUE" *)	wire					ORAMDataOutValid_Post, ORAMDataOutReady_Post;
+	(* mark_debug = "FALSE" *)	wire	[FEDWidth-1:0]	ORAMDataOut_Post;
+	(* mark_debug = "FALSE" *)	wire					ORAMDataOutValid_Post, ORAMDataOutReady_Post;
 	
-	(* mark_debug = "TRUE" *)	wire					StartCounting, AccessInProgress, StopCounting, StopCounting_Delay;
-	(* mark_debug = "TRUE" *)	wire	[HGAWidth-1:0]	AccessLatency, HistogramAddress;
-	(* mark_debug = "TRUE" *)	wire					HistogramWrite;
+	(* mark_debug = "FALSE" *)	wire					StartCounting, AccessInProgress, StopCounting, StopCounting_Delay;
+	(* mark_debug = "FALSE" *)	wire	[HGAWidth-1:0]	AccessLatency, HistogramAddress;
+	(* mark_debug = "FALSE" *)	wire					HistogramWrite;
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] ReceiveCrossDataIn;
-	(* mark_debug = "TRUE" *)	wire					ReceiveCrossDataInValid, ReceiveCrossDataInReady;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] ReceiveCrossDataIn;
+	(* mark_debug = "FALSE" *)	wire					ReceiveCrossDataInValid, ReceiveCrossDataInReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] HistogramInData, HistogramOutData;
-	(* mark_debug = "TRUE" *)	wire					HistogramOutValid, HistogramOutReady;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] HistogramInData, HistogramOutData;
+	(* mark_debug = "FALSE" *)	wire					HistogramOutValid, HistogramOutReady;
 	
-	(* mark_debug = "TRUE" *)	wire	[HGAWidth-1:0]	DumpAddress;
-	(* mark_debug = "TRUE" *)	wire					DumpHistogram;
+	(* mark_debug = "FALSE" *)	wire	[HGAWidth-1:0]	DumpAddress;
+	(* mark_debug = "FALSE" *)	wire					DumpHistogram;
 			
-	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] ReceiveCrossDataOut;
-	(* mark_debug = "TRUE" *)	wire					ReceiveCrossDataOutValid, ReceiveCrossDataOutReady;
+	(* mark_debug = "FALSE" *)	wire	[DBaseWidth-1:0] ReceiveCrossDataOut;
+	(* mark_debug = "FALSE" *)	wire					ReceiveCrossDataOutValid, ReceiveCrossDataOutReady;
 
 	//------------------------------------------------------------------------------
-	// 	Input stimulus
+	// 	Simulation command generation
 	//------------------------------------------------------------------------------	
 
+	/*
 	`ifdef SIMULATION
 		localparam			Rounds = 				500,
 							AccessesPerRound =		20,
@@ -247,13 +249,13 @@ module HWTestHarness(
 		assign	CrossBufIn_DataInValid =			CrossBufIn_DataInValid_Reg;
 		assign	CrossBufIn_DataIn =					CrossBufIn_DataIn_Reg;
 		
-		PRNG 	#(			.RandWidth(				ORAMU),
-							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00)) // TODO make dynamic
+		PRNG 	#(			.RandWidth(				ORAMU)) // TODO make dynamic
 				leaf_gen(	.Clock(					SlowClock),
 							.Reset(					SlowReset),
 							.RandOutReady(			CrossBufIn_DataInValid & CrossBufIn_DataInReady),
 							.RandOutValid(			RandOutValid),
-							.RandOut(				RandOut));
+							.RandOut(				RandOut),
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_00));
 		
 		initial begin
 			FinishedInput = 						0;
@@ -342,19 +344,138 @@ module HWTestHarness(
 				$finish;
 			end
 		end
+		
+		assign	SlowStartSignal =					1'b0;
 	`else
-		FIFOShiftRound #(	.IWidth(				UARTWidth),
+	
+	*/
+	
+	//------------------------------------------------------------------------------
+	// 	Hardware command generation
+	//------------------------------------------------------------------------------
+	
+	localparam				STWidth =					2,
+							ST_Idle =					2'd0,		
+							ST_PrepSeed =				2'd1,
+							ST_Seed =					2'd2,
+							ST_Access =					2'd3;
+	
+	(* mark_debug = "TRUE" *)	wire	[THPWidth-1:0]	CrossBufIn_DataInPre;
+	(* mark_debug = "TRUE" *)	wire					CrossBufIn_DataInValidPre, CrossBufIn_DataInReadyPre;
+
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;	
+	(* mark_debug = "TRUE" *)	wire					CSAccess, CSSeed;
+	
+	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	SlowCommand;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		SlowAddress; 
+	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] SlowDataBase;
+	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	SlowTime;
+	
+	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	SeedCommand;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		SeedAddress;
+	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] SeedDataBase; 
+	(* mark_debug = "TRUE" *)	wire	[TimeWidth-1:0]	SeedTime;
+	
+	(* mark_debug = "TRUE" *)	wire	[DBaseWidth-1:0] SeedAccessCount;
+	
+	(* mark_debug = "TRUE" *)	wire					ResetPRNG, PRNGOutValid;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PRNGOutData;
+	
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		RandomAddress, ScanAddress;
+	(* mark_debug = "TRUE" *)	wire	[TCMDWidth-1:0]	RandomCommand, ScanCommand;
+	
+	(* mark_debug = "TRUE" *)	wire					AccessHalfThresholdReached, AccessThresholdReached;
+	
+	initial begin
+		CS = ST_Idle;
+	end
+	
+	assign	AccessTransfer =						CrossBufIn_DataInValid & CrossBufIn_DataInReady;
+	
+	assign	CrossBufIn_DataInValid =				(CSAccess) ? 	CrossBufIn_DataInValidPre : 
+													(CSSeed) ? 		PRNGOutValid : 1'b0;
+	assign	CrossBufIn_DataInReadyPre =				(CSAccess) ? 	CrossBufIn_DataInReadyPre : 
+													(CSSeed) ? 		AccessThresholdReached : 1'b0;
+	
+	assign	ResetPRNG =								CS == ST_PrepSeed;
+	
+	assign	{SlowCommand, SlowAddress, SlowDataBase, SlowTime} = CrossBufIn_DataInPre;
+		
+	assign	CrossBufIn_DataIn =						(CSAccess) ? 	{SlowCommand, SlowAddress, SlowDataBase, SlowTime} : 
+																	{SeedCommand, SeedAddress, SeedDataBase, SeedTime};
+
+	assign	CSAccess =								CS == ST_Access;
+	assign	CSSeed =								CS == ST_Seed;
+	
+	always @(posedge SlowClock) begin
+		if (SlowReset) CS <= 						ST_Idle;
+		else CS <= 									NS;
+	end
+	
+	always @( * ) begin
+		NS = 										CS;
+		case (CS)
+			ST_Idle : 
+				if (CrossBufIn_DataInValidPre && (SlowCommand == TCMD_Update || SlowCommand == TCMD_Read || SlowCommand == TCMD_Start))
+					NS =							ST_Access;
+				else if (CrossBufIn_DataInValidPre)
+					NS =							ST_PrepSeed;
+			ST_PrepSeed :
+				NS =								ST_Seed;
+			ST_Seed :
+				if (AccessThresholdReached)
+					NS =							ST_Idle;
+			ST_Access :
+				if (AccessTransfer)
+					NS =							ST_Idle;
+		endcase
+	end
+	
+	FIFOShiftRound #(		.IWidth(				UARTWidth),
 							.OWidth(				THPWidth),
 							.Reverse(				1))
-				tst_shift(	.Clock(					SlowClock),
+			tst_shift(		.Clock(					SlowClock),
 							.Reset(					SlowReset),
 							.InData(				UARTDataOut),
 							.InValid(				UARTDataOutValid),
 							.InAccept(				UARTDataOutReady),
-							.OutData(				CrossBufIn_DataIn),
-							.OutValid(				CrossBufIn_DataInValid),
-							.OutReady(				CrossBufIn_DataInReady));	
-	`endif	
+							.OutData(				CrossBufIn_DataInPre),
+							.OutValid(				CrossBufIn_DataInValidPre),
+							.OutReady(				CrossBufIn_DataInReadyPre));
+	
+	Counter		#(			.Width(					DBaseWidth))
+				access_cnt(	.Clock(					SlowClock),
+							.Reset(					SlowReset | AccessThresholdReached),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CSSeed & AccessTransfer),
+							.In(					{DBaseWidth{1'bx}}),
+							.Count(					SeedAccessCount));					
+	assign	AccessHalfThresholdReached =			SeedAccessCount >= (SlowDataBase >> 1);
+	assign	AccessThresholdReached =				SeedAccessCount == SlowDataBase;
+
+	PRNG 		#(			.RandWidth(				ORAMU))
+				addr_gen(	.Clock(					SlowClock),
+							.Reset(					SlowReset | ResetPRNG),
+							.RandOutReady(			CSSeed & CrossBufIn_DataInReady),
+							.RandOutValid(			PRNGOutValid),
+							.RandOut(				PRNGOutData),
+							.SecretKey(				{ {AESWidth-TimeWidth{1'b0}}, SlowAddress} ));
+
+	assign	RandomAddress =							PRNGOutData + SlowTime;
+	assign	ScanAddress =							((AccessHalfThresholdReached) ? (SeedAccessCount >> 1) : SeedAccessCount) + SlowTime;
+	
+	assign	RandomCommand =							(PRNGOutData[ORAMU-1]) ? TCMD_Update : TCMD_Read;
+	assign	ScanCommand =							(AccessHalfThresholdReached) ? TCMD_Read : TCMD_Update;
+	
+	assign	SeedCommand =							(SlowCommand == TCMD_CmdRnd_AddrLin || SlowCommand == TCMD_CmdRnd_AddrRnd) ? RandomCommand : 				ScanCommand;																					
+	assign	SeedAddress =							(SlowCommand == TCMD_CmdLin_AddrRnd || SlowCommand == TCMD_CmdRnd_AddrRnd) ? RandomAddress[NVWidth-1:0] : 	ScanAddress[NVWidth-1:0]; 
+	
+	assign	SeedDataBase =							{DBaseWidth{1'b0}};
+	assign	SeedTime =								{TimeWidth{1'b0}};
+	
+	assign	SlowStartSignal =						CSAccess && SlowCommand == TCMD_Start;			
+	//`endif	
 	
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Shifts & buffers
@@ -518,14 +639,11 @@ module HWTestHarness(
 							.DataOutReady(			UARTDataOutReady), 
 							.SIn(					UARTRX), 
 							.SOut(					UARTTX));				
-						
+	
 	//------------------------------------------------------------------------------
 	// 	[Send path] Clock crossing
 	//------------------------------------------------------------------------------
-							
-	assign	SlowCommand =							CrossBufIn_DataIn[THPWidth-1:THPWidth-TCMDWidth];
-	assign	SlowStartSignal =						SlowCommand == TCMD_Start;
-	
+
 	assign	CrossBufIn_DataInReady =				~CrossBufIn_Full;
 
 	// TODO there will be a bug if 2 start signals appear before the first is finished emptying its buffer ...

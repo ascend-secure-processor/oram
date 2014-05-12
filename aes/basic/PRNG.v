@@ -6,10 +6,9 @@
 
 //==============================================================================
 
-module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
+module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
 
 	parameter RandWidth = 32;
-	parameter SecretKey = 128'h0; 
 	
 	`include "SecurityLocal.vh"
 	
@@ -17,7 +16,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut);
 	input  RandOutReady;
 	output RandOutValid;
 	output [RandWidth-1:0] RandOut;
-
+	input	[AESWidth-1:0] SecretKey;
 	
 	wire  SeedValid, SeedReady;
 	wire  [AESEntropy-1:0] Seed;

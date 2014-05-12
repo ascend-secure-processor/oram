@@ -81,12 +81,12 @@ module UORamController
 
 	// Frontend must handle two cases on writes: data arrives {before, after} command
 
-	(* mark_debug = "TRUE" *) wire 	[FEDWidth-1:0] 	DataIn_Internal;
-	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
+	(* mark_debug = "FALSE" *) wire 	[FEDWidth-1:0] 	DataIn_Internal;
+	(* mark_debug = "FALSE" *) wire					DataInValid_Internal, DataInReady_Internal;
 
-	(* mark_debug = "TRUE" *) wire 					CmdInReady_Internal, CmdInValid_Internal;
-    (* mark_debug = "TRUE" *) wire 	[BECMDWidth-1:0] CmdIn_Internal;
-    (* mark_debug = "TRUE" *) wire 	[ORAMU-1:0] 	ProgAddrIn_Internal;
+	(* mark_debug = "FALSE" *) wire 					CmdInReady_Internal, CmdInValid_Internal;
+    (* mark_debug = "FALSE" *) wire 	[BECMDWidth-1:0] CmdIn_Internal;
+    (* mark_debug = "FALSE" *) wire 	[ORAMU-1:0] 	ProgAddrIn_Internal;
 
 	FIFORAM	#(				.Width(					FEDWidth),
 							.Buffering(				BlkSize_FEDChunks))
@@ -100,8 +100,8 @@ module UORamController
 							.OutReady(				DataInReady_Internal));
 
 	(* mark_debug = "TRUE" *) wire	AddrOutofRange;
-	(* mark_debug = "TRUE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
-	(* mark_debug = "TRUE" *) wire	ERROR_OutOfRange;
+	(* mark_debug = "FALSE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
+	(* mark_debug = "FALSE" *) wire	ERROR_OutOfRange;
 
 	assign CmdIn_Internal = CmdIn;
 	assign ProgAddrIn_Internal = AddrOutofRange ? 0 : ProgAddrIn;
@@ -139,18 +139,18 @@ module UORamController
     reg [MaxLogRecursion-1:0] QDepth;
     reg [ORAMU-1:0] AddrQ [Recursion-1:0];
 
-    (* mark_debug = "TRUE" *) wire Preparing, Accessing;
-    (* mark_debug = "TRUE" *) wire RefillStarted, ExpectingProgramData;
+    (* mark_debug = "FALSE" *) wire Preparing, Accessing;
+    (* mark_debug = "FALSE" *) wire RefillStarted, ExpectingProgramData;
 
     // ================================== PosMapPLB ============================
-    (* mark_debug = "TRUE" *) wire PPPCmdReady, PPPCmdValid;
-    (* mark_debug = "TRUE" *) wire [1:0] PPPCmd;
-    (* mark_debug = "TRUE" *) wire [ORAMU-1:0] PPPAddrIn, PPPAddrOut;
-    (* mark_debug = "TRUE" *) wire PPPRefill;
-    (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PPPRefillData;
-    (* mark_debug = "TRUE" *) wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
-    (* mark_debug = "TRUE" *) wire PPPEvictDataValid, PPPRefillDataValid, PPPRefillDataReady;
-    (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PPPEvictData;
+    (* mark_debug = "FALSE" *) wire PPPCmdReady, PPPCmdValid;
+    (* mark_debug = "FALSE" *) wire [1:0] PPPCmd;
+    (* mark_debug = "FALSE" *) wire [ORAMU-1:0] PPPAddrIn, PPPAddrOut;
+    (* mark_debug = "FALSE" *) wire PPPRefill;
+    (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPRefillData;
+    (* mark_debug = "FALSE" *) wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
+    (* mark_debug = "FALSE" *) wire PPPEvictDataValid, PPPRefillDataValid, PPPRefillDataReady;
+    (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPEvictData;
 
     PosMapPLB #(.ORAMU(             ORAMU),
                 .ORAML(             ORAML),
@@ -179,10 +179,10 @@ module UORamController
                 .EvictDataOutValid( PPPEvictDataValid),
                 .EvictDataOut(      PPPEvictData));
 
-    (* mark_debug = "TRUE" *) wire PPPMiss, PPPUnInitialized;
-    (* mark_debug = "TRUE" *) wire PPPLookup, PPPInitRefill;
+    (* mark_debug = "FALSE" *) wire PPPMiss, PPPUnInitialized;
+    (* mark_debug = "FALSE" *) wire PPPLookup, PPPInitRefill;
 
-	(* mark_debug = "TRUE" *) wire FakePLBMiss;	// hack to mimic recursive ORAM
+	(* mark_debug = "FALSE" *) wire FakePLBMiss;	// hack to mimic recursive ORAM
 	assign FakePLBMiss = !EnablePLB && Preparing && PPPValid && QDepth < Recursion - 1;
 
     assign PPPMiss = PPPValid && (!PPPHit || FakePLBMiss);
@@ -210,7 +210,7 @@ module UORamController
     // =============================================================================
 
     // ============================== Cmd to Backend ==============================
-    (* mark_debug = "TRUE" *) wire EvictionRequest, InitRequest, SwitchReq, DataBlockReq;
+    (* mark_debug = "FALSE" *) wire EvictionRequest, InitRequest, SwitchReq, DataBlockReq;
     assign DataBlockReq = QDepth == 0;
     assign EvictionRequest = PPPValid && PPPEvict;
     assign InitRequest = DataBlockReq && PPPUnInitialized;		// initialize data block
