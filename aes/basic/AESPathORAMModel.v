@@ -83,7 +83,8 @@ module AESPathORAMDelayModel(
 	//--------------------------------------------------------------------------
 	
 	assign	InTransfer =							DataInValid & DataInReady;
-	
+
+`ifndef ASIC	
 	PathBuffer buf_core(	.clk(					Clock),
 							.din(					DataIn), 
 							.wr_en(					InTransfer), 
@@ -91,6 +92,7 @@ module AESPathORAMDelayModel(
 							.dout(					DataOut), 
 							.full(					Full), 
 							.valid(					BufOutValid));						
+
 
     FIFORAM 	#(			.Width(					1),
 							.FWLatency(				FWLatency),
@@ -105,6 +107,24 @@ module AESPathORAMDelayModel(
 
 	assign	OutTransfer =							DataOutValid & DataOutReady;
 						
+`else
+    FIFORAM 	#(			.Width(					Width),
+							.FWLatency(				FWLatency),
+							.Buffering(				512)) // as deep as the path buffer
+                latency(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DataIn),
+							.InValid(				DataInValid),
+							.InAccept(				DataInReady),
+							.OutData(				DataOut),
+							.OutSend(				DataOutValid),
+							.OutReady(				DataOutReady));							
+
+	assign	Full = 0;
+	assign	OutTransfer = 1;
+`endif
+
+
 	//--------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------
