@@ -83,13 +83,13 @@ module ascend_vc707(
 							ORAMC =					10,
 							ORAME =					5;
 
-	parameter				FEDWidth =				64,
+	parameter				FEDWidth =				512,
 							BEDWidth =				512;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,
-							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 512 `endif; // TODO 8192 << 3;
+							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif; // TODO 8192 << 3;
 		
 	parameter				Overclock =				1;
 	
