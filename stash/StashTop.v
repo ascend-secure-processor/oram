@@ -22,7 +22,7 @@ module StashTop(
 	FEWriteData, FEWriteDataValid, FEWriteDataReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
-	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
 	);
 
 	//--------------------------------------------------------------------------

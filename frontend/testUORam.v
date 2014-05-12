@@ -13,19 +13,19 @@ module testUORam;
 	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 64 `endif;
 	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
 	
-    parameter                   NumValidBlock = 	1 << ORAML;
-    parameter                   Recursion = 		3;
-
-    parameter					EnablePLB = 		1;               
-    parameter                   PLBCapacity = 		8192 << 3; // in bits
+	parameter                   NumValidBlock = 	1 << ORAML;
+	parameter                   Recursion = 		3;
+	
+	parameter					EnablePLB = 		1;               
+	parameter                   PLBCapacity = 		8192 << 3; // in bits
 
 	parameter					Overclock = 		1;
-	parameter					EnableAES =			1;
-	parameter					EnableREW =			1;
-    parameter					EnableIV =          1;
+	parameter					EnableAES =			0;
+	parameter					EnableREW =			0;
+	parameter					EnableIV =          EnableREW;
 	parameter					DelayedWB =			EnableIV;
 
-	localparam  NN = 10000;
+	localparam  NN = 200;
 	localparam	nn = 100;
 	localparam	nn2 = nn * 2;	
 
@@ -60,8 +60,7 @@ module testUORam;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-    PathORamTop        #(	.StopOnBlockNotFound(	0),
-                            .ORAMB(					ORAMB),
+    PathORamTop        #(   .ORAMB(					ORAMB),
                             .ORAMU(					ORAMU),
                             .ORAML(					ORAML),
                             .ORAMZ(					ORAMZ),

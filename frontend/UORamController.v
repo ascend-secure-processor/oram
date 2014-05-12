@@ -100,6 +100,8 @@ module UORamController
 							.OutReady(				DataInReady_Internal));
 
 	(* mark_debug = "TRUE" *) wire	AddrOutofRange;
+	(* mark_debug = "TRUE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
+	(* mark_debug = "TRUE" *) wire	ERROR_OutOfRange;
 
 	assign CmdIn_Internal = CmdIn;
 	assign ProgAddrIn_Internal = AddrOutofRange ? 0 : ProgAddrIn;
@@ -109,8 +111,6 @@ module UORamController
 	// check whether input is valid
 	assign	AddrOutofRange = ProgAddrIn >= NumValidBlock;
 
-	(* mark_debug = "TRUE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
-	(* mark_debug = "TRUE" *) wire			ERROR_OutOfRange;
 	
 	FIFORegister #(			.Width(					ORAMU))
 				ro_start(	.Clock(					Clock),

@@ -403,7 +403,7 @@ module PathORAMBackend(
 		end else begin:BASIC_AES_PASS
 			// We still want to model AES latencies
 
-			parameter		AESLatency =			21 + 8; // assuming tiny_aes
+			localparam		AESLatency =			21 + 8; // assuming tiny_aes
 			
 			AESPathORAMDelayModel #(.Width(			DDRDWidth),
 							.FWLatency(				AESLatency))

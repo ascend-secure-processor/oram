@@ -65,6 +65,15 @@ module AESREWORAM(
 	localparam				AESHWidth =				ROHeader_AESChunks * AESWidth,
 							BDWidth =				DDRDWidth + AESEntropy + BIDWidth + 1;
 	
+	localparam				ROSWidth =				3,
+							ST_RO_Idle =			3'd0,
+							ST_RO_StartRead =		3'd1,
+							ST_RO_Read =			3'd2, // Masks for RO headers
+							ST_RO_ROIReadCommand =	3'd3,
+							ST_RO_ROIReadLocked =	3'd4,
+							ST_RO_ROIRead =			3'd5, // Masks for bucket of interest
+							ST_RO_StartWrite =		3'd6, 
+							ST_RO_Write =			3'd7; // Masks for header writebacks	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -491,15 +500,6 @@ module AESREWORAM(
 	//	RO AES Input
 	//--------------------------------------------------------------------------
 
-	localparam				ROSWidth =				3,
-							ST_RO_Idle =			3'd0,
-							ST_RO_StartRead =		3'd1,
-							ST_RO_Read =			3'd2, // Masks for RO headers
-							ST_RO_ROIReadCommand =	3'd3,
-							ST_RO_ROIReadLocked =	3'd4,
-							ST_RO_ROIRead =			3'd5, // Masks for bucket of interest
-							ST_RO_StartWrite =		3'd6, 
-							ST_RO_Write =			3'd7; // Masks for header writebacks	
 	
 	// Generate the masks for RO headers and ROI buckets of interest
 	
