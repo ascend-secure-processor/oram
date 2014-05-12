@@ -211,7 +211,7 @@ module CoherenceController(
 			$finish;
 		end
 		
-		if (RO_W_Enable > 0 && !BOIDone_IV) begin
+		if (RO_W_Enable && !BOIDone_IV) begin
 			$display("Error: Header write back starts before Integrity is done");
 			$finish;
 		end
@@ -232,6 +232,16 @@ module CoherenceController(
 	end
 `endif	
 
+	wire	[0:8] error;
+	wire	ERROR;
+	assign	error[0] = ROStart && !(ROAccess && PathRead);
+	assign	error[1] = FromDecDataValid && !PathRead;
+    assign	error[2] = ToEncDataValid && !PathWriteback;
+	assign	error[3] = FromStashDataValid && !(DelayedWB ? RWAccessExtend && !RWAccess 
+												: RWAccess && PathWriteback)
+	assign	error[4] = RO_W_Enable && !BOIDone_IV;	
+	
+	Register1b err (Clock, Reset, |error, ERROR);
 	
 	//--------------------------------------------------------------------------
 	// CC handles header write back
@@ -272,6 +282,7 @@ module CoherenceController(
 		end
 	end
 `endif	
+	assign	error[5] = HdOfIHasBeenFound && HdOfIFound_Pre;
 	
 	//--------------------------------------------------------------------------
 	// Integrity Verification needs a dual-port path buffer and requires delaying path and header write back
@@ -297,7 +308,8 @@ module CoherenceController(
 			end			
 		end
 	`endif	
-	
+		assign	error[6] = ROAccess && PathWriteback && RO_W_Enable && !BOIDone_IV;
+		assign	error[7] = RWAccess && PathWriteback && RW_W_Enable && !PathDone_IV;
 
 		`include "IVCCLocal.vh"
 		
@@ -406,6 +418,8 @@ module CoherenceController(
 			end
 		end
 	`endif
+		assign	error[8] = BktOfIUpdate_CC && HeaderInBkfOfI;		
+	
 			// update BktOfI header in CC rather late than early.
 			// too early --> Stash receives no valid block
 			// too late --> IV takes the old header data
