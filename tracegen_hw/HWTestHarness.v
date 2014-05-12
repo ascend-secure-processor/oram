@@ -394,7 +394,7 @@ module HWTestHarness(
 	
 	assign	CrossBufIn_DataInValid =				(CSAccess) ? 	CrossBufIn_DataInValidPre : 
 													(CSSeed) ? 		PRNGOutValid : 1'b0;
-	assign	CrossBufIn_DataInReadyPre =				(CSAccess) ? 	CrossBufIn_DataInReadyPre : 
+	assign	CrossBufIn_DataInReadyPre =				(CSAccess) ? 	CrossBufIn_DataInReady : 
 													(CSSeed) ? 		AccessThresholdReached : 1'b0;
 	
 	assign	ResetPRNG =								CS == ST_PrepSeed;
@@ -461,10 +461,10 @@ module HWTestHarness(
 							.RandOutValid(			PRNGOutValid),
 							.RandOut(				PRNGOutData),
 							.SecretKey(				{ {AESWidth-TimeWidth{1'b0}}, SlowAddress} ));
-
+						
 	assign	RandomAddress =							PRNGOutData + SlowTime;
 	assign	ScanAddress =							((AccessHalfThresholdReached) ? (SeedAccessCount >> 1) : SeedAccessCount) + SlowTime;
-	
+		
 	assign	RandomCommand =							(PRNGOutData[ORAMU-1]) ? TCMD_Update : TCMD_Read;
 	assign	ScanCommand =							(AccessHalfThresholdReached) ? TCMD_Read : TCMD_Update;
 	
