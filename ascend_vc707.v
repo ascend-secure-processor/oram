@@ -62,8 +62,8 @@ module ascend_vc707(
 		
 		See PathORAMTop for more documentation */
 	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
-	parameter				SlowAESClock =			0; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	1; // NOTE: set to 0 for performance run
 	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
 	
 	// See HWTestHarness for documentation
@@ -89,7 +89,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,
-							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif;
+							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 512 `endif; // TODO 8192 << 3;
 		
 	parameter				Overclock =				1;
 	
