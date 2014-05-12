@@ -237,8 +237,7 @@ module CoherenceController(
 	assign	error[0] = ROStart && !(ROAccess && PathRead);
 	assign	error[1] = FromDecDataValid && !PathRead;
     assign	error[2] = ToEncDataValid && !PathWriteback;
-	assign	error[3] = FromStashDataValid && !(DelayedWB ? RWAccessExtend && !RWAccess 
-												: RWAccess && PathWriteback)
+	assign	error[3] = FromStashDataValid && !(DelayedWB ? RWAccessExtend && !RWAccess : RWAccess && PathWriteback);
 	assign	error[4] = RO_W_Enable && !BOIDone_IV;	
 	
 	Register1b err (Clock, Reset, |error, ERROR);
