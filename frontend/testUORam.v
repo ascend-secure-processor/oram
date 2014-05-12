@@ -16,19 +16,18 @@ module testUORam;
 	parameter                   NumValidBlock = 	1 << ORAML;
 	parameter                   Recursion = 		3;
 	
-	parameter					EnablePLB = 		1;               
-	parameter                   PLBCapacity = 		8192 << 3; // in bits
+    parameter					EnablePLB = 		1;               
+    parameter                   PLBCapacity = 		`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif;
 
 	parameter					Overclock = 		1;
-	parameter					EnableAES =			0;
-	parameter					EnableREW =			0;
-	parameter					EnableIV =          EnableREW;
+	parameter					EnableREW =			1;	
+	parameter					EnableAES =			EnableREW;
+    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
 	parameter					DelayedWB =			EnableIV;
 
 	localparam  NN = 200;
-	localparam	nn = 100;
-	localparam	nn2 = nn * 2;	
-
+	localparam	nn = 1;
+	localparam	nn2 = nn * 32;	
 	
 	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
@@ -248,7 +247,8 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	assign	Op = {TestCount[0], 1'b0};
 	
 	initial begin
 		TestCount <= 0;
@@ -273,10 +273,9 @@ module testUORam;
                 #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle); 
-				AddrPrev <= AddrRand;
-                //AddrRand <= ((573 * TestCount + 421) % (NumValidBlock / 2)) + NumValidBlock / 2;			   
+				AddrPrev <= AddrRand;				
 				TestCount <= TestCount + 1;
-				AddrRand <=  (TestCount / nn2) * nn2 + TestCount % nn;	   
+				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	   
                 	   
 				if (AddrRand > NumValidBlock)
 					$finish;   

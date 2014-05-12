@@ -34,24 +34,24 @@ module PosMapPLB
     output [LeafWidth-1:0] EvictDataOut;
 
     // Select between PLB and PosMap
-    wire InOnChipPosMap;
+    (* mark_debug = "TRUE" *) wire InOnChipPosMap;
     assign InOnChipPosMap = AddrIn >= FinalPosMapStart; 
  
     // receive input cmd
-    wire [CacheCmdWidth-1:0] LastCmd;
+    (* mark_debug = "TRUE" *) wire [CacheCmdWidth-1:0] LastCmd;
     Register #(.Width(CacheCmdWidth))
         CmdReg (Clock, Reset, 1'b0, CmdReady && CmdValid, Cmd, LastCmd);
         
-    wire Busy;
+    (* mark_debug = "TRUE" *) wire Busy;
     Register1b BusyReg (	.Clock(Clock), 
 							.Reset(Reset || (Valid && OutReady)), 
 							.Set(CmdReady && CmdValid), 
 							.Out(Busy)
 						);
     
-	wire [LeafWidth-1:0] NewLeafIn_Pre;
-    wire [ORAML-1:0] NewLeafIn;
-    wire NewLeafValid, NewLeafAccept;
+	(* mark_debug = "TRUE" *) wire [LeafWidth-1:0] NewLeafIn_Pre;
+    (* mark_debug = "TRUE" *) wire [ORAML-1:0] NewLeafIn;
+    (* mark_debug = "TRUE" *) wire NewLeafValid, NewLeafAccept;
     PRNG #(	.RandWidth(	LeafWidth))
         LeafGen (   .Clock(Clock), 
 					.Reset(Reset),
@@ -63,9 +63,9 @@ module PosMapPLB
 	assign NewLeafIn = NewLeafIn_Pre[ORAML-1:0];
 
     // ============================== onchip PosMap ====================================
-    wire PosMapEnable, PosMapWrite;
-    wire [LogFinalPosMapEntry-1:0] PosMapAddr;
-    wire [ORAML:0] PosMapIn, PosMapOut;
+    (* mark_debug = "TRUE" *) wire PosMapEnable, PosMapWrite;
+    (* mark_debug = "TRUE" *) wire [LogFinalPosMapEntry-1:0] PosMapAddr;
+    (* mark_debug = "TRUE" *) wire [ORAML:0] PosMapIn, PosMapOut;
 
     RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry) `ifdef ASIC , .ASIC(1) `endif )
         PosMap (    .Clock(Clock), .Reset(Reset), 
@@ -74,7 +74,7 @@ module PosMapPLB
                 );
    
     // PosMap control and input
-    wire PosMapSelect, PosMapBusy, PosMapValid, PosMapInit;
+    (* mark_debug = "TRUE" *) wire PosMapSelect, PosMapBusy, PosMapValid, PosMapInit;
       
     Pipeline #(.Width(1), .Stages(1))	PosMapValidReg 	(Clock, 1'b0, PosMapSelect, PosMapValid);
     Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, 1'b0, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
@@ -98,11 +98,11 @@ module PosMapPLB
     // ===============================================================================
 
     // ============================================= PLB =============================
-    wire PLBReady, PLBEnable, PLBValid, PLBHit, PLBEvict;
-    wire [1:0] PLBCmd;
-    wire [ORAMU-1:0] PLBAddrIn, PLBAddrOut;  
-    wire [LeafWidth-1:0] PLBDIn, PLBDOut;
-    wire [ORAML-1:0] PLBLeafIn, PLBLeafOut;
+    (* mark_debug = "TRUE" *) wire PLBReady, PLBEnable, PLBValid, PLBHit, PLBEvict;
+    (* mark_debug = "TRUE" *) wire [1:0] PLBCmd;
+    (* mark_debug = "TRUE" *) wire [ORAMU-1:0] PLBAddrIn, PLBAddrOut;  
+    (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PLBDIn, PLBDOut;
+    (* mark_debug = "TRUE" *) wire [ORAML-1:0] PLBLeafIn, PLBLeafOut;
 
     DM_Cache #( .DataWidth(		LeafWidth), 
 				.LogLineSize(	LogLeafInBlock), 
@@ -134,7 +134,7 @@ module PosMapPLB
     assign EvictDataOut = PLBDOut;
                                                       
     // PLB control and input 
-    wire PLBRefill, PLBInitRefill;
+    (* mark_debug = "TRUE" *) wire PLBRefill, PLBInitRefill;
     assign PLBRefill = (CmdReady && CmdValid && Cmd == CacheRefill) || (LastCmd == CacheRefill && !PLBReady);   // Refill start or Refilling
     assign PLBInitRefill = (CmdReady && CmdValid && Cmd == CacheInitRefill) || (LastCmd == CacheInitRefill && !PLBReady);   // InitRefill
     
@@ -145,7 +145,7 @@ module PosMapPLB
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
     // =============================================================================  
-    wire PPPHit;
+    (* mark_debug = "TRUE" *) wire PPPHit;
     assign PPPHit = PosMapValid || (PLBValid && PLBHit);
        
     assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;

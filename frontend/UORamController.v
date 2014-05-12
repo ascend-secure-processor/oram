@@ -136,8 +136,8 @@ module UORamController
     Register #(.Width(2))
         CmdReg (Clock, Reset, 1'b0, CmdInReady_Internal && CmdInValid_Internal, CmdIn_Internal, LastCmd);
 
-    reg [MaxLogRecursion-1:0] QDepth;
-    reg [ORAMU-1:0] AddrQ [Recursion-1:0];
+    (* mark_debug = "TRUE" *) reg [MaxLogRecursion-1:0] QDepth;
+    (* mark_debug = "TRUE" *) reg [ORAMU-1:0] AddrQ [Recursion-1:0];
 
     (* mark_debug = "TRUE" *) wire Preparing, Accessing;
     (* mark_debug = "TRUE" *) wire RefillStarted, ExpectingProgramData;

@@ -25,17 +25,34 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
         SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {AESEntropy{1'bx}}, Seed); // load = set = 0, in= x 
         	// TODO: if reset, seed goes back to 0, not secure anymore. 
 
-    wire [AESWidth-1:0]                            AESKey;
-    wire                                           AESKeyValid;
-    wire                                           AESKeyReady;
+    wire [AESWidth-1:0]			AESKey;
+    wire                       	AESKeyValid;
+    wire                        AESKeyReady;
 
     assign AESKey = SecretKey;
         // We should renew the key on every reset, but currently not doing it.
     assign AESKeyValid = 1; 
 
-    wire [AESWidth-1:0]                            AESDataOut;
-    wire                                           AESDataOutValid;
+    wire [AESWidth-1:0]         AESDataIn, AESDataOut;
+    wire                        AESDataOutValid;
 
+	assign		AESDataIn = {{(AESWidth-AESEntropy){1'b0}}, Seed};
+/*	
+	Register1b 	aes_ready 	(Clock,	!Reset && SeedValid && SeedReady, Reset || AESDataOutValid, SeedReady);
+	aes_cipher_top 
+		aes	(	.clk(		Clock),
+				.rst(		~Reset),
+				.ld(		SeedValid && AESKeyValid),
+				.done(		AESDataOutValid),
+				.key(		AESKey),
+				.text_in(	AESDataIn),
+				.text_out(	AESDataOut)
+			);
+			
+	always @(posedge Clock) begin
+		$display("Reset = %d, SeedValid = %d, SeedReady = %d, AESDataOutValid = %d", Reset, SeedValid, SeedReady, AESDataOutValid);
+	end	
+*/			
 
     AES_DW #(.W(1),
              .D(1))
@@ -99,7 +116,8 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
                 );
 
 
-    FIFORegister #(	.Width(			RandWidth)) 
+    FIFORegister #(	.Width(			RandWidth),
+					.BWLatency(		1)) 
     RandOutReg (  	.Clock(			Clock), 
                     .Reset(			Reset), 
                     .InAccept(		FunnelOutReady), 
@@ -110,7 +128,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
                     .OutData(		RandOut)
                 ); 
                     
-    assign SeedValid = FunnelInReady && !AESDataOutValid;	
+    assign SeedValid = FunnelInReady && SeedReady && !AESDataOutValid;	
     	// Generate new random bits if there's space in AESOutFunnel and no bits are on the fly;
 		
 	`ifdef SIMULATION
