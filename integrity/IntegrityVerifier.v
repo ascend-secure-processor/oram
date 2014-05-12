@@ -16,7 +16,7 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter	NUMSHA3 = 3;	// TODO 3
+	parameter	NUMSHA3 = 2;	// TODO 3
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));
 	
     `include "PathORAM.vh"
@@ -76,13 +76,16 @@ module IntegrityVerifier (
 	assign	NextTurn = (Turn + 1) % NUMSHA3;
 	assign	LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
+	wire DataInValid,	DataInValid_Pre;
+	wire HeaderInValid, HeaderInValid_Pre;
+	(* mark_debug = "TRUE" *)	wire ROIHeader;
+	wire [DDRDWidth-1:0] HashData;	
+	
 	//------------------------------------------------------------------------------------
 	// Request and address generation
 	//------------------------------------------------------------------------------------ 
 	assign Address = BucketIDTurn * BktSize_DRBursts + (BucketOffsetTurn % BktSize_DRBursts);
 		// address pattern, chunk 0, 1, 2, ... BktSize_DRBursts - 1, 0
-
-	wire DataInValid,	DataInValid_Pre;
 	
 	// when BRAMLatency >= NUMSHA3, it may break
 	generate if (NUMSHA3 == 2)	
@@ -93,10 +96,7 @@ module IntegrityVerifier (
 	
 	//------------------------------------------------------------------------------------
 	// Process and save headers
-	//------------------------------------------------------------------------------------ 		
-	wire HeaderInValid, HeaderInValid_Pre;
-	(* mark_debug = "TRUE" *)	wire ROIHeader;
-	wire [DDRDWidth-1:0] HashData;
+	//------------------------------------------------------------------------------------ 	
 	
 	assign	DataInValid_Pre = !Reset &&  Request && !Write;
 	assign	HeaderInValid_Pre = DataInValid_Pre && BucketOffsetTurn == 0;
