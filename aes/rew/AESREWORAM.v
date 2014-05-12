@@ -73,7 +73,8 @@ module AESREWORAM(
 							ST_RO_ROIReadLocked =	3'd4,
 							ST_RO_ROIRead =			3'd5, // Masks for bucket of interest
 							ST_RO_StartWrite =		3'd6, 
-							ST_RO_Write =			3'd7; // Masks for header writebacks	
+							ST_RO_Write =			3'd7; // Masks for header writebacks
+							
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
