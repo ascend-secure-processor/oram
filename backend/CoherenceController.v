@@ -306,12 +306,12 @@ module CoherenceController(
 		// 		port1 written by Stash, read and written by AES
 		//		port2 read and written by integrity verifier
 		//------------------------------------------------------------------------------------------------------
-		wire 						BufP1_Enable, BufP1_Write;
-		wire [PathBufAWidth-1:0] 	BufP1_Address;
+		(* mark_debug = "TRUE" *)	wire 						BufP1_Enable, BufP1_Write;
+		(* mark_debug = "TRUE" *)	wire [PathBufAWidth-1:0] 	BufP1_Address;
 		wire [DDRDWidth-1:0] 		BufP1_DIn, BufP1_DOut_Pre, BufP1_DOut;
 
-		wire 						BufP2_Enable, BufP2_Write;
-		wire [PathBufAWidth-1:0] 	BufP2_Address;
+		(* mark_debug = "TRUE" *)	wire 						BufP2_Enable, BufP2_Write;
+		(* mark_debug = "TRUE" *)	wire [PathBufAWidth-1:0] 	BufP2_Address;
 		wire [DDRDWidth-1:0] 		BufP2_DIn, BufP2_DOut_Pre, BufP2_DOut;
 		
 		RAM		#(          .DWidth(				DDRDWidth),     

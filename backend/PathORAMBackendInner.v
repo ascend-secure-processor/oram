@@ -729,7 +729,7 @@ module BackendInnerControl(
 	
 	(* mark_debug = "TRUE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
 
-	(* mark_debug = "TRUE" *)	wire					AddrRWDone, DataRWDone, OperationComplete;
+	wire					AddrRWDone, DataRWDone, OperationComplete;
 	(* mark_debug = "TRUE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
 	(* mark_debug = "TRUE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
