@@ -95,7 +95,7 @@ module PathORAMTopTestbench;
 							
 													// CRUD Format:			Cmd   					PAddr		DataBase	TimeDelay
 													// Seed Format:			Cmd						Seed		AccessCount	Offset
-	assign	UARTShftDataIn =						{						TCMD_CmdLin_AddrRnd, 	32'hff, 	32'd2048, 	32'd1024};
+	assign	UARTShftDataIn =						{						TCMD_CmdRnd_AddrLin, 	32'hff, 	1 << 20, 	32'd1024};
 													/*(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
 													(CmdCount == 1) ? 	{8'd0, 	32'h1, 	32'hf, 		32'd0} : 
 													(CmdCount == 2) ? 	{8'd0, 	32'h2, 	32'hff, 	32'd0} : 

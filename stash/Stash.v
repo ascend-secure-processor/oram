@@ -57,7 +57,9 @@ module Stash(
 	`include "StashLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering + 1);
+	parameter				ORAMUValid =			21;	
+	
+	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering + 1);		
 		
 	localparam				STWidth =				4,
 							ST_Reset =				4'd0,
@@ -216,7 +218,7 @@ module Stash(
 	
 	// ScanTable interface
 	
-	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		Scan_PAddr;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		Scan_PAddr; 
 	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		Scan_Leaf;
 	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	Scan_SAddr;
 	(* mark_debug = "TRUE" *)	wire					Scan_Add, Scan_LeafValid, Scan_Done;
@@ -270,9 +272,9 @@ module Stash(
 	
 	// Debugging
 	
-	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;	
+	(* mark_debug = "TRUE" *)	wire					BogusU, BlockNotFound, BlockNotFoundValid;	
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_ISC4, ERROR_Stash;
+	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_ISC4, ERROR_BOGUSU, ERROR_Stash;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -291,14 +293,17 @@ module Stash(
 	assign	BlockNotFound = 						LookForBlock & ~BlockWasFound;
 	assign	BlockNotFoundValid =					CSTurnaround1_FirstCycle;
 	
+	assign	BogusU =								Scan_LeafValid && |Scan_PAddr[ORAMU-1:ORAMUValid];
+	
 	Register1b 	errno1(Clock, Reset, StopOnBlockNotFound && BlockNotFound && BlockNotFoundValid, 	ERROR_BlockNotFound); 	
 	Register1b 	errno2(Clock, Reset, BlockReadCommit & ~OutHeaderValid, 							ERROR_ISC1);	
 	Register1b 	errno3(Clock, Reset, OutBufferInValid & ~OutBufferInReady, 							ERROR_ISC2);
 	Register1b 	errno4(Clock, Reset, OutHBufferInValid & ~OutHBufferInReady, 						ERROR_ISC3);
 	Register1b 	errno5(Clock, Reset, StashOverflow, 												ERROR_StashOverflow);
 	Register1b 	errno6(Clock, Reset, ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid), ERROR_ISC4);
+	Register1b 	errno7(Clock, Reset, BogusU, 														ERROR_BOGUSU);
 	
-	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow, ERROR_Stash);
+	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow | ERROR_BOGUSU, ERROR_Stash);
 
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
@@ -369,6 +374,11 @@ module Stash(
 			if (ERROR_ISC4) begin
 				$display("[%m] ERROR: the scan took longer than our _conservative_ estimate");
 				$finish;
+			end
+			
+			if (ERROR_BOGUSU) begin
+				$display("[%m] ERROR: tried to scan a block with a bogus PAddr");
+				$finish;			
 			end
 			
 			if (CS_Delayed != CS) begin

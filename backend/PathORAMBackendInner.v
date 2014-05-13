@@ -53,6 +53,8 @@ module PathORAMBackendInner(
 							ST_Append =				2'd2,
 							ST_Access =				2'd3;
 	
+	parameter				ORAMUValid =			21;
+								
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -538,7 +540,9 @@ module PathORAMBackendInner(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.Overclock(				Overclock),
-							.EnableREW(             EnableREW))
+							.EnableREW(             EnableREW),
+							
+							.ORAMUValid(			ORAMUValid))
 				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),
 

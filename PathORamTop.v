@@ -51,6 +51,8 @@ module PathORamTop(
 	parameter				DebugDRAMReadTiming =	0; 
 	parameter				DebugAES =				0; 
 	
+	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -179,7 +181,8 @@ module PathORamTop(
 							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
-							.DebugAES(				DebugAES))
+							.DebugAES(				DebugAES),
+							.ORAMUValid(			ORAMUValid))
 				back_end (	.Clock(					Clock),
 			                .FastClock(				FastClock),
 							.Reset(					Reset),

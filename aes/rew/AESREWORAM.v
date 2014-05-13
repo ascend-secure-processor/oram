@@ -52,8 +52,10 @@ module AESREWORAM(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	`include "REWAESLocal.vh"
+	`include "StashLocal.vh"
 	
 	parameter				DebugAES =				0;
+	parameter				ORAMUValid =			21;
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
@@ -125,35 +127,35 @@ module AESREWORAM(
 	
 	// Global control
 	
-	wire					PathRead, ROAccess, RWAccess, PathWriteback;	
+	(* mark_debug = "TRUE" *)	wire					PathRead, ROAccess, RWAccess, PathWriteback;	
 	
 	wire	[ORAMU-1:0]		ROPAddr_Internal;
 	wire	[ORAML-1:0]		ROLeaf_Internal;	
 	
 	// AES Core
 	
-	(* mark_debug = "FALSE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
-	(* mark_debug = "FALSE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
-	(* mark_debug = "FALSE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
-	(* mark_debug = "FALSE" *)	wire					Core_ROCommandInValid;
-	(* mark_debug = "FALSE" *)	wire					Core_ROCommandInReady;
+	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_ROIVIn; 
+	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_ROBIDIn; 
+	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandIn; 
+	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInValid;
+	(* mark_debug = "TRUE" *)	wire					Core_ROCommandInReady;
 
-	(* mark_debug = "FALSE" *)	wire	[AESEntropy-1:0] Core_RWIVIn;
-	(* mark_debug = "FALSE" *)	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
-	(* mark_debug = "FALSE" *)	wire					Core_RWCommandInValid; 
-	(* mark_debug = "FALSE" *)	wire					Core_RWCommandInReady;
+	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] Core_RWIVIn;
+	(* mark_debug = "TRUE" *)	wire	[BIDWidth-1:0] 	Core_RWBIDIn;
+	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInValid; 
+	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInReady;
 
 	(* mark_debug = "FALSE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
 	(* mark_debug = "FALSE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
-	(* mark_debug = "FALSE" *)	wire					Core_RODataOutValid;
-	(* mark_debug = "FALSE" *)	wire					Core_RODataOutReady;
+	(* mark_debug = "TRUE" *)	wire					Core_RODataOutValid;
+	(* mark_debug = "TRUE" *)	wire					Core_RODataOutReady;
 	
 	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
-	(* mark_debug = "FALSE" *)	wire					Core_RWDataOutValid;	
+	(* mark_debug = "TRUE" *)	wire					Core_RWDataOutValid;	
 	
 	// RO header mask & bucket of interest seed generation
 
-	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
+	(* mark_debug = "TRUE" *)	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
 	
 	wire					DRAMReadTransfer, ROCommandTransfer;
 
@@ -164,66 +166,66 @@ module AESREWORAM(
 	wire	[ORAML-1:0]		CurrentLeaf;
 	
 	wire	[BDWidth-1:0]	BufferedDataIn_Wide, BufferedDataOut_Wide;
-	wire					BufferedDataInValid, BufferedDataInReady;
-	wire					BufferedDataOutValid, BufferedDataOutReady;
+	(* mark_debug = "TRUE" *)	wire					BufferedDataInValid, BufferedDataInReady;
+	(* mark_debug = "TRUE" *)	wire					BufferedDataOutValid, BufferedDataOutReady;
 	
 	wire					BufferedDataOutReady_Read, BufferedDataTransfer_Read;
-	wire					BufferedDataOutReady_Write, BufferedDataTransfer_Write;	
+	(* mark_debug = "TRUE" *)	wire					BufferedDataOutReady_Write, BufferedDataTransfer_Write;	
 	
 	wire	[DDRDWidth-1:0]	BufferedDataOut;
-	wire					BufferedDataTransfer;
+	(* mark_debug = "TRUE" *)	wire					BufferedDataTransfer;
 	
-	wire					BucketNotYetWritten, BufferedIVNotValid;
+	(* mark_debug = "TRUE" *)	wire					BucketNotYetWritten, BufferedIVNotValid;
 	
 	wire	[AESEntropy-1:0] BufferedROIVOutData;
-	wire					BufferedROIVInValid, BufferedROIVInReady;
-	wire					BufferedROIVOutValid, BufferedROIVOutReady;	
+	(* mark_debug = "TRUE" *)	wire					BufferedROIVInValid, BufferedROIVInReady;
+	(* mark_debug = "TRUE" *)	wire					BufferedROIVOutValid, BufferedROIVOutReady;	
 	
 	wire	[AESEntropy-1:0] WritebackROIVInData;
-	wire					WritebackROIVInValid;
+	(* mark_debug = "TRUE" *)	wire					WritebackROIVInValid;
 		
 	wire	[AESEntropy-1:0] BufferedROIVOutData_DWB;
-	wire					BufferedROIVOutValid_DWB, BufferedROIVOutReady_DWB;	
+	(* mark_debug = "TRUE" *)	wire					BufferedROIVOutValid_DWB, BufferedROIVOutReady_DWB;	
 	
 	wire	[AESEntropy-1:0] WritebackROIVOutData;
-	wire					WritebackROIVInReady, WritebackROIVOutValid, WritebackROIVOutReady;
+	(* mark_debug = "TRUE" *)	wire					WritebackROIVInReady, WritebackROIVOutValid, WritebackROIVOutReady;
 	
-	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
+	(* mark_debug = "TRUE" *)	wire 					RO_BIDInReady, RO_BIDOutValid, RO_BIDOutReady;
 
-	wire 					RO_BIDOutValid_Needed;	
+	(* mark_debug = "TRUE" *)	wire 					RO_BIDOutValid_Needed;	
 	
-	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
+	(* mark_debug = "TRUE" *)	wire					RODRAMChunkIsHeader, ROBucketTransition, ROPathTransition;
 	
 	wire	[AESEntropy-1:0] RO_GentryIV, BufferedIV;
 	wire	[BIDWidth-1:0] 	RO_BIDOut, BufferedBID;
 	
 	wire	[AESEntropy-1:0] ExternalIV, ExternalIVIncrement, UpdatedExternalIV;
 	
-	wire					RO_LeafNextDirection;
+	(* mark_debug = "TRUE" *)	wire					RO_LeafNextDirection;
 	wire	[AESEntropy-1:0] RO_IVIncrement, RO_IVNext;
 		
 	wire					CSROIdle, CSROStartRead, CSROStartOp, CSRORead, CSROROIReadCommand, CSROROIRead, CSROWrite;
 	
-	wire					FinishWBIn, HWBPathTransition, RWWBPathTransition;
+	(* mark_debug = "TRUE" *)	wire					FinishWBIn, HWBPathTransition, RWWBPathTransition;
 	
 	// RO mask shifting/buffering
 	
-	wire					ROMaskShiftInValid, ROMaskShiftInReady;
+	(* mark_debug = "TRUE" *)	wire					ROMaskShiftInValid, ROMaskShiftInReady;
 	wire	[ROHeader_RawBits-1:0] ROMaskShiftOutData;
-	wire					ROMaskShiftOutValid, ROMaskShiftOutReady;
+	(* mark_debug = "TRUE" *)	wire					ROMaskShiftOutValid, ROMaskShiftOutReady;
 	
 	wire	[ROHeader_RawBits-1:0] ROMaskBufOutData;
-	wire					ROMaskBufOutValid, ROMaskBufOutReady;
+	(* mark_debug = "TRUE" *)	wire					ROMaskBufOutValid, ROMaskBufOutReady;
 
-	wire					ROIMaskShiftInValid, ROIMaskShiftInReady;
+	(* mark_debug = "TRUE" *)	wire					ROIMaskShiftInValid, ROIMaskShiftInReady;
 	wire	[DDRDWidth-1:0]	ROIMaskShiftOutData;
-	wire					ROIMaskShiftOutValid, ROIMaskShiftOutReady;	
+	(* mark_debug = "TRUE" *)	wire					ROIMaskShiftOutValid, ROIMaskShiftOutReady;	
 	
 	// RW background mask generation
 		
-	wire					RW_BIDOutValid, RW_BIDOutReady;
-	wire					RWSend, RWReceive;
-	wire					MaskFIFOReady;
+	(* mark_debug = "TRUE" *)	wire					RW_BIDOutValid, RW_BIDOutReady;
+	(* mark_debug = "TRUE" *)	wire					RWSend, RWReceive;
+	(* mark_debug = "TRUE" *)	wire					MaskFIFOReady;
 	wire	[IFMWidth-1:0]	MasksInFlight;
 	
 	// ROI (Bucket of interest handling)
@@ -231,7 +233,7 @@ module AESREWORAM(
 	genvar 					i;
 	wire	[ORAMZ-1:0]		ROI_UMatches;
 	
-	wire					ProcessingLastHeader;	
+	(* mark_debug = "TRUE" *)	wire					ProcessingLastHeader;	
 	wire					ROI_BufferBucket, ROI_HeaderValid, ROI_BucketLoad, ROI_BucketLoaded;
 	(* mark_debug = "TRUE" *)	wire 					ROI_FoundBucket, ROI_NotFoundBucket, ROI_HeaderLoad;
 	
@@ -246,19 +248,19 @@ module AESREWORAM(
 	wire					ROIInfoReset, ROIInfoEnable;
 	
 	wire	[DDRDWidth-1:0]	ROIData;
-	wire					ROIDataInValid, ROIDataInReady;	
-	wire					ROIDataValid, ROIDataReady;
+	(* mark_debug = "TRUE" *)	wire					ROIDataInValid, ROIDataInReady;	
+	(* mark_debug = "TRUE" *)	wire					ROIDataValid, ROIDataReady;
 
-	wire					ROI_Rebuffer1Complete, ROI_Rebuffer2Complete;	
+	(* mark_debug = "TRUE" *)	wire					ROI_Rebuffer1Complete, ROI_Rebuffer2Complete;	
 	
 	// Output control
 
-	reg		[COSWidth-1:0]	CS_CO, NS_CO;
+	(* mark_debug = "TRUE" *)	reg		[COSWidth-1:0]	CS_CO, NS_CO;
 		
 	wire					CSCOWrite, CSCOROI;
 	wire					StartROI, FinishROI, FinishWBOut;
 
-	wire					HWBPathTransitionOut, RWWBPathTransitionOut;
+	(* mark_debug = "TRUE" *)	wire					HWBPathTransitionOut, RWWBPathTransitionOut;
 	
 	// Output Data/Mask mixing
 	
@@ -268,16 +270,16 @@ module AESREWORAM(
 	wire	[DDRDWidth-1:0]	GentryHeaderMask, GentryDataMask;
 	wire	[DDRDWidth-1:0]	Mask;
 	
-	wire					BDataValid_Needed, RMMaskValid_Needed, ROMaskValid_Needed;
+	(* mark_debug = "TRUE" *)	wire					BDataValid_Needed, RMMaskValid_Needed, ROMaskValid_Needed;
 
 	wire	[BktHSize_ValidBits-1:0] RecomputedValidBits;
 	wire	[BigUWidth+BktHSize_ValidBits-1:0] RecomputedVU;
 	wire	[AESEntropy-1:0] OutputExternalIV;
 	
 	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Read1, DataOut_Read, DataOut_Write;
-	wire					DataOutValid, DataOutReady;
+	(* mark_debug = "TRUE" *)	wire					DataOutValid, DataOutReady;
 	
-	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
+	(* mark_debug = "TRUE" *)	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
 	
 	// Derived signals / timing related
 	
@@ -296,8 +298,10 @@ module AESREWORAM(
 		
 	(* mark_debug = "TRUE" *)	wire					FoundBOIThisAccess;	
 
+	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0]		BogusORAMU_Read;
+	
 	(* mark_debug = "TRUE" *)	wire					ERROR_UF1_DWB, ERROR_OF1_DWB, ERROR_ISC1_DWB;
-	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_DUP1, ERROR_ISC2, ERROR_AES;
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_DUP1, ERROR_ISC2, ERROR_BOGUSU, ERROR_AES;
 
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -315,7 +319,11 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
-		
+	
+	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
+		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
+	end endgenerate	
+	
 	Register1b 	errno1(Clock, Reset, 	BufferedDataInValid & ~BufferedDataInReady & CSROROIRead, 	ERROR_OF1);	
 	Register1b 	errno2(Clock, Reset, 	BufferedROIVOutReady & ~BufferedROIVOutValid, 				ERROR_UF1);	
 	Register1b 	errno3(Clock, Reset, 	ROIDataInValid & ~ROIDataInReady, 							ERROR_OF2);	
@@ -326,9 +334,10 @@ module AESREWORAM(
 	Register1b 	errno8(Clock, Reset, 	ROI_FoundBucket & ROI_NotFoundBucket, 						ERROR_ISC1);
 	Register1b 	errno9(Clock, Reset, 	FinishWBIn & ROIDataValid, 									ERROR_ISC2);	
 	Register1b 	errno10(Clock, Reset, 	FoundBOIThisAccess & ROI_FoundBucket, 						ERROR_DUP1);
+	Register1b 	errno11(Clock, Reset, 	|BogusORAMU_Read && BufferedDataOutValid && ROMaskBufOutValid && MaskIsHeader && ~BufferedIVNotValid && ~CSCOWrite, ERROR_BOGUSU);
 	
 	Register1b 	errANY(Clock, Reset, 	ERROR_UF1_DWB | ERROR_OF1_DWB | ERROR_ISC1_DWB | 
-										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1, ERROR_AES);
+										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1 | ERROR_BOGUSU, ERROR_AES);
 	
 	`ifdef SIMULATION
 		initial begin	
@@ -449,6 +458,11 @@ module AESREWORAM(
 			if (ERROR_DUP1) begin
 				$display("[%m @ %t] ERROR: found 2 buckets of interest on 1 path.", $time);
 				$finish;			
+			end
+			
+			if (ERROR_BOGUSU) begin
+				$display("[%m @ %t] ERROR: some U got decrypted to garbage.", $time);
+				$finish;					
 			end
 		end
 	`endif
@@ -1061,7 +1075,7 @@ module AESREWORAM(
 					
 	assign	ROI_FoundBucket =						BufferedDataOutValid & ROMaskBufOutValid & 	ROAccess & MaskIsHeader & ~CSCOWrite & |ROI_UMatches;
 	assign	ROI_NotFoundBucket =					BufferedDataOutValid & ROMaskBufOutValid &	ROAccess & ProcessingLastHeader & ~ROI_HeaderValid & ~ROI_FoundBucket;
-
+	
 	assign	ROI_HeaderLoad =						ROI_FoundBucket | ROI_NotFoundBucket;
 	
 	Register	#(			.Width(					1))

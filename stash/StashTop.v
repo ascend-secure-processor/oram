@@ -43,6 +43,8 @@ module StashTop(
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits,
 							PBEDP1Width = 			PBEDWidth + 1;
 
+	parameter				ORAMUValid =			21;
+															
 	localparam				STWidth =				3,
 							ST_Initialize =			3'd0,
 							ST_Idle =				3'd1,
@@ -471,7 +473,9 @@ module StashTop(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
-							.Overclock(				Overclock))
+							.Overclock(				Overclock),
+							
+							.ORAMUValid(			ORAMUValid))
 				stash(		.Clock(					Clock),
 							.Reset(					Reset),
 							.ResetDone(				ResetDone),

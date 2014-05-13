@@ -43,6 +43,8 @@ module PathORAMBackend(
 	
 	parameter				DebugAES =				0;
 	
+	parameter				ORAMUValid =			21;
+	
 	localparam				ORAMLogL = 				`log2(ORAML+1);
 	
 	//--------------------------------------------------------------------------
@@ -147,7 +149,9 @@ module PathORAMBackend(
 							.DelayedWB(				DelayedWB),
 							
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							
+							.ORAMUValid(			ORAMUValid))
 			bend_inner (	.Clock(					Clock),
 				`ifdef ASIC
 							.Reset(					Reset),
@@ -332,7 +336,8 @@ module PathORAMBackend(
 							.Overclock(				Overclock),
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
-							.DebugAES(				DebugAES))
+							.DebugAES(				DebugAES),
+							.ORAMUValid(			ORAMUValid))
 							
 				aes(		.Clock(					Clock), 
 							.FastClock(				FastClock),
