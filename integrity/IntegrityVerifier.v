@@ -145,7 +145,8 @@ module IntegrityVerifier (
 	(* mark_debug = "TRUE" *) wire 	[1:0]				BktOfIStarted, BktOfIDone;
 	(* mark_debug = "TRUE" *) wire						PendingWork, Idle, ConsumeHash;
 	
-	Counter	#(				.Width(					BktAWidth))
+	Counter	#(				.Width(					BktAWidth),
+							.Initial(				TotalBucketD))
 		path_started	(	.Clock(					Clock),
 							.Reset(					PathReady),
 							.Set(					Reset),
@@ -154,7 +155,8 @@ module IntegrityVerifier (
 							.In(					{BktAWidth{1'bx}}),
 							.Count(					BktOnPathStarted)
 						);
-	Counter	#(				.Width(					BktAWidth))
+	Counter	#(				.Width(					BktAWidth),
+							.Initial(				TotalBucketD))
 		path_done	(		.Clock(					Clock),
 							.Reset(					PathReady),
 							.Set(					Reset),
@@ -164,7 +166,8 @@ module IntegrityVerifier (
 							.Count(					BktOnPathDone)
 						);	
 
-	Counter	#(				.Width(					2))
+	Counter	#(				.Width(					2),
+							.Initial(				2))
 		boi_started		(	.Clock(					Clock),
 							.Reset(					BOIReady),
 							.Set(					Reset),
@@ -173,7 +176,8 @@ module IntegrityVerifier (
 							.In(					{2{1'bx}}),
 							.Count(					BktOfIStarted)
 						);
-	Counter	#(				.Width(					2))
+	Counter	#(				.Width(					2),
+							.Initial(				2))
 		boi_done	(		.Clock(					Clock),
 							.Reset(					BOIReady),
 							.Set(					Reset),

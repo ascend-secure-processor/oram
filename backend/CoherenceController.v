@@ -402,9 +402,14 @@ module CoherenceController(
 									
 		assign 	CoherentData = (ConflictHeaderOutValid || ConflictBktOfIOutValid)? BufP1_DOut : FromDecData_dl;
 						
-		localparam	BktCtrAWidth = `log2(BktSize_DRBursts+1);
-		wire	[BktCtrAWidth-1:0]		BktOfIOffset;			
-		assign	BktOfIOffset = RO_R_Ctr - (ORAML+1) * BktHSize_DRBursts;
+		localparam	BktCtrAWidth = `log2(BktSize_DRBursts);
+		wire	[BktCtrAWidth-1:0]		BktOfIOffset;
+		CountAlarm #(		.Threshold(				BktSize_DRBursts))
+			boi_ctr (		.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Enable(				BktOfIInValid),
+							.Count(					BktOfIOffset)
+					);
 		
 		Pipeline #(.Width(1), .Stages(BRAMLatency))
 			boi_update_pipe	(	Clock, 1'b0, BOIFromCC && HeaderInBkfOfI, BktOfIUpdate_CC);
@@ -460,8 +465,10 @@ module CoherenceController(
 		wire RW_PathRead;
 		assign	RW_PathRead = RWAccess && PathRead;		
 		// 1 means write to buffer; 0 means read from buffer	// Note initial value is 1'b1 !!
-		Register #(.Width(1)) pth_rw (Clock, 1'b0, Reset, RWAccessExtend && !RW_PathRead && PthRW_Transition, !PthRW, PthRW);
-		Register #(.Width(1)) hd_rw  (Clock, 1'b0, Reset, ROAccess && HdRW_Transition, !HdRW, HdRW);
+		Register #(.Width(1), .Initial(1'b1)) 
+			pth_rw (Clock, 1'b0, Reset, RWAccessExtend && !RW_PathRead && PthRW_Transition, !PthRW, PthRW);
+		Register #(.Width(1), .Initial(1'b1)) 
+			hd_rw  (Clock, 1'b0, Reset, ROAccess && HdRW_Transition, !HdRW, HdRW);
 		
 		Register #(.Width(ORAMLogL))
 			boi_id_reg (Clock, 1'b0, 1'b0, HdOfIFound, 		LastHdOnPthCtr,		BktOfIIdx);
@@ -661,6 +668,15 @@ module CoherenceController(
 		assign	FromStashDataDone = 	RW_W_DoneAlarm;
 		
 		assign	RWAccessExtend = RWAccess;
+		
+		// No IV
+		assign	PathReady_IV = 1'bx;
+		assign	BOIReady_IV = 1'bx;
+		assign	BOIFromCC = 1'bx;
+		assign	DataToIV = {DDRDWidth{1'bx}};
+		assign	ROIBV = {AESEntropy{1'bx}}; 
+		assign	ROIBID = {(ORAML+1){1'bx}}; 
+		
 	end endgenerate
 
 endmodule

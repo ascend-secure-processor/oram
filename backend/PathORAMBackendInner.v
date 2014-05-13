@@ -743,13 +743,17 @@ module BackendInnerControl(
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------
-
+	wire	OneAccessHasOccurred;
+	Register #( .Width(1),	.Initial(1'b0))
+		first_access (Clock, Reset, CommandRequest, 1'b0, 1'bx, OneAccessHasOccurred);
+	
 	`ifndef ASIC
 		initial begin
 			CS = ST_Idle;
-		end
+			
+		end 
 	`endif
-
+	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
@@ -916,7 +920,7 @@ module BackendInnerControl(
 							.Count(					GentryLeaf));
 
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
-		assign	SetDummy =							CSIdle & (StashAlmostFull | RWAccess);
+		assign	SetDummy =							CSIdle & (StashAlmostFull | (RWAccess & OneAccessHasOccurred));
 
 		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
 
@@ -1020,7 +1024,7 @@ module BackendInnerControl(
 	assign	AddrGenLeaf =							StashCurrentLeaf;
 	assign	AddrGenRead =							Addr_PathRead;
 	assign	AddrGenHeader =							Addr_ROAccess & Addr_PathWriteback;
-	assign	AddrGenInValid = 						CSAddrGenRead | CSAddrGenWrite;
+	assign	AddrGenInValid = 						(CSAddrGenRead | CSAddrGenWrite);
 
 	//--------------------------------------------------------------------------
 endmodule
