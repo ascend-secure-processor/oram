@@ -114,17 +114,17 @@ module CoherenceController(
 	output	[ORAMLogL-1:0]		BktOfIIdx;
 	input						PathDone_IV, BOIDone_IV, BucketOfITurn;
 	
-	wire 	ROAccess, RWAccess, PathRead, PathWriteback, RWAccessExtend;
+	(* mark_debug = "TRUE" *) wire 	ROAccess, RWAccess, PathRead, PathWriteback, RWAccessExtend;
 	
-	wire 	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
+	(* mark_debug = "TRUE" *) wire 	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
 	
 	//--------------------------------------------------------------------------
 	// CC status control logic
 	//-------------------------------------------------------------------------- 
-	wire					ROStart;
-	wire	[ORAMU-1:0]		ROPAddr;
-	wire	[ORAML-1:0]		ROLeaf;
-    wire					RODummy;
+	(* mark_debug = "TRUE" *) wire					ROStart;
+	(* mark_debug = "TRUE" *) wire	[ORAMU-1:0]		ROPAddr;
+	(* mark_debug = "TRUE" *) wire	[ORAML-1:0]		ROLeaf;
+    (* mark_debug = "TRUE" *) wire					RODummy;
 	
 	FIFORegister #(		.Width(			ORAMU+ORAML+1), 
 						.BWLatency(		1)) 
@@ -232,8 +232,8 @@ module CoherenceController(
 	end
 `endif	
 
-	wire	[0:8] error;
-	wire	ERROR;
+	(* mark_debug = "TRUE" *)  wire	[0:8] error;
+	(* mark_debug = "TRUE" *)  wire	ERROR;
 	assign	error[0] = ROStart && !(ROAccess && PathRead);
 	assign	error[1] = FromDecDataValid && !PathRead;
     assign	error[2] = ToEncDataValid && !PathWriteback;
@@ -245,15 +245,15 @@ module CoherenceController(
 	//--------------------------------------------------------------------------
 	// CC handles header write back
 	//-------------------------------------------------------------------------- 	
-	wire	HeaderCmpValid;
-	wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
+	(* mark_debug = "TRUE" *)  wire	HeaderCmpValid;
+	(* mark_debug = "TRUE" *) wire 	HeaderInValid, HeaderInBkfOfI, BktOfIInValid;	
 		
 	assign 	HeaderInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr < RO_R_Chunk - BktSize_DRBursts;
 	assign	HeaderInBkfOfI = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr == RO_R_Chunk - BktSize_DRBursts;	
 	assign	BktOfIInValid  = ROAccess && PathRead && FromDecDataValid && RO_R_Ctr >= RO_R_Chunk - BktSize_DRBursts; 
 		
 	// invalidate the bit for the target block
-	wire HdOfIDetect, HdOfIFound, HdOfIFound_Pre, HdOfIHasBeenFound;
+	(* mark_debug = "TRUE" *) wire HdOfIDetect, HdOfIFound, HdOfIFound_Pre, HdOfIHasBeenFound;
 	wire [DDRDWidth-1:0]	CoherentData, CoherentDataOfI, HeaderIn;
 
 	BkfOfIDetector	#(		.DWidth(		DDRDWidth),
@@ -341,7 +341,7 @@ module CoherenceController(
 		//--------------------------------------------------------------------------
 		// Resolve conflict and produce coherent data
 		//-------------------------------------------------------------------------- 
-		wire 	BktOfIOutValid;
+		(* mark_debug = "TRUE" *) wire 	BktOfIOutValid;
 		wire	[DDRDWidth-1:0]		FromDecData_dl;
 		
 		// delay these 3 signals by 1 cycle to match the case where CC resolves conflict
@@ -352,10 +352,10 @@ module CoherenceController(
 							{HeaderCmpValid, 	BktOfIOutValid,		FromDecData_dl}
 						); 
 		
-		wire 	Intersect, Intersect_Pre; 
-		wire	BktOfIUpdate_CC;
-		wire	ConflictHeaderLookup, ConflictHeaderOutValid;
-		wire	ConflictBktOfILookup, ConflictBktOfIOutValid;			
+		(* mark_debug = "TRUE" *) wire 	Intersect, Intersect_Pre; 
+		(* mark_debug = "TRUE" *) wire	BktOfIUpdate_CC;
+		(* mark_debug = "TRUE" *) wire	ConflictHeaderLookup, ConflictHeaderOutValid;
+		(* mark_debug = "TRUE" *) wire	ConflictBktOfILookup, ConflictBktOfIOutValid;			
 		wire 	[ORAMLogL-1:0]	IntersectCtr;
 		
 		wire	[AESEntropy-1:0]	GentryVersion;	
@@ -394,7 +394,7 @@ module CoherenceController(
 						{ConflictHeaderOutValid, ConflictBktOfIOutValid}
 					);
 		
-		wire	HdOfIWriteBack, HdOfIWriteBack_Pre;
+		(* mark_debug = "TRUE" *) wire	HdOfIWriteBack, HdOfIWriteBack_Pre;
 		Pipeline #(.Width(DDRDWidth), .Stages(BRAMLatency-1))
 			bufP1_out_pipe	(	Clock, 1'b0, BufP1_DOut_Pre, BufP1_DOut);
 		Pipeline #(.Width(1), .Stages(BRAMLatency-1))
@@ -428,8 +428,8 @@ module CoherenceController(
 		//-------------------------------------------------------------------------- 	
 	
 		// Port control signals
-		wire  					PthRW, HdRW;
-		wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr;
+		(* mark_debug = "TRUE" *) wire  					PthRW, HdRW;
+		(* mark_debug = "TRUE" *) wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr;
 		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
 		wire 					PthCtrEnable, HdCtrEnable;
 		wire 					HdRW_Transition, PthRW_Transition;			
@@ -479,7 +479,7 @@ module CoherenceController(
 		assign 	BufP1Reg_DIn =  HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
 								: BufP1_DOut;
 		
-		wire	BufP1Reg_DInValid;		
+		(* mark_debug = "TRUE" *) wire	BufP1Reg_DInValid;		
 		Pipeline #(	.Width(1), .Stages(BRAMLatency))	
 			to_enc_valid (Clock, 1'b0, PathWriteback && BufP1_Enable,	BufP1Reg_DInValid);
 		
@@ -541,7 +541,7 @@ module CoherenceController(
 							: 0;	
 		
 		//	AES --> Stash
-		wire	BktOfIHdOutValid;		
+		(* mark_debug = "TRUE" *) wire	BktOfIHdOutValid;		
 		assign	BktOfIHdOutValid = 	BktOfIOutValid && BktOfIOffset == 1;
 
 		assign	ToStashData =			RW_PathRead ? FromDecData
@@ -571,7 +571,7 @@ module CoherenceController(
 		assign	BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_Pre, BktOfIAccessedByIV_1st;
+		(* mark_debug = "TRUE" *) wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_Pre, BktOfIAccessedByIV_1st;
 		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && BucketOfITurn && IVRequest && IVAddress == BktOfIStartAddr;		
 		CountAlarm #(		.Threshold(				3),
 							.IThreshold(			1))
@@ -601,7 +601,7 @@ module CoherenceController(
 								.DataOut(		DataToIV)
 						);					
 		
-		wire	HeaderCmpValid_dl, ROIVID_Enable;
+		(* mark_debug = "TRUE" *) wire	HeaderCmpValid_dl, ROIVID_Enable;
 		wire	[AESEntropy-1:0]	ROIBV_Pre;	
 		Pipeline #(.Width(1), .Stages(1))	hd_cmp_dl	(Clock,	1'b0, HeaderCmpValid, HeaderCmpValid_dl);
 		assign	ROIVID_Enable = 	HeaderCmpValid_dl && !HdOfIHasBeenFound;	

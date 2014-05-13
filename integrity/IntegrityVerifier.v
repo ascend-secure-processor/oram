@@ -57,9 +57,9 @@ module IntegrityVerifier (
 	
 	// status and meta data for hash engines	
 	(* mark_debug = "TRUE" *)	wire [BktAWidth-1:0] 	BucketIDTurn;
-	wire [BlkAWidth-1:0]	BucketOffsetTurn; 
+	(* mark_debug = "TRUE" *) wire [BlkAWidth-1:0]	BucketOffsetTurn; 
 	wire [DDRDWidth-1:0]	BucketHeaderOut;
-	wire					BucketOfISIn;
+	(* mark_debug = "TRUE" *) wire					BucketOfISIn;
 	
 	// hash IO internal variables
 	localparam HashByteCount = (BktSize_RawBits + 0) / 8;    	
@@ -76,9 +76,9 @@ module IntegrityVerifier (
 	assign	NextTurn = (Turn + 1) % NUMSHA3;
 	assign	LastTurn = (Turn + NUMSHA3 - BRAMLatency) % NUMSHA3;
 	
-	wire DataInValid,	DataInValid_Pre;
-	wire HeaderInValid, HeaderInValid_Pre;
-	(* mark_debug = "TRUE" *)	wire ROIHeader;
+	(* mark_debug = "TRUE" *) wire DataInValid,	DataInValid_Pre;
+	(* mark_debug = "TRUE" *) wire HeaderInValid, HeaderInValid_Pre;
+	(* mark_debug = "TRUE" *) wire ROIHeader;
 	wire [DDRDWidth-1:0] HashData;	
 	
 	//------------------------------------------------------------------------------------
@@ -141,9 +141,9 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------
 	// Remaining work status
 	//------------------------------------------------------------------------------------ 	
-	wire 	[BktAWidth-1:0] 	BktOnPathStarted, BktOnPathDone;
-	wire 	[1:0]				BktOfIStarted, BktOfIDone;
-	wire						PendingWork, Idle, ConsumeHash;
+	(* mark_debug = "TRUE" *) wire 	[BktAWidth-1:0] 	BktOnPathStarted, BktOnPathDone;
+	(* mark_debug = "TRUE" *) wire 	[1:0]				BktOfIStarted, BktOfIDone;
+	(* mark_debug = "TRUE" *) wire						PendingWork, Idle, ConsumeHash;
 	
 	Counter	#(				.Width(					BktAWidth))
 		path_started	(	.Clock(					Clock),
@@ -193,7 +193,7 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	wire VersionNonzero, Violation, CheckHash, UpdateHash; 	
+	(* mark_debug = "TRUE" *) wire VersionNonzero, Violation, CheckHash, UpdateHash; 	
 	Pipeline #(.Width(1), .Stages(1))	consume_hash (Clock, 1'b0, HashOutValid[NextTurn], ConsumeHash);
 
 	assign CheckHash = ConsumeHash && 
