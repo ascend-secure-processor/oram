@@ -233,10 +233,10 @@ module AESREWORAM(
 	
 	wire					ProcessingLastHeader;	
 	wire					ROI_BufferBucket, ROI_HeaderValid, ROI_BucketLoad, ROI_BucketLoaded;
-	wire 					ROI_FoundBucket, ROI_NotFoundBucket, ROI_HeaderLoad;
+	(* mark_debug = "TRUE" *)	wire 					ROI_FoundBucket, ROI_NotFoundBucket, ROI_HeaderLoad;
 	
-	wire	[BigVWidth-1:0] DataOutV;
-	wire	[BigUWidth-1:0] DataOutU;
+	(* mark_debug = "TRUE" *)	wire	[BigVWidth-1:0] DataOutV;
+	(* mark_debug = "TRUE" *)	wire	[BigUWidth-1:0] DataOutU;
 	
 	wire	[AESEntropy-1:0] ROI_GentryIV;
 	wire	[BIDWidth-1:0]	ROI_BID;

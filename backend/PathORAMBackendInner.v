@@ -721,7 +721,7 @@ module BackendInnerControl(
 
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 
-	(* mark_debug = "FALSE" *)	wire					RWAccess, ROAccess, PathRead, PathWriteback;
+	(* mark_debug = "TRUE" *)	wire					RWAccess, ROAccess, PathRead, PathWriteback;
 	(* mark_debug = "FALSE" *)	wire					Addr_ROAccess, Addr_RWAccess, Addr_PathRead, Addr_PathWriteback;
 
 	(* mark_debug = "FALSE" *)	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
@@ -732,7 +732,7 @@ module BackendInnerControl(
 	wire					AddrRWDone, DataRWDone, OperationComplete; // NOTE: do not add debug here; mysteriously causes the tools to fail @ impl
 	(* mark_debug = "FALSE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
 	
-	(* mark_debug = "FALSE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
+	(* mark_debug = "TRUE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
 		
 	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		DummyLeaf;
 	(* mark_debug = "FALSE" *)	wire					DummyLeaf_Valid;

@@ -77,15 +77,16 @@ module StashCore(
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
 
-	localparam				STWidth =				3,
-							ST_Reset =				3'd0,
-							ST_Idle = 				3'd1,
-							ST_Pushing = 			3'd2, // write, add
-							ST_Overwriting = 		3'd3, // overwrite current entry
-							ST_Peaking =			3'd4, // read, do not remove
-							ST_Dumping =			3'd5,
-							ST_UpdatingHeader =		3'd6,
-							ST_StartSync =			3'd7;
+	localparam				STWidth =				4,
+							ST_Reset =				4'd0,
+							ST_Idle = 				4'd1,
+							ST_Pushing = 			4'd2, // write, add
+							ST_Overwriting = 		4'd3, // overwrite current entry
+							ST_Peaking =			4'd4, // read, do not remove
+							ST_Dumping =			4'd5,
+							ST_UpdatingHeader =		4'd6,
+							ST_StartSync =			4'd7,
+							ST_Error =				4'd8;
 
 	localparam				SyncSTWidth =			3,
 							ST_Sync_Idle =			3'd0,
@@ -237,7 +238,7 @@ module StashCore(
 	wire	[SEAWidth-1:0]	StashC_ROAddress;	
 	
 	wire					CSPushing_FirstTransferred;
-	
+
 	// Chunk counting
 	
 	wire					FirstChunk, LastChunk;
@@ -280,6 +281,10 @@ module StashCore(
 							CSSyncing_FirstCycle;
 
 	// debugging
+	
+	(* mark_debug = "TRUE" *)	wire 					StashAlmostFull_Internal;
+	(* mark_debug = "TRUE" *)	wire					StashOverflow_Internal;	
+	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0] 	StashOccupancy_Internal;
 	
 	(* mark_debug = "TRUE" *)	wire					ERROR_UF1, ERROR_ISC1, ERROR_ISC2, ERROR_StashCore;
 	
@@ -565,20 +570,21 @@ module StashCore(
 				if (ResetDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (~ERROR_StashCore)
-					if (InCommandValid) begin
-						if (InCommand == SCMD_Push & ~CancelPushCommand)
-							NS =						ST_Pushing;
-						if (InCommand == SCMD_Overwrite)
-							NS =						ST_Overwriting;
-						if (InCommand == SCMD_Peak)
-							NS =						ST_Peaking;
-						if (InCommand == SCMD_Dump)
-							NS =						ST_Dumping;
-						if (InCommand == SCMD_UpdateHeader)
-							NS =						ST_UpdatingHeader;
-						if (InCommand == SCMD_Sync)
-							NS =						ST_StartSync;
+				if (ERROR_StashCore)
+					NS =							ST_Error;
+				else if (InCommandValid) begin
+					if (InCommand == SCMD_Push & ~CancelPushCommand)
+						NS =						ST_Pushing;
+					if (InCommand == SCMD_Overwrite)
+						NS =						ST_Overwriting;
+					if (InCommand == SCMD_Peak)
+						NS =						ST_Peaking;
+					if (InCommand == SCMD_Dump)
+						NS =						ST_Dumping;
+					if (InCommand == SCMD_UpdateHeader)
+						NS =						ST_UpdatingHeader;
+					if (InCommand == SCMD_Sync)
+						NS =						ST_StartSync;
 				end
 			ST_Pushing :
 				if (ContinuePush)
@@ -842,10 +848,14 @@ module StashCore(
 							.Up(					AddBlock),
 							.Down(					RemoveBlock),
 							.In(					{SEAWidth{1'bx}}),
-							.Count(					StashOccupancy));
+							.Count(					StashOccupancy_Internal));
 
-	assign	StashAlmostFull =						(StashOccupancy + BlocksOnPath) >= StashCapacity - 1; // - 1 because we reserve last spot for SNULL
-	assign	StashOverflow =							AddBlock & StashOccupancy == StashCapacity;	
+	assign	StashOccupancy =						StashOccupancy_Internal;
+	assign	StashAlmostFull_Internal =				(StashOccupancy + BlocksOnPath) >= StashCapacity - 1; // - 1 because we reserve last spot for SNULL
+	assign	StashOverflow_Internal =				AddBlock & StashOccupancy == StashCapacity;
+	
+	assign	StashAlmostFull =						StashAlmostFull_Internal;
+	assign	StashOverflow =							StashOverflow_Internal;							
 							
 	//--------------------------------------------------------------------------
 	//	Dumping the UsedList

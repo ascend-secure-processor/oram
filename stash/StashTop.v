@@ -50,7 +50,8 @@ module StashTop(
 							ST_StartWriteback =		3'd3,
 							ST_Update =				3'd4,
 							ST_Writeback =			3'd5,
-							ST_Append =				3'd6;
+							ST_Append =				3'd6,
+							ST_Error =				3'd7;
 							
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -118,7 +119,7 @@ module StashTop(
 	wire					LatchCommand, LatchBECommand;
 	
 	wire	[BECMDWidth-1:0] BECommand_Internal;
-	wire	[ORAMU-1:0]		PAddr_Internal;
+	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PAddr_Internal;
 	wire	[ORAML-1:0]		CurrentLeaf_Internal;
 	wire	[ORAML-1:0]		RemappedLeaf_Internal;
 	wire					AccessIsDummy_Internal, AccessSkipsWriteback_Internal;
@@ -187,10 +188,6 @@ module StashTop(
 	wire					Stash_EvictBlockValid, Stash_EvictBlockReady;
 
 	wire					Stash_BlockWriteComplete;
-	
-	(* mark_debug = "TRUE" *)	wire					StashOverflow;
-	
-	(* mark_debug = "TRUE" *)	wire	[SEAWidth-1:0]	StashOccupancy;
 
 	// Derived signals
 	
@@ -300,11 +297,12 @@ module StashTop(
 				if (ResetDone) 
 					NS =						 	ST_Idle;
 			ST_Idle :
-				if (~ERROR_StashTop)
-					if (CommandValid & Command == STCMD_Append)
-						NS =						 	ST_Append;
-					else if (CommandValid)
-						NS =						 	ST_Read;
+				if (ERROR_StashTop)
+					NS =							ST_Error;
+				else if (CommandValid & Command == STCMD_Append)
+					NS =						 	ST_Append;
+				else if (CommandValid)
+					NS =						 	ST_Read;
 			ST_Read :
 				if (CommandValid)
 					NS =						 	ST_StartWriteback;
@@ -525,8 +523,8 @@ module StashTop(
 							.PathReadComplete(		), // not connected
 							
 							.StashAlmostFull(		StashAlmostFull),
-							.StashOverflow(			StashOverflow),
-							.StashOccupancy(		StashOccupancy)); // debugging
+							.StashOverflow(			),
+							.StashOccupancy(		)); // debugging
 
 	//--------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters

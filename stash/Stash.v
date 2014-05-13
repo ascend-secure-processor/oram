@@ -69,7 +69,8 @@ module Stash(
 							ST_Turnaround1 =		4'd6,
 							ST_Turnaround2 =		4'd7,
 							ST_CoreSync =			4'd8,
-							ST_ROReset =			4'd9;
+							ST_ROReset =			4'd9,
+							ST_Error =				4'd10;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -180,7 +181,7 @@ module Stash(
 
 	// Control
 	
-	reg		[STWidth-1:0]	CS, NS;
+	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
 	wire					CSIdle, CSPathRead, CSPathWriteback, CSScan, 
 							CSEvict, CSTurnaround1, CSTurnaround2,
 							CSCoreSync, CSROReset;
@@ -271,7 +272,7 @@ module Stash(
 	
 	(* mark_debug = "TRUE" *)	wire					BlockNotFound, BlockNotFoundValid;	
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_Stash;
+	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_ISC4, ERROR_Stash;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -295,8 +296,9 @@ module Stash(
 	Register1b 	errno3(Clock, Reset, OutBufferInValid & ~OutBufferInReady, 							ERROR_ISC2);
 	Register1b 	errno4(Clock, Reset, OutHBufferInValid & ~OutHBufferInReady, 						ERROR_ISC3);
 	Register1b 	errno5(Clock, Reset, StashOverflow, 												ERROR_StashOverflow);
-
-	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_StashOverflow, ERROR_Stash);
+	Register1b 	errno6(Clock, Reset, ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid), ERROR_ISC4);
+	
+	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow, ERROR_Stash);
 
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
@@ -363,12 +365,11 @@ module Stash(
 				$finish;
 			end
 			
-			/* The StashTestbench abuses this by illegally filling the stash.  Re-enable for BackendTestbench
-			if (ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid)) begin
+			/* The StashTestbench abuses this by illegally filling the stash.  Re-enable for BackendTestbench */
+			if (ERROR_ISC4) begin
 				$display("[%m] ERROR: the scan took longer than our _conservative_ estimate");
 				$finish;
 			end
-			*/
 			
 			if (CS_Delayed != CS) begin
 				if (CSScan)
@@ -445,11 +446,12 @@ module Stash(
 			ST_Reset : 
 				if (Core_ResetDone) NS =			ST_Idle;
 			ST_Idle :
-				if (~ERROR_Stash)
-					if (AccessStarted) 
-						NS =							ST_Scan;
-					else if (StartAppend)
-						NS =							ST_Evict;
+				if (ERROR_Stash)
+					NS =							ST_Error;
+				else if (AccessStarted) 
+					NS =							ST_Scan;
+				else if (StartAppend)
+					NS =							ST_Evict;
 			ST_Scan :
 				if (ScanComplete_Conservative)
 					NS =			 				ST_PathRead;
