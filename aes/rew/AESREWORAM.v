@@ -57,7 +57,12 @@ module AESREWORAM(
 	parameter				DebugAES =				0;
 	parameter				ORAMUValid =			21;
 	
+	parameter				DebugAggressive =		1;
+	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
+	
+	localparam				DUChunks =				DDRDWidth / ORAMU,
+							DUWidth =				`log2(DUChunks);
 	
 	localparam				RW_R_Chunk = 			PathSize_DRBursts,
 							RW_W_Chunk = 			PathSize_DRBursts,
@@ -145,23 +150,23 @@ module AESREWORAM(
 	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInValid; 
 	(* mark_debug = "TRUE" *)	wire					Core_RWCommandInReady;
 
-	(* mark_debug = "FALSE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
-	(* mark_debug = "FALSE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
+	(* mark_debug = "TRUE" *)	wire	[AESWidth-1:0]	Core_RODataOut; 
+	(* mark_debug = "TRUE" *)	wire	[PCCMDWidth-1:0] Core_ROCommandOut;
 	(* mark_debug = "TRUE" *)	wire					Core_RODataOutValid;
 	(* mark_debug = "TRUE" *)	wire					Core_RODataOutReady;
 	
-	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	Core_RWDataOut;
 	(* mark_debug = "TRUE" *)	wire					Core_RWDataOutValid;	
 	
 	// RO header mask & bucket of interest seed generation
 
 	(* mark_debug = "TRUE" *)	reg		[ROSWidth-1:0] 	CS_RO, NS_RO;
 	
-	wire					DRAMReadTransfer, ROCommandTransfer;
+	(* mark_debug = "TRUE" *)	wire					DRAMReadTransfer, ROCommandTransfer;
 
-	wire	[AESEntropy-1:0] GentryCounter_MemoryConsistant;
+	(* mark_debug = "TRUE" *)	wire	[AESEntropy-1:0] GentryCounter_MemoryConsistant;
 	
-	wire					ROStarted;
+	(* mark_debug = "TRUE" *)	wire					ROStarted;
 	
 	wire	[ORAML-1:0]		CurrentLeaf;
 	
@@ -169,7 +174,7 @@ module AESREWORAM(
 	(* mark_debug = "TRUE" *)	wire					BufferedDataInValid, BufferedDataInReady;
 	(* mark_debug = "TRUE" *)	wire					BufferedDataOutValid, BufferedDataOutReady;
 	
-	wire					BufferedDataOutReady_Read, BufferedDataTransfer_Read;
+	(* mark_debug = "TRUE" *)	wire					BufferedDataOutReady_Read, BufferedDataTransfer_Read;
 	(* mark_debug = "TRUE" *)	wire					BufferedDataOutReady_Write, BufferedDataTransfer_Write;	
 	
 	wire	[DDRDWidth-1:0]	BufferedDataOut;
@@ -245,7 +250,7 @@ module AESREWORAM(
 	wire	[BigUWidth-1:0]	ROI_U;
 	wire	[BigVWidth-1:0]	ROI_V;
 	
-	wire					ROIInfoReset, ROIInfoEnable;
+	(* mark_debug = "TRUE" *)	wire					ROIInfoReset, ROIInfoEnable;
 	
 	wire	[DDRDWidth-1:0]	ROIData;
 	(* mark_debug = "TRUE" *)	wire					ROIDataInValid, ROIDataInReady;	
@@ -299,9 +304,10 @@ module AESREWORAM(
 	(* mark_debug = "TRUE" *)	wire					FoundBOIThisAccess;	
 
 	(* mark_debug = "TRUE" *)	wire	[ORAMZ-1:0]		BogusORAMU_Read;
+	(* mark_debug = "TRUE" *)	wire	[DUChunks-1:0]	BogusORAMData;
 	
 	(* mark_debug = "TRUE" *)	wire					ERROR_UF1_DWB, ERROR_OF1_DWB, ERROR_ISC1_DWB;
-	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_DUP1, ERROR_ISC2, ERROR_BOGUSU, ERROR_AES;
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_UF1, ERROR_OF2, ERROR_UF2, ERROR_OF3, ERROR_OF4, ERROR_UF3, ERROR_ISC1, ERROR_DUP1, ERROR_ISC2, ERROR_BOGUSU, ERROR_BOGUSDATA, ERROR_AES;
 
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -322,7 +328,15 @@ module AESREWORAM(
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
-	end endgenerate	
+	end endgenerate
+	
+	generate if (DebugAggressive) begin:AGGRESSIVE
+		for (i = 0; i < DUChunks; i = i + 1) begin
+			assign	BogusORAMData[i] =				|BEDataOut_Pre[(i+1)*ORAMU-1:i*ORAMU+24]; // check top 8 bits
+		end
+	end else begin
+		assign	BogusORAMData =						{DUChunks{1'b0}};
+	end endgenerate
 	
 	Register1b 	errno1(Clock, Reset, 	BufferedDataInValid & ~BufferedDataInReady & CSROROIRead, 	ERROR_OF1);	
 	Register1b 	errno2(Clock, Reset, 	BufferedROIVOutReady & ~BufferedROIVOutValid, 				ERROR_UF1);	
@@ -335,9 +349,10 @@ module AESREWORAM(
 	Register1b 	errno9(Clock, Reset, 	FinishWBIn & ROIDataValid, 									ERROR_ISC2);	
 	Register1b 	errno10(Clock, Reset, 	FoundBOIThisAccess & ROI_FoundBucket, 						ERROR_DUP1);
 	Register1b 	errno11(Clock, Reset, 	|BogusORAMU_Read && BufferedDataOutValid && ROMaskBufOutValid && MaskIsHeader && ~BufferedIVNotValid && ~CSCOWrite, ERROR_BOGUSU);
+	Register1b 	errno12(Clock, Reset, 	|BogusORAMData && ~BufferedIVNotValid && ~MaskIsHeader && BEDataOutValid_Pre && (FoundBOIThisAccess || RWAccess), ERROR_BOGUSDATA);
 	
 	Register1b 	errANY(Clock, Reset, 	ERROR_UF1_DWB | ERROR_OF1_DWB | ERROR_ISC1_DWB | 
-										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1 | ERROR_BOGUSU, ERROR_AES);
+										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1 | ERROR_BOGUSU | ERROR_BOGUSDATA, ERROR_AES);
 	
 	`ifdef SIMULATION
 		initial begin	
@@ -462,6 +477,11 @@ module AESREWORAM(
 			
 			if (ERROR_BOGUSU) begin
 				$display("[%m @ %t] ERROR: some U got decrypted to garbage.", $time);
+				$finish;					
+			end
+			
+			if (ERROR_BOGUSDATA) begin
+				$display("[%m @ %t] ERROR: some data got decrypted to garbage.", $time);
 				$finish;					
 			end
 		end
