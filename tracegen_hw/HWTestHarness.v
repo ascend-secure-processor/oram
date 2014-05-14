@@ -221,6 +221,10 @@ module HWTestHarness(
 				$display("Illegal mode");
 				$finish;
 			end
+			
+			if (MismatchReceivePattern) begin
+				$display("WARNING: Traffic gen data mismatch (%x != %x)", DataOutExpected, DataOutActual);
+			end
 		end
 	`endif
 	
