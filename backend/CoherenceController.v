@@ -578,24 +578,14 @@ module CoherenceController(
 		assign	BufP2_Address = IVAddress;
 		assign  BufP2_DIn = DataFromIV;		
 		
-		(* mark_debug = "TRUE" *) wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_Pre, BktOfIAccessedByIV_1st;
-		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && BucketOfITurn && IVRequest && IVAddress == BktOfIStartAddr;		
-		CountAlarm #(		.Threshold(				3),
-							.IThreshold(			1))
-			boi_by_IV (		.Clock(					Clock), 
-							.Reset(					ROStart), 
-							.Enable(				BktOfIAccessedByIV),
-							.Intermediate(			BktOfIAccessedByIV_1st_Pre)
-					);	
+		(* mark_debug = "TRUE" *) wire 	BktOfIAccessedByIV, BktOfIAccessedByIV_1st_hold, BktOfIAccessedByIV_1st;
+		assign	BktOfIAccessedByIV = HdOfIHasBeenFound && BucketOfITurn && IVRequest;
 		
-		Register #(.Width(DDRDWidth))
-			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);
-			
-		Pipeline #(.Width(DDRDWidth+1), .Stages(BRAMLatency-1))
-			bufP2_out_pipe	(	Clock, 1'b0, 
-								{BktOfIAccessedByIV_1st_Pre, BufP2_DOut_Pre}, 
-								{BktOfIAccessedByIV_1st, BufP2_DOut}
-							);
+		Register1b boi_by_iv_1st_pre (Clock, ROStart, BktOfIAccessedByIV, BktOfIAccessedByIV_1st_hold);
+		Pipeline #(.Width(1), .Stages(BRAMLatency))
+			boi_by_iv_1st 	(Clock, ROStart, BktOfIAccessedByIV && !BktOfIAccessedByIV_1st_hold, BktOfIAccessedByIV_1st);			
+		Pipeline #(.Width(DDRDWidth), .Stages(BRAMLatency-1))
+			bufP2_out_pipe	(	Clock, 1'b0, BufP2_DOut_Pre, BufP2_DOut);
 		
 		BkfOfIDetector	#(		.DWidth(		DDRDWidth),
 								.ValidBitStart(	AESEntropy),
@@ -606,7 +596,11 @@ module CoherenceController(
 								.AddrOfI(		ROPAddr),
 								.DataIn(		BufP2_DOut),
 								.DataOut(		DataToIV)
-						);					
+						);	
+						
+		Register #(.Width(DDRDWidth))
+			hash_out_reg (Clock, 1'b0, 1'b0, BktOfIAccessedByIV && IVWrite, 		DataFromIV,		HdOfI);	
+		
 		
 		(* mark_debug = "TRUE" *) wire	HeaderCmpValid_dl, ROIVID_Enable;
 		wire	[AESEntropy-1:0]	ROIBV_Pre;	
@@ -661,7 +655,7 @@ module CoherenceController(
 
 		//	ROAccess: header write back CC --> AES. RWAccess: Stash --> AES
 		assign	ToEncData =				ROAccess ? HeaderOut: FromStashData;
-		assign	ToEncDataValid =		ROAccess ? HeaderOutValid  && PathWriteback:	FromStashDataValid;
+		assign	ToEncDataValid =		ROAccess ? (HeaderOutValid  && PathWriteback):	FromStashDataValid;
 		assign  HeaderOutReady = 		ROAccess && PathWriteback && ToEncDataReady;
 		
 		assign	FromStashDataReady = 	!ROAccess && ToEncDataReady;

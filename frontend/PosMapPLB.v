@@ -76,8 +76,8 @@ module PosMapPLB
     // PosMap control and input
     (* mark_debug = "TRUE" *) wire PosMapSelect, PosMapBusy, PosMapValid, PosMapInit;
       
-    Pipeline #(.Width(1), .Stages(1))	PosMapValidReg 	(Clock, 1'b0, PosMapSelect, PosMapValid);
-    Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, 1'b0, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
+    Pipeline #(.Width(1), .Stages(1))	PosMapValidReg 	(Clock, Reset, PosMapSelect, PosMapValid);
+    Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, Reset, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
     
     wire InitEnd;
     wire [LogFinalPosMapEntry-1:0] InitAddr;
@@ -137,7 +137,7 @@ module PosMapPLB
     (* mark_debug = "TRUE" *) wire PLBRefill, PLBInitRefill;
     assign PLBRefill = (CmdReady && CmdValid && Cmd == CacheRefill) || (LastCmd == CacheRefill && !PLBReady);   // Refill start or Refilling
     assign PLBInitRefill = (CmdReady && CmdValid && Cmd == CacheInitRefill) || (LastCmd == CacheInitRefill && !PLBReady);   // InitRefill
-    
+		
     assign PLBEnable = (CmdReady && CmdValid && !InOnChipPosMap) || (PLBRefill && DInValid) || PLBInitRefill;  
     assign PLBCmd = Cmd == CacheInitRefill ? CacheRefill : Cmd; 
     assign PLBAddrIn = (PLBRefill || PLBInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;

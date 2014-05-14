@@ -110,17 +110,16 @@ module UORamController
 
 	// check whether input is valid
 	assign	AddrOutofRange = ProgAddrIn >= NumValidBlock;
-
 	
 	FIFORegister #(			.Width(					ORAMU))
-				ro_start(	.Clock(					Clock),
+		addr_outof_rage(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				ProgAddrIn),
 							.InValid(				CmdInReady && CmdInValid && AddrOutofRange),
 							.OutData(				AddrOutofRangeAddr),
 							.OutSend(				ERROR_OutOfRange),
 							.OutReady(				1'b0));
-		
+`ifdef SIMULATION		
 	always @ (posedge Clock) begin
 		if (CmdInReady && CmdInValid) begin
 			if (AddrOutofRange) begin
@@ -129,6 +128,7 @@ module UORamController
 			end
 		end
 	end
+`endif	
 	// =============================================================================
 
     // FrontEnd state machines

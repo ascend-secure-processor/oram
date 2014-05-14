@@ -36,23 +36,21 @@ module DM_Cache
     wire [DataWidth-1:0] LastDIn;
     wire [ExtraTagWidth-1:0] LastExtraTag;
     Register #(.Width(CacheCmdWidth))
-        CmdReg (Clock, Reset, 1'b0, Ready && Enable, Cmd, LastCmd);
+        CmdReg (Clock, 1'b0, 1'b0, Ready && Enable, Cmd, LastCmd);
     Register #(.Width(AddrWidth))
-        AddrReg (Clock, Reset, 1'b0, Ready && Enable, AddrIn, LastAddr);
+        AddrReg (Clock, 1'b0, 1'b0, Ready && Enable, AddrIn, LastAddr);
     Register #(.Width(DataWidth))
-        DInReg (Clock, Reset, 1'b0, Ready && Enable, DIn, LastDIn); 
+        DInReg (Clock, 1'b0, 1'b0, Ready && Enable, DIn, LastDIn); 
     Register #(.Width(ExtraTagWidth))
-        ExtraTagReg (Clock, Reset, 1'b0, Ready && Enable, ExtraTagIn, LastExtraTag);  
+        ExtraTagReg (Clock, 1'b0, 1'b0, Ready && Enable, ExtraTagIn, LastExtraTag);  
            
     // Cmd related states
     wire RefillStart, Refilling, RefillFinish, RefillWriting;
     wire IsLastWrite, IsLastRefilling;
-    Register #(.Width(1))
-        WriteReg (  .Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
-                    .In(Enable && Ready && (Cmd == CacheWrite)), .Out(IsLastWrite));      
-    Register #(.Width(1))
-        RefillReg ( .Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), 
-                    .In(Refilling), .Out(IsLastRefilling)); 
+    Pipeline #(.Width(1), .Stages(1))
+        WriteReg  (	Clock,	Reset,	Enable && Ready && (Cmd == CacheWrite),	IsLastWrite);   
+    Pipeline #(.Width(1), .Stages(1))
+        RefillReg (	Clock,	Reset,	Refilling,	IsLastRefilling);
     
     wire [LogLineSize:0] RefillOffset; 	// RefillOffset[LogLineSize:1] is the addr offset, the last bit is evict/refill
     Counter #(.Width(LogLineSize+1))
