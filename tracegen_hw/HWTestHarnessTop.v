@@ -40,9 +40,13 @@ module HWTestHarnessTop(
 							ORAMB =					512,
 							ORAML =					10,
 							ORAMZ =					5,			
-							FEDWidth =				64,
+							FEDWidth =				512,
 							BEDWidth =				512;
 
+	localparam				NumValidBlock =			1 << ORAML; 
+							
+	localparam				OBUChunks = 			ORAMB / ORAMU;							
+							
 	// uBlaze/caches/System
 	
 	parameter				SystemClockFreq =		100_000_000,
@@ -111,7 +115,8 @@ module HWTestHarnessTop(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
 							.SlowClockFreq(			SystemClockFreq),
-							.GenHistogram(			1))
+							.GenHistogram(			1),
+							.NumValidBlock(			NumValidBlock))
 				tester(		.SlowClock(				ClockF100),
 							.FastClock(				ClockF200),
 							.SlowReset(				ResetF100), 
@@ -122,13 +127,17 @@ module HWTestHarnessTop(
 							.ORAMCommandValid(		PathORAM_CommandValid),
 							.ORAMCommandReady(		PathORAM_CommandReady),
 							
+							// Write data
 							.ORAMDataIn(			PathORAM_DataIn),
 							.ORAMDataInValid(		PathORAM_DataInValid),
 							.ORAMDataInReady(		PathORAM_DataInReady),
 							
+							// Read data
 							.ORAMDataOut(			PathORAM_ReturnData),
 							.ORAMDataOutValid(		PathORAM_ReturnDataValid),
 							.ORAMDataOutReady(		PathORAM_ReturnDataReady),
+							
+							.ForceHistogramDump(	1'b0),
 							
 							.UARTRX(				uart_rxd),
 							.UARTTX(				uart_txd),
@@ -139,38 +148,43 @@ module HWTestHarnessTop(
 
 	assign	PathORAM_CommandReady = 				1'b1;
 	
+	wire	[ORAMB-1:0]	DataOutExpectedPre;
+	genvar i;
+	generate for (i = 0; i < OBUChunks; i = i + 1) begin
+		assign	DataOutExpectedPre[(i+1)*ORAMU-1:i*ORAMU] = PathORAM_PAddr + i;
+	end endgenerate		
+	
 	generate if (GenHistogram) begin
-		reg	[FEDWidth-1:0]	PathORAM_ReturnDataPre;
-		reg 				PathORAM_ReturnDataValidPre = 1'b0;	
-		integer	done, j;
+		reg 				PathORAM_ReturnDataValidPre = 1'b0;
+		integer	j;		
 		
 		assign	PathORAM_DataInReady =				1'b1;
 		
-		assign	PathORAM_ReturnData =				PathORAM_ReturnDataPre;
-		assign	PathORAM_ReturnDataValid =			PathORAM_ReturnDataValidPre;
+		FIFOShiftRound #(	.IWidth(				ORAMB),
+							.OWidth(				FEDWidth),
+							.Register(				1))
+				O_check(	.Clock(					ClockF200),
+							.Reset(					ResetF200),
+							.InData(				DataOutExpectedPre),
+							.InValid(				PathORAM_CommandValid & PathORAM_Command == BECMD_Read),
+							.InAccept(				),
+							.OutData(				PathORAM_ReturnData),
+							.OutValid(				PathORAM_ReturnDataValid),
+							.OutReady(				PathORAM_ReturnDataReady));		
 		
 		always @(posedge ClockF200) begin
 			if (PathORAM_CommandValid & PathORAM_Command == BECMD_Read) begin
 				j = 0;
-				while (j < NumAccess * 6) begin
+				while (j < 6) begin
 					#(Cycle);
 					j = j + 1;
 				end
 				
-				NumAccess = NumAccess + 1;
-				
-				done = 0;
-				PathORAM_ReturnDataPre = 0;
 				PathORAM_ReturnDataValidPre = 1'b1;
-				while (done == 0) begin
-					#(Cycle);
-					if (PathORAM_ReturnDataValidPre & PathORAM_ReturnDataReady) begin
-						PathORAM_ReturnDataPre = PathORAM_ReturnDataPre + 1;
-						if (PathORAM_ReturnDataPre == FEORAMBChunks) 
-							done = 1;
-					end
-				end
+				#(Cycle);
 				PathORAM_ReturnDataValidPre = 1'b0;
+				
+				NumAccess = NumAccess + 1;
 			end
 		end
 	end else begin

@@ -18,6 +18,7 @@
 							TCMD_Append =			{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_Append},
 							TCMD_Read =				{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_Read},
 							TCMD_ReadRmv =			{{TCMDWidth - BECMDWidth{1'b0}}, BECMD_ReadRmv},
+							TCMD_Fill =				8'haf,
 							TCMD_CmdLin_AddrLin =	8'hbf,
 							TCMD_CmdLin_AddrRnd =	8'hcf,
 							TCMD_CmdRnd_AddrLin =	8'hdf,

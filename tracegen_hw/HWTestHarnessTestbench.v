@@ -86,13 +86,17 @@ module HWTestHarnessTestbench;
 							.Count(					CmdCount));
 
 	generate if (GenHistogram) begin
-		assign	UARTShftDataIn =					(CmdCount == 0) ? {8'd0, 32'h00000000, 32'h0, 32'd0} : // write
+		assign	UARTShftDataIn =					(CmdCount == 0) ? 	{TCMD_Fill, 			32'hff, 	1 << 5, 	32'd1024} :
+													(CmdCount == 1) ? 	{TCMD_CmdLin_AddrRnd, 	32'hff, 	1 << 5, 	32'd1024} : 
+																		{TCMD_Start, 			32'h0, 		32'h0, 		32'd0};
+	
+		/*assign	UARTShftDataIn =					(CmdCount == 0) ? {8'd0, 32'h00000000, 32'h0, 32'd0} : // write
 													(CmdCount == 1) ? {8'd0, 32'hf0000001, 32'h2f, 32'd0} : // write
 													(CmdCount == 2) ? {8'd2, 32'hf0000000, 32'h3f, 32'd0} : 
 													(CmdCount == 3) ? {8'd2, 32'hf0000001, 32'h4f, 32'd0} : 
 													(CmdCount == 4) ? {8'd2, 32'hf0000001, 32'h4f, 32'd0} : 
-													{8'hff, 32'h0, 32'h0, 32'd0};
-		assign	UARTShftDataInValid =				CmdCount < 6;	
+													{8'hff, 32'h0, 32'h0, 32'd0};*/
+		assign	UARTShftDataInValid =				CmdCount < 3;
 	end else begin
 		assign	UARTShftDataIn =					(CmdCount == 0) ? {8'd0, 32'hdeadbeef, 32'h0, 32'd0} : // write
 													(CmdCount == 1) ? {8'd1, 32'hf0000000, 32'h2f, 32'd128} : // write
