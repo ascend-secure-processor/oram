@@ -274,7 +274,7 @@ module Stash(
 	
 	(* mark_debug = "TRUE" *)	wire					BogusU, BlockNotFound, BlockNotFoundValid;	
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_ISC4, ERROR_BOGUSU, ERROR_Stash;
+	(* mark_debug = "TRUE" *)	wire					ERROR_BlockNotFound, ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_StashOverflow, ERROR_ISC4, ERROR_BOGUSU, ERROR_StashOverflowConservative, ERROR_Stash;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -302,8 +302,9 @@ module Stash(
 	Register1b 	errno5(Clock, Reset, StashOverflow, 												ERROR_StashOverflow);
 	Register1b 	errno6(Clock, Reset, ScanComplete_Conservative & (Scanned_LeafValid | Scan_LeafValid), ERROR_ISC4);
 	Register1b 	errno7(Clock, Reset, BogusU, 														ERROR_BOGUSU);
+	Register1b 	errno8(Clock, Reset, CSIdle && StashOccupancy > ORAMC,								ERROR_StashOverflowConservative);
 	
-	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow | ERROR_BOGUSU, ERROR_Stash);
+	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow | ERROR_BOGUSU | ERROR_StashOverflowConservative, ERROR_Stash);
 
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
@@ -379,6 +380,11 @@ module Stash(
 			if (ERROR_BOGUSU) begin
 				$display("[%m] ERROR: tried to scan a block with a bogus PAddr");
 				$finish;			
+			end
+			
+			if (ERROR_StashOverflowConservative) begin
+				$display("[%m] ERROR: we have too many blocks in the stash during an idle period");
+				$finish;				
 			end
 			
 			if (CS_Delayed != CS) begin
