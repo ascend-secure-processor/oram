@@ -95,7 +95,11 @@ module PathORAMTopTestbench;
 							
 													// CRUD Format:			Cmd   					PAddr		DataBase	TimeDelay
 													// Seed Format:			Cmd						Seed		AccessCount	Offset
-	assign	UARTShftDataIn =						{						TCMD_CmdLin_AddrLin, 	32'hff, 	1 << 20, 	32'd1024};
+	assign	UARTShftDataIn =						(CmdCount == 0) ? {		TCMD_Fill, 				32'hff, 	1 << 6, 	32'd0} : 
+													(CmdCount == 1) ? {		TCMD_CmdLin_AddrLin, 	32'hff, 	1 << 7, 	32'd0} :
+													(CmdCount == 2) ? {		8'd0, 	32'hdead, 	32'hff, 	32'd0} :
+													                {		8'd2, 	32'hdead, 	32'hff, 	32'd0};
+													//{						TCMD_Start, 			32'h0, 		32'h0, 		32'd0};
 													/*(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
 													(CmdCount == 1) ? 	{8'd0, 	32'h1, 	32'hf, 		32'd0} : 
 													(CmdCount == 2) ? 	{8'd0, 	32'h2, 	32'hff, 	32'd0} : 
@@ -114,7 +118,7 @@ module PathORAMTopTestbench;
 													(CmdCount == 14) ? 	{8'd2, 	32'h6, 	32'h0, 		32'd0} :
 													(CmdCount == 15) ? 	{8'd2, 	32'h7, 	32'h0, 		32'd0} :
 																		{8'hff, 32'h0, 	32'h0, 		32'd0}; */ // start
-	assign	UARTShftDataInValid =					Start & CmdCount < 1;
+	assign	UARTShftDataInValid =					Start & CmdCount < 4;
 	
 	FIFOShiftRound #(		.IWidth(				THPWidth),
 							.OWidth(				UARTWidth),

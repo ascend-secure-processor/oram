@@ -448,7 +448,7 @@ module HWTestHarness(
 							.SecretKey(				{ {AESWidth-TimeWidth{1'b0}}, SlowAddress} ));
 
 	assign	RandomAddress =							PRNGOutData + SlowTime;
-	assign	ScanAddress =							((AccessHalfThresholdReached) ? (SeedAccessCount >> 1) : SeedAccessCount) + SlowTime;
+	assign	ScanAddress =							((AccessHalfThresholdReached) ?  SeedAccessCount - (SlowDataBase >> 1) : SeedAccessCount) + SlowTime;
 	assign	FillAddress =							SeedAccessCount;
 	
 	assign	RandomCommand =							(PRNGOutData[ORAMU-1]) ? TCMD_Update : TCMD_Read;
@@ -780,14 +780,8 @@ module HWTestHarness(
 	//	Error messages
 	//------------------------------------------------------------------------------
 
-	Register	#(			.Width(					1))
-				recv_ovflw(	.Clock(					FastClock),
-							.Reset(					FastReset),
-							.Set(					CrossBufOut_Full & CrossBufOut_DataInValid),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ErrorReceiveOverflow));
-
+	assign	ErrorReceiveOverflow =					1'b0;
+	
 	Register	#(			.Width(					1))
 				send_ovflw(	.Clock(					SlowClock),
 							.Reset(					SlowReset),
