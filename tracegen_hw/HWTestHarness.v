@@ -111,7 +111,7 @@ module HWTestHarness(
 	(* mark_debug = "FALSE" *)	wire	[ORAMB-1:0] DataOutActual, DataOutExpected, DataOutExpectedPre, DataInWide;
 	(* mark_debug = "FALSE" *)	wire				DataOutActualValid, DataOutExpectedValid;
 	
-	(* mark_debug = "FALSE" *)	wire				MismatchReceivePattern;
+	(* mark_debug = "TRUE" *)	wire				ERROR_MismatchReceivePattern;
 
 	// UART
 	
@@ -222,7 +222,7 @@ module HWTestHarness(
 				$finish;
 			end
 			
-			if (MismatchReceivePattern) begin
+			if (ERROR_MismatchReceivePattern) begin
 				$display("WARNING: Traffic gen data mismatch (%x != %x)", DataOutExpected, DataOutActual);
 			end
 		end
@@ -746,7 +746,7 @@ module HWTestHarness(
 							.OutSend(				DataOutExpectedValid),
 							.OutReady(				DataOutActualValid));								
 			
-	assign	MismatchReceivePattern =				(DataOutActual != DataOutExpected) & DataOutActualValid; 
+	assign	ERROR_MismatchReceivePattern =			(DataOutActual != DataOutExpected) & DataOutActualValid; 
 	
 	//------------------------------------------------------------------------------
 	// 	[Receive path] Funnels & crossing
@@ -797,7 +797,7 @@ module HWTestHarness(
 	Register	#(			.Width(					1))
 				error(		.Clock(					FastClock),
 							.Reset(					FastReset),
-							.Set(					MismatchReceivePattern),
+							.Set(					ERROR_MismatchReceivePattern),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ErrorReceivePattern));	
