@@ -72,7 +72,7 @@ module ProgramLoader(
 							.SIn(					UARTRX), 
 							.SOut(					UARTTX));				
 		
-	Register1b 	turn(Clock, Reset | , , 			DataTurn);	
+	Register1b 	turn(Clock, Reset | (ORAMDataInValid & ORAMDataInReady), ORAMCommandValid & ORAMCommandReady, DataTurn);	
 		
 	FIFOShiftRound #(		.IWidth(				UWidth),
 							.OWidth(				ORAMU + BECMDWidth))
