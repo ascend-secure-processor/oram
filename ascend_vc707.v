@@ -62,9 +62,9 @@ module ascend_vc707(
 		
 		See PathORAMTop for more documentation */
 	parameter				SlowORAMClock =			1; // NOTE: set to 0 for performance run
-	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	1; // NOTE: set to 0 for performance run
-	parameter				DebugAES =				0; // NOTE: set to 0 for performance run
+	parameter				SlowAESClock =			SlowORAMClock; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	parameter				DebugAES =				1; // NOTE: set to 0 for performance run			[NOTE: set to 0 for CCS; this may help broken DRAM issue]
 	
 	// See HWTestHarness for documentation
 	parameter				GenHistogram = 			1;
@@ -72,7 +72,7 @@ module ascend_vc707(
 	// CCS paper configurations
 	parameter				UnifiedExperiment =		1;
 	parameter				REWExperiment =			1;
-	parameter				REWIVExperiment =		`ifdef EnableIV `EnableIV `else 0 `endif;
+	parameter				REWIVExperiment =		`ifdef EnableIV 			`EnableIV 			`else 1 `endif;
 	
 	// ORAM related
 	
@@ -89,7 +89,7 @@ module ascend_vc707(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							EnablePLB = 			UnifiedExperiment,
-							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif; // TODO 8192 << 3;
+							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif;
 		
 	parameter				Overclock =				1;
 	
@@ -198,7 +198,7 @@ module ascend_vc707(
 	//------------------------------------------------------------------------------
 	// 	Clocking
 	//------------------------------------------------------------------------------
-
+ 
 	F100ClockGen clk_div_2(	.clk_in1(				MemoryClock),
 							.clk_out1(				SlowClock),
 							.reset(					MemoryReset),
@@ -222,11 +222,14 @@ module ascend_vc707(
 	always @(posedge ORAMClock) begin
 		Tester_ForceHistogramDump <=				Tester_ForceHistogramDumpPre;
 	end	
-	
-	// do something with this
-	assign	led[6:3] = 								0;
 
 	assign	led[7] =								DDR3SDRAM_ResetDone;
+	assign	led[6] = 								UnifiedExperiment;
+	assign	led[5] = 								REWExperiment;
+	assign	led[4] = 								REWIVExperiment;
+	
+	assign	led[3] = 								0;
+	assign	led[2] = 								0;
 	
 	ButtonParse	#(			.Width(					1),
 							.DebWidth(				`log2(ORAMClockFreq / 100)), // Use a 10ms button parser (roughly)
@@ -275,7 +278,7 @@ module ascend_vc707(
 							
 							.ErrorReceiveOverflow(	led[0]),
 							.ErrorReceivePattern(	led[1]),	
-							.ErrorSendOverflow(		led[2]));
+							.ErrorSendOverflow(		));
 
 	//------------------------------------------------------------------------------
 	// 	ORAM Controller

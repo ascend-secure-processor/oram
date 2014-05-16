@@ -16,7 +16,9 @@ module IntegrityVerifier (
 	ROIBV, ROIBID
 );
 
-	parameter	NUMSHA3 = 2;	// TODO 3
+	parameter	NUMSHA3 = 2;
+
+	localparam	StallOnError = 0;
 	localparam  LogNUMSHA3 = `max(1, `log2(NUMSHA3));
 	
     `include "PathORAM.vh"
@@ -189,8 +191,8 @@ module IntegrityVerifier (
 	
 	assign PendingWork = BktOnPathStarted < TotalBucketD || BktOfIStarted < 2;	
 	
-	assign PathDone = BktOnPathDone >= TotalBucketD && ~ERROR_IV;
-	assign BOIDone = BktOfIDone >= 2 && ~ERROR_IV;
+	assign PathDone = BktOnPathDone >= TotalBucketD && ((StallOnError) ? ~ERROR_IV : 1'b1);
+	assign BOIDone = BktOfIDone >= 2 && ((StallOnError) ? ~ERROR_IV : 1'b1);
 	
 	//------------------------------------------------------------------------------------
 	// Checking or updating hash

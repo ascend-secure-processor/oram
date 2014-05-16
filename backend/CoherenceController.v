@@ -319,7 +319,8 @@ module CoherenceController(
 		//------------------------------------------------------------------------------------------------------
 		(* mark_debug = "TRUE" *)	wire 						BufP1_Enable, BufP1_Write;
 		(* mark_debug = "TRUE" *)	wire [PathBufAWidth-1:0] 	BufP1_Address;
-		wire [DDRDWidth-1:0] 		BufP1_DIn, BufP1_DOut_Pre, BufP1_DOut;
+		(* mark_debug = "TRUE" *)	wire [DDRDWidth-1:0] 		BufP1_DIn;
+		wire [DDRDWidth-1:0] 		BufP1_DOut_Pre, BufP1_DOut;
 
 		(* mark_debug = "TRUE" *)	wire 						BufP2_Enable, BufP2_Write;
 		(* mark_debug = "TRUE" *)	wire [PathBufAWidth-1:0] 	BufP2_Address;
