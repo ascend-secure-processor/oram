@@ -224,6 +224,9 @@ module HWTestHarness(
 			
 			if (ERROR_MismatchReceivePattern) begin
 				$display("WARNING: Traffic gen data mismatch (%x != %x)", DataOutExpected, DataOutActual);
+				if (DataOutActual != {(ORAMB/32){32'hdeaf1234}}) begin
+					$finish;
+				end
 			end
 		end
 	`endif

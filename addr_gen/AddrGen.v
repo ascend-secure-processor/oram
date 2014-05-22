@@ -48,18 +48,18 @@ module AddrGen
 
 	wire [ORAML+1:0] BktIdx_Padded;
 	
+	// control logic for AddrGenBktHead
+	wire Enable, SwitchLevel;
+	reg RW, BH;
+	reg [ORAMLogL-1:0] BktCounter;
+    
 	`ifndef ASIC
 		initial begin
 			RW = 1'b0;
 			BH = 1'b0;
 		end
 	`endif
- 
-	// control logic for AddrGenBktHead
-	wire Enable, SwitchLevel;
-	reg RW, BH;
-	reg [ORAMLogL-1:0] BktCounter;
-     
+	
 	AddrGenBktHead #( 	.ORAML(	ORAML), 
 						.DDRROWWidth( DDRROWWidth),
 						.BktSize_DRWords( BktSize_DRWords)
