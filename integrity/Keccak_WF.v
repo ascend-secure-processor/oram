@@ -75,7 +75,7 @@ module Keccak_WF (
 		hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre && !HashEngineReset, HashOutValid);
 
 	// instantiate the hash engine
-    keccak	
+    keccak	#(1600, 1024, 64)
         HashEngine	(	    .clk(			Clock), 
 							.reset(			HashEngineReset), 
 							.in(			HashIn), 

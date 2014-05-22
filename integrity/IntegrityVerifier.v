@@ -64,7 +64,7 @@ module IntegrityVerifier (
 	(* mark_debug = "TRUE" *) wire					BucketOfISIn;
 	
 	// hash IO internal variables
-	localparam HashByteCount = (BktSize_RawBits + 0) / 8;    	
+	localparam HashByteCount = (BktSize_RndBits + 0) / 8;    	
 	wire HashDataReady [0:NUMSHA3-1];
 			
 	// Round robin scheduling for hash engines
@@ -199,7 +199,7 @@ module IntegrityVerifier (
 	//------------------------------------------------------------------------------------ 	
 	wire HashOutValid 	[0:NUMSHA3-1];
 	wire [FullDigestWidth-1:0] HashOut [0:NUMSHA3-1]; 	
-	(* mark_debug = "TRUE" *) wire VersionNonzero, Violation, CheckHash, UpdateHash; 	
+	(* mark_debug = "TRUE" *) wire VersionNon0, Violation, CheckHash, UpdateHash; 	
 	Pipeline #(.Width(1), .Stages(1))	consume_hash (Clock, 1'b0, HashOutValid[NextTurn], ConsumeHash);
 
 	assign CheckHash = ConsumeHash && 
@@ -207,16 +207,15 @@ module IntegrityVerifier (
 						|| BktOfIDone == 1);		// first task is to update the hash, second is to check against the old hash
 	
 	assign UpdateHash = ConsumeHash && !CheckHash;	
-	assign VersionNonzero = (BucketHeaderOut[AESEntropy-1:0] > 64'b0);
 	
 	// checking hash for the input path
-	assign Violation = ConsumeHash && CheckHash && !BOIFromCC && VersionNonzero &&
+	assign Violation = ConsumeHash && CheckHash && !BOIFromCC && VersionNon0 &&
 		BucketHeaderOut[TrancateDigestWidth+BktHSize_RawBits-1:BktHSize_RawBits] != HashOut[Turn][DigestStart-1:DigestEnd];
 	
 	assign Idle = BucketOffsetTurn == BktSize_DRBursts + 1;
 		
 	// updating hash for the output path
-	assign Write = UpdateHash && VersionNonzero;		
+	assign Write = UpdateHash && VersionNon0;		
 	assign DataOut = {HashOut[Turn][DigestStart-1:DigestEnd], BucketHeaderOut[BktHSize_RawBits-1:0]};
 	
 	//------------------------------------------------------------------------------------
@@ -249,7 +248,7 @@ module IntegrityVerifier (
 							.Enable(				1'b1), 
 							.SIn(					{BucketOfISIn, BucketIDSIn}),
 							.SOut(					{BucketOfITurn, BucketIDTurn})
-					);
+					);	
 	assign	BucketOfISIn = (PendingWork && Idle) ? BktOfIStarted < 2 : BucketOfITurn;
 	assign	BucketIDSIn = (PendingWork && Idle) ? 
 								(BucketOfISIn ? 
@@ -260,23 +259,25 @@ module IntegrityVerifier (
 	
 	// BucketHeader has to be a FIFO; it cannot be implemented with ShiftRegister
 	wire	[DDRDWidth-1:0]		BucketHeaderIn;
-	FIFORAM	#(      	.Width(					DDRDWidth),     
+	wire						VersionNon0In;
+	FIFORAM	#(      	.Width(					DDRDWidth+1),     
 						.Buffering(				NUMSHA3))
 		bkt_hd_fifo  (	.Clock(					Clock),
 						.Reset(					Reset),
-						.InData(				BucketHeaderIn),
+						.InData(				{VersionNon0In, BucketHeaderIn}),
 						.InValid(				HeaderInValid),
 						.InAccept(				),
-						.OutData(				BucketHeaderOut),
+						.OutData(				{VersionNon0, BucketHeaderOut}),
 						.OutSend(				),
 						.OutReady(				ConsumeHash)
 					); 
 	assign	BucketHeaderIn = {DataIn[DDRDWidth-1:AESEntropy], BktV};
+	assign	VersionNon0In = BktV > 0;
 	
 	Register1b 	errno1(Clock, Reset, ConsumeHash && CheckHash && Violation, 							ERROR_IVVIOLATION);
 	Register1b 	errno2(Clock, Reset, BOIReady && !BOIDone, 												ERROR_ISC1);
 	Register1b 	errno3(Clock, Reset, PathReady && !PathDone, 											ERROR_ISC2);
-	Register1b 	errno4(Clock, Reset, ConsumeHash && UpdateHash && !VersionNonzero && !BucketOfITurn, 	ERROR_RWWVersion);
+	Register1b 	errno4(Clock, Reset, ConsumeHash && UpdateHash && !VersionNon0 && !BucketOfITurn, 	ERROR_RWWVersion);
 	
 	Register1b 	errANY(Clock, Reset, ERROR_IVVIOLATION | ERROR_ISC1 | ERROR_ISC2 | ERROR_RWWVersion, 	ERROR_IV);
 	
@@ -285,7 +286,7 @@ module IntegrityVerifier (
 		if (ConsumeHash && CheckHash) begin
 			$display("Integrity verification results on Bucket %d, version %d", BucketIDTurn, BucketHeaderOut[AESEntropy-1:0]);
 			if (Violation === 0) begin
-				if (!VersionNonzero)
+				if (!VersionNon0)
 					$display("\tVersion is 0, no need to check hash for Bucket %d", BucketIDTurn);
 				else
 					$display("\tPassed: %x", HashOut[Turn][DigestStart-1:DigestEnd]);
@@ -304,7 +305,7 @@ module IntegrityVerifier (
 		end
 		
 		if (ConsumeHash && UpdateHash) begin
-			if (!VersionNonzero) begin
+			if (!VersionNon0) begin
 				$display("\tVersion is 0, no need to update hash for Bucket %d", BucketIDTurn);
 				if (!BucketOfITurn) begin
 					$display("\t Error: RW_W version 0 for Bucket %d", BucketIDTurn);
