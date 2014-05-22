@@ -1,5 +1,5 @@
 
-	localparam  FullDigestWidth = 512;
+	localparam  FullDigestWidth = 224;
 	
 	localparam  TrancateDigestWidth = `min(BktHSize_RndBits - BktHSize_RawBits, FullDigestWidth); // TODO trigger an assertion if this is too small (say < 80)
 	

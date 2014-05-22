@@ -55,7 +55,7 @@ module IntegrityVerifier (
 	input	[AESEntropy-1:0] ROIBV;
 	input	[BIDWidth-1:0]	 ROIBID;
 	
-	(* mark_debug = "TRUE" *)	wire			ERROR_IVVIOLATION, ERROR_ISC1, ERROR_ISC2, ERROR_RWWVersion, ERROR_IV;	
+	wire			ERROR_IVVIOLATION, ERROR_ISC1, ERROR_ISC2, ERROR_RWWVersion, ERROR_IV;	
 	
 	// status and meta data for hash engines	
 	(* mark_debug = "TRUE" *)	wire [BktAWidth-1:0] 	BucketIDTurn;
@@ -331,6 +331,7 @@ module IntegrityVerifier (
 		
         Keccak_WF #(        .IWidth(            DDRDWidth),
                             .HashByteCount(     HashByteCount),
+							.HashOutWidth(		FullDigestWidth),
 							.KeyLength(			HashKeyLength),
 							.Key(				128'h 5e_7a_2a_9d_43_35_74_5b_85_ce_e5_b3_c0_c1_23_a6))							
             HashEngine (    .Clock(             Clock),         

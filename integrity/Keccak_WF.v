@@ -14,12 +14,12 @@ module Keccak_WF (
 
 	parameter IWidth = 512;
 	parameter HashByteCount = 1;
+	parameter HashOutWidth = 512;
 	
 	parameter KeyLength = 0;
 	parameter Key = 0;
 	
-	localparam HashInWidth = 64;
-	localparam HashOutWidth = 512;
+	localparam HashInWidth = 128;	
 	
 	localparam NumKeyChunk = `divceil(KeyLength, HashInWidth);
 	localparam LogNumKeyChunk = `log2(NumKeyChunk+1);
@@ -75,7 +75,7 @@ module Keccak_WF (
 		hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre && !HashEngineReset, HashOutValid);
 
 	// instantiate the hash engine
-    keccak	#(1600, 1024, 64)
+    keccak	#(1600, 2 * HashOutWidth, HashInWidth)
         HashEngine	(	    .clk(			Clock), 
 							.reset(			HashEngineReset), 
 							.in(			HashIn), 
