@@ -15,19 +15,52 @@
  */
 
 module padder1(in, byte_num, out);
-    input      [63:0] in;
-    input      [2:0]  byte_num;
-    output reg [63:0] out;
+	parameter	IW = 64;
+	
+    input      [IW-1:0] in;
+    input      [3:0]  byte_num;
+    output reg [IW-1:0] out;
     
-    always @ (*)
-      case (byte_num)
-        0: out =             64'h0100000000000000;
-        1: out = {in[63:56], 56'h01000000000000};
-        2: out = {in[63:48], 48'h010000000000};
-        3: out = {in[63:40], 40'h0100000000};
-        4: out = {in[63:32], 32'h01000000};
-        5: out = {in[63:24], 24'h010000};
-        6: out = {in[63:16], 16'h0100};
-        7: out = {in[63:8],   8'h01};
-      endcase
+	generate if (IW == 64) begin
+	
+		always @ (*)
+		  case (byte_num)
+			0: 		out = {						8'h01, 	{(IW-8*1){1'b0}}}; 
+			1: 		out = {in[IW-1:IW-8*1], 	8'h01, 	{(IW-8*2){1'b0}}};
+			2: 		out = {in[IW-1:IW-8*2], 	8'h01, 	{(IW-8*3){1'b0}}};
+			3: 		out = {in[IW-1:IW-8*3], 	8'h01, 	{(IW-8*4){1'b0}}};
+			4: 		out = {in[IW-1:IW-8*4], 	8'h01, 	{(IW-8*5){1'b0}}};
+			5: 		out = {in[IW-1:IW-8*5], 	8'h01, 	{(IW-8*6){1'b0}}};
+			6: 		out = {in[IW-1:IW-8*6], 	8'h01, 	{(IW-8*7){1'b0}}};
+			7: 		out = {in[IW-1:IW-8*7], 	8'h01, 	{(IW-8*8){1'b0}}};
+		  endcase
+		  
+	end else if (IW == 128) begin
+	
+		always @ (*)
+		  case (byte_num)
+			0: 		out = {						8'h01, 	{(IW-8*1){1'b0}}}; 
+			1: 		out = {in[IW-1:IW-8*1], 	8'h01, 	{(IW-8*2){1'b0}}};
+			2: 		out = {in[IW-1:IW-8*2], 	8'h01, 	{(IW-8*3){1'b0}}};
+			3: 		out = {in[IW-1:IW-8*3], 	8'h01, 	{(IW-8*4){1'b0}}};
+			4: 		out = {in[IW-1:IW-8*4], 	8'h01, 	{(IW-8*5){1'b0}}};
+			5: 		out = {in[IW-1:IW-8*5], 	8'h01, 	{(IW-8*6){1'b0}}};
+			6: 		out = {in[IW-1:IW-8*6], 	8'h01, 	{(IW-8*7){1'b0}}};
+			7: 		out = {in[IW-1:IW-8*7], 	8'h01, 	{(IW-8*8){1'b0}}};
+			8: 		out = {in[IW-1:IW-8*8], 	8'h01, 	{(IW-8*9){1'b0}}};
+			9: 		out = {in[IW-1:IW-8*9], 	8'h01, 	{(IW-8*10){1'b0}}};
+			10: 	out = {in[IW-1:IW-8*10], 	8'h01, 	{(IW-8*11){1'b0}}};
+			11: 	out = {in[IW-1:IW-8*11], 	8'h01, 	{(IW-8*12){1'b0}}};
+			12: 	out = {in[IW-1:IW-8*12], 	8'h01, 	{(IW-8*13){1'b0}}};
+			13: 	out = {in[IW-1:IW-8*13], 	8'h01, 	{(IW-8*14){1'b0}}};
+			14: 	out = {in[IW-1:IW-8*14], 	8'h01, 	{(IW-8*15){1'b0}}};
+			15: 	out = {in[IW-1:IW-8*15], 	8'h01, 	{(IW-8*16){1'b0}}};		
+		  endcase
+		  
+	end else begin
+		initial begin
+			$display("IW not 64 or 128, not supported");
+			$finish;
+		end
+	end endgenerate	  
 endmodule

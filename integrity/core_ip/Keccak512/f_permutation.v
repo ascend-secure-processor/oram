@@ -17,15 +17,20 @@
 /* if "ack" is 1, then current input has been used. */
 
 module f_permutation(clk, reset, in, in_ready, ack, out, out_ready);
+	parameter	f = 1600;
+	parameter	c = 1024;
+	
+	localparam	r = f - c;
+
     input               clk, reset;
-    input      [575:0]  in;
+    input      [r-1:0]  in;
     input               in_ready;
     output              ack;
-    output reg [1599:0] out;
+    output reg [f-1:0] 	out;
     output reg          out_ready;
 
     reg        [10:0]   i; /* select round constant */
-    wire       [1599:0] round_in, round_out;
+    wire       [f-1:0] round_in, round_out;
     wire       [63:0]   rc1, rc2;
     wire                update;
     wire                accept;
@@ -53,7 +58,7 @@ module f_permutation(clk, reset, in, in_ready, ack, out, out_ready);
       else if (i[10]) // only change at the last round
         out_ready <= 1;
 
-    assign round_in = accept ? {in ^ out[1599:1599-575], out[1599-576:0]} : out;
+    assign round_in = accept ? {in ^ out[f-1:f-r], out[f-r-1:0]} : out;
 
     rconst2in1
       rconst_ ({i, accept}, rc1, rc2);

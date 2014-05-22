@@ -20,23 +20,32 @@
 module test_keccak;
 
     // Inputs
+    parameter	f = 1600;
+	parameter	c = 448;
+	
+	localparam	r = f - c;
+	localparam	c2 = c / 2;
+
+	parameter	IW = 128;
+    
     reg clk;
     reg reset;
-    reg [63:0] in;
+    reg [IW-1:0] in;
     reg in_ready;
     reg is_last;
-    reg [2:0] byte_num;
+    reg [3:0] byte_num;
 
     // Outputs
     wire buffer_full;
-    wire [511:0] out;
+    wire [c2-1:0] out;
     wire out_ready;
 
     // Var
     integer i;
 
     // Instantiate the Unit Under Test (UUT)
-    keccak uut (
+    keccak #(f, c, IW)
+		uut (
         .clk(clk),
         .reset(reset),
         .in(in),
@@ -62,7 +71,7 @@ module test_keccak;
 
         // Add stimulus here
         @ (negedge clk);
-
+/*
         // SHA3-512("The quick brown fox jumps over the lazy dog")
         reset = 1; #(`P); reset = 0;
         in_ready = 1; is_last = 0;
@@ -71,7 +80,7 @@ module test_keccak;
         in = "fox jump"; #(`P);
         in = "s over t"; #(`P);
         in = "he lazy "; #(`P);
-        in = "dog     "; byte_num = 3; is_last = 1; #(`P); /* !!! not in = "dog" */
+        in = "dog     "; byte_num = 3; is_last = 1; #(`P); // !!! not in = "dog" 
         in_ready = 0; is_last = 0;
         while (out_ready !== 1)
             #(`P);
@@ -85,7 +94,7 @@ module test_keccak;
         in = "fox jump"; #(`P);
         in = "s over t"; #(`P);
         in = "he lazy "; #(`P);
-        in = "dog.    "; byte_num = 4; is_last = 1; #(`P); /* !!! not in = "dog." */
+        in = "dog.    "; byte_num = 4; is_last = 1; #(`P); // !!! not in = "dog." 
         in_ready = 0; is_last = 0;
         while (out_ready !== 1)
             #(`P);
@@ -145,7 +154,7 @@ module test_keccak;
         reset = 1; #(`P); reset = 0;
         #(4*`P); // wait some cycles
         in_ready = 1;
-        byte_num = 7; /* should have no effect */
+        byte_num = 7; // should have no effect 
         is_last = 0;
         for (i=0; i<8; i=i+1)
           begin
@@ -164,7 +173,7 @@ module test_keccak;
         reset = 1; #(`P); reset = 0;
         // don't wait any cycle
         in_ready = 1;
-        byte_num = 7; /* should have no effect */
+        byte_num = 7; // should have no effect 
         is_last = 0;
         for (i=0; i<8; i=i+1)
           begin
@@ -184,7 +193,7 @@ module test_keccak;
         // pad an (576*2-16) bit string
         reset = 1; #(`P); reset = 0;
         in_ready = 1;
-        byte_num = 1; /* should have no effect */
+        byte_num = 1; // should have no effect 
         is_last = 0;
         for (i=0; i<9; i=i+1)
           begin
@@ -214,33 +223,21 @@ module test_keccak;
         while (out_ready !== 1)
             #(`P);
         check(512'h0f385323604e279251e80f928cfd9ce9492ba5df775063ea106eebe2a2c7785a3e33b4397fca66e90f67470334c66ea12016cb1f06170b9b033f158a7c01933e);
-
-        // what the hell is buffer_full
+*/
         reset = 1; #(`P); reset = 0;
         in_ready = 1;
-        byte_num = 1; /* should have no effect */
+        byte_num = 1; // should have no effect 
         is_last = 0;
-        for (i=0; i<19; i=i+1)
+        for (i=0; i<12; i=i+1)
           begin
             while (buffer_full) #(`P);
-            in = "fuckfull"; #(`P);
+            in = "fuckfullfuckfull"; #(`P);
           end
-        byte_num = 0; is_last = 1;
+        byte_num = 4; is_last = 1;
+        while (buffer_full) #(`P);
         #(`P);
         in_ready = 0; is_last = 0;
-
-        #(`P);
-        in_ready = 1;
-        is_last = 0;
-        for (i=0; i<3; i=i+1)
-          begin
-            while (buffer_full) #(`P);
-            in = "fuckfull"; #(`P);
-          end
-        byte_num = 0; is_last = 1;
-        #(`P);
-        in_ready = 0; is_last = 0;
-        
+     
         while (out_ready !== 1)
             #(`P);
         $display("%x", out);
@@ -254,7 +251,7 @@ module test_keccak;
     task error;
         begin
               $display("E");
-              $finish;
+              //$finish;
         end
     endtask
 

@@ -48,7 +48,7 @@ module Keccak_WF (
 	wire [HashInWidth-1:0] KeyChunk;
 	
 	
-	wire LastChunk, HashBufFull, HashBusy, HashReset;
+	wire LastChunk, HashBufFull, HashBusy, HashReset, HashEngineReset;
 	wire LastBut2Chunk, LastEmptyChunk;
 	
 	// Funnel --> HashEngine, controlled by a CounterAlarm
@@ -71,12 +71,13 @@ module Keccak_WF (
 	wire	[HashOutWidth-1:0]	HashOut_pre;	
 	Pipeline	#(.Width(HashOutWidth), .Stages(1))
 		hash_out_pipe	(Clock,	1'b0, HashOut_pre, HashOut);
-	Register1b	hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre, HashOutValid);
+	Pipeline	#(.Width(HashOutWidth), .Stages(1))
+		hash_out_valid_reg	(Clock, HashReset, HashOutValid_pre && !HashEngineReset, HashOutValid);
 
 	// instantiate the hash engine
     keccak	
         HashEngine	(	    .clk(			Clock), 
-							.reset(			HashReset), 
+							.reset(			HashEngineReset), 
 							.in(			HashIn), 
 							.in_ready(		HashInValid), 
 							.is_last(		LastChunk), 
@@ -85,7 +86,23 @@ module Keccak_WF (
 							.out(			HashOut_pre), 
 							.out_ready(		HashOutValid_pre)
 						);
+/*
+	// unsuccessful attemp in mixing with VHDL
+    wire [1:0] hashinreadytemp;
+	wire hashoutreadytemp;
+	wire [63:0]	hashouttmp;
 
+	wrapper_impl
+		HashEngine_test (	.clk(			Clock),
+							.rst(			HashEngineReset),
+							.ext_din(			HashIn),
+							.ext_src_ready(		{HashInValid, HashInValid}),
+							.ext_src_read(		hashinreadytemp),
+							.ext_dout(			hashouttmp),
+							.ext_dst_write(		hashoutreadytemp),
+							.ext_dst_ready(		HashOutValid_pre)					
+						);					
+*/						
     CountAlarm #	(	    .Threshold(HashChunkCount),
                             .IThreshold(HashChunkCount - 1))
         ChunkCtr	(	    .Clock(		    Clock),
@@ -122,6 +139,9 @@ module Keccak_WF (
 	
 	Register #(.Width(1)) Hash (Clock, HashReset, LastChunk, 1'b0, 1'bx, HashBusy);
 	assign HashReset = Reset || (HashOutValid && HashOutReady);
+	
+	Pipeline #(.Width(1), .Stages(1))
+		hash_reset_dl	(Clock, 1'b0, HashReset, HashEngineReset);
 	
 endmodule
 	

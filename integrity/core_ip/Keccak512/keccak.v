@@ -24,27 +24,51 @@
 `define high_pos2(w,b)    (`low_pos2(w,b) + 7)
 
 module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out_ready);
+	parameter	f = 1600;
+	parameter	c = 1024;
+	
+	localparam	r = f - c;
+	localparam	c2 = c / 2;
+
+	parameter	IW = 64;
+//	localparam	BytesInChunk = IW / 8;
+	localparam	ChunkInFIn = r / 64;		// this 64 has nothing to do with IW! Do not change!
+	localparam	ChunkInFOut = f / 64;
+
+`ifdef SIMULATION	
+	initial begin
+		if (r % IW != 0) begin
+			$display("IW does not divide r. Don't know what to do");
+			$finish;
+		end
+		if (f != 1600) begin
+			$display("f != 1600, not supported");
+			$finish;
+		end
+	end
+`endif
+	
     input              clk, reset;
-    input      [63:0]  in;
+    input      [IW-1:0]  in;
     input              in_ready, is_last;
-    input      [2:0]   byte_num;
+    input      [3:0]   byte_num;
     output             buffer_full; /* to "user" module */
-    output     [511:0] out;
+    output     [c2-1:0] out;
     output reg         out_ready;
 
     reg                state;     /* state == 0: user will send more input data
                                    * state == 1: user will not send any data */
-    wire       [575:0] padder_out,
+    wire       [r-1:0] padder_out,
                        padder_out_1; /* before reorder byte */
     wire               padder_out_ready;
     wire               f_ack;
-    wire      [1599:0] f_out;
+    wire       [f-1:0] f_out;
     wire               f_out_ready;
-    wire       [511:0] out1;      /* before reorder byte */
+    wire       [f-1:0] f_out1;      /* after reorder byte */
     reg        [10:0]  i;         /* gen "out_ready" */
     genvar w, b;
 
-    assign out1 = f_out[1599:1599-511];
+    assign out = f_out1[f-1:f-c2];
 
     always @ (posedge clk)
       if (reset)
@@ -55,29 +79,21 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
     always @ (posedge clk)
       if (reset)
         state <= 0;
-      else if (is_last)
+      else if (is_last && in_ready && !buffer_full)
         state <= 1;
 
     /* reorder byte ~ ~ */
-    generate
-      for(w=0; w<8; w=w+1)
-        begin : L0
-          for(b=0; b<8; b=b+1)
-            begin : L1
-              assign out[`high_pos(w,b):`low_pos(w,b)] = out1[`high_pos2(w,b):`low_pos2(w,b)];
-            end
-        end
+    generate	
+		for(w = 0; w < ChunkInFOut; w = w+1)	
+			for(b = 0; b < 8; b = b+1)	
+				assign f_out1[`high_pos(w,b):`low_pos(w,b)] = f_out[`high_pos2(w,b):`low_pos2(w,b)];
     endgenerate
 
-    generate
-      for(w=0; w<9; w=w+1)
-        begin : L2
-          for(b=0; b<8; b=b+1)
-            begin : L3
-              assign padder_out[`high_pos(w,b):`low_pos(w,b)] = padder_out_1[`high_pos2(w,b):`low_pos2(w,b)];
-            end
-        end
-    endgenerate
+	generate
+		for(w = 0; w < ChunkInFIn; w = w+1)	
+			for(b = 0; b < 8; b = b+1)	
+				assign padder_out[`high_pos(w,b):`low_pos(w,b)] = padder_out_1[`high_pos2(w,b):`low_pos2(w,b)];
+	endgenerate
 
     always @ (posedge clk)
       if (reset)
@@ -85,10 +101,10 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
       else if (i[10])
         out_ready <= 1;
 
-    padder
+    padder	#(f, c, IW)
       padder_ (clk, reset, in, in_ready, is_last, byte_num, buffer_full, padder_out_1, padder_out_ready, f_ack);
 
-    f_permutation
+    f_permutation #(f, c)
       f_permutation_ (clk, reset, padder_out, padder_out_ready, f_ack, f_out, f_out_ready);
 endmodule
 
