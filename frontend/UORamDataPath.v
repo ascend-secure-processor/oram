@@ -87,29 +87,33 @@ module UORamDataPath
     (* mark_debug = "TRUE" *) wire EvictFunnelOutValid;
     (* mark_debug = "FALSE" *) wire [FEDWidth-1:0] EvictFunnelDOut;
 
-    FIFOShiftRound #(.IWidth(LeafWidth), .OWidth(FEDWidth))
-        EvictFunnel (   .Clock(Clock),
-                        .Reset(Reset),
-                        .InAccept(EvictBufferOutReady),
-                        .InValid(EvictBufferOutValid),
-                        .InData(EvictBufferDOut),
-                        .OutReady(StoreDataReady),
-                        .OutValid(EvictFunnelOutValid),
-                        .OutData(EvictFunnelDOut)
+    FIFOShiftRound #(	.IWidth(	LeafWidth), 
+						.OWidth(	FEDWidth),
+						.Class1(	1))
+        EvictFunnel (   .Clock(		Clock),
+                        .Reset(		Reset),
+                        .InAccept(	EvictBufferOutReady),
+                        .InValid(	EvictBufferOutValid),
+                        .InData(	EvictBufferDOut),
+                        .OutReady(	StoreDataReady),
+                        .OutValid(	EvictFunnelOutValid),
+                        .OutData(	EvictFunnelDOut)
                     );
 
     // Funnel for LoadData --> PPPRefillData
     (* mark_debug = "TRUE" *) wire RefillFunnelReady, RefillFunnelValid;
 
-    FIFOShiftRound #(.IWidth(FEDWidth), .OWidth(LeafWidth))
-        RefillFunnel (  .Clock(Clock),
-                        .Reset(Reset),
-                        .InAccept(RefillFunnelReady),
-                        .InValid(RefillFunnelValid),
-                        .InData(LoadData),
-                        .OutReady(PPPRefillDataReady),
-                        .OutValid(PPPRefillDataValid),
-                        .OutData(PPPRefillData)
+    FIFOShiftRound #(	.IWidth(	FEDWidth), 
+						.OWidth(	LeafWidth),
+						.Class1(	1))
+        RefillFunnel (  .Clock(		Clock),
+                        .Reset(		Reset),
+                        .InAccept(	RefillFunnelReady),
+                        .InValid(	RefillFunnelValid),
+                        .InData(	LoadData),
+                        .OutReady(	PPPRefillDataReady),
+                        .OutValid(	PPPRefillDataValid),
+                        .OutData(	PPPRefillData)
                     );
 
     // control signal

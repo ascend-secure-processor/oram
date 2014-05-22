@@ -58,7 +58,7 @@ module DM_Cache
 
     assign RefillStart = Enable && Ready && (Cmd == CacheRefill);
     assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset == (1 << LogLineSize) - 1);
-    assign Refilling = RefillStart || (Enable && LastCmd == CacheRefill && RefillOffset > 0);
+    assign Refilling = RefillStart || (LastCmd == CacheRefill && RefillOffset > 0);
     assign RefillWriting = Refilling && RefillOffset[0];
     
     assign RefillDataReady = RefillWriting;
@@ -81,10 +81,10 @@ module DM_Cache
     // control signals for data and tag arrays
     wire DataEnable, TagEnable, DataWrite, TagWrite;
     
-    assign DataEnable = Enable || (IsLastWrite && Hit);
-    assign DataWrite = DataEnable && (IsLastWrite || RefillWriting );
-    assign TagEnable = TagInit || (Enable && (Ready || RefillFinish));
-    assign TagWrite = TagInit || (TagEnable && RefillFinish);
+    assign DataEnable = Enable || (IsLastWrite && Hit) || Refilling;
+    assign DataWrite = IsLastWrite || RefillWriting;
+    assign TagEnable = TagInit || RefillFinish || (Enable && Ready);
+    assign TagWrite = TagInit || RefillFinish;
     
     // addresses for data and tag arrays
     wire [AddrWidth-1:0] Addr;

@@ -133,17 +133,31 @@ module PosMapPLB
     assign EvictDataOutValid = PLBEvict;
     assign EvictDataOut = PLBDOut;
                                                       
-    // PLB control and input 
+    // PLB control and input
+	wire CmdIsRefill, CmdIsInitRefill;
+	assign CmdIsRefill = Cmd == CacheRefill;
+	assign CmdIsInitRefill = Cmd == CacheInitRefill;
+	
     (* mark_debug = "TRUE" *) wire PLBRefill, PLBInitRefill;
-    assign PLBRefill = (CmdReady && CmdValid && Cmd == CacheRefill) || (LastCmd == CacheRefill && !PLBReady);   // Refill start or Refilling
-    assign PLBInitRefill = (CmdReady && CmdValid && Cmd == CacheInitRefill) || (LastCmd == CacheInitRefill && !PLBReady);   // InitRefill
+    assign PLBRefill = (CmdReady && CmdValid && CmdIsRefill) || (LastCmd == CacheRefill && !PLBReady);   // Refill start or Refilling
+    assign PLBInitRefill = (CmdReady && CmdValid && CmdIsInitRefill) || (LastCmd == CacheInitRefill && !PLBReady);   // InitRefill
 		
-    assign PLBEnable = (CmdReady && CmdValid && !InOnChipPosMap) || (PLBRefill && DInValid) || PLBInitRefill;  
-    assign PLBCmd = Cmd == CacheInitRefill ? CacheRefill : Cmd; 
-    assign PLBAddrIn = (PLBRefill || PLBInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;
+    assign PLBEnable = CmdReady && CmdValid && !InOnChipPosMap;
+    assign PLBCmd = CmdIsInitRefill ? CacheRefill : Cmd; 
+    assign PLBAddrIn = (CmdIsRefill || CmdIsInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;
     assign PLBDIn = PLBRefill ? DIn : PLBInitRefill ? {LeafWidth{1'b0}} : {1'b1, NewLeafIn};
     assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
                                       // Must be NewLeafOut! The previous leaf that's still in store, 
+	
+`ifdef SIMULATION
+	always @ (posedge Clock) begin
+		if (PLBRefill && !DInValid) begin
+			$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
+			$finish;
+		end
+	end
+`endif	
+									  
     // =============================================================================  
     (* mark_debug = "TRUE" *) wire PPPHit;
     assign PPPHit = PosMapValid || (PLBValid && PLBHit);
