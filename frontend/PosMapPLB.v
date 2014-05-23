@@ -151,7 +151,7 @@ module PosMapPLB
 	
 `ifdef SIMULATION
 	always @ (posedge Clock) begin
-		if (PLBRefill && !DInValid) begin
+		if (PLBRefill && PLB.DataWrite && !DInValid) begin
 			$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
 			$finish;
 		end
