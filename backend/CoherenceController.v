@@ -484,7 +484,7 @@ module CoherenceController(
 		localparam				EmptyCWidth = `log2(2 + BRAMLatency + 1);
 		wire [EmptyCWidth-1:0]				BufP1Reg_EmptyCount;		
 		
-		assign 	BufP1Reg_DIn =  HdOfIWriteBack ? {HdOfI[DigestStart-1:DigestEnd], BufP1_DOut[DigestEnd-1:0]} 
+		assign 	BufP1Reg_DIn =  HdOfIWriteBack ? {HdOfI[DDRDWidth-1:BktHSize_RawBits], BufP1_DOut[BktHSize_RawBits-1:0]} 
 								: BufP1_DOut;
 		
 		(* mark_debug = "TRUE" *) wire	BufP1Reg_DInValid;		
