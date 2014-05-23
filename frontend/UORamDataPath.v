@@ -89,7 +89,7 @@ module UORamDataPath
 
     FIFOShiftRound #(	.IWidth(	LeafWidth), 
 						.OWidth(	FEDWidth),
-						.Class1(	1))
+						.Class1(	0))
         EvictFunnel (   .Clock(		Clock),
                         .Reset(		Reset),
                         .InAccept(	EvictBufferOutReady),
@@ -105,7 +105,7 @@ module UORamDataPath
 
     FIFOShiftRound #(	.IWidth(	FEDWidth), 
 						.OWidth(	LeafWidth),
-						.Class1(	1))
+						.Class1(	0))
         RefillFunnel (  .Clock(		Clock),
                         .Reset(		Reset),
                         .InAccept(	RefillFunnelReady),
