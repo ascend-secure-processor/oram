@@ -52,7 +52,7 @@ module ascend_vc707(
 	);
 	
 	//------------------------------------------------------------------------------
-	//	Constants
+	//	Parameters
 	//------------------------------------------------------------------------------
 	
 	/* 	Debugging.
@@ -97,6 +97,10 @@ module ascend_vc707(
 	parameter				EnableREW =				REWExperiment;
 	parameter				EnableIV =				REWIVExperiment;
 	parameter				DelayedWB =				EnableIV;
+	
+	//------------------------------------------------------------------------------
+	//	Constants
+	//------------------------------------------------------------------------------	
 	
 	`include "SecurityLocal.vh"
 	`include "BucketLocal.vh"
