@@ -9,6 +9,8 @@
 //	Module:		PathORAMSimulator
 //	Desc:		Produces a DRAM traffic pattern that is indistinguishable from 
 //				Path ORAM, but doesn't do any real work.
+//				This module was written to stress test the FPGA DRAM and find 
+//				broken boards.
 //==============================================================================
 module PathORAMSimulator(
   	Clock, Reset,
@@ -81,16 +83,19 @@ module PathORAMSimulator(
 
 	// Address generator
 
-	wire					AddrGen_InValid, AddrGen_InReady
+	reg		[STAWidth-1:0]	CS_A, NS_A;	
+	wire					CSAStartRead, CSAStartWrite;
+	
+	wire					Reading_Addr;
+	wire					PRNG_OutReady, PRNG_OutValid, AddrGen_InValid, AddrGen_InReady;
 				
-	wire	[ORAML-1:0]		AddrGen_Leaf;
-	wire					StartRead, Reading;	
+	wire	[ORAML-1:0]		AddrGen_Leaf;	
 	
 	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
 	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
 	(* mark_debug = "FALSE" *)	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 
-	// Path buffer
+	// Data paths
 
 	wire					PathBuffer_Full;	
 	
@@ -100,28 +105,50 @@ module PathORAMSimulator(
 	//--------------------------------------------------------------------------
 	//	DRAM Command Interface
 	//--------------------------------------------------------------------------
+		
+	localparam				STAWidth =				2,
+							ST_A_Initializing =		2'd0,
+							ST_A_Idle =				2'd1,
+							ST_A_StartRead =		2'd2;
 	
-	Writing
+	assign	CSAStartRead =							CS_A == ST_A_StartRead;
+	assign	CSAStartWrite =							CS_A == ST_A_StartWrite;
 	
-	Register1b	start(		.Clock(					Clock),
-							.Reset(					AddrGen_InReady & AddrGen_InValid & StartRead),				
-							.Set(					Reset | (AddrGen_InReady & AddrGen_InValid & ~StartRead)),
-							.Out(					StartRead));					
-				
-	Register	state(		.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				AddrGen_InReady & AddrGen_InValid),
-							.In(					~Reading),
-							.Out(					Reading));			
-	assign	Writing =								~Reading;
-				
+	assign	Reading_Addr =							CSAStartRead;
+	
+	assign	PRNG_OutReady =							CSAStartWrite && AddrGen_InReady;
+	assign	AddrGen_InValid	=						CSAStartRead | CSAStartWrite;
+	
+	always @(posedge Clock) begin
+		if (Reset) CS_A <= 							ST_A_Initializing;
+		else CS_A <= 								NS_A;
+	end
+
+	always @( * ) begin
+		NS_A = 										CS_A;
+		case (CS_A)
+			ST_A_Initializing : 
+				if (DRAMInitComplete)
+					NS_A =							ST_A_Idle;
+			ST_A_Idle :
+				if (~Error && PRNG_OutValid)
+					NS_A =							ST_A_StartRead;
+			ST_A_StartRead :						
+				if (AddrGen_InReady)
+					NS_A =							ST_A_StartWrite;
+			ST_A_StartWrite :
+				if (AddrGen_InReady)
+					NS_A =							ST_A_Idle;
+		endcase
+	end
+
 	PRNG 		#(			.RandWidth(				32)) 
 				leaf_gen(	.Clock(					Clock),
 							.Reset(					Reset),
-							.RandOutReady(			AddrGen_InReady & StartRead),
-							.RandOutValid(			AddrGen_InValid),
+							.RandOutReady(			PRNG_OutReady),
+							.RandOutValid(			PRNG_OutValid),
 							.RandOut(				AddrGen_Leaf),
-							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73));		
+							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73)); // TODO: should we make this dynamic?
 							
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -129,9 +156,9 @@ module PathORAMSimulator(
 							.ORAMZ(					ORAMZ))
 				addr_gen(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Start(					AddrGen_InValid & ~Error),
+							.Start(					AddrGen_InValid),
 							.Ready(					AddrGen_InReady),
-							.RWIn(					StartRead),
+							.RWIn(					Reading_Addr),
 							.BHIn(					1'b0),
 							.leaf(					AddrGen_Leaf),
 							.CmdReady(				AddrGen_DRAMCommandReady),
@@ -161,29 +188,95 @@ module PathORAMSimulator(
 	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~DRAMInitializing;
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		DRAMInitializing;
 
-	assign	DRAMWriteData =							(DRAMInitializing) ? 	DRAMInit_DRAMWriteData : 		Stash_DRAMWriteData;
-	assign	DRAMWriteDataValid =					(DRAMInitializing) ? 	DRAMInit_DRAMWriteDataValid : 	Stash_DRAMWriteDataValid;
+	assign	DRAMWriteData =							(DRAMInitializing) ? 	DRAMInit_DRAMWriteData : 		DataPath_DRAMWriteData;
+	assign	DRAMWriteDataValid =					(DRAMInitializing) ? 	DRAMInit_DRAMWriteDataValid : 	DataPath_DRAMWriteDataValid;
 
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
-	assign	Stash_DRAMWriteDataReady =				DRAMWriteDataReady &	~DRAMInitializing;							
-							
+	assign	DataPath_DRAMWriteDataReady =			DRAMWriteDataReady &	~DRAMInitializing;							
+		
 	//--------------------------------------------------------------------------
-	//	AES input (reads)
-	//--------------------------------------------------------------------------
-	
-	AESDataIn
-	AESDataOut
-	
-	AESInValid	
-	AESOutValid
-	
-	OutMask
-	MaskOutValid
-	
+	//	Read/write state
+	//--------------------------------------------------------------------------		
+
+	ReadingData_Pre
 	MaskIsHeader_Pre
 	BucketTransition_Pre
 	MaskIsHeader_Post
 	BucketTransition_Post
+	PathTransition_Pre	
+			
+	ReadingData_Post
+	PathTransition_Post
+	
+	Register1b 	I_state(	.Clock(					Clock),
+							.Reset(					ReadingData_Pre & PathTransition_Pre), 
+							.Set(					Reset | (~ReadingData_Pre & PathTransition_Pre)),
+							.Out(					ReadingData_Pre));
+	
+	CountAlarm #(			.Threshold(				BktSize_DRBursts),
+							.IThreshold(			0))
+				bkt_I_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				(ReadingData_Pre & PathBuffer_OutValid) | ~ReadingData_Pre),
+							.Intermediate(			MaskIsHeader_Pre),
+							.Done(					BucketTransition_Pre));							
+	CountAlarm #(			.Threshold(				ORAML + 1))
+				pth_I_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				BucketTransition_Pre),
+							.Done(					PathTransition_Pre));			
+	
+	Register1b 	O_state(	.Clock(					Clock),
+							.Reset(					ReadingData_Post & PathTransition_Post), 
+							.Set(					Reset | (~ReadingData_Post & PathTransition_Post)),
+							.Out(					ReadingData_Post));	
+	
+	CountAlarm #(			.Threshold(				BktSize_DRBursts),
+							.IThreshold(			0))
+				bkt_O_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				MaskOutValidBuf),
+							.Intermediate(			MaskIsHeader_Post),
+							.Done(					BucketTransition_Post));	
+	
+	CountAlarm 	#(			.Threshold(				ORAML + 1))
+				pth_O_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				BucketTransition_Post),
+							.Done(					PathTransition_Post));					
+		
+	//--------------------------------------------------------------------------
+	//	DRAM read interface
+	//--------------------------------------------------------------------------
+		
+	PathBuffer in_P_buf(	.clk(					Clock),
+							.din(					DRAMReadData), 
+							.wr_en(					DRAMReadDataValid), 
+							.rd_en(					1'b1), 
+							.dout(					PathBuffer_OutData), 
+							.full(					PathBuffer_Full), 
+							.valid(					PathBuffer_OutValid));
+	
+	//--------------------------------------------------------------------------
+	//	AES input (reads)
+	//--------------------------------------------------------------------------
+	
+	
+	
+	AESDataIn
+	AESDataOut
+	
+	AESDataInRead
+	
+	AESInValid	
+	AESOutValid
+	
+	AESReadInValid
+	
+	OutMask
+	MaskOutValid
+	
+
 	
 	DataBase
 	DataOutPreMask						
@@ -196,63 +289,75 @@ module PathORAMSimulator(
 	
 	ChunkID
 	
-	CountAlarm #(			.Threshold(				BktSize_DRBursts),
-							.IThreshold(			0))
-				hdr_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				),
-							.Intermediate(			MaskIsHeader_Pre),
-							.Done(					BucketTransition_Pre));	
+	NextReadIVValid
+	NextReadIVReady
 	
-	Register1b	read_latch(	.Clock(					Clock),
-							.Reset(					MaskIsHeader_Pre & ReadIVGate & PathBuffer_OutValid),				
-							.Set(					BucketTransition_Pre),
-							.Out(					ReadIVGate));
-	Counter		#(			.Width(					AESWidth))
-				next_iv_rd(	.Clock(					Clock),
+	ReadData
+	ReadDataValid
+	CommitRead
+	
+
+	
+	PathBuffer in_I_buf(	.clk(					Clock),
+							.din(					PathBuffer_OutData), 
+							.wr_en(					PathBuffer_OutValid), 
+							.rd_en(					CommitRead), 
+							.dout(					ReadData), 
+							.full(					), 
+							.valid(					ReadDataValid));
+							
+	FIFORAM		#(			.Width(					AESWidth),
+							.Buffering(				ORAML+1))
+				in_iv_fifo(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					MaskIsHeader_Pre & ReadIVGate & PathBuffer_OutValid),
-							.Enable(				~ReadIVGate),
-							.In(					PathBuffer_OutData[AESWidth-1:0]),
-							.Count(					NextReadIV));	
+							.InData(				PathBuffer_OutData[AESWidth-1:0]),
+							.InValid(				PathBuffer_OutValid && MaskIsHeader_Pre),
+							.InAccept(				),
+							.OutData(				NextReadIV),
+							.OutSend(				NextReadIVValid),
+							.OutReady(				NextReadIVReady));							
+	
+	CountAlarm #(			.Threshold(				BktSize_AESChunks))
+				chnt_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				NextReadIVValid),
+							.Count(					ChunkID));
+	
+	assign	AESDataInRead =							NextReadIV + ChunkID;
+	assign 	AESReadInValid =						NextReadIVValid;
 	
 	//--------------------------------------------------------------------------
 	//	AES input (writes)
 	//--------------------------------------------------------------------------		
+
+	AESDataInWrite
+	AESWriteInValid		
 			
 	Counter		#(			.Width(					AESWidth))
 				next_iv_wr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				),
+							.Enable(				BucketTransition_Pre),
 							.In(					{AESWidth{1'bx}}),
 							.Count(					NextWriteIV));
-							
-	Counter		#(			.Width(					AESWidth),
-							.Factor(				BktSize_AESChunks))
-				next_iv_wb(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				Writing & BucketTransition_Post),
-							.In(					{AESWidth{1'bx}}),
-							.Count(					NextBaseWriteIV));
+	
+	assign	AESDataInWrite =						NextWriteIV;
+	assign	AESWriteInValid =						~ReadingData_Pre;
 	
 	//--------------------------------------------------------------------------
-	//	AES core
+	//	AES
 	//--------------------------------------------------------------------------			
 			
-	assign	AESDataIn =								(Reading) ? NextReadIV : NextWriteIV;
-	assign	AESInValid =							;
+	assign	AESDataIn =								(ReadingData_Pre) ? AESDataInRead : AESDataInWrite;
+	assign	AESInValid =							(ReadingData_Pre) ? AESReadInValid : AESWriteInValid;
 	
 	aes_128 tiny_aes(		.clk(					Clock), 
 							.state(					AESDataIn), 
 							.key(					{AESWidth{1'b1}}), 
 							.out(					AESDataOut));
 
-	ShiftRegister #(		.PWidth(				21),
+	ShiftRegister #(		.PWidth(				21), // 21 based on tiny AES
 							.SWidth(				1))
 				V_shift(	.Clock(					Clock), 
 							.Reset(					1'b0), 
@@ -262,8 +367,8 @@ module PathORAMSimulator(
 							.SOut(					AESOutValid));		
 
 	//--------------------------------------------------------------------------
-	//	AES output
-	//--------------------------------------------------------------------------								
+	//	AES output (reads & writes)
+	//--------------------------------------------------------------------------									
 				
 	FIFOShiftRound #(		.IWidth(				AESWidth),
 							.OWidth(				DDRDWidth)) // some of these bits should get pruned by the tools
@@ -276,60 +381,57 @@ module PathORAMSimulator(
 							.OutValid(				MaskOutValid),
 							.OutReady(				1'b1));
 		
+	OutMaskBuf	
+	MaskOutValidBuf
+	 
+	PathBuffer m_buf(		.clk(					Clock),
+							.din(					OutMask), 
+							.wr_en(					MaskOutValid), 
+							.rd_en(					CommitRead | CommitWrite), 
+							.dout(					OutMaskBuf), 
+							.full(					), 
+							.valid(					MaskOutValidBuf));		
+		
 	assign	DataBase =								{DDRDWidth{1'b0}};
-	assign	DataOutPre = 							(Reading) ? PathBuffer_OutData : 
+	assign	DataOutPre = 							(ReadingData_Pre) ? PathBuffer_OutData : 
 													(MaskIsHeader_Post) ? { DataBase[DDRDWidth-1:AESWidth], NextBaseWriteIV } : DataBase;
-	assign	MaskOutPre =							(MaskIsHeader_Post) ? { OutMask[DDRDWidth-1:AESWidth], {AESWidth{1'b0}} } : OutMask;
+	assign	MaskOutPre =							(MaskIsHeader_Post) ? { OutMaskBuf[DDRDWidth-1:AESWidth], {AESWidth{1'b0}} } : OutMaskBuf;
 	assign	DataOut =								DataOutPre ^ MaskOutPre;
 	
-	PathTransition_Post
-	
-	CountAlarm 	#(			.Threshold(				ORAML + 1))
-				pth_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				BucketTransition_Post),
-							.Done(					PathTransition_Post));
-	
-	CountAlarm #(			.Threshold(				BktSize_DRBursts),
-							.IThreshold(			0))
-				bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				MaskOutValid),
-							.Intermediate(			MaskIsHeader_Post),
-							.Done(					BucketTransition_Post));
-		
-	//--------------------------------------------------------------------------
-	//	DRAM Read Interface
-	//--------------------------------------------------------------------------
-			
-	assign	PathBuffer_InReady =					~PathBuffer_Full;
-	PathBuffer in_P_buf(	.clk(					Clock),
-							.din(					DRAMReadData), 
-							.wr_en(					DRAMReadDataValid), 
-							.rd_en(					PathBuffer_OutReady), 
-							.dout(					PathBuffer_OutData), 
-							.full(					PathBuffer_Full), 
-							.valid(					PathBuffer_OutValid));
+	assign	CommitRead =							ReadingData_Post && MaskOutValidBuf && ReadDataValid;		
+	assign	CommitWrite =							~ReadingData_Post && MaskOutValidBuf;
 
 	//--------------------------------------------------------------------------
-	//	DRAM Write Interface
+	//	DRAM write interface
 	//--------------------------------------------------------------------------
-
-	PathBuffer out_P_buf(	.clk(					Clock),
-							.din(					DataOut), 
-							.wr_en(					MaskOutValid & DataWriting), 
-							.rd_en(					DRAMWriteDataReady), 
-							.dout(					DRAMWriteData), 
+	
+	DataPath_DRAMWriteData
+	DataPath_DRAMWriteDataReady
+	DataPath_DRAMWriteDataValid
+	
+	Counter		#(			.Width(					AESWidth),
+							.Factor(				BktSize_AESChunks))
+				next_iv_wb(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				),
+							.In(					{AESWidth{1'bx}}),
+							.Count(					NextBaseWriteIV));	
+	
+	PathBuffer 	out_P_buf(	.clk(					Clock),
+							.din(					DataOut),
+							.wr_en(					CommitWrite), 
+							.rd_en(					DataPath_DRAMWriteDataReady), 
+							.dout(					DataPath_DRAMWriteData), 
 							.full(					), 
-							.valid(					DRAMWriteDataValid));	
-	
-	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
+							.valid(					DataPath_DRAMWriteDataValid));		
 	
 	//--------------------------------------------------------------------------
 	//	Error checking
 	//--------------------------------------------------------------------------
 	
-	Register1b 	errno1(Clock, Reset, 	Reading && 
+	Register1b 	errno1(Clock, Reset, 	ReadingData_Pre && 
 										MaskOutReady && MaskOutValid && 
 										PathBuffer_OutValid && PathBuffer_OutReady &&
 										~MaskIsHeader_Post && 

@@ -33,6 +33,8 @@ module DRAMInitializer(
 	`include "BucketDRAMLocal.vh"
 	`include "SubTreeLocal.vh"
 	
+	parameter					IV =				IVINITValue;
+	
 	localparam					SpaceRemaining = 	BktHSize_RndBits - AESEntropy - BktHSize_ValidBits;
 	
     localparam					EndOfTree =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
@@ -102,7 +104,7 @@ module DRAMInitializer(
 	
 	assign	DRAMWriteData = 						{	{SpaceRemaining{1'bx}},  
 														{BktHSize_ValidBits{1'b0}}, 
-														IVINITValue	};
+														IV	};
 	
 	//--------------------------------------------------------------------------	
 endmodule
