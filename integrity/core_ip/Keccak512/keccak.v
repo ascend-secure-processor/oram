@@ -52,21 +52,18 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
     input      [IW-1:0]  in;
     input              in_ready, is_last;
     input      [3:0]   byte_num;
-    output             buffer_full; /* to "user" module */
+    output             buffer_full; 	// to "user" module
     output     [c2-1:0] out;
     output reg         out_ready;
 
-    reg                state;     /* state == 0: user will send more input data
-                                   * state == 1: user will not send any data */
-    wire       [r-1:0] padder_out,
-                       padder_out_1; /* before reorder byte */
-    wire               padder_out_ready;
+    reg                state;     		// state == 1: user has sent all data
+    wire       [r-1:0] padder_out,	padder_out_pre, 	f_in; 	// padder_out is padder_out_pre reordered 				   
+    wire               padder_out_valid, padder_out_ready, f_in_valid;
     wire               f_ack;
-    wire       [f-1:0] f_out;
+    wire       [f-1:0] f_out,	f_out1;	// // f_out1 is f_out reordered 			
     wire               f_out_ready;
-    wire       [f-1:0] f_out1;      /* after reorder byte */
     reg        [10:0]  i;         /* gen "out_ready" */
-    genvar w, b;
+    
 
     assign out = f_out1[f-1:f-c2];
 
@@ -82,7 +79,8 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
       else if (is_last && in_ready && !buffer_full)
         state <= 1;
 
-    /* reorder byte ~ ~ */
+	// reorder byte ~ ~
+	genvar w, b; 
     generate	
 		for(w = 0; w < ChunkInFOut; w = w+1)	
 			for(b = 0; b < 8; b = b+1)	
@@ -92,7 +90,7 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
 	generate
 		for(w = 0; w < ChunkInFIn; w = w+1)	
 			for(b = 0; b < 8; b = b+1)	
-				assign padder_out[`high_pos(w,b):`low_pos(w,b)] = padder_out_1[`high_pos2(w,b):`low_pos2(w,b)];
+				assign padder_out[`high_pos(w,b):`low_pos(w,b)] = padder_out_pre[`high_pos2(w,b):`low_pos2(w,b)];
 	endgenerate
 
     always @ (posedge clk)
@@ -102,10 +100,22 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
         out_ready <= 1;
 
     padder	#(f, c, IW)
-      padder_ (clk, reset, in, in_ready, is_last, byte_num, buffer_full, padder_out_1, padder_out_ready, f_ack);
+      padder_ (clk, reset, in, in_ready, is_last, byte_num, buffer_full, padder_out_pre, padder_out_valid, padder_out_ready);
 
+	FIFORegister #(		.Width(			r), 
+						.BWLatency(		1)) 
+		padder_reg (	.Clock(			clk),
+						.Reset(			reset),
+						.InData(		padder_out),
+						.InValid(		padder_out_valid),
+						.InAccept(		padder_out_ready),
+						.OutData(		f_in),
+						.OutSend(		f_in_valid),
+						.OutReady(		f_ack)  
+					);
+	  
     f_permutation #(f, c)
-      f_permutation_ (clk, reset, padder_out, padder_out_ready, f_ack, f_out, f_out_ready);
+      f_permutation_ (clk, reset, f_in, f_in_valid, f_ack, f_out, f_out_ready);
 endmodule
 
 `undef low_pos

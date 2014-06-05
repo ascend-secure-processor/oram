@@ -51,47 +51,42 @@ module padder(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
 	assign	update =  (in_ready | state) & (~ buffer_full) & (~ done);
 
     always @ (posedge clk)
-      if (reset)
-        out <= 0;
-      else if (update)
-        out <= {out[r-1-IW:0], v1};
+	if (update)
+		out <= {out[r-1-IW:0], v1};
 
     always @ (posedge clk)
-		if (reset)
-			i <= 0;
-		else if (f_ack)
+		if (reset || (f_ack && out_ready))
 			i <= {ChunkInFIn{1'b0}};
-		else if (update)
+		else if (update) 
 			i <= {i[ChunkInFIn-2:0], 1'b1};
 			
     always @ (posedge clk)
-      if (reset)
-        state <= 0;
-      else if (is_last && in_ready && !buffer_full)
-        state <= 1;
+		if (reset)
+			state <= 0;
+		else if (in_ready && is_last && !buffer_full)
+			state <= 1;
 
     always @ (posedge clk)
-      if (reset)
-        done <= 0;
-      else if (state & out_ready)
-        done <= 1;
+		if (reset)
+			done <= 0;
+		else if (state & out_ready)
+			done <= 1;
 
-    padder1 #(IW) 
-		p0 (in, byte_num, v0);
-    
-    always @ (*)
-      begin
-        if (state)
-          begin
-            v1 = 0;
-            v1[7] = v1[7] | i[ChunkInFIn-2]; /* "v1[7]" is the MSB of its last byte */
-          end
-        else if (!is_last)
-          v1 = in;
-        else
-          begin
-            v1 = v0;
-            v1[7] = v1[7] | i[ChunkInFIn-2];
-          end
-      end
+	localparam	USE_10Pad = 0;
+	generate if (USE_10Pad)		
+		padder1 #(IW) 
+			p0 (in, byte_num, v0);
+    else
+		assign	v0 = {IW{1'b0}};
+	endgenerate
+	
+	
+    always @ (*)  
+		if (state || is_last)	begin	
+			v1 = state ? {IW{1'b0}} : v0;
+			v1[7] = v1[7] | i[ChunkInFIn-2]; /* "v1[7]" is the MSB of its last byte */
+		end
+		else	
+			v1 = in;
+				
 endmodule
