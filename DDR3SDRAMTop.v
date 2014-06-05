@@ -18,7 +18,7 @@ module DDR3SDRAMTop(
 	
 	sys_clk_p, sys_clk_n, sys_rst,
 	
-	ddr3_dq, ddr3_dqs_n, ddr3_dqs_p,			
+	ddr3_dq, ddr3_dqs_n, ddr3_dqs_p,
 	ddr3_addr, ddr3_ba,
 	ddr3_ras_n, ddr3_cas_n,
 	ddr3_we_n, ddr3_reset_n,
@@ -36,7 +36,9 @@ module DDR3SDRAMTop(
 	`include "DDR3SDRAMLocal.vh"	
 	
 	parameter				SlowUserClock =			1,
-							AWidth =				DDRAWidth;
+							AWidth =				DDRAWidth,
+							IntroduceErrors =		0,
+							ErrorRate =				100;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -48,7 +50,7 @@ module DDR3SDRAMTop(
 	//	User interface
 	//--------------------------------------------------------------------------	
 
-	input	[DDRAWidth-1:0]	DRAMAddress;
+	input	[AWidth-1:0]	DRAMAddress;
 	input	[DDRCWidth-1:0]	DRAMCommand;
 	input					DRAMCommandValid;
 	output					DRAMCommandReady;
@@ -103,6 +105,8 @@ module DDR3SDRAMTop(
 	
 	// MIG/DDR3 DRAM
 	
+	wire	[DDRDWidth-1:0]	DRAMReadData_Pre;
+	
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
@@ -116,7 +120,38 @@ module DDR3SDRAMTop(
 	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
 	(* mark_debug = "TRUE" *)	wire					PathWriteback;
+
+	//------------------------------------------------------------------------------
+	//	Debugging bit errors
+	//------------------------------------------------------------------------------	
+
+	generate if (IntroduceErrors && `ifdef SIMULATION 1 `else 0 `endif) begin:ADD_ERRORS
+		reg		[`log2(DDRDWidth)-1:0] ErrorPosition;
+		reg					IntroduceError;
 		
+		initial begin
+			ErrorPosition = {`log2(DDRDWidth){1'b0}};
+			IntroduceError = 1'b0;
+		end
+		
+		always @(posedge UserClock) begin
+			if (DRAMReadDataValid) begin
+				ErrorPosition <=						$random % DDRDWidth;
+				IntroduceError <=						($random % ErrorRate) == 0;
+			end
+
+			if (DRAMReadDataValid && IntroduceError) begin
+				$display("[%m @ %t] INFO: flipped DRAM bit at position %d", $time, ErrorPosition);
+			end
+		end
+		
+		assign	DRAMReadData =							( (IntroduceError) ? 	{{DDRDWidth-1{1'b0}}, 1'b1} << ErrorPosition : 
+																				{DDRDWidth{1'b0}} ) 
+																				^ DRAMReadData_Pre;
+	end else begin:NO_ERRORS
+		assign	DRAMReadData =							DRAMReadData_Pre;	
+	end endgenerate
+	
 	//------------------------------------------------------------------------------
 	//	Debugging clock crossings
 	//------------------------------------------------------------------------------	
@@ -163,7 +198,7 @@ module DDR3SDRAMTop(
 								.din(				DDR3SDRAM_ReadData_MIG),
 								.wr_en(				DDR3SDRAM_DataOutValid_MIG),
 								.rd_en(				1'b1),
-								.dout(				DRAMReadData),
+								.dout(				DRAMReadData_Pre),
 								.full(				),
 								.valid(				DRAMReadDataValid));	
 	end else begin:MEM_CLK_PASS
@@ -180,7 +215,7 @@ module DDR3SDRAMTop(
 		assign	DDR3SDRAM_DataInValid_MIG_Pre =		DRAMWriteDataValid;
 		assign	DRAMWriteDataReady = 				DDR3SDRAM_DataInReady_MIG_Pre;
 		
-		assign	DRAMReadData =						DDR3SDRAM_ReadData_MIG;
+		assign	DRAMReadData_Pre =						DDR3SDRAM_ReadData_MIG;
 		assign	DRAMReadDataValid = 				DDR3SDRAM_DataOutValid_MIG;
 	end endgenerate
 	
@@ -191,6 +226,15 @@ module DDR3SDRAMTop(
 	// This is needed only because MIG is bugged and will drop write data if we 
 	// present WriteCommands & WriteData out of sync with each other
 	// NOTE: this workaround doesn't impact writeback performance
+	
+	`ifdef SIMULATION
+		always @(posedge MemoryClock) begin
+			if (PathWriteback === 1'bx) begin
+				$display("PathWriteback is X.");
+				$finish;
+			end
+		end
+	`endif
 	
 	assign	PathWriteback =							(DDR3SDRAM_Command_MIG == DDR3CMD_Write) & DDR3SDRAM_CommandValid_MIG_Pre;
 	

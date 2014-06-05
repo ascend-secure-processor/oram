@@ -12,7 +12,7 @@
 //				This module was written to stress test the FPGA DRAM and find 
 //				broken boards.
 //==============================================================================
-module PathORAMSimulator(
+module PathORamSimulator(
   	Clock, Reset,
 	
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
@@ -27,8 +27,6 @@ module PathORAMSimulator(
 	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
-	`include "UORAM.vh" 
-	`include "PLB.vh"
 	
 	`include "SecurityLocal.vh"	
 	`include "DDR3SDRAMLocal.vh"
@@ -36,6 +34,12 @@ module PathORAMSimulator(
 	`include "BucketDRAMLocal.vh"
 	
 	localparam				 BktSize_AESChunks = 	BktSize_DRBursts * (DDRDWidth / AESWidth);
+	
+	localparam				STAWidth =				2,
+							ST_A_Initializing =		2'd0,
+							ST_A_Idle =				2'd1,
+							ST_A_StartRead =		2'd2,
+							ST_A_StartWrite =		2'd3;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -97,19 +101,103 @@ module PathORAMSimulator(
 
 	// Data paths
 
-	wire					PathBuffer_Full;	
+	wire					ReadingData_Pre, MaskIsHeader_Pre, PathTransition_Pre;
+	wire					ReadingData_Post, MaskIsHeader_Post, BucketTransition_Post, PathTransition_Post;
 	
-	wire					PathBuffer_OutValid, PathBuffer_OutReady;
+	wire	[AESWidth-1:0]	AESDataIn, AESDataOut;
+	wire					AESInValid, AESOutValid;
+	
+	wire	[AESWidth-1:0]	AESDataInRead, AESDataInWrite;
+	wire					AESReadInValid, AESWriteInValid;		
+	
+	wire	[DDRDWidth-1:0]	OutMask;
+	wire					MaskOutValid;
+	
+	wire	[DDRDWidth-1:0]	ReadData;
+	wire					ReadDataValid;
+	
+	wire					IFIFOHeaderValid;
+	wire					CheckReadBucketIn, CheckReadBucketOut, IVCheckValid;
+	
+	wire	[AESWidth-1:0]	NextReadIV, NextWriteIV_Pre, NextWriteIV_Post;
+	
+	wire	[`log2(BktSize_AESChunks)-1:0] ChunkID;
+	
+	wire					NextReadIVValid, NextReadIVReady;
+		
+	wire					CommitRead, CommitWrite;
+	
+	wire	[DDRDWidth-1:0]	WriteData, OutMaskBuf, MaskOutPre, DataOutPre, DataOut;
+	wire					MaskOutValidBuf;
+	
+	wire					PathBuffer_OutValid;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
-
+	
+	wire	[DDRDWidth-1:0]	DataPath_DRAMWriteData;
+	wire					DataPath_DRAMWriteDataReady, DataPath_DRAMWriteDataValid;
+	
+	// Debugging
+	
+	wire	[63:0]			BurstsChecked;
+	wire					DataMismatch;
+	
+	//--------------------------------------------------------------------------
+	//	Error checking
+	//--------------------------------------------------------------------------
+	
+	Counter		#(			.Width(					64))
+				burst_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CommitRead && CheckReadBucketOut),
+							.In(					{64{1'bx}}),
+							.Count(					BurstsChecked));	
+	
+	assign	DataMismatch =							CommitRead && CheckReadBucketOut && WriteData != DataOut;
+	
+	Register1b 	errno1(Clock, Reset, 	DataMismatch, Error_DataMismatch);
+	Register1b 	errANY(Clock, Reset, 	Error_DataMismatch, Error);
+	
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (DataMismatch) begin
+				$display("ERROR: data mismatch expected = %x, actual = %x.", WriteData, DataOut);
+				$finish;
+			end
+			
+			if (CommitRead && CheckReadBucketOut && ^DataOut === 1'bx) begin
+				$display("ERROR: compare data is X.");
+				$finish;			
+			end
+			
+			if (PathBuffer_OutValid && MaskIsHeader_Pre && ^PathBuffer_OutData[AESWidth-1:0] === 1'bx) begin
+				$display("ERROR: IV is X.");
+				$finish;
+			end
+			
+			if (AESReadInValid && AESWriteInValid) begin
+				$display("ERROR: illegal signal combination.");
+				$finish;			
+			end
+			
+			if (~IVCheckValid && IVCheckReady) begin
+				$display("ERROR: illegal signal combination.");
+				$finish;						
+			end
+			
+			if (CheckReadBucketIn === 1'bx && IFIFOHeaderValid) begin
+				$display("ERROR: illegal signal combination.");
+				$finish;
+			end
+		end
+	`endif	
+	
 	//--------------------------------------------------------------------------
 	//	DRAM Command Interface
 	//--------------------------------------------------------------------------
-		
-	localparam				STAWidth =				2,
-							ST_A_Initializing =		2'd0,
-							ST_A_Idle =				2'd1,
-							ST_A_StartRead =		2'd2;
+	
+	assign	DRAMInitializing =						CS_A == ST_A_Initializing;
 	
 	assign	CSAStartRead =							CS_A == ST_A_StartRead;
 	assign	CSAStartWrite =							CS_A == ST_A_StartWrite;
@@ -170,14 +258,14 @@ module PathORAMSimulator(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.IV						{AESEntropy{1'b0}}))
+							.IV(					{AESEntropy{1'b0}}))
 				dram_init(	.Clock(					Clock),
 							.Reset(					Reset),
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
 							.DRAMCommand(			DRAMInit_DRAMCommand),
 							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
 							.DRAMCommandReady(		DRAMInit_DRAMCommandReady),
-							.DRAMWriteData(			DRAMInit_DRAMWriteData),
+							.DRAMWriteData(			),
 							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
 							.Done(					DRAMInitComplete));
@@ -188,9 +276,12 @@ module PathORAMSimulator(
 	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~DRAMInitializing;
 	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		DRAMInitializing;
 
+	assign	DRAMInit_DRAMWriteData =				{DDRDWidth{1'b0}};
 	assign	DRAMWriteData =							(DRAMInitializing) ? 	DRAMInit_DRAMWriteData : 		DataPath_DRAMWriteData;
 	assign	DRAMWriteDataValid =					(DRAMInitializing) ? 	DRAMInit_DRAMWriteDataValid : 	DataPath_DRAMWriteDataValid;
 
+	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
+	
 	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
 	assign	DataPath_DRAMWriteDataReady =			DRAMWriteDataReady &	~DRAMInitializing;							
 		
@@ -198,35 +289,20 @@ module PathORAMSimulator(
 	//	Read/write state
 	//--------------------------------------------------------------------------		
 
-	ReadingData_Pre
-	MaskIsHeader_Pre
-	BucketTransition_Pre
-	MaskIsHeader_Post
-	BucketTransition_Post
-	PathTransition_Pre	
-			
-	ReadingData_Post
-	PathTransition_Post
-	
-	Register1b 	I_state(	.Clock(					Clock),
+	Register1b 	#(			.Initial(				1'b1))
+				I_state(	.Clock(					Clock),
 							.Reset(					ReadingData_Pre & PathTransition_Pre), 
 							.Set(					Reset | (~ReadingData_Pre & PathTransition_Pre)),
 							.Out(					ReadingData_Pre));
 	
-	CountAlarm #(			.Threshold(				BktSize_DRBursts),
-							.IThreshold(			0))
-				bkt_I_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				(ReadingData_Pre & PathBuffer_OutValid) | ~ReadingData_Pre),
-							.Intermediate(			MaskIsHeader_Pre),
-							.Done(					BucketTransition_Pre));							
-	CountAlarm #(			.Threshold(				ORAML + 1))
+	CountAlarm #(			.Threshold(				(ORAML + 1) * BktSize_AESChunks))
 				pth_I_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				BucketTransition_Pre),
+							.Enable(				AESInValid),
 							.Done(					PathTransition_Pre));			
 	
-	Register1b 	O_state(	.Clock(					Clock),
+	Register1b 	#(			.Initial(				1'b1))
+				O_state(	.Clock(					Clock),
 							.Reset(					ReadingData_Post & PathTransition_Post), 
 							.Set(					Reset | (~ReadingData_Post & PathTransition_Post)),
 							.Out(					ReadingData_Post));	
@@ -237,7 +313,7 @@ module PathORAMSimulator(
 							.Reset(					Reset),
 							.Enable(				MaskOutValidBuf),
 							.Intermediate(			MaskIsHeader_Post),
-							.Done(					BucketTransition_Post));	
+							.Done(					BucketTransition_Post));
 	
 	CountAlarm 	#(			.Threshold(				ORAML + 1))
 				pth_O_cnt(	.Clock(					Clock),
@@ -254,95 +330,78 @@ module PathORAMSimulator(
 							.wr_en(					DRAMReadDataValid), 
 							.rd_en(					1'b1), 
 							.dout(					PathBuffer_OutData), 
-							.full(					PathBuffer_Full), 
+							.full(					), 
 							.valid(					PathBuffer_OutValid));
 	
 	//--------------------------------------------------------------------------
 	//	AES input (reads)
 	//--------------------------------------------------------------------------
 	
-	
-	
-	AESDataIn
-	AESDataOut
-	
-	AESDataInRead
-	
-	AESInValid	
-	AESOutValid
-	
-	AESReadInValid
-	
-	OutMask
-	MaskOutValid
-	
-
-	
-	DataBase
-	DataOutPreMask						
-	DataOutPre
-	DataOut
-
-	NextReadIV
-	NextWriteIV
-	NextBaseWriteIV
-	
-	ChunkID
-	
-	NextReadIVValid
-	NextReadIVReady
-	
-	ReadData
-	ReadDataValid
-	CommitRead
-	
-
-	
-	PathBuffer in_I_buf(	.clk(					Clock),
+	PathBuffer 	in_I_buf(	.clk(					Clock),
 							.din(					PathBuffer_OutData), 
 							.wr_en(					PathBuffer_OutValid), 
 							.rd_en(					CommitRead), 
 							.dout(					ReadData), 
 							.full(					), 
 							.valid(					ReadDataValid));
-							
+	
+	CountAlarm #(			.Threshold(				BktSize_DRBursts),
+							.IThreshold(			0))
+				bkt_H_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				ReadingData_Pre & PathBuffer_OutValid),
+							.Intermediate(			MaskIsHeader_Pre));
+	
+	assign	IFIFOHeaderValid =						PathBuffer_OutValid && MaskIsHeader_Pre;
 	FIFORAM		#(			.Width(					AESWidth),
 							.Buffering(				ORAML+1))
 				in_iv_fifo(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				PathBuffer_OutData[AESWidth-1:0]),
-							.InValid(				PathBuffer_OutValid && MaskIsHeader_Pre),
+							.InValid(				IFIFOHeaderValid),
 							.InAccept(				),
 							.OutData(				NextReadIV),
 							.OutSend(				NextReadIVValid),
-							.OutReady(				NextReadIVReady));							
+							.OutReady(				NextReadIVReady));
 	
+	assign	CheckReadBucketIn =						PathBuffer_OutData[AESWidth-1:0] > 0;
+	FIFORAM		#(			.Width(					1),
+							.Buffering(				ORAML+1))
+				in_iv_vld(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				CheckReadBucketIn),
+							.InValid(				IFIFOHeaderValid),
+							.InAccept(				),
+							.OutData(				CheckReadBucketOut),
+							.OutSend(				IVCheckValid),
+							.OutReady(				IVCheckReady));
+	assign	IVCheckReady =							CommitRead && BucketTransition_Post;
+							
 	CountAlarm #(			.Threshold(				BktSize_AESChunks))
 				chnt_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				NextReadIVValid),
-							.Count(					ChunkID));
+							.Count(					ChunkID),
+							.Done(					NextReadIVReady));
 	
 	assign	AESDataInRead =							NextReadIV + ChunkID;
 	assign 	AESReadInValid =						NextReadIVValid;
-	
+
 	//--------------------------------------------------------------------------
 	//	AES input (writes)
 	//--------------------------------------------------------------------------		
-
-	AESDataInWrite
-	AESWriteInValid		
-			
-	Counter		#(			.Width(					AESWidth))
+		
+	Counter		#(			.Width(					AESWidth),
+							.ResetValue(			BktSize_AESChunks))
 				next_iv_wr(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				BucketTransition_Pre),
+							.Enable(				~ReadingData_Pre),
 							.In(					{AESWidth{1'bx}}),
-							.Count(					NextWriteIV));
+							.Count(					NextWriteIV_Pre));
 	
-	assign	AESDataInWrite =						NextWriteIV;
+	assign	AESDataInWrite =						NextWriteIV_Pre;
 	assign	AESWriteInValid =						~ReadingData_Pre;
 	
 	//--------------------------------------------------------------------------
@@ -350,28 +409,29 @@ module PathORAMSimulator(
 	//--------------------------------------------------------------------------			
 			
 	assign	AESDataIn =								(ReadingData_Pre) ? AESDataInRead : AESDataInWrite;
-	assign	AESInValid =							(ReadingData_Pre) ? AESReadInValid : AESWriteInValid;
+	assign	AESInValid =							AESReadInValid | AESWriteInValid;
 	
 	aes_128 tiny_aes(		.clk(					Clock), 
 							.state(					AESDataIn), 
 							.key(					{AESWidth{1'b1}}), 
 							.out(					AESDataOut));
-
+	
 	ShiftRegister #(		.PWidth(				21), // 21 based on tiny AES
-							.SWidth(				1))
+							.SWidth(				1),
+							.Initial(				{21{1'b0}}))
 				V_shift(	.Clock(					Clock), 
 							.Reset(					1'b0), 
 							.Load(					1'b0), 
 							.Enable(				1'b1),
 							.SIn(					AESInValid),
 							.SOut(					AESOutValid));		
-
+	
 	//--------------------------------------------------------------------------
 	//	AES output (reads & writes)
 	//--------------------------------------------------------------------------									
-				
+	
 	FIFOShiftRound #(		.IWidth(				AESWidth),
-							.OWidth(				DDRDWidth)) // some of these bits should get pruned by the tools
+							.OWidth(				DDRDWidth))
 			aes_shift(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.InData(				AESDataOut),
@@ -380,10 +440,7 @@ module PathORAMSimulator(
 							.OutData(				OutMask),
 							.OutValid(				MaskOutValid),
 							.OutReady(				1'b1));
-		
-	OutMaskBuf	
-	MaskOutValidBuf
-	 
+	
 	PathBuffer m_buf(		.clk(					Clock),
 							.din(					OutMask), 
 							.wr_en(					MaskOutValid), 
@@ -392,10 +449,13 @@ module PathORAMSimulator(
 							.full(					), 
 							.valid(					MaskOutValidBuf));		
 		
-	assign	DataBase =								{DDRDWidth{1'b0}};
-	assign	DataOutPre = 							(ReadingData_Pre) ? PathBuffer_OutData : 
-													(MaskIsHeader_Post) ? { DataBase[DDRDWidth-1:AESWidth], NextBaseWriteIV } : DataBase;
-	assign	MaskOutPre =							(MaskIsHeader_Post) ? { OutMaskBuf[DDRDWidth-1:AESWidth], {AESWidth{1'b0}} } : OutMaskBuf;
+	assign	WriteData =								{DDRDWidth{1'b0}};
+	assign	DataOutPre = 							(ReadingData_Post && MaskIsHeader_Post) ? 	{ 	ReadData[DDRDWidth-1:AESWidth], 	{AESWidth{1'b0}} } :
+													(ReadingData_Post) ?  							ReadData :
+													(~ReadingData_Post && MaskIsHeader_Post) ? 	{ 	WriteData[DDRDWidth-1:AESWidth], 	NextWriteIV_Post } : 
+																									WriteData;	
+	assign	MaskOutPre =							(MaskIsHeader_Post) ? 						{ 	OutMaskBuf[DDRDWidth-1:AESWidth], 	{AESWidth{1'b0}} } : 
+																									OutMaskBuf;
 	assign	DataOut =								DataOutPre ^ MaskOutPre;
 	
 	assign	CommitRead =							ReadingData_Post && MaskOutValidBuf && ReadDataValid;		
@@ -405,40 +465,24 @@ module PathORAMSimulator(
 	//	DRAM write interface
 	//--------------------------------------------------------------------------
 	
-	DataPath_DRAMWriteData
-	DataPath_DRAMWriteDataReady
-	DataPath_DRAMWriteDataValid
-	
 	Counter		#(			.Width(					AESWidth),
-							.Factor(				BktSize_AESChunks))
+							.Factor(				BktSize_AESChunks),
+							.ResetValue(			BktSize_AESChunks))
 				next_iv_wb(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
-							.Enable(				),
+							.Enable(				CommitWrite && MaskIsHeader_Post),
 							.In(					{AESWidth{1'bx}}),
-							.Count(					NextBaseWriteIV));	
+							.Count(					NextWriteIV_Post));	
 	
 	PathBuffer 	out_P_buf(	.clk(					Clock),
 							.din(					DataOut),
 							.wr_en(					CommitWrite), 
+							.full(					),
 							.rd_en(					DataPath_DRAMWriteDataReady), 
 							.dout(					DataPath_DRAMWriteData), 
-							.full(					), 
-							.valid(					DataPath_DRAMWriteDataValid));		
-	
-	//--------------------------------------------------------------------------
-	//	Error checking
-	//--------------------------------------------------------------------------
-	
-	Register1b 	errno1(Clock, Reset, 	ReadingData_Pre && 
-										MaskOutReady && MaskOutValid && 
-										PathBuffer_OutValid && PathBuffer_OutReady &&
-										~MaskIsHeader_Post && 
-										DataBase != DataOut, 
-										Error_DataMismatch);
-	
-	Register1b 	errANY(Clock, Reset, 	Error_DataMismatch, Error);	
+							.valid(					DataPath_DRAMWriteDataValid));
 	
 	//--------------------------------------------------------------------------
 endmodule
