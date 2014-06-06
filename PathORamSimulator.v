@@ -19,7 +19,11 @@ module PathORamSimulator(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Error, Error_DataMismatch
+	Error, Error_DataMismatch,
+	
+	UARTTX,	
+	
+	DumpStatistics
 	);
 	
 	//--------------------------------------------------------------------------
@@ -33,6 +37,8 @@ module PathORamSimulator(
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	
+	parameter				ClockFreq =				100_000_000;
+	
 	localparam				 BktSize_AESChunks = 	BktSize_DRBursts * (DDRDWidth / AESWidth);
 	
 	localparam				STAWidth =				3,
@@ -42,6 +48,13 @@ module PathORamSimulator(
 							ST_A_StartWrite =		3'd3,
 							ST_A_Writing =			3'd4;
 	
+	localparam				UARTWidth =				8,
+							EWidth =				13,
+							CNTWidth =				64,
+							BPWidth =				`log2(DDRDWidth),
+							StatWidth =				BPWidth + CNTWidth + DDRAWidth,
+							StatWidthRnd =			`divceil(StatWidth, 8) * 8;
+		
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -70,6 +83,10 @@ module PathORamSimulator(
 	//-------------------------------------------------------------------------- 
 
 	output					Error, Error_DataMismatch; 
+
+	output					UARTTX;	
+	
+	input					DumpStatistics;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -141,32 +158,74 @@ module PathORamSimulator(
 	
 	// Debugging
 	
-	(* mark_debug = "TRUE" *)	wire	[63:0]			BurstsChecked; // Warning: this will probably get pruned
 	(* mark_debug = "TRUE" *)	wire					DataMismatch;
 	
+	(* mark_debug = "TRUE" *)	wire					EStatAddrInValid, EStatAddrInReady, EStatAddrOutValid;
+	
+	(* mark_debug = "TRUE" *)	wire	[BPWidth-1:0]	EStat_BitPosition, EStat_BitPosition_Out;
+	(* mark_debug = "TRUE" *)	wire	[CNTWidth-1:0]	EStat_BurstsChecked, EStat_BurstsChecked_Out;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	EStat_Address, EStat_Address_Out;
+	
+	(* mark_debug = "TRUE" *)	wire	[EWidth-1:0]	ErrorCount, DumpCount;
+	
+	(* mark_debug = "TRUE" *)	wire					DumpStatistics_Reg, StatsValid, DumpComplete;
+	 
+	wire	[StatWidth-1:0]	StatsDummy, StatsOut;
+	
+	wire	[StatWidthRnd-1:0] UARTShiftIn;
+	(* mark_debug = "TRUE" *)	wire					UARTShiftInValid, UARTShiftInReady;
+	
+	wire	[UARTWidth-1:0]	UARTDataIn;
+	(* mark_debug = "TRUE" *)	wire					UARTDataInValid, UARTDataInReady;	
+	
 	//--------------------------------------------------------------------------
-	//	Error checking
+	//	Error checking & stat collection
 	//--------------------------------------------------------------------------
 	
-	Counter		#(			.Width(					64))
-				burst_cnt(	.Clock(					Clock),
+	assign	DataMismatch =							CommitRead && CheckReadBucketOut && WriteData != DataOut;
+	
+	assign	EStatAddrInValid =						AddrGen_DRAMCommandReady && AddrGen_DRAMCommandValid && AddrGen_DRAMCommand == DDR3CMD_Read;
+	FIFORAM		#(			.Width(					DDRAWidth),
+							.Buffering(				512)) // whatever [TODO change to be tight]
+				es_addr(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				AddrGen_DRAMCommandAddress),
+							.InValid(				EStatAddrInValid),
+							.InAccept(				EStatAddrInReady),
+							.OutData(				EStat_Address),
+							.OutSend(				EStatAddrOutValid),
+							.OutReady(				CommitRead));	
+	
+	Counter		#(			.Width(					CNTWidth))
+				es_burstc(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				CommitRead && CheckReadBucketOut),
-							.In(					{64{1'bx}}),
-							.Count(					BurstsChecked));	
+							.In(					{CNTWidth{1'bx}}),
+							.Count(					EStat_BurstsChecked));
+							
+	OneHot2Bin	#(			.Width(					DDRDWidth))
+				es_pos(		.OneHot(				DataOut), 
+							.Bin(					EStat_BitPosition));	
 	
-	assign	DataMismatch =							CommitRead && CheckReadBucketOut && WriteData != DataOut;
+	Counter		#(			.Width(					EWidth))
+				es_errorc(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DataMismatch),
+							.In(					{EWidth{1'bx}}),
+							.Count(					ErrorCount));	
 	
-	Register1b 	errno1(Clock, Reset, 	DataMismatch, Error_DataMismatch);
-	Register1b 	errANY(Clock, Reset, 	Error_DataMismatch, Error);
+	Register1b 	errno1(Clock, Reset, DataMismatch, Error_DataMismatch);
+	Register1b 	errANY(Clock, Reset, Error_DataMismatch, Error);
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (DataMismatch) begin
-				$display("ERROR: data mismatch expected = %x, actual = %x.", WriteData, DataOut);
-				$finish;
+				$display("CRITICAL WARNING: data mismatch expected = %x, actual = %x.", WriteData, DataOut);
+				//$finish;
 			end
 			
 			if (CommitRead && CheckReadBucketOut && ^DataOut === 1'bx) begin
@@ -193,8 +252,82 @@ module PathORamSimulator(
 				$display("ERROR: illegal signal combination.");
 				$finish;
 			end
+			
+			if (EStatAddrInValid && ~EStatAddrInReady) begin
+				$display("ERROR: estat overflow.");
+				$finish;
+			end
+			
+			if (~EStatAddrOutValid && CommitRead) begin
+				$display("ERROR: estat underflow.");
+				$finish;
+			end
 		end
 	`endif	
+	
+	//--------------------------------------------------------------------------
+	//	Collect errors and send them to SW	
+	//--------------------------------------------------------------------------
+	
+	Register1b 	D_state(Clock, Reset | DumpComplete, DumpStatistics, DumpStatistics_Reg);
+	Counter		#(			.Width(					EWidth))
+				dump_cnt(	.Clock(					Clock),
+							.Reset(					Reset | DumpComplete),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DumpStatistics_Reg),
+							.In(					{EWidth{1'bx}}),
+							.Count(					DumpCount));	
+	assign	DumpComplete =							DumpCount >= (ErrorCount - 1);
+	Register1Pipe d_dly(Clock, DumpStatistics_Reg, StatsValid);
+	
+	RAM			#(			.DWidth(				StatWidth),
+							.AWidth(				EWidth),
+							.NPorts(				2))
+				stored(		.Clock(					{2{Clock}}),
+							.Reset(					2'b00),
+							.Enable(				2'b11),
+							.Write(					{DataMismatch, 	1'b0}),
+							.Address(				{ErrorCount, 	DumpCount}),
+							.DIn(					{{EStat_BitPosition, EStat_BurstsChecked, EStat_Address}, {StatWidth{1'bx}}}),
+							.DOut(					{StatsDummy, StatsOut} ));	
+	assign	{EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out} = StatsOut;
+	
+	FIFORAM		#(			.Width(					StatWidthRnd),
+							.Buffering(				1 << EWidth))
+				stat_fifo(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				StatsOut),
+							.InValid(				StatsValid),
+							.InAccept(				),
+							.OutData(				UARTShiftIn),
+							.OutSend(				UARTShiftInValid),
+							.OutReady(				UARTShiftInReady));
+	
+	FIFOShiftRound #(		.IWidth(				StatWidthRnd),
+							.OWidth(				UARTWidth))
+				u_shft(		.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				UARTShiftIn),
+							.InValid(				UARTShiftInValid),
+							.InAccept(				UARTShiftInReady),
+							.OutData(				UARTDataIn),
+							.OutValid(				UARTDataInValid),
+							.OutReady(				UARTDataInReady));	
+	
+	UART		#(			.ClockFreq(				ClockFreq),
+							.Baud(					9600),
+							.Width(					UARTWidth))
+				uart(		.Clock(					Clock), 
+							.Reset(					Reset), 
+							.DataIn(				UARTDataIn), 
+							.DataInValid(			UARTDataInValid), 
+							.DataInReady(			UARTDataInReady), 
+							.DataOut(				), 
+							.DataOutValid(			), 
+							.DataOutReady(			1'b1), 
+							.SIn(					), 
+							.SOut(					UARTTX));
 	
 	//--------------------------------------------------------------------------
 	//	DRAM Command Interface
@@ -222,7 +355,7 @@ module PathORamSimulator(
 				if (DRAMInitComplete)
 					NS_A =							ST_A_Idle;
 			ST_A_Idle :
-				if (~Error && PRNG_OutValid)
+				if (/* ~Error && */ PRNG_OutValid)
 					NS_A =							ST_A_StartRead;
 			ST_A_StartRead :						
 				if (AddrGen_InReady)

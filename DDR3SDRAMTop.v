@@ -125,6 +125,9 @@ module DDR3SDRAMTop(
 	//	Debugging bit errors
 	//------------------------------------------------------------------------------	
 
+	// This code artificially injects errors into data returned by DRAM to simulate 
+	// broken FPGA boards.
+	
 	generate if (IntroduceErrors && `ifdef SIMULATION 1 `else 0 `endif) begin:ADD_ERRORS
 		reg		[`log2(DDRDWidth)-1:0] ErrorPosition;
 		reg					IntroduceError;
