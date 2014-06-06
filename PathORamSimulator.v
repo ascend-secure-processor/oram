@@ -37,9 +37,10 @@ module PathORamSimulator(
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	
-	parameter				ClockFreq =				100_000_000;
+	parameter				IntroduceErrors =		1,
+							ClockFreq =				100_000_000;
 	
-	localparam				 BktSize_AESChunks = 	BktSize_DRBursts * (DDRDWidth / AESWidth);
+	localparam				BktSize_AESChunks = 	BktSize_DRBursts * (DDRDWidth / AESWidth);
 	
 	localparam				STAWidth =				3,
 							ST_A_Initializing =		3'd0,
@@ -53,7 +54,8 @@ module PathORamSimulator(
 							CNTWidth =				64,
 							BPWidth =				`log2(DDRDWidth),
 							StatWidth =				BPWidth + CNTWidth + DDRAWidth,
-							StatWidthRnd =			`divceil(StatWidth, 8) * 8;
+							StatWidthRnd =			`divceil(StatWidth, 8) * 8,
+							SpaceRemaining =		StatWidthRnd - StatWidth;
 		
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -175,6 +177,7 @@ module PathORamSimulator(
 	wire	[StatWidthRnd-1:0] UARTShiftIn;
 	(* mark_debug = "TRUE" *)	wire					UARTShiftInValid, UARTShiftInReady;
 	
+	wire	[3:0]			UARTDataIn_Pre;
 	wire	[UARTWidth-1:0]	UARTDataIn;
 	(* mark_debug = "TRUE" *)	wire					UARTDataInValid, UARTDataInReady;	
 	
@@ -184,51 +187,21 @@ module PathORamSimulator(
 	
 	assign	DataMismatch =							CommitRead && CheckReadBucketOut && WriteData != DataOut;
 	
-	assign	EStatAddrInValid =						AddrGen_DRAMCommandReady && AddrGen_DRAMCommandValid && AddrGen_DRAMCommand == DDR3CMD_Read;
-	FIFORAM		#(			.Width(					DDRAWidth),
-							.Buffering(				512)) // whatever [TODO change to be tight]
-				es_addr(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				AddrGen_DRAMCommandAddress),
-							.InValid(				EStatAddrInValid),
-							.InAccept(				EStatAddrInReady),
-							.OutData(				EStat_Address),
-							.OutSend(				EStatAddrOutValid),
-							.OutReady(				CommitRead));	
-	
-	Counter		#(			.Width(					CNTWidth))
-				es_burstc(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				CommitRead && CheckReadBucketOut),
-							.In(					{CNTWidth{1'bx}}),
-							.Count(					EStat_BurstsChecked));
-							
-	OneHot2Bin	#(			.Width(					DDRDWidth))
-				es_pos(		.OneHot(				DataOut), 
-							.Bin(					EStat_BitPosition));	
-	
-	Counter		#(			.Width(					EWidth))
-				es_errorc(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataMismatch),
-							.In(					{EWidth{1'bx}}),
-							.Count(					ErrorCount));	
-	
 	Register1b 	errno1(Clock, Reset, DataMismatch, Error_DataMismatch);
 	Register1b 	errANY(Clock, Reset, Error_DataMismatch, Error);
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (DataMismatch) begin
-				$display("CRITICAL WARNING: data mismatch expected = %x, actual = %x.", WriteData, DataOut);
+				$display("[%m @ %t] CRITICAL WARNING: data mismatch expected = %x, actual = %x.", $time, WriteData, DataOut);
 				//$finish;
 			end
 			
-			if (CommitRead && CheckReadBucketOut && ^DataOut === 1'bx) begin
+			if (StatsValid) begin
+				$display("[%m @ %t] Stat dump, error: [bit pos = %d, burst count = %d, dram addr = %d]", $time, EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out);
+			end			
+			
+			if (IntroduceErrors == 0 && CommitRead && CheckReadBucketOut && ^DataOut === 1'bx) begin
 				$display("ERROR: compare data is X.");
 				$finish;			
 			end
@@ -264,9 +237,48 @@ module PathORamSimulator(
 			end
 		end
 	`endif	
+
+	//--------------------------------------------------------------------------
+	//	Collect statistics	
+	//--------------------------------------------------------------------------
+	
+	assign	EStatAddrInValid =						AddrGen_DRAMCommandReady && AddrGen_DRAMCommandValid && AddrGen_DRAMCommand == DDR3CMD_Read;
+	FIFORAM		#(			.Width(					DDRAWidth),
+							.Buffering(				512)) // whatever [TODO change to be tight]
+				es_addr(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				AddrGen_DRAMCommandAddress),
+							.InValid(				EStatAddrInValid),
+							.InAccept(				EStatAddrInReady),
+							.OutData(				EStat_Address),
+							.OutSend(				EStatAddrOutValid),
+							.OutReady(				CommitRead));	
+	
+	Counter		#(			.Width(					CNTWidth))
+				es_burstc(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				CommitRead && CheckReadBucketOut),
+							.In(					{CNTWidth{1'bx}}),
+							.Count(					EStat_BurstsChecked));
+							
+	OneHot2Bin	#(			.Width(					DDRDWidth))
+				es_pos(		.OneHot(				DataOut), 
+							.Bin(					EStat_BitPosition));	
+	
+	Counter		#(			.Width(					EWidth),
+							.Limited(				1))
+				es_errorc(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DataMismatch),
+							.In(					{EWidth{1'bx}}),
+							.Count(					ErrorCount));		
 	
 	//--------------------------------------------------------------------------
-	//	Collect errors and send them to SW	
+	//	Record errors and send them to SW	
 	//--------------------------------------------------------------------------
 	
 	Register1b 	D_state(Clock, Reset | DumpComplete, DumpStatistics, DumpStatistics_Reg);
@@ -297,7 +309,7 @@ module PathORamSimulator(
 							.Buffering(				1 << EWidth))
 				stat_fifo(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				StatsOut),
+							.InData(				{ {SpaceRemaining{1'b0}}, StatsOut} ),
 							.InValid(				StatsValid),
 							.InAccept(				),
 							.OutData(				UARTShiftIn),
@@ -305,15 +317,17 @@ module PathORamSimulator(
 							.OutReady(				UARTShiftInReady));
 	
 	FIFOShiftRound #(		.IWidth(				StatWidthRnd),
-							.OWidth(				UARTWidth))
+							.OWidth(				4))
 				u_shft(		.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				UARTShiftIn),
 							.InValid(				UARTShiftInValid),
 							.InAccept(				UARTShiftInReady),
-							.OutData(				UARTDataIn),
+							.OutData(				UARTDataIn_Pre),
 							.OutValid(				UARTDataInValid),
 							.OutReady(				UARTDataInReady));	
+	
+	Bin2HexASCII bin_ascii(UARTDataIn_Pre, UARTDataIn);
 	
 	UART		#(			.ClockFreq(				ClockFreq),
 							.Baud(					9600),
