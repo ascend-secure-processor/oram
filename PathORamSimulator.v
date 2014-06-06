@@ -35,11 +35,12 @@ module PathORamSimulator(
 	
 	localparam				 BktSize_AESChunks = 	BktSize_DRBursts * (DDRDWidth / AESWidth);
 	
-	localparam				STAWidth =				2,
-							ST_A_Initializing =		2'd0,
-							ST_A_Idle =				2'd1,
-							ST_A_StartRead =		2'd2,
-							ST_A_StartWrite =		2'd3;
+	localparam				STAWidth =				3,
+							ST_A_Initializing =		3'd0,
+							ST_A_Idle =				3'd1,
+							ST_A_StartRead =		3'd2,
+							ST_A_StartWrite =		3'd3,
+							ST_A_Writing =			3'd4;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -76,70 +77,72 @@ module PathORamSimulator(
 		
 	// DRAM initializer
 	
-	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
-	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
-	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
+	(* mark_debug = "TRUE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
 	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
-	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
+	(* mark_debug = "TRUE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 
-	(* mark_debug = "FALSE" *)	wire					DRAMInitializing;
+	(* mark_debug = "TRUE" *)	wire					DRAMInitializing;
 
 	// Address generator
 
-	reg		[STAWidth-1:0]	CS_A, NS_A;	
-	wire					CSAStartRead, CSAStartWrite;
+	(* mark_debug = "TRUE" *)	reg		[STAWidth-1:0]	CS_A, NS_A;	
+	(* mark_debug = "TRUE" *)	wire					CSAStartRead, CSAStartWrite;
 	
-	wire					Reading_Addr;
-	wire					PRNG_OutReady, PRNG_OutValid, AddrGen_InValid, AddrGen_InReady;
+	(* mark_debug = "TRUE" *)	wire					Reading_Addr;
+	(* mark_debug = "TRUE" *)	wire					PRNG_OutReady, PRNG_OutValid, AddrGen_InValid, AddrGen_InReady;
 				
-	wire	[ORAML-1:0]		AddrGen_Leaf;	
+	(* mark_debug = "TRUE" *)	wire	[ORAML-1:0]		AddrGen_Leaf;	
 	
-	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
-	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
-	(* mark_debug = "FALSE" *)	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	AddrGen_DRAMCommandAddress;
+	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	AddrGen_DRAMCommand;
+	(* mark_debug = "TRUE" *)	wire					AddrGen_DRAMCommandValid, AddrGen_DRAMCommandReady;
 
 	// Data paths
 
-	wire					ReadingData_Pre, MaskIsHeader_Pre, PathTransition_Pre;
-	wire					ReadingData_Post, MaskIsHeader_Post, BucketTransition_Post, PathTransition_Post;
+	(* mark_debug = "TRUE" *)	wire					ReadingData_Pre, MaskIsHeader_Pre, PathTransition_Pre;
+	(* mark_debug = "TRUE" *)	wire					ReadingData_Post, MaskIsHeader_Post, BucketTransition_Post, PathTransition_Post;
 	
 	wire	[AESWidth-1:0]	AESDataIn, AESDataOut;
-	wire					AESInValid, AESOutValid;
+	(* mark_debug = "TRUE" *)	wire					AESInValid, AESOutValid;
 	
 	wire	[AESWidth-1:0]	AESDataInRead, AESDataInWrite;
-	wire					AESReadInValid, AESWriteInValid;		
+	(* mark_debug = "TRUE" *)	wire					AESReadInValid, AESWriteInValid;		
 	
 	wire	[DDRDWidth-1:0]	OutMask;
-	wire					MaskOutValid;
+	(* mark_debug = "TRUE" *)	wire					MaskOutValid;
 	
 	wire	[DDRDWidth-1:0]	ReadData;
-	wire					ReadDataValid;
+	(* mark_debug = "TRUE" *)	wire					ReadDataValid;
 	
-	wire					IFIFOHeaderValid;
-	wire					CheckReadBucketIn, CheckReadBucketOut, IVCheckValid;
+	(* mark_debug = "TRUE" *)	wire					IFIFOHeaderValid;
+	(* mark_debug = "TRUE" *)	wire					CheckReadBucketIn, CheckReadBucketOut, IVCheckValid, IVCheckReady;
 	
-	wire	[AESWidth-1:0]	NextReadIV, NextWriteIV_Pre, NextWriteIV_Post;
+	wire	[AESWidth-1:0]	NextReadIV, NextWriteIV_Pre;
+	(* mark_debug = "TRUE" *)	wire	[AESWidth-1:0]	NextWriteIV_Post;
 	
-	wire	[`log2(BktSize_AESChunks)-1:0] ChunkID;
+	(* mark_debug = "TRUE" *)	wire	[`log2(BktSize_AESChunks)-1:0] ChunkID;
 	
-	wire					NextReadIVValid, NextReadIVReady;
+	(* mark_debug = "TRUE" *)	wire					NextReadIVValid, NextReadIVReady;
 		
-	wire					CommitRead, CommitWrite;
+	(* mark_debug = "TRUE" *)	wire					CommitRead, CommitWrite;
 	
-	wire	[DDRDWidth-1:0]	WriteData, OutMaskBuf, MaskOutPre, DataOutPre, DataOut;
-	wire					MaskOutValidBuf;
+	wire	[DDRDWidth-1:0]	WriteData, OutMaskBuf, MaskOutPre, DataOutPre;
+	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DataOut;
+	(* mark_debug = "TRUE" *)	wire					MaskOutValidBuf;
 	
-	wire					PathBuffer_OutValid;
+	(* mark_debug = "TRUE" *)	wire					PathBuffer_OutValid;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
 	
 	wire	[DDRDWidth-1:0]	DataPath_DRAMWriteData;
-	wire					DataPath_DRAMWriteDataReady, DataPath_DRAMWriteDataValid;
+	(* mark_debug = "TRUE" *)	wire					DataPath_DRAMWriteDataReady, DataPath_DRAMWriteDataValid;
 	
 	// Debugging
 	
-	wire	[63:0]			BurstsChecked;
-	wire					DataMismatch;
+	(* mark_debug = "TRUE" *)	wire	[63:0]			BurstsChecked; // Warning: this will probably get pruned
+	(* mark_debug = "TRUE" *)	wire					DataMismatch;
 	
 	//--------------------------------------------------------------------------
 	//	Error checking
@@ -226,6 +229,9 @@ module PathORamSimulator(
 					NS_A =							ST_A_StartWrite;
 			ST_A_StartWrite :
 				if (AddrGen_InReady)
+					NS_A =							ST_A_Writing;
+			ST_A_Writing :
+				if (~ReadingData_Post && PathTransition_Post)
 					NS_A =							ST_A_Idle;
 		endcase
 	end
@@ -325,7 +331,8 @@ module PathORamSimulator(
 	//	DRAM read interface
 	//--------------------------------------------------------------------------
 		
-	PathBuffer in_P_buf(	.clk(					Clock),
+	PathBufferRst in_P_buf(	.rst(					Reset),
+							.clk(					Clock),
 							.din(					DRAMReadData), 
 							.wr_en(					DRAMReadDataValid), 
 							.rd_en(					1'b1), 
@@ -337,7 +344,8 @@ module PathORamSimulator(
 	//	AES input (reads)
 	//--------------------------------------------------------------------------
 	
-	PathBuffer 	in_I_buf(	.clk(					Clock),
+	PathBufferRst in_I_buf(	.rst(					Reset),
+							.clk(					Clock),
 							.din(					PathBuffer_OutData), 
 							.wr_en(					PathBuffer_OutValid), 
 							.rd_en(					CommitRead), 
@@ -441,7 +449,8 @@ module PathORamSimulator(
 							.OutValid(				MaskOutValid),
 							.OutReady(				1'b1));
 	
-	PathBuffer m_buf(		.clk(					Clock),
+	PathBufferRst m_buf(	.rst(					Reset),
+							.clk(					Clock),
 							.din(					OutMask), 
 							.wr_en(					MaskOutValid), 
 							.rd_en(					CommitRead | CommitWrite), 
@@ -476,7 +485,8 @@ module PathORamSimulator(
 							.In(					{AESWidth{1'bx}}),
 							.Count(					NextWriteIV_Post));	
 	
-	PathBuffer 	out_P_buf(	.clk(					Clock),
+	PathBufferRst out_P_buf(.rst(					Reset),
+							.clk(					Clock),
 							.din(					DataOut),
 							.wr_en(					CommitWrite), 
 							.full(					),

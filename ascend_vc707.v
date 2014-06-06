@@ -334,7 +334,7 @@ module ascend_vc707(
 	
 	DDR3SDRAMTop #(			.SlowUserClock(			SlowORAMClock),
 							.AWidth(				DDRAWidth_Top))
-				mig(		.UserClock(				ORAMClock), 
+				dram(		.UserClock(				ORAMClock), 
 							.UserReset(				ORAMReset), 
                             
 							.DRAMCommand(			DDR3SDRAM_Command),

@@ -107,19 +107,19 @@ module DDR3SDRAMTop(
 	
 	wire	[DDRDWidth-1:0]	DRAMReadData_Pre;
 	
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
+	(* mark_debug = "FALSE" *)	wire					DDR3SDRAM_CommandValid_MIG_Pre, DDR3SDRAM_DataInValid_MIG_Pre;
+	(* mark_debug = "FALSE" *)	wire					DDR3SDRAM_CommandReady_MIG_Pre, DDR3SDRAM_DataInReady_MIG_Pre;
 	
-	(* mark_debug = "TRUE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
-	(* mark_debug = "TRUE" *)	wire	[AWidth-1:0]	DDR3SDRAM_Address_MIG;
-	(* mark_debug = "TRUE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
+	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	DDR3SDRAM_Command_MIG;
+	(* mark_debug = "FALSE" *)	wire	[AWidth-1:0]	DDR3SDRAM_Address_MIG;
+	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DDR3SDRAM_WriteData_MIG, DDR3SDRAM_ReadData_MIG; 
 	wire	[DDRMWidth-1:0]	DDR3SDRAM_WriteMask_MIG;
 
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
-	(* mark_debug = "TRUE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
+	(* mark_debug = "FALSE" *)	wire					DDR3SDRAM_CommandValid_MIG, DDR3SDRAM_CommandReady_MIG;
+	(* mark_debug = "FALSE" *)	wire					DDR3SDRAM_DataInValid_MIG, DDR3SDRAM_DataInReady_MIG;
+	(* mark_debug = "FALSE" *)	wire					DDR3SDRAM_DataOutValid_MIG;	
 		
-	(* mark_debug = "TRUE" *)	wire					PathWriteback;
+	(* mark_debug = "FALSE" *)	wire					PathWriteback;
 
 	//------------------------------------------------------------------------------
 	//	Debugging bit errors

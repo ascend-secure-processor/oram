@@ -20,28 +20,6 @@ set_property PACKAGE_PIN AU33 [get_ports uart_rxd]
 set_property IOSTANDARD LVCMOS18 [get_ports uart_rxd]
 
 #######################################
-# Clocks
-#######################################
-
-create_clock -period 5.000 -name ClockF200 [get_ports sys_clk_p]
-#set_propagated_clock sys_clk_p
-
-# PadFunction: IO_L12P_T1_MRCC_38 
-set_property IOSTANDARD DIFF_SSTL15 [get_ports sys_clk_p]
-
-# PadFunction: IO_L12N_T1_MRCC_38 
-set_property IOSTANDARD DIFF_SSTL15 [get_ports sys_clk_n]
-set_property PACKAGE_PIN E18 [get_ports sys_clk_n]
-
-#######################################
-# Reset
-#######################################
-
-# PadFunction: IO_L13P_T2_MRCC_15 
-set_property IOSTANDARD LVCMOS18 [get_ports sys_rst]
-set_property PACKAGE_PIN AV40 [get_ports sys_rst]
-
-#######################################
 # GPIO
 #######################################
 
@@ -106,7 +84,29 @@ set_property PACKAGE_PIN AW40 [get_ports GPIO_SW_W]
 set_property IOSTANDARD LVCMOS18 [get_ports GPIO_SW_W]
 
 #######################################
-# DRAM
+# Clocks
+#######################################
+
+create_clock -period 5.000 [get_ports sys_clk_p]
+#set_propagated_clock sys_clk_p
+
+# PadFunction: IO_L12P_T1_MRCC_38 
+set_property IOSTANDARD DIFF_SSTL15 [get_ports sys_clk_p]
+
+# PadFunction: IO_L12N_T1_MRCC_38 
+set_property IOSTANDARD DIFF_SSTL15 [get_ports sys_clk_n]
+set_property PACKAGE_PIN E18 [get_ports sys_clk_n]
+
+#######################################
+# Reset
+#######################################
+
+# PadFunction: IO_L13P_T2_MRCC_15 
+set_property IOSTANDARD LVCMOS18 [get_ports sys_rst]
+set_property PACKAGE_PIN AV40 [get_ports sys_rst]
+
+#######################################
+# DRAM/MIG
 #######################################
 
 # PadFunction: IO_L23N_T3_39 
@@ -674,67 +674,67 @@ set_property PACKAGE_PIN G18 [get_ports {ddr3_ck_n[0]}]
 # DDR3 MIG 7
 ################################################################################
 
-set_property LOC PHASER_OUT_PHY_X1Y19 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y18 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y17 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y16 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y23 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y22 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y21 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y27 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y26 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y25 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
-set_property LOC PHASER_OUT_PHY_X1Y24 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y19 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y18 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y17 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y16 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y23 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y22 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y21 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y27 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y26 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y25 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_out]
+set_property LOC PHASER_OUT_PHY_X1Y24 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_out]
 
-set_property LOC PHASER_IN_PHY_X1Y19 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y18 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y17 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y16 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y27 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y26 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y25 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_in_gen.phaser_in]
-set_property LOC PHASER_IN_PHY_X1Y24 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y19 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y18 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y17 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y16 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y27 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y26 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y25 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/phaser_in_gen.phaser_in]
+set_property LOC PHASER_IN_PHY_X1Y24 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/phaser_in_gen.phaser_in]
 
-set_property LOC OUT_FIFO_X1Y19 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
-set_property LOC OUT_FIFO_X1Y18 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
-set_property LOC OUT_FIFO_X1Y17 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
-set_property LOC OUT_FIFO_X1Y16 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/out_fifo]
-set_property LOC OUT_FIFO_X1Y23 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
-set_property LOC OUT_FIFO_X1Y22 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
-set_property LOC OUT_FIFO_X1Y21 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
-set_property LOC OUT_FIFO_X1Y27 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
-set_property LOC OUT_FIFO_X1Y26 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
-set_property LOC OUT_FIFO_X1Y25 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
-set_property LOC OUT_FIFO_X1Y24 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/out_fifo]
+set_property LOC OUT_FIFO_X1Y19 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
+set_property LOC OUT_FIFO_X1Y18 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
+set_property LOC OUT_FIFO_X1Y17 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
+set_property LOC OUT_FIFO_X1Y16 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/out_fifo]
+set_property LOC OUT_FIFO_X1Y23 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
+set_property LOC OUT_FIFO_X1Y22 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
+set_property LOC OUT_FIFO_X1Y21 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
+set_property LOC OUT_FIFO_X1Y27 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/out_fifo]
+set_property LOC OUT_FIFO_X1Y26 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/out_fifo]
+set_property LOC OUT_FIFO_X1Y25 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/out_fifo]
+set_property LOC OUT_FIFO_X1Y24 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/out_fifo]
 
-set_property LOC IN_FIFO_X1Y19 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y18 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y17 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y16 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y27 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y26 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y25 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/in_fifo_gen.in_fifo]
-set_property LOC IN_FIFO_X1Y24 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y19 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y18 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y17 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y16 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y27 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y26 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y25 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/in_fifo_gen.in_fifo]
+set_property LOC IN_FIFO_X1Y24 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/in_fifo_gen.in_fifo]
 
-set_property LOC PHY_CONTROL_X1Y4 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/phy_control_i]
-set_property LOC PHY_CONTROL_X1Y5 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/phy_control_i]
-set_property LOC PHY_CONTROL_X1Y6 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/phy_control_i]
+set_property LOC PHY_CONTROL_X1Y4 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/phy_control_i]
+set_property LOC PHY_CONTROL_X1Y5 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/phy_control_i]
+set_property LOC PHY_CONTROL_X1Y6 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/phy_control_i]
 
-set_property LOC PHASER_REF_X1Y4 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/phaser_ref_i]
-set_property LOC PHASER_REF_X1Y5 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/phaser_ref_i]
-set_property LOC PHASER_REF_X1Y6 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/phaser_ref_i]
+set_property LOC PHASER_REF_X1Y4 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/phaser_ref_i]
+set_property LOC PHASER_REF_X1Y5 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_1.u_ddr_phy_4lanes/phaser_ref_i]
+set_property LOC PHASER_REF_X1Y6 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/phaser_ref_i]
 
-set_property LOC OLOGIC_X1Y243 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y231 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y219 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y207 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y343 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y331 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y319 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
-set_property LOC OLOGIC_X1Y307 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y243 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y231 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y219 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y207 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_2.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y343 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_D.ddr_byte_lane_D/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y331 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_C.ddr_byte_lane_C/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y319 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_B.ddr_byte_lane_B/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
+set_property LOC OLOGIC_X1Y307 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_memc_ui_top_std/mem_intfc0/ddr_phy_top0/u_ddr_mc_phy_wrapper/u_ddr_mc_phy/ddr_phy_4lanes_0.u_ddr_phy_4lanes/ddr_byte_lane_A.ddr_byte_lane_A/ddr_byte_group_io/slave_ts.oserdes_slave_ts]
 
-set_property LOC PLLE2_ADV_X1Y5 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_ddr3_infrastructure/plle2_i]
-set_property LOC MMCME2_ADV_X1Y5 [get_cells DDR3SDRAMController/u_DDR3SDRAM_mig/u_ddr3_infrastructure/gen_mmcm.mmcm_i]
+set_property LOC PLLE2_ADV_X1Y5 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_ddr3_infrastructure/plle2_i]
+set_property LOC MMCME2_ADV_X1Y5 [get_cells dram/DDR3SDRAMController/u_DDR3SDRAM_mig/u_ddr3_infrastructure/gen_mmcm.mmcm_i]
 
 set_multicycle_path -setup -from [get_cells -hier -filter {NAME =~ */mc0/mc_read_idle_r_reg}] -to [get_cells -hier -filter {NAME =~ */input_[?].iserdes_dq_.iserdesdq}] 6
 set_multicycle_path -hold -from [get_cells -hier -filter {NAME =~ */mc0/mc_read_idle_r_reg}] -to [get_cells -hier -filter {NAME =~ */input_[?].iserdes_dq_.iserdesdq}] 5
