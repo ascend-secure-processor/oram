@@ -606,7 +606,7 @@ module PathORamSimulator(
 							.SWidth(				1),
 							.Initial(				{21{1'b0}}))
 				V_shift(	.Clock(					Clock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Load(					1'b0), 
 							.Enable(				1'b1),
 							.SIn(					AESInValid),
@@ -619,7 +619,7 @@ module PathORamSimulator(
 	FIFOShiftRound #(		.IWidth(				AESWidth),
 							.OWidth(				DDRDWidth))
 			aes_shift(		.Clock(					Clock),
-							.Reset(					1'b0),
+							.Reset(					Reset),
 							.InData(				AESDataOut),
 							.InValid(				AESOutValid),
 							.InAccept(				),
