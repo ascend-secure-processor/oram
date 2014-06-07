@@ -11,6 +11,9 @@
 //				Path ORAM, but doesn't do any real work.
 //				This module was written to stress test the FPGA DRAM and find 
 //				broken boards.
+//
+//				Basically, this is a much better memory traffic generator than 
+//				anything Xilinx puts out.
 //==============================================================================
 module PathORamSimulator(
   	Clock, Reset,
@@ -19,7 +22,7 @@ module PathORamSimulator(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Error, Error_DataMismatch,
+	Error, Error_DataMismatch, Error_MultipleBitErrors,
 	
 	UARTTX,	
 	
@@ -50,12 +53,16 @@ module PathORamSimulator(
 							ST_A_Writing =			3'd4;
 	
 	localparam				UARTWidth =				8,
-							EWidth =				13,
+							EWidth =				11, // track up to 1 << EWidth errors
 							CNTWidth =				64,
 							BPWidth =				`log2(DDRDWidth),
-							StatWidth =				BPWidth + CNTWidth + DDRAWidth,
-							StatWidthRnd =			`divceil(StatWidth, 8) * 8,
-							SpaceRemaining =		StatWidthRnd - StatWidth;
+							PCWidth =				`log2(DDRDWidth+1),
+							StatWidth =				BPWidth + PCWidth + CNTWidth + DDRAWidth,
+							DDRAWidthRnd =			`divceil(DDRAWidth, 4) * 4,
+							CNTWidthRnd =			`divceil(CNTWidth, 4) * 4,
+							BPWidthRnd =			`divceil(BPWidth, 4) * 4,
+							PCWidthRnd =			`divceil(PCWidth, 4) * 4,
+							StatWidthRnd =			PCWidthRnd + BPWidthRnd + CNTWidthRnd + DDRAWidthRnd; 
 		
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -84,7 +91,7 @@ module PathORamSimulator(
 	//	Status interface
 	//-------------------------------------------------------------------------- 
 
-	output					Error, Error_DataMismatch; 
+	output					Error, Error_DataMismatch, Error_MultipleBitErrors; 
 
 	output					UARTTX;	
 	
@@ -160,21 +167,27 @@ module PathORamSimulator(
 	
 	// Debugging
 	
-	(* mark_debug = "TRUE" *)	wire					DataMismatch;
+	(* mark_debug = "TRUE" *)	wire					DataMismatch, MultipleBitErrors;
 	
 	(* mark_debug = "TRUE" *)	wire					EStatAddrInValid, EStatAddrInReady, EStatAddrOutValid;
 	
+	(* mark_debug = "TRUE" *)	wire	[PCWidth-1:0]	EStat_NumBitErrors, EStat_NumBitErrors_Out;
 	(* mark_debug = "TRUE" *)	wire	[BPWidth-1:0]	EStat_BitPosition, EStat_BitPosition_Out;
 	(* mark_debug = "TRUE" *)	wire	[CNTWidth-1:0]	EStat_BurstsChecked, EStat_BurstsChecked_Out;
 	(* mark_debug = "TRUE" *)	wire	[DDRAWidth-1:0]	EStat_Address, EStat_Address_Out;
+	
+	(* mark_debug = "TRUE" *)	wire	[PCWidthRnd-1:0] EStat_NumBitErrors_OutPadded;
+	(* mark_debug = "TRUE" *)	wire	[BPWidthRnd-1:0] EStat_BitPosition_OutPadded;
+	(* mark_debug = "TRUE" *)	wire	[CNTWidthRnd-1:0] EStat_BurstsChecked_OutPadded;
+	(* mark_debug = "TRUE" *)	wire	[DDRAWidthRnd-1:0] EStat_Address_OutPadded;
 	
 	(* mark_debug = "TRUE" *)	wire	[EWidth-1:0]	ErrorCount, DumpCount;
 	
 	(* mark_debug = "TRUE" *)	wire					DumpStatistics_Reg, StatsValid, DumpComplete;
 	 
-	wire	[StatWidth-1:0]	StatsDummy, StatsOut;
+	wire	[StatWidth-1:0]	StatsDummy, StatsIn, StatsOut;
 	
-	wire	[StatWidthRnd-1:0] UARTShiftIn;
+	wire	[StatWidthRnd-1:0] StatsPadded, UARTShiftIn;
 	(* mark_debug = "TRUE" *)	wire					UARTShiftInValid, UARTShiftInReady;
 	
 	wire	[3:0]			UARTDataIn_Pre;
@@ -186,19 +199,24 @@ module PathORamSimulator(
 	//--------------------------------------------------------------------------
 	
 	assign	DataMismatch =							CommitRead && CheckReadBucketOut && WriteData != DataOut;
+	assign	MultipleBitErrors =						CommitRead && CheckReadBucketOut && EStat_NumBitErrors > 1;
 	
 	Register1b 	errno1(Clock, Reset, DataMismatch, Error_DataMismatch);
-	Register1b 	errANY(Clock, Reset, Error_DataMismatch, Error);
+	Register1b 	errno2(Clock, Reset, MultipleBitErrors, Error_MultipleBitErrors);
+	Register1b 	errANY(Clock, Reset, Error_DataMismatch || Error_MultipleBitErrors, Error);
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (DataMismatch) begin
 				$display("[%m @ %t] CRITICAL WARNING: data mismatch expected = %x, actual = %x.", $time, WriteData, DataOut);
-				//$finish;
 			end
 			
+			if (MultipleBitErrors) begin
+				$display("[%m @ %t] CRITICAL WARNING: multiple bit errors detected (num = %d).", $time, EStat_NumBitErrors);
+			end			
+			
 			if (StatsValid) begin
-				$display("[%m @ %t] Stat dump, error: [bit pos = %d, burst count = %d, dram addr = %d]", $time, EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out);
+				$display("[%m @ %t] Stat dump, error: [# bit errors = %d, bit pos = %d, burst count = %d, dram addr = %d]", $time, EStat_NumBitErrors_Out, EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out);
 			end			
 			
 			if (IntroduceErrors == 0 && CommitRead && CheckReadBucketOut && ^DataOut === 1'bx) begin
@@ -262,7 +280,11 @@ module PathORamSimulator(
 							.Enable(				CommitRead && CheckReadBucketOut),
 							.In(					{CNTWidth{1'bx}}),
 							.Count(					EStat_BurstsChecked));
-							
+			
+	PopAdd		#(			.IWidth(				DDRDWidth))
+				es_ebcnt(	.In(					DataOut), 
+							.Out(					EStat_NumBitErrors));
+
 	OneHot2Bin	#(			.Width(					DDRDWidth))
 				es_pos(		.OneHot(				DataOut), 
 							.Bin(					EStat_BitPosition));	
@@ -293,6 +315,7 @@ module PathORamSimulator(
 	assign	DumpComplete =							DumpCount >= (ErrorCount - 1);
 	Register1Pipe d_dly(Clock, DumpStatistics_Reg, StatsValid);
 	
+	assign	StatsIn =								{EStat_NumBitErrors, EStat_BitPosition, EStat_BurstsChecked, EStat_Address};
 	RAM			#(			.DWidth(				StatWidth),
 							.AWidth(				EWidth),
 							.NPorts(				2))
@@ -301,15 +324,23 @@ module PathORamSimulator(
 							.Enable(				2'b11),
 							.Write(					{DataMismatch, 	1'b0}),
 							.Address(				{ErrorCount, 	DumpCount}),
-							.DIn(					{{EStat_BitPosition, EStat_BurstsChecked, EStat_Address}, {StatWidth{1'bx}}}),
-							.DOut(					{StatsDummy, StatsOut} ));	
-	assign	{EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out} = StatsOut;
+							.DIn(					{StatsIn, 		{StatWidth{1'bx}}}),
+							.DOut(					{StatsDummy, 	StatsOut}));	
+	assign	{EStat_NumBitErrors_Out, EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out} = StatsOut;
 	
+	// Pad the data so that it is easy to read in hex-ascii
+	assign	EStat_NumBitErrors_OutPadded =			{{PCWidthRnd-PCWidth{1'b0}}, 		EStat_NumBitErrors_Out};
+	assign	EStat_BitPosition_OutPadded =			{{BPWidthRnd-BPWidth{1'b0}}, 		EStat_BitPosition_Out};
+	assign	EStat_BurstsChecked_OutPadded =			{{CNTWidthRnd-CNTWidth{1'b0}}, 		EStat_BurstsChecked_Out};
+	assign	EStat_Address_OutPadded =				{{DDRAWidthRnd-DDRAWidth{1'b0}}, 	EStat_Address_Out};
+	
+	assign	StatsPadded =							{EStat_NumBitErrors_OutPadded, EStat_BitPosition_OutPadded, 
+													 EStat_BurstsChecked_OutPadded, EStat_Address_OutPadded};
 	FIFORAM		#(			.Width(					StatWidthRnd),
 							.Buffering(				1 << EWidth))
 				stat_fifo(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{ {SpaceRemaining{1'b0}}, StatsOut} ),
+							.InData(				StatsPadded),
 							.InValid(				StatsValid),
 							.InAccept(				),
 							.OutData(				UARTShiftIn),

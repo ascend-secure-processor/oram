@@ -38,7 +38,8 @@ module DDR3SDRAMTop(
 	parameter				SlowUserClock =			1,
 							AWidth =				DDRAWidth,
 							IntroduceErrors =		0,
-							ErrorRate =				100;
+							ErrorRate =				100,
+							ErrorRate2 =			2;
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -129,8 +130,8 @@ module DDR3SDRAMTop(
 	// broken FPGA boards.
 	
 	generate if (IntroduceErrors && `ifdef SIMULATION 1 `else 0 `endif) begin:ADD_ERRORS
-		reg		[`log2(DDRDWidth)-1:0] ErrorPosition;
-		reg					IntroduceError;
+		reg		[`log2(DDRDWidth)-1:0] ErrorPosition, ErrorPosition2;
+		reg					IntroduceError, IntroduceError2;
 		
 		initial begin
 			ErrorPosition = {`log2(DDRDWidth){1'b0}};
@@ -140,17 +141,20 @@ module DDR3SDRAMTop(
 		always @(posedge UserClock) begin
 			if (DRAMReadDataValid) begin
 				ErrorPosition <=						$random % DDRDWidth;
+				ErrorPosition2 <=						$random % DDRDWidth;
 				IntroduceError <=						($random % ErrorRate) == 0;
+				IntroduceError2 <=						($random % ErrorRate2) == 0;
 			end
 
 			if (DRAMReadDataValid && IntroduceError) begin
 				$display("[%m @ %t] INFO: flipped DRAM bit at position %d", $time, ErrorPosition);
+				if (IntroduceError2) $display("[%m @ %t] INFO: flipped _second_ DRAM bit at position %d", $time, ErrorPosition2);
 			end
 		end
 		
-		assign	DRAMReadData =							( (IntroduceError) ? 	{{DDRDWidth-1{1'b0}}, 1'b1} << ErrorPosition : 
-																				{DDRDWidth{1'b0}} ) 
-																				^ DRAMReadData_Pre;
+		assign	DRAMReadData =							( (IntroduceError) ? 						{{DDRDWidth-1{1'b0}}, 1'b1} << ErrorPosition : {DDRDWidth{1'b0}} ) ^
+														( (IntroduceError && IntroduceError2) ? 	{{DDRDWidth-1{1'b0}}, 1'b1} << ErrorPosition2 : {DDRDWidth{1'b0}} ) ^
+														DRAMReadData_Pre;
 	end else begin:NO_ERRORS
 		assign	DRAMReadData =							DRAMReadData_Pre;	
 	end endgenerate
