@@ -52,12 +52,14 @@ module ProgramLoader(
         //      Wires & Regs
         //------------------------------------------------------------------------------
 
-        wire    [UWidth-1:0]    UARTDataOut;
-        wire                                    UARTDataOutValid;
+        (* mark_debug = "TRUE" *) wire    [UWidth-1:0]    UARTDataOut;
+        (* mark_debug = "TRUE" *) wire                                    UARTDataOutValid;
 
-        wire                                    DataTurn;
+        (* mark_debug = "TRUE" *) wire                                    DataTurn;
 
-        wire                                    CommandInReady, DataInReady;
+        (* mark_debug = "TRUE" *) wire                                    CommandInReady, DataInReady;
+
+        wire [8-BECMDWidth-1:0]                           Dummy;
 
         //------------------------------------------------------------------------------
         //      HW<->SW Bridge (UART)
@@ -80,13 +82,13 @@ module ProgramLoader(
         Register1b      turn(Clock, Reset | (ORAMDataInValid & ORAMDataInReady), ORAMCommandValid & ORAMCommandReady, DataTurn);
 
         FIFOShiftRound #(               .IWidth(                                UWidth),
-                                                        .OWidth(                                ORAMU + BECMDWidth))
+                                                        .OWidth(                                ORAMU + 8))
                                 cmd_shft(       .Clock(                                 Clock),
                                                         .Reset(                                 Reset),
                                                         .InData(                                UARTDataOut),
                                                         .InValid(                               UARTDataOutValid & ~DataTurn),
                                                         .InAccept(                              CommandInReady),
-                                                        .OutData(                               {ORAMCommand, ORAMPAddr}),
+                                                        .OutData(                               {Dummy, ORAMCommand, ORAMPAddr}),
                                                         .OutValid(                              ORAMCommandValid),
                                                         .OutReady(                              ORAMCommandReady));
 
