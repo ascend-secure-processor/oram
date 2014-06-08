@@ -1,101 +1,106 @@
 
 //==============================================================================
-//	Section:	Includes
+//      Section:        Includes
 //==============================================================================
 `include "Const.vh"
 //==============================================================================
 
 //==============================================================================
-//	Module:		ProgramLoader
-//	Desc:		
+//      Module:         ProgramLoader
+//      Desc:
 //==============================================================================
 module ProgramLoader(
-	Clock, Reset,
+        Clock, Reset,
 
-	UARTRX, UARTTX,
-	
-	ORAMCommand,
-	ORAMPAddr,
-	ORAMCommandValid,
-	ORAMCommandReady,
-	
-	ORAMDataIn,
-	ORAMDataInValid,
-	ORAMDataInReady
-	);
-	//--------------------------------------------------------------------------
-	//	IO
-	//-------------------------------------------------------------------------- 
+        UARTRX, UARTTX,
 
-	parameter				ClockFreq =			100_000_000,
-							ORAMU =				32,
-							BECMDWidth =		2,
-							FEDWidth =			512;
-	
-	input					Clock, Reset;
-	
-	output	[BECMDWidth-1:0] ORAMCommand;
-	output	[ORAMU-1:0]		ORAMPAddr;
-	output					ORAMCommandValid;
-	input					ORAMCommandReady;
-	
-	output	[FEDWidth-1:0]	ORAMDataIn;
-	output					ORAMDataInValid;
-	input					ORAMDataInReady;
+        ORAMCommand,
+        ORAMPAddr,
+        ORAMCommandValid,
+        ORAMCommandReady,
 
-	//------------------------------------------------------------------------------
-	// 	Wires & Regs
-	//------------------------------------------------------------------------------
+        ORAMDataIn,
+        ORAMDataInValid,
+        ORAMDataInReady
+        );
+        //--------------------------------------------------------------------------
+        //      IO
+        //--------------------------------------------------------------------------
 
-	wire	[UWidth-1:0]	UARTDataOut;
-	wire					UARTDataOutValid, UARTDataOutReady;
+        localparam UWidth = 8;
 
-	wire					DataTurn;
-	
-	wire					CommandInReady, DataInReady;
-	
-	//------------------------------------------------------------------------------
-	// 	HW<->SW Bridge (UART)
-	//------------------------------------------------------------------------------	
-	
-	UART		#(			.ClockFreq(				ClockFreq),
-							.Baud(					UARTBaud),
-							.Width(					UARTWidth))
-				uart(		.Clock(					Clock), 
-							.Reset(					Reset), 
-							.DataIn(				), 
-							.DataInValid(			1'b0), 
-							.DataInReady(			), 
-							.DataOut(				UARTDataOut), 
-							.DataOutValid(			UARTDataOutValid), 
-							.DataOutReady(			UARTDataOutReady & ((DataTurn) ? DataInReady : CommandInReady)), 
-							.SIn(					UARTRX), 
-							.SOut(					UARTTX));				
-		
-	Register1b 	turn(Clock, Reset | (ORAMDataInValid & ORAMDataInReady), ORAMCommandValid & ORAMCommandReady, DataTurn);	
-		
-	FIFOShiftRound #(		.IWidth(				UWidth),
-							.OWidth(				ORAMU + BECMDWidth))
-				cmd_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				UARTDataOut),
-							.InValid(				UARTDataOutValid & ~DataTurn),
-							.InAccept(				CommandInReady),
-							.OutData(				{ORAMCommand, ORAMPAddr}),
-							.OutValid(				ORAMCommandValid),
-							.OutReady(				ORAMCommandReady));
-							
-	FIFOShiftRound #(		.IWidth(				UWidth),
-							.OWidth(				FEDWidth))
-				data_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				UARTDataOut),
-							.InValid(				UARTDataOutValid & DataTurn),
-							.InAccept(				DataInReady),
-							.OutData(				ORAMDataIn),
-							.OutValid(				ORAMDataInValid),
-							.OutReady(				ORAMDataInReady));							
-		
-	//------------------------------------------------------------------------------
+        parameter                               ClockFreq =                     100_000_000,
+                                                ORAMU =                         32,
+                                                BECMDWidth =            2,
+                                                FEDWidth =                      512,
+                                                UARTBaud = 9600;
+
+        input                                   Clock, Reset;
+        input                                   UARTRX, UARTTX;
+
+        output  [BECMDWidth-1:0] ORAMCommand;
+        output  [ORAMU-1:0]             ORAMPAddr;
+        output                                  ORAMCommandValid;
+        input                                   ORAMCommandReady;
+
+
+        output  [FEDWidth-1:0]  ORAMDataIn;
+        output                                  ORAMDataInValid;
+        input                                   ORAMDataInReady;
+
+        //------------------------------------------------------------------------------
+        //      Wires & Regs
+        //------------------------------------------------------------------------------
+
+        wire    [UWidth-1:0]    UARTDataOut;
+        wire                                    UARTDataOutValid;
+
+        wire                                    DataTurn;
+
+        wire                                    CommandInReady, DataInReady;
+
+        //------------------------------------------------------------------------------
+        //      HW<->SW Bridge (UART)
+        //------------------------------------------------------------------------------
+
+        UART            #(                      .ClockFreq(                             ClockFreq),
+                                                        .Baud(                                  UARTBaud),
+                                                        .Width(                                 UWidth))
+                                uart(           .Clock(                                 Clock),
+                                                        .Reset(                                 Reset),
+                                                        .DataIn(                                ),
+                                                        .DataInValid(                   1'b0),
+                                                        .DataInReady(                   ),
+                                                        .DataOut(                               UARTDataOut),
+                                                        .DataOutValid(                  UARTDataOutValid),
+                                                        .DataOutReady(                  (DataTurn) ? DataInReady : CommandInReady),
+                                                        .SIn(                                   UARTRX),
+                                                        .SOut(                                  UARTTX));
+
+        Register1b      turn(Clock, Reset | (ORAMDataInValid & ORAMDataInReady), ORAMCommandValid & ORAMCommandReady, DataTurn);
+
+        FIFOShiftRound #(               .IWidth(                                UWidth),
+                                                        .OWidth(                                ORAMU + BECMDWidth))
+                                cmd_shft(       .Clock(                                 Clock),
+                                                        .Reset(                                 Reset),
+                                                        .InData(                                UARTDataOut),
+                                                        .InValid(                               UARTDataOutValid & ~DataTurn),
+                                                        .InAccept(                              CommandInReady),
+                                                        .OutData(                               {ORAMCommand, ORAMPAddr}),
+                                                        .OutValid(                              ORAMCommandValid),
+                                                        .OutReady(                              ORAMCommandReady));
+
+        FIFOShiftRound #(               .IWidth(                                UWidth),
+                                                        .OWidth(                                FEDWidth))
+                                data_shft(      .Clock(                                 Clock),
+                                                        .Reset(                                 Reset),
+                                                        .InData(                                UARTDataOut),
+                                                        .InValid(                               UARTDataOutValid & DataTurn),
+                                                        .InAccept(                              DataInReady),
+                                                        .OutData(                               ORAMDataIn),
+                                                        .OutValid(                              ORAMDataInValid),
+                                                        .OutReady(                              ORAMDataInReady));
+
+        //------------------------------------------------------------------------------
 endmodule
 //--------------------------------------------------------------------------
