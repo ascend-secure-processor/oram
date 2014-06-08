@@ -1,7 +1,5 @@
 `include "Const.vh"
 
-// `timescale 1ns/1ns
-
 module testUORam;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
@@ -25,9 +23,9 @@ module testUORam;
     parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
 	parameter					DelayedWB =			EnableIV;
 
-	localparam  NN = 200;
-	localparam	nn = 1;
-	localparam	nn2 = nn * 32;	
+	localparam  NN = 100;
+	localparam	nn = 73;
+	localparam	nn2 = nn * 29;	
 	
 	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
@@ -214,7 +212,7 @@ module testUORam;
 			#(Cycle / 2.0) DataInValid <= 1;
 			GlobalData[AddrIn] = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = $random % 256;
+				DataIn = 512 + ($random % 512);
 				GlobalData[AddrIn] <= (GlobalData[AddrIn] << FEDWidth) + DataIn;
 				while (!DataInReady)  #(Cycle);   
 				#(Cycle);
@@ -247,8 +245,8 @@ module testUORam;
 	wire  Exist;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
-	//assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-	assign	Op = {TestCount[0], 1'b0};
+	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
+	//assign	Op = {TestCount[0], 1'b0};
 	
 	initial begin
 		TestCount <= 0;

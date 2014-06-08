@@ -1,3 +1,12 @@
+//==============================================================================
+//	Module:		DM_Cache
+//	Desc:		Direct mapped cache, specifically designed for PLB
+//				Ready-valid interface for input command. 
+//				Currently support Read/Write/Refill.
+//==============================================================================
+
+// TODO: How do we support counter tricks in PosMap?
+
 `include "Const.vh"
 
 module DM_Cache
@@ -17,7 +26,7 @@ module DM_Cache
     input Clock, Reset;
     output Ready;
     input Enable;
-    input [CacheCmdWidth-1:0] Cmd;        // 00 for write, 01 for read, 10 for refill, 11 for remove
+    input [CacheCmdWidth-1:0] Cmd;        // 00 for update, 01 for read, 10 for refill, 11 reserved (possibly for remove)
     input [AddrWidth-1:0] AddrIn;
     input [DataWidth-1:0] DIn;
     input [ExtraTagWidth-1:0] ExtraTagIn;
@@ -31,24 +40,26 @@ module DM_Cache
     output [ExtraTagWidth-1:0] ExtraTagOut;
 
     // Registers to hold input data
+	wire CmdTransfer;
     wire [CacheCmdWidth-1:0] LastCmd;
     wire [AddrWidth-1:0] LastAddr;
     wire [DataWidth-1:0] LastDIn;
     wire [ExtraTagWidth-1:0] LastExtraTag;
-    Register #(.Width(CacheCmdWidth))
-        CmdReg (Clock, 1'b0, 1'b0, Ready && Enable, Cmd, LastCmd);
-    Register #(.Width(AddrWidth))
-        AddrReg (Clock, 1'b0, 1'b0, Ready && Enable, AddrIn, LastAddr);
-    Register #(.Width(DataWidth))
-        DInReg (Clock, 1'b0, 1'b0, Ready && Enable, DIn, LastDIn); 
-    Register #(.Width(ExtraTagWidth))
-        ExtraTagReg (Clock, 1'b0, 1'b0, Ready && Enable, ExtraTagIn, LastExtraTag);  
-           
-    // Cmd related states
+	assign CmdTransfer = Ready && Enable;
+    Register #(			.Width(		CacheCmdWidth + AddrWidth + DataWidth + ExtraTagWidth))
+		InputReg	(	.Clock(		Clock),
+						.Reset(		1'b0),	.Set(		1'b0),
+						.Enable(	CmdTransfer),
+						.In(		{Cmd, AddrIn, DIn, ExtraTagIn}),
+						.Out(		{LastCmd, LastAddr, LastDIn, LastExtraTag})
+					);	
+
+    // Refill and write related states
+	// Write needs to first lookup, and write only if it hits; blindly writing will correct some other cachelines
     wire RefillStart, Refilling, RefillFinish, RefillWriting;
     wire IsLastWrite, IsLastRefilling;
     Pipeline #(.Width(1), .Stages(1))
-        WriteReg  (	Clock,	Reset,	Enable && Ready && (Cmd == CacheWrite),	IsLastWrite);   
+        WriteReg  (	Clock,	Reset,	CmdTransfer && (Cmd == CacheWrite),	IsLastWrite);  
     Pipeline #(.Width(1), .Stages(1))
         RefillReg (	Clock,	Reset,	Refilling,	IsLastRefilling);
     
@@ -56,7 +67,7 @@ module DM_Cache
     Counter #(.Width(LogLineSize+1))
         RefillCounter (Clock, Reset, 1'b0, 1'b0, Refilling, {(LogLineSize+1){1'bx}}, RefillOffset); // load = set = 0, in= x  
 
-    assign RefillStart = Enable && Ready && (Cmd == CacheRefill);
+    assign RefillStart = CmdTransfer && (Cmd == CacheRefill);
     assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset == (1 << LogLineSize) - 1);
     assign Refilling = RefillStart || (LastCmd == CacheRefill && RefillOffset > 0);
     assign RefillWriting = Refilling && RefillOffset[0];
@@ -83,7 +94,7 @@ module DM_Cache
     
     assign DataEnable = Enable || (IsLastWrite && Hit) || Refilling;
     assign DataWrite = IsLastWrite || RefillWriting;
-    assign TagEnable = TagInit || RefillFinish || (Enable && Ready);
+    assign TagEnable = TagInit || RefillFinish || CmdTransfer;
     assign TagWrite = TagInit || RefillFinish;
     
     // addresses for data and tag arrays
@@ -112,16 +123,15 @@ module DM_Cache
         TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
  
     // output for cache outcome
+	Pipeline #(.Width(1), .Stages(1))
+        OutValidReg (	Clock,	Reset,	CmdTransfer,	OutValid);
+		
     wire LineValid;
-    assign LineValid = TagOut[TagWidth+ExtraTagWidth];
-
-    Register #(.Width(1))
-        OutValidReg (.Clock(Clock), .Reset(Reset), .Set(1'b0), .Enable(1'b1), .In(Enable && Ready), .Out(OutValid));
+    assign LineValid = TagOut[TagWidth+ExtraTagWidth];	
     assign Hit = (LastCmd == CacheWrite || LastCmd == CacheRead) && LineValid
                     && LastAddr[AddrWidth-1:LogLineSize] == TagOut[TagWidth-1:0];  // valid && tag match
     assign Evicting = IsLastRefilling && LineValid && RefillWriting; 
-            // a valid line is there, and we read in last cycle 
-            // danger: on refillFinish, cannot use new tag!
+            // a valid line is there, and we read in last cycle. Danger: on refillFinish, cannot use new tag!
     assign AddrOut = TagOut[TagWidth-1:0] << LogLineSize;
     assign ExtraTagOut = TagOut[TagWidth+ExtraTagWidth-1:TagWidth];
      

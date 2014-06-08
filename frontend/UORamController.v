@@ -1,35 +1,28 @@
+//==============================================================================
+//	Module:		UORamController
+//	Desc:		Unified ORAM control logic.
+//				Interface with outside: (op, addr, data)
+//				Interface with backend: (op, addr, leaf, leaf', data)		
+//				Separate ready-valid interface for cmd and data
+//				Currently support Read/Write/Append/Read_Rmv.
+//				Append/Read_Rmv are for PosMap blocks; Append is also used to initialize a block
+//
+//				Two major phases in this module: Prepare and Accessing
+//				Prepare: keep looking up PPP until a hit
+//				Access: in the reserve order, issue accesses and refill PLB
+//==============================================================================
+
 `include "Const.vh"
 
 module UORamController
 (
     Clock, Reset,
-
-    CmdInReady,
-    CmdInValid,
-    CmdIn,
-    ProgAddrIn,
-
-    DataInReady,
-    DataInValid,
-    DataIn,
-
-    ReturnDataReady,
-    ReturnDataValid,
-    ReturnData,
-
-    CmdOutReady,
-    CmdOutValid,
-    CmdOut,
-    AddrOut,
-    OldLeaf, NewLeaf,
-
-    StoreDataReady,
-    StoreDataValid,
-    StoreData,
-
-    LoadDataReady,
-    LoadDataValid,
-    LoadData
+    CmdInReady, CmdInValid, CmdIn, ProgAddrIn,
+    DataInReady, DataInValid, DataIn,
+    ReturnDataReady, ReturnDataValid, ReturnData,
+    CmdOutReady, CmdOutValid, CmdOut, AddrOut, OldLeaf, NewLeaf,
+	StoreDataReady, StoreDataValid, StoreData,
+    LoadDataReady, LoadDataValid, LoadData
 );
 
 	`include "UORAM.vh";
@@ -77,16 +70,10 @@ module UORamController
     output LoadDataReady;
     input  LoadDataValid;
     input  [FEDWidth-1:0] LoadData;
-	// ============================== Frontend buffers =============================
-
-	// Frontend must handle two cases on writes: data arrives {before, after} command
-
+	
+	// Save the input data in case the client really needs to send data before command
 	(* mark_debug = "FALSE" *) wire 	[FEDWidth-1:0] 	DataIn_Internal;
 	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
-
-	(* mark_debug = "TRUE" *) wire 					CmdInReady_Internal, CmdInValid_Internal;
-    (* mark_debug = "FALSE" *) wire 	[BECMDWidth-1:0] CmdIn_Internal;
-    (* mark_debug = "FALSE" *) wire 	[ORAMU-1:0] 	ProgAddrIn_Internal;
 
 	FIFORAM	#(				.Width(					FEDWidth),
 							.Buffering(				BlkSize_FEDChunks))
@@ -99,18 +86,12 @@ module UORamController
 							.OutSend(				DataInValid_Internal),
 							.OutReady(				DataInReady_Internal));
 
+	// check whether input is valid
 	(* mark_debug = "TRUE" *) wire	AddrOutofRange;
 	(* mark_debug = "FALSE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
 	(* mark_debug = "TRUE" *) wire	ERROR_OutOfRange;
-
-	assign CmdIn_Internal = CmdIn;
-	assign ProgAddrIn_Internal = AddrOutofRange ? 0 : ProgAddrIn;
-	assign CmdInValid_Internal = CmdInValid;
-	assign CmdInReady = CmdInReady_Internal & ~ERROR_OutOfRange;
-
-	// check whether input is valid
 	assign	AddrOutofRange = ProgAddrIn >= NumValidBlock;
-	
+			
 	FIFORegister #(			.Width(					ORAMU))
 		addr_outof_rage(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -119,6 +100,7 @@ module UORamController
 							.OutData(				AddrOutofRangeAddr),
 							.OutSend(				ERROR_OutOfRange),
 							.OutReady(				1'b0));
+							
 `ifdef SIMULATION		
 	always @ (posedge Clock) begin
 		if (CmdInReady && CmdInValid) begin
@@ -129,12 +111,11 @@ module UORamController
 		end
 	end
 `endif	
-	// =============================================================================
-
+	
     // FrontEnd state machines
     (* mark_debug = "TRUE" *) wire [BECMDWidth-1:0] LastCmd;
     Register #(.Width(2))
-        CmdReg (Clock, Reset, 1'b0, CmdInReady_Internal && CmdInValid_Internal, CmdIn_Internal, LastCmd);
+        CmdReg (Clock, Reset, 1'b0, CmdInReady && CmdInValid, CmdIn, LastCmd);
 
     (* mark_debug = "TRUE" *) reg [MaxLogRecursion-1:0] QDepth;
     (* mark_debug = "TRUE" *) reg [ORAMU-1:0] AddrQ [Recursion-1:0];
@@ -197,16 +178,14 @@ module UORamController
 						// But the hack we add to disable PLB require CacheRead to entries that should've missed but in fact hit
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
 
-
-
-    assign CmdInReady_Internal = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
+    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
     assign PPPOutReady = Preparing ? PPPMiss :
                             ((PPPMiss && !PPPEvict) || (PPPUnInitialized && QDepth > 0) || CmdOutReady);
             // four cases:
             // (1) PLB miss in the prepare stage,
             // (2) refill but no evict, must have PPPMiss there, or it will misfire on Hit & UnInit
             // (3) uninitialized PosMap block
-            // ($finish) request send to backend
+            // (4) request send to backend
     // =============================================================================
 
     // ============================== Cmd to Backend ==============================
@@ -214,12 +193,12 @@ module UORamController
     assign DataBlockReq = QDepth == 0;
     assign EvictionRequest = PPPValid && PPPEvict;
     assign InitRequest = DataBlockReq && PPPUnInitialized;		// initialize data block
-    assign CmdOutValid = Accessing && PPPValid && ((PPPHit && !PPPUnInit) || InitRequest || PPPEvict);
+    assign CmdOutValid = Accessing && PPPValid && ~ERROR_OutOfRange && 
+							((PPPHit && !PPPUnInit) || InitRequest || PPPEvict);
 
     // if EvictionRequest, write back a PosMap block; otherwise serve the next access in the queue
     assign CmdOut = (EvictionRequest || InitRequest) ? BECMD_Append
-						: DataBlockReq ? LastCmd
-						: EnablePLB ? BECMD_ReadRmv : BECMD_ReadRmv;
+						: DataBlockReq ? LastCmd : BECMD_ReadRmv;
     assign AddrOut = EvictionRequest ? NumValidBlock + PPPAddrOut / LeafInBlock : AddrQ[QDepth];
 
     assign SwitchReq = (CmdOutReady && CmdOutValid && !EvictionRequest) || (!DataBlockReq && PPPUnInitialized);
@@ -231,7 +210,7 @@ module UORamController
 	Register1b
 		PreparingReg(  	.Clock(     Clock),
 						.Reset(     Reset || PPPValid && !PPPMiss), 	// due to our hack, Hit is no longer !Miss
-						.Set(       CmdInValid_Internal && CmdInReady_Internal),
+						.Set(       CmdInValid && CmdInReady),
 						.Out(       Preparing));
 	Register1b
 		AccessingReg(  	.Clock(     Clock),
@@ -255,7 +234,7 @@ module UORamController
     Register #(	.Width(1))
       PPPLookupReg (	.Clock(     Clock),
                         .Reset(     Reset || (Accessing && SwitchReq)),
-                        .Set(       CmdInValid_Internal && CmdInReady_Internal),          // this sets up PLB lookup for the first access
+                        .Set(       CmdInValid && CmdInReady),          // this sets up PLB lookup for the first access
                         .Enable(    1'b1),
                         .In(        Preparing ? PPPMiss : RefillStarted && PPPCmdReady),
                                                                         // make the next query only after receiving the previous one
@@ -264,9 +243,9 @@ module UORamController
     //(Preparing && PPPValid && PPPHit) ||
 
     always @(posedge Clock) begin
-       if (CmdInValid_Internal && CmdInReady_Internal) begin
+       if (CmdInValid && CmdInReady) begin
             QDepth <= 0;
-            AddrQ[0] = ProgAddrIn_Internal;
+            AddrQ[0] = ProgAddrIn;
         end
 
         else if (Preparing) begin

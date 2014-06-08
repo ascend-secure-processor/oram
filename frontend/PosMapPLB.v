@@ -1,3 +1,14 @@
+//==============================================================================
+//	Module:		PosMapPLB
+//	Desc:		A nice and simple abstraction of PLB plus PosMap (PPP) to frontend
+//				This hides the different address space & level of recursion
+//				The frontend keeps looking up for next PosMap block until it hits.
+//				Currently support Read/Write/Refill/InitRefill.
+//				InitRefill is hidden from DM_Cache (turned into Refill)
+//==============================================================================
+
+// TODO: How do we support counter tricks in PosMap?
+
 `include "Const.vh"
 
 module PosMapPLB
@@ -38,17 +49,25 @@ module PosMapPLB
     assign InOnChipPosMap = AddrIn >= FinalPosMapStart; 
  
     // receive input cmd
+	wire	CmdTransfer;
     (* mark_debug = "TRUE" *) wire [CacheCmdWidth-1:0] LastCmd;
+	assign	CmdTransfer = CmdReady && CmdValid;
     Register #(.Width(CacheCmdWidth))
-        CmdReg (Clock, Reset, 1'b0, CmdReady && CmdValid, Cmd, LastCmd);
+        CmdReg (Clock, 1'b0, 1'b0, CmdTransfer, Cmd, LastCmd);
         
     (* mark_debug = "TRUE" *) wire Busy;
-    Register1b BusyReg (	.Clock(Clock), 
-							.Reset(Reset || (Valid && OutReady)), 
-							.Set(CmdReady && CmdValid), 
-							.Out(Busy)
+    Register1b BusyReg (	.Clock(	Clock), 
+							.Reset(	Reset || (Valid && OutReady)), 
+							.Set(	CmdTransfer), 
+							.Out(	Busy)
 						);
-    
+						
+    wire CmdIsWrite, mdIsRefill, CmdIsInitRefill;
+	assign CmdIsWrite = Cmd == CacheWrite;
+	assign CmdIsRefill = Cmd == CacheRefill;
+	assign CmdIsInitRefill = Cmd == CacheInitRefill;
+	
+	// PRNG to generate new leaf
 	(* mark_debug = "TRUE" *) wire [LeafWidth-1:0] NewLeafIn_Pre;
     (* mark_debug = "TRUE" *) wire [ORAML-1:0] NewLeafIn;
     (* mark_debug = "TRUE" *) wire NewLeafValid, NewLeafAccept;
@@ -77,7 +96,7 @@ module PosMapPLB
     (* mark_debug = "TRUE" *) wire PosMapSelect, PosMapBusy, PosMapValid, PosMapInit;
       
     Pipeline #(.Width(1), .Stages(1))	PosMapValidReg 	(Clock, Reset, PosMapSelect, PosMapValid);
-    Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, Reset, PosMapSelect && Cmd == CacheWrite, PosMapBusy);
+    Pipeline #(.Width(1), .Stages(1))	PosMapBusyReg	(Clock, Reset, PosMapSelect && CmdIsWrite, PosMapBusy);
     
     wire InitEnd;
     wire [LogFinalPosMapEntry-1:0] InitAddr;
@@ -90,7 +109,7 @@ module PosMapPLB
 							.Done(					InitEnd)
 						);
 	
-    assign PosMapSelect = InOnChipPosMap && CmdReady && CmdValid;                       
+    assign PosMapSelect = InOnChipPosMap && CmdTransfer;                       
     assign PosMapEnable = PosMapInit || PosMapSelect || PosMapBusy;
     assign PosMapWrite = PosMapInit || PosMapBusy;        
     assign PosMapAddr = PosMapInit ? InitAddr : AddrIn - FinalPosMapStart;
@@ -133,25 +152,20 @@ module PosMapPLB
     assign EvictDataOutValid = PLBEvict;
     assign EvictDataOut = PLBDOut;
                                                       
-    // PLB control and input
-	wire CmdIsRefill, CmdIsInitRefill;
-	assign CmdIsRefill = Cmd == CacheRefill;
-	assign CmdIsInitRefill = Cmd == CacheInitRefill;
-	
-    (* mark_debug = "TRUE" *) wire PLBRefill, PLBInitRefill;
-    assign PLBRefill = (CmdReady && CmdValid && CmdIsRefill) || (LastCmd == CacheRefill && !PLBReady);   // Refill start or Refilling
-    assign PLBInitRefill = (CmdReady && CmdValid && CmdIsInitRefill) || (LastCmd == CacheInitRefill && !PLBReady);   // InitRefill
-		
-    assign PLBEnable = CmdReady && CmdValid && !InOnChipPosMap;
+    // PLB control and input	
+    (* mark_debug = "TRUE" *) wire PLBRefill, ;
+	assign PLBRefill = (CmdTransfer && CmdIsRefill) || (!CmdTransfer && LastCmd == CacheRefill);   // Refill start or Refilling	
+    assign PLBEnable = CmdTransfer && !InOnChipPosMap;
     assign PLBCmd = CmdIsInitRefill ? CacheRefill : Cmd; 
     assign PLBAddrIn = (CmdIsRefill || CmdIsInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;
-    assign PLBDIn = PLBRefill ? DIn : PLBInitRefill ? {LeafWidth{1'b0}} : {1'b1, NewLeafIn};
-    assign PLBLeafIn = NewLeafOut;     // Cache refill does not and cannot use random leaf
-                                      // Must be NewLeafOut! The previous leaf that's still in store, 
+    assign PLBDIn = PLBRefill ? DIn : {CmdTransfer && CmdIsWrite, NewLeafIn};
+				// Refill --> data from backend; Write --> {1'b1, NewLeafIn}; InitRefill --> {1'b0, xxxx}
+    assign PLBLeafIn = NewLeafOut;    
+				// CacheRefill must use NewLeafOut (not NewLeafIn), the previous leaf that's still in store.
 	
 `ifdef SIMULATION
 	always @ (posedge Clock) begin
-		if (PLBRefill && PLB.DataWrite && !DInValid) begin
+		if (PLB.RefillWriting && !DInValid) begin
 			$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
 			$finish;
 		end
@@ -162,7 +176,7 @@ module PosMapPLB
     (* mark_debug = "TRUE" *) wire PPPHit;
     assign PPPHit = PosMapValid || (PLBValid && PLBHit);
        
-    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;
+    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;	// random leaf is used only on a write hit
     assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
 
 	Register1b ValidReg (	.Clock(		Clock), 
@@ -181,12 +195,12 @@ module PosMapPLB
                             
             if (PPPHit && LastCmd == CacheWrite) begin     // only update. Cache refill does not and cannot use random leaf     
                 NewLeafOut <= NewLeafIn;
-			`ifdef SIMULATION
+		`ifdef SIMULATION
                 if (!NewLeafValid) begin
                     $display("Error: run out of random leaves.");
 					$finish;
                 end
-			`endif
+		`endif
             end
             else if (LastCmd == CacheRefill || LastCmd == CacheInitRefill) begin
                 NewLeafOut <= PLBLeafOut;

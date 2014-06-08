@@ -1,3 +1,12 @@
+//==============================================================================
+//	Module:		UORamDataPath
+//	Desc:		Data path of unified ORAM
+//				Data block read/write   : Backend <--> LLC
+//				PosMap block read/evict : Backend <--> PPP
+//
+//				Variables named "Fake" handle a retarded corner case, read a non-existent block. 
+//==============================================================================
+
 `include "Const.vh"
 
 module UORamDataPath
@@ -194,18 +203,18 @@ module UORamDataPath
 						.Done(					DataTransferEnd)
 					);
 
-    // if ExpectingProgStore, network ==> backend; otherwise PLB ==> backend
+    // if ExpectingProgStore, LLC ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = FakeStoring || (ExpectingProgStore ? DataInValid : EvictFunnelOutValid);
-    assign StoreData = FakeStoring ? FakeData		// TODO: fake stuff
-						: ExpectingProgStore ? DataIn : EvictFunnelDOut;
+    assign StoreData = FakeStoring ? FakeData :	// TODO: fake stuff
+						ExpectingProgStore ? DataIn : EvictFunnelDOut;
     assign DataInReady = ExpectingProgStore && StoreDataReady;
 
-    // if ExpectingDataBlock, backend ==> network; if ExpectingPosMapBlock, backend ==> PLB
+    // if ExpectingDataBlock, backend ==> LLC; if ExpectingPosMapBlock, backend ==> PLB
     assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = FakeLoading || (ExpectingDataBlock && LoadDataValid);
-    assign ReturnData = FakeLoading ? FakeData		// TODO: fake stuff
-							: LoadData;
+    assign ReturnData = FakeLoading ? FakeData :	// TODO: fake stuff
+							LoadData;
 
 `ifdef SIMULATION
     always @(posedge Clock) begin
