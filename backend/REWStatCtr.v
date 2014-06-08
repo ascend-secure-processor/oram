@@ -44,26 +44,24 @@ module REWStatCtr(
 		end
 	`endif	
 	
-	input	Clock, Reset;
-		
+	input	Clock, Reset;		
 	output 	ROAccess, RWAccess, Read, Writeback;
 	output	RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm, RO_W_DoneAlarm;
-	
-	// count the number of chunks transferred
 	input	RW_R_Transfer, RW_W_Transfer, RO_R_Transfer, RO_W_Transfer;
-	
-	wire	RW_R_Enable, RW_W_Enable, RO_R_Enable, RO_W_Enable;
-	
-	assign	RW_R_Enable = Overlap ? RW_R_Transfer : RWAccess && Read 		&& RW_R_Transfer;
-	assign	RW_W_Enable = Overlap ? RW_W_Transfer : RWAccess && Writeback 	&& RW_W_Transfer;
-	assign	RO_R_Enable = Overlap ? RO_R_Transfer : ROAccess && Read 		&& RO_R_Transfer;
-	assign	RO_W_Enable = Overlap ? RO_W_Transfer : ROAccess && Writeback 	&& RO_W_Transfer;
 	
 	output	[`log2(RW_R_Chunk)-1:0]		RW_R_Ctr;
 	output	[`log2(RW_W_Chunk)-1:0]		RW_W_Ctr;
 	output	[`log2(RO_R_Chunk)-1:0]		RO_R_Ctr;
 	output	[ROWWidth-1:0]				RO_W_Ctr;
-			
+	
+	
+	// count the number of chunks transferred
+	wire	RW_R_Enable, RW_W_Enable, RO_R_Enable, RO_W_Enable;	
+	assign	RW_R_Enable = Overlap ? RW_R_Transfer : RWAccess && Read 		&& RW_R_Transfer;
+	assign	RW_W_Enable = Overlap ? RW_W_Transfer : RWAccess && Writeback 	&& RW_W_Transfer;
+	assign	RO_R_Enable = Overlap ? RO_R_Transfer : ROAccess && Read 		&& RO_R_Transfer;
+	assign	RO_W_Enable = Overlap ? RO_W_Transfer : ROAccess && Writeback 	&& RO_W_Transfer;
+				
 	wire 	RW_R_Done, RW_W_Done, RO_R_Done, RO_W_Done;
 	wire	E_RO_Accesses;
 		
@@ -93,7 +91,7 @@ module REWStatCtr(
 			
 	generate if (ROWWidth > 0) begin
 		CountAlarm #(	.Threshold(				RO_W_Chunk))
-		ro_w_ctr (		.Clock(					Clock), 
+			ro_w_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				RO_W_Enable),
 						.Count(					RO_W_Ctr),
@@ -104,11 +102,11 @@ module REWStatCtr(
 	end endgenerate
 	
 	CountAlarm #(		.Threshold(				ORAME))
-	oram_e_ctr (		.Clock(					Clock), 
+		oram_e_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				ROAccess && Writeback && RO_W_Done),
 						.Done(					E_RO_Accesses)
-			);
+					);
 	
 	// State transition based on CountAlarms
 	//		0	  1		0		1

@@ -1,7 +1,6 @@
 //==============================================================================
 //	Module:		AddrGen
-//	Desc:		Output physical addresses along a path, 
-//				using subtree locality trick from ISCA'13
+//	Desc:		Send requests to DRAM to read/write buckets/headers along a path
 //==============================================================================
 
 `include "Const.vh"
@@ -12,7 +11,7 @@ module AddrGen
 	Start, RWIn, BHIn, leaf, Ready, CmdReady, CmdValid, Cmd, 
 	Addr, currentLevel, BktIdx,
 	
-	// tmp output for debugging
+	// output for debugging
 	STIdx, BktIdxInST
 );
 
@@ -21,9 +20,9 @@ module AddrGen
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
 	
-	localparam ORAMLogL = `log2(ORAML) + 1; // TODO need plus one for Ready signal corner case (e.g., ORAML = 31); find a better solution?
+	localparam ORAMLogL = `log2(ORAML) + 1; // TODO need +1 for Ready signal corner case (e.g., ORAML = 31); find a better solution?
 	
-	// =========================== in/out =========================
+	// =========================== Ports =========================
 	input Clock; 
 
 	// interface with backend controller
@@ -40,7 +39,7 @@ module AddrGen
 	output [DDRAWidth-1:0] Addr;
 	output [ORAML:0] BktIdx;	// logic bucket ID (no subtree)
 	
-	// tmp output for debugging
+	// output for debugging
 	output [ORAMLogL-1:0]  currentLevel; 
 	output [ORAML:0] STIdx, BktIdxInST;
 	
@@ -53,13 +52,6 @@ module AddrGen
 	reg RW, BH;
 	reg [ORAMLogL-1:0] BktCounter;
     
-	`ifndef ASIC
-		initial begin
-			RW = 1'b0;
-			BH = 1'b0;
-		end
-	`endif
-	
 	AddrGenBktHead #( 	.ORAML(	ORAML), 
 						.DDRROWWidth( DDRROWWidth),
 						.BktSize_DRWords( BktSize_DRWords)
@@ -72,7 +64,7 @@ module AddrGen
 						.currentLevel(	currentLevel),
 						.BktIdx(	BktIdx_Padded),
 						
-						// tmp output for debugging
+						// output for debugging
 						.STIdx(		STIdx),
 						.BktIdxInST(BktIdxInST)
 					);  
@@ -87,11 +79,7 @@ module AddrGen
 	assign Addr = (BktIdx_Padded * BktSize_DRBursts + BktCounter) * DDRBstLen;
 
 	always@(posedge Clock) begin
-		if (Reset) begin
-			RW <= 1'b0;
-			BH <= 1'b0;
-		end
-		else if (Start && Ready) begin
+		if (Start && Ready) begin
 			RW <= RWIn;
 			BH <= BHIn;
 			BktCounter <= 0;
@@ -110,7 +98,7 @@ module AddrGen
 					.BktIdx(	BktIdx)			
 				);
 	
-`ifdef SIMULATION
+`ifdef SIMULATION	// Check that AddrGen is not mapping two different buckets to the same physical address
 	localparam 	CheckAddrGen = 1;
 	integer bkt_i;
 	generate if (CheckAddrGen) begin:Check_Addr

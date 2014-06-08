@@ -1,3 +1,9 @@
+//==============================================================================
+//	Module:		PathGen
+//	Desc:		Output indices of nodes on a subtree.
+//				Support any 2^k-ary tree for subtree locality trick from ISCA'13
+//==============================================================================
+
 module PathGen (Clock, Reset, Enable, Switch, BinChild,  NodeIdx);
 	
 	parameter ORAML = 10;

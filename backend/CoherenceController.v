@@ -1,35 +1,29 @@
-
-//==============================================================================
-//	Section:	Includes
-//==============================================================================
-`include "Const.vh"
-//==============================================================================
-
 //==============================================================================
 //	Module:		CoherenceController
-//	Desc:		Create a coherent view of data in ORAM tree to backend & 
-//				integrity verification.  Notation: REW accesses = RO, H, R, W
+//	Desc:		Create a coherent view of data in ORAM tree to backend & integrity verifier (IV)
+//				Notation: REW accesses = RO, H, R, W
 //
 //				Schedule: [ R W (backend only) {E{RO H}} W (write to memory) ] repeat
 //
 //				Summary of jobs:
-//
 //				1 - R access:
-//					- Store the path read during the access.  This path will be periodically read by IV unit to check R hashes.
-//				2 - BACKEND completes W access:
-//					- Store plaintext bits that will be written back.  These bits will be periodically read by the IV unit to re-create W hashes.
-//					- IV unit will send new hashes back to CoherenceController, which will insert them in proper locations
+//					- Buffer the path read during the access.  This path will be periodically read by IV to check the hashes.
+//				2 - Stash completes W access:
+//					- Buffer outgoing access in plaintext.  These bits will be periodically read by IV to re-create the hashes.
+//					- IV will insert new hashes in proper locations
 //				3 - RO access: [coherence step]
-//					- For each RO bucket received from AES (decrypted in certain cases), compare that bucket to the set of buckets stored from step 2.  For each aliasing bucket, forward W data to BE/IV unit.
-//					- Invariant: all data forwarded to IV/BE must be freshest copy of the data.
-//					- Store decrypted header sent from AES (after being coherence checked) internally.
-//					- Send IV the bucket of interest to be hashed; send rest to BE
-//					- When IV returns hash, merge hash & any modified valid bits back into W path and headers (stored internally) if the bucket of interest had a collision
+//					- Take the most recent version of each bucket, either from AES or in outgoing buffer
+//					- Forward the bucket of interest to Stash and IV
+//					- Buffer decrypted header from AES.
+//					- When IV rehash the bucket of interest, update its headers and start H access
 //				4 - H access: 
-//					- Push updated headers back to AES
+//					- Send updated headers back to AES
 //				5 - W access (writes to external memory)
-//					- Push the fully up to date W path (stored internally and coherent) back to memory
+//					- Send the fully up-to-date and hashed W path back to memory
 //==============================================================================
+
+`include "Const.vh"
+
 module CoherenceController(
 	Clock, Reset,
 	ROCmdValid, ROCmdReady, 
@@ -425,9 +419,9 @@ module CoherenceController(
 	`endif
 		assign	error[8] = BktOfIUpdate_CC && HeaderInBkfOfI;		
 	
-			// update BktOfI header in CC rather late than early.
-			// too early --> Stash receives no valid block
-			// too late --> IV takes the old header data
+		// update BktOfI header in CC rather late than early.
+		// too early --> Stash receives no valid block
+		// too late --> IV takes the old header data
 		
 		//--------------------------------------------------------------------------
 		// Port1 : written by Stash, read and written by AES, read and written by CC to resolve conflict
