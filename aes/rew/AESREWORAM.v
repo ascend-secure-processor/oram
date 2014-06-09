@@ -325,13 +325,12 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
-	genvar i;
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
 	end endgenerate
 	
 	generate if (DebugAggressive) begin:AGGRESSIVE
-		for (i = 0; i < DUChunks; i = i + 1) begin
+		for (i = 0; i < DUChunks; i = i + 1) begin:AGGRESSIVE_Inner
 			assign	BogusORAMData[i] =				|BEDataOut_Pre[(i+1)*ORAMU-1:i*ORAMU+24]; // check top 8 bits
 		end
 	end else begin
