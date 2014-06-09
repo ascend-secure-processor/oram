@@ -1,3 +1,3 @@
  
-	parameter				NumValidBlock = 		1024,
+	parameter				NumValidBlock = 		8192,
 							Recursion = 			3;

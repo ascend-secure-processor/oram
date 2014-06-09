@@ -88,7 +88,7 @@ module UORamController
 
 	// check whether input is valid
 	(* mark_debug = "TRUE" *) wire	AddrOutofRange;
-	(* mark_debug = "FALSE" *) wire	[ORAMU:0] AddrOutofRangeAddr;
+	(* mark_debug = "FALSE" *) wire	[ORAMU-1:0] AddrOutofRangeAddr;
 	(* mark_debug = "TRUE" *) wire	ERROR_OutOfRange;
 	assign	AddrOutofRange = ProgAddrIn >= NumValidBlock;
 			
