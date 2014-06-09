@@ -325,7 +325,7 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
-	
+	genvar i;
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
 	end endgenerate

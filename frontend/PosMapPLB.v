@@ -153,7 +153,7 @@ module PosMapPLB
     assign EvictDataOut = PLBDOut;
                                                       
     // PLB control and input	
-    (* mark_debug = "TRUE" *) wire PLBRefill, ;
+    (* mark_debug = "TRUE" *) wire PLBRefill;
 	assign PLBRefill = (CmdTransfer && CmdIsRefill) || (!CmdTransfer && LastCmd == CacheRefill);   // Refill start or Refilling	
     assign PLBEnable = CmdTransfer && !InOnChipPosMap;
     assign PLBCmd = CmdIsInitRefill ? CacheRefill : Cmd; 
