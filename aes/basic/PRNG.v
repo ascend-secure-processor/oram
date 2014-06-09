@@ -23,7 +23,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
 
     Counter #(.Width(AESEntropy))
         SeedCounter (Clock, Reset, 1'b0, 1'b0, (SeedValid && SeedReady), {AESEntropy{1'bx}}, Seed); // load = set = 0, in= x 
-        	// TODO: if reset, seed goes back to 0, not secure anymore. 
+        	// TODO: if reset, seed goes back to 0, not secure any more. 
 
     wire [AESWidth-1:0]			AESKey;
     wire                       	AESKeyValid;
@@ -67,38 +67,6 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
             .DataOut(AESDataOut),
             .DataOutValid(AESDataOutValid)
             );
-/*  
-    wire  					BufferInReady;
-    wire [AESWidth-1:0]     BufferOut;
-    wire                    BufferOutReady, BufferOutValid;		
-
-	
-    FIFORAM #(.Width(AESWidth), .Buffering(2)) 
-    AESOutBuffer (  .Clock(Clock), 
-                    .Reset(Reset), 
-                    .InAccept(BufferInReady), 
-                    .InValid(AESDataOutValid), 
-                    .InData(AESDataOut),                      
-                    .OutReady(BufferOutReady), 
-                    .OutSend(BufferOutValid), 
-                    .OutData(BufferOut)
-                ); 
-                
-    FIFOShiftRound #(.IWidth(AESWidth), .OWidth(RandWidth))
-    RandOutFunnel ( .Clock(Clock), 
-                    .Reset(Reset),  
-                    .InAccept(BufferOutReady), 
-                    .InValid(BufferOutValid), 
-                    .InData(BufferOut),
-                    .OutReady(RandOutReady), 
-                    .OutValid(RandOutValid), 
-                    .OutData(RandOut)
-                );
-				
-	assign SeedValid = BufferInReady && !AESDataOutValid;		
-    	// Generate new random bits if there's space in AESOutBuffer and no bits are on the fly;			
-				
-*/
 
     wire  					FunnelInReady;
     wire [RandWidth-1:0]    FunnelOut;

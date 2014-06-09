@@ -21,9 +21,9 @@ module UORamDataPath
 	DumbRequest // to satisfy microblaze
 );
 
-	`include "UORAM.vh";
-	`include "PathORAM.vh";
-	`include "PLB.vh";
+	`include "UORAM.vh"
+	`include "PathORAM.vh"
+	`include "PLB.vh"
 
     `include "PathORAMBackendLocal.vh"
     `include "CacheCmdLocal.vh"

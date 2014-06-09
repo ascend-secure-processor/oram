@@ -15,7 +15,7 @@ module AddrGen
 	STIdx, BktIdxInST
 );
 
-	`include "PathORAM.vh";
+	`include "PathORAM.vh"
 	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketDRAMLocal.vh"
