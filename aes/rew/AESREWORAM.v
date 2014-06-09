@@ -329,7 +329,7 @@ module AESREWORAM(
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
 	end endgenerate
 	
-	generate if (DebugAggressive) begin:AGGRESSIVE
+	generate if (DebugAggressive) begin:AGGRESSIVE 
 		for (i = 0; i < DUChunks; i = i + 1) begin:AGGRESSIVE_Inner
 			assign	BogusORAMData[i] =				|BEDataOut_Pre[(i+1)*ORAMU-1:i*ORAMU+24]; // check top 8 bits
 		end
