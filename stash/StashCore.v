@@ -374,12 +374,12 @@ module StashCore(
 				$finish;			
 			end
 			
-			if (^OutScanValidDump === 1'bx | 
+			if (!Reset && (^OutScanValidDump === 1'bx | 
 				^DumpStop === 1'bx |
 				^InScanValid === 1'bx |
 				^InScanDone === 1'bx |
 				^InValid === 1'bx |
-				^InCommandValid === 1'bx) begin
+				^InCommandValid === 1'bx)) begin
 				$display("[%m] ERROR: control signal is X");
 				$finish;
 			end

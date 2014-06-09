@@ -18,7 +18,7 @@ module testUORam;
     parameter                   PLBCapacity = 		`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif;
 
 	parameter					Overclock = 		1;
-	parameter					EnableREW =			1;	
+	parameter					EnableREW =			0;	
 	parameter					EnableAES =			EnableREW;
     parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
 	parameter					DelayedWB =			EnableIV;

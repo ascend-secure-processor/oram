@@ -82,16 +82,18 @@ module keccak(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
 	// reorder byte ~ ~
 	genvar w, b; 
     generate	
-		for(w = 0; w < ChunkInFOut; w = w+1)	
-			for(b = 0; b < 8; b = b+1)	
+		for(w = 0; w < ChunkInFOut; w = w+1) begin:OUT_REORDER_1	
+			for(b = 0; b < 8; b = b+1) begin:OUT_REORDER_2	
 				assign f_out1[`high_pos(w,b):`low_pos(w,b)] = f_out[`high_pos2(w,b):`low_pos2(w,b)];
-    endgenerate
+    		end
+	end endgenerate
 
 	generate
-		for(w = 0; w < ChunkInFIn; w = w+1)	
-			for(b = 0; b < 8; b = b+1)	
+		for(w = 0; w < ChunkInFIn; w = w+1) begin:IN_REORDER_1	
+			for(b = 0; b < 8; b = b+1) begin:IN_REORDER_2	
 				assign padder_out[`high_pos(w,b):`low_pos(w,b)] = padder_out_pre[`high_pos2(w,b):`low_pos2(w,b)];
-	endgenerate
+    		end
+	end endgenerate
 
     always @ (posedge clk)
       if (reset)
