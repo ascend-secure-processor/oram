@@ -211,11 +211,11 @@ module StashScanTable(
 			if (~ResetDone_Delayed & ResetDone) begin
 				ind = 0;
 				while (ind != BlocksOnPath) begin
-					if (st_ram.Mem[ind] != SNULL) begin
-						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, st_ram.Mem[ind]);
+					if (st_ram.BEHAVIORAL.Mem[ind] != SNULL) begin
+						$display("[%m @ %t] ERROR: Scan table address %d not initialized to SNULL (found %d)", $time, ind, st_ram.BEHAVIORAL.Mem[ind]);
 						$finish;
 					end
-					//$display("OK %d", ScanTable.Mem[ind]);
+					//$display("OK %d", ScanTable.BEHAVIORAL.Mem[ind]);
 					ind = ind + 1;
 				end
 			end

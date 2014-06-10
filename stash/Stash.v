@@ -354,13 +354,13 @@ module Stash(
 			
 	`ifndef SIMULATION_ASIC	
 			if (LookForBlock & BlockWasFound & CSTurnaround1 &
-				core.StashH.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
+				core.StashH.BEHAVIORAL.Mem[CRUD_SAddr][ORAML-1:0] != AccessLeaf) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct leaf", $time);
 				$finish;
 			end
 			
 			if (LookForBlock & BlockWasFound & CSTurnaround1 &
-				core.StashH.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
+				core.StashH.BEHAVIORAL.Mem[CRUD_SAddr][ORAML+ORAMU-1:ORAML] != AccessPAddr) begin
 				$display("[%m @ %t] ERROR: the block being accessed didn't have correct PAddr", $time);
 				$finish;
 			end
