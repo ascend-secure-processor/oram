@@ -94,10 +94,10 @@ module PathORAMTopTestbench;
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 							
-													// CRUD Format:			Cmd   					PAddr		DataBase	TimeDelay
-													// Seed Format:			Cmd						Seed		AccessCount	Offset
+													// CRUD Format:			Cmd   					PAddr		DataBase		TimeDelay
+													// Seed Format:			Cmd						Seed		AccessCount		Offset
 	assign	UARTShftDataIn =						{						TCMD_CmdRnd_AddrRnd, 	32'hff, 	1 << ORAML, 	32'd0};
-													//{						TCMD_Start, 			32'h0, 		32'h0, 		32'd0};
+													//{						TCMD_Start, 			32'h0, 		32'h0, 			32'd0};
 													/*(CmdCount == 0) ? 	{8'd0, 	32'h0, 	32'h0, 		32'd0} :
 													(CmdCount == 1) ? 	{8'd0, 	32'h1, 	32'hf, 		32'd0} : 
 													(CmdCount == 2) ? 	{8'd0, 	32'h2, 	32'hff, 	32'd0} : 
