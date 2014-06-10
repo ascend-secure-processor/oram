@@ -53,7 +53,7 @@ module PathORamSimulator(
 							ST_A_Writing =			3'd4;
 	
 	localparam				UARTWidth =				8,
-							EWidth =				11, // track up to 1 << EWidth errors
+							EWidth =				13, // track up to 1 << EWidth errors
 							CNTWidth =				64,
 							BPWidth =				`log2(DDRDWidth),
 							PCWidth =				`log2(DDRDWidth+1),
@@ -316,16 +316,17 @@ module PathORamSimulator(
 	Register1Pipe d_dly(Clock, DumpStatistics_Reg, StatsValid);
 	
 	assign	StatsIn =								{EStat_NumBitErrors, EStat_BitPosition, EStat_BurstsChecked, EStat_Address};
-	RAM			#(			.DWidth(				StatWidth),
+	SDPRAM		 #(			.DWidth(				StatWidth),
 							.AWidth(				EWidth),
-							.NPorts(				2))
-				stored(		.Clock(					{2{Clock}}),
-							.Reset(					2'b00),
-							.Enable(				2'b11),
-							.Write(					{DataMismatch, 	1'b0}),
-							.Address(				{ErrorCount, 	DumpCount}),
-							.DIn(					{StatsIn, 		{StatWidth{1'bx}}}),
-							.DOut(					{StatsDummy, 	StatsOut}));	
+							.RLatency(				1),
+							.WLatency(				1))
+				stored(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Write(					DataMismatch),
+							.ReadAddress(			DumpCount), 
+							.WriteAddress(			ErrorCount),
+							.DIn(					StatsIn),
+							.DOut(					StatsOut));		
 	assign	{EStat_NumBitErrors_Out, EStat_BitPosition_Out, EStat_BurstsChecked_Out, EStat_Address_Out} = StatsOut;
 	
 	// Pad the data so that it is easy to read in hex-ascii
@@ -509,27 +510,31 @@ module PathORamSimulator(
 	//	DRAM read interface
 	//--------------------------------------------------------------------------
 		
-	PathBufferRst in_P_buf(	.rst(					Reset),
-							.clk(					Clock),
-							.din(					DRAMReadData), 
-							.wr_en(					DRAMReadDataValid), 
-							.rd_en(					1'b1), 
-							.dout(					PathBuffer_OutData), 
-							.full(					), 
-							.valid(					PathBuffer_OutValid));
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid), 
+							.InAccept(				),
+							.OutData(				PathBuffer_OutData), 
+							.OutSend(				PathBuffer_OutValid),
+							.OutReady(				1'b1));
 	
 	//--------------------------------------------------------------------------
 	//	AES input (reads)
 	//--------------------------------------------------------------------------
 	
-	PathBufferRst in_I_buf(	.rst(					Reset),
-							.clk(					Clock),
-							.din(					PathBuffer_OutData), 
-							.wr_en(					PathBuffer_OutValid), 
-							.rd_en(					CommitRead), 
-							.dout(					ReadData), 
-							.full(					), 
-							.valid(					ReadDataValid));
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				in_I_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				PathBuffer_OutData),
+							.InValid(				PathBuffer_OutValid), 
+							.InAccept(				),
+							.OutData(				ReadData), 
+							.OutSend(				ReadDataValid),
+							.OutReady(				CommitRead));
 	
 	CountAlarm #(			.Threshold(				BktSize_DRBursts),
 							.IThreshold(			0))
@@ -627,14 +632,16 @@ module PathORamSimulator(
 							.OutValid(				MaskOutValid),
 							.OutReady(				1'b1));
 	
-	PathBufferRst m_buf(	.rst(					Reset),
-							.clk(					Clock),
-							.din(					OutMask), 
-							.wr_en(					MaskOutValid), 
-							.rd_en(					CommitRead | CommitWrite), 
-							.dout(					OutMaskBuf), 
-							.full(					), 
-							.valid(					MaskOutValidBuf));		
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				m_buf(		.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				OutMask),
+							.InValid(				MaskOutValid), 
+							.InAccept(				),
+							.OutData(				OutMaskBuf), 
+							.OutSend(				MaskOutValidBuf),
+							.OutReady(				CommitRead | CommitWrite));
 		
 	assign	WriteData =								{DDRDWidth{1'b0}};
 	assign	DataOutPre = 							(ReadingData_Post && MaskIsHeader_Post) ? 	{ 	ReadData[DDRDWidth-1:AESWidth], 	{AESWidth{1'b0}} } :
@@ -661,16 +668,18 @@ module PathORamSimulator(
 							.Load(					1'b0),
 							.Enable(				CommitWrite && MaskIsHeader_Post),
 							.In(					{AESWidth{1'bx}}),
-							.Count(					NextWriteIV_Post));	
+							.Count(					NextWriteIV_Post));
 	
-	PathBufferRst out_P_buf(.rst(					Reset),
-							.clk(					Clock),
-							.din(					DataOut),
-							.wr_en(					CommitWrite), 
-							.full(					),
-							.rd_en(					DataPath_DRAMWriteDataReady), 
-							.dout(					DataPath_DRAMWriteData), 
-							.valid(					DataPath_DRAMWriteDataValid));
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts))
+				out_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DataOut),
+							.InValid(				CommitWrite), 
+							.InAccept(				),
+							.OutData(				DataPath_DRAMWriteData), 
+							.OutSend(				DataPath_DRAMWriteDataValid),
+							.OutReady(				DataPath_DRAMWriteDataReady));
 	
 	//--------------------------------------------------------------------------
 endmodule
