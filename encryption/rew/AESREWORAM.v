@@ -179,6 +179,9 @@ module AESREWORAM(
 	
 	wire	[DDRDWidth-1:0]	BufferedDataOut;
 	(* mark_debug = "TRUE" *)	wire					BufferedDataTransfer;
+
+	wire	ROIDataInValid_Inner;
+	wire	[DDRDWidth-1:0]	BufferedDataOut_Inner;	
 	
 	(* mark_debug = "TRUE" *)	wire					BucketNotYetWritten, BufferedIVNotValid;
 	
@@ -739,29 +742,16 @@ module AESREWORAM(
 																			{BEDataIn_Inner,{AESEntropy{1'bx}}, 	RO_BIDOut,		1'b0}; // header WB + RW writeback
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
-	generate if (UseBRAM) begin:BRAM_DATABUFF
-		wire	BufferedDataFull;
-		
-		assign	BufferedDataInReady =				~BufferedDataFull;
-		AESIntDataBuff data_buf(.clk(				Clock), 
-							.din(					BufferedDataIn_Wide), 
-							.wr_en(					BufferedDataInValid), 
-							.full(					BufferedDataFull), 
-							.dout(					BufferedDataOut_Wide), 
-							.valid(					BufferedDataOutValid),
-							.rd_en(					BufferedDataOutReady));
-	end else begin:LUTRAM_DATABUFF
-		FIFORAM	#(			.Width(					BDWidth),
-							.Buffering(				AESLatencyPlus))
-				data_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				BufferedDataIn_Wide),
-							.InValid(				BufferedDataInValid),
-							.InAccept(				BufferedDataInReady),
-							.OutData(				BufferedDataOut_Wide),
-							.OutSend(				BufferedDataOutValid),
-							.OutReady(				BufferedDataOutReady));		
-	end endgenerate
+	FIFORAM	#(			.Width(						BDWidth),
+						.Buffering(					AESLatencyPlus))
+			data_buf(	.Clock(						Clock),
+						.Reset(						Reset),
+						.InData(					BufferedDataIn_Wide),
+						.InValid(					BufferedDataInValid),
+						.InAccept(					BufferedDataInReady),
+						.OutData(					BufferedDataOut_Wide),
+						.OutSend(					BufferedDataOutValid),
+						.OutReady(					BufferedDataOutReady));		
 	
 	assign	{BufferedDataOut, BufferedIV, BufferedBID, BufferedIVNotValid} = BufferedDataOut_Wide;
 	
@@ -1158,14 +1148,9 @@ module AESREWORAM(
 							.Out(					{ROI_GentryIV, 		ROI_BID,		ROI_U,		ROI_V}));
 						
 	assign	ROIDataInValid =						BufferedDataTransfer_Read & ROI_BufferBucket;						
-							
+								
 	// Note: This buffer is only needed because the Path Buffer is a FIFO						
-	generate if (UseBRAM) begin:BRAM_ROIBUFF
-		wire	ROIDataFull;
-		
-		wire	ROIDataInValid_Inner;
-		wire	[DDRDWidth-1:0]	BufferedDataOut_Inner;
-		
+	generate if (Overclock) begin:ROIBUFF_LATCH
 		// NOTE: this register is VERY important to help meet timing
 		Register #(			.Width(					DDRDWidth + 1))
 				roi_dly(	.Clock(					Clock),
@@ -1174,28 +1159,22 @@ module AESREWORAM(
 							.Enable(				1'b1),
 							.In(					{BufferedDataOut, 		ROIDataInValid}),
 							.Out(					{BufferedDataOut_Inner, ROIDataInValid_Inner}));		
-
-		assign	ROIDataInReady =					~ROIDataFull;
-		AESROIBuff roi_P_buf(.clk(					Clock), 
-							.din(					BufferedDataOut_Inner), 
-							.wr_en(					ROIDataInValid_Inner), 
-							.full(					ROIDataFull), 
-							.dout(					ROIData), 
-							.valid(					ROIDataValid),
-							.rd_en(					ROIDataReady));
-	end else begin:LUTRAM_ROIBUFF
-		FIFORAM	#(			.Width(					DDRDWidth),
+	end else begin:ROIBUFF_PASS
+		assign	ROIDataInValid_Inner =				ROIDataInValid;
+		assign	BufferedDataOut_Inner =				BufferedDataOut;
+	end endgenerate
+	
+	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				BktSize_DRBursts))
 				roi_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BufferedDataOut),
-							.InValid(				ROIDataInValid),
+							.InData(				BufferedDataOut_Inner),
+							.InValid(				ROIDataInValid_Inner),
 							.InAccept(				ROIDataInReady),
 							.OutData(				ROIData),
 							.OutSend(				ROIDataValid),
 							.OutReady(				ROIDataReady));
-	end endgenerate							
-
+	
 	// Note: We don't check BufferedDataOutReady because we know 100% for sure 
 	// that data_buf will have space by the time the bucket of interest is 
 	// stored in roi_P_buf
