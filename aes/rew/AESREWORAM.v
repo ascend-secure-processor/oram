@@ -57,7 +57,7 @@ module AESREWORAM(
 	parameter				DebugAES =				0;
 	parameter				ORAMUValid =			21;
 	
-	parameter				DebugAggressive =		1;
+	parameter				DebugAggressive =		0;
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	
@@ -325,6 +325,7 @@ module AESREWORAM(
 	//--------------------------------------------------------------------------
 	
 	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
+	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
 	end endgenerate
@@ -419,7 +420,7 @@ module AESREWORAM(
 				$finish;
 			end
 			
-			if (BufferedDataInValid && ~BucketNotYetWritten && (	((EnableIV) ? DRAMReadData[DDRDWidth-1:BktHLStart+BigLWidth] === 1'bx : 1'b0) ||
+			if (BufferedDataInValid && ~BucketNotYetWritten && (	((EnableIV) ? ^DRAMReadData[DDRDWidth-1:BktHLStart+BigLWidth] === 1'bx : 1'b0) ||
 																	^DRAMReadData[BktHLStart+BigLWidth-1:0] === 1'bx || 
 																	^RO_GentryIV === 1'bx || 
 																	^Core_ROBIDIn === 1'bx)) begin
