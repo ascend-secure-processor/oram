@@ -130,7 +130,7 @@ module PathORamTop(
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	
-	UORamController #(  	.ORAMU(         		ORAMU), 
+	UORAMController #(  	.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
