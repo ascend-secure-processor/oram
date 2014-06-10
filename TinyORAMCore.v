@@ -6,11 +6,11 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		PathORAMTop
-//	Desc:		{Unified} x {Basic, REW} Path ORAM with encryption, integrity 
-//				verification, & a DRAM interface
+//	Module:		TinyORAMCore
+//	Desc:		{Unified} x {Basic, REW} ORAM core with encryption, integrity 
+//				verification, & a FIFO DRAM interface.
 //==============================================================================
-module PathORamTop(
+module TinyORAMCore(
   	Clock, FastClock, Reset,
 	
 	Cmd, PAddr, 
@@ -25,7 +25,7 @@ module PathORamTop(
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
-	);	
+	);
 	
 	//--------------------------------------------------------------------------
 	//	Constants
@@ -130,7 +130,7 @@ module PathORamTop(
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	
-	UORAMController #(  	.ORAMU(         		ORAMU), 
+	UORamController #(  	.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
