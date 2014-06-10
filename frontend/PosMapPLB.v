@@ -15,9 +15,9 @@ module PosMapPLB
 (	Clock, Reset, CmdReady, CmdValid, Cmd, AddrIn, DInValid, DIn, 
 	OutReady, Valid, Hit, UnInit, OldLeafOut, NewLeafOut, Evict, AddrOut, RefillDataReady, EvictDataOutValid, EvictDataOut
 );
-	`include "UORAM.vh"
+
 	`include "PathORAM.vh"
-	`include "PLB.vh"
+	`include "UORAM.vh"
  
     `include "CacheCmdLocal.vh" 
     `include "PLBLocal.vh"     

@@ -25,9 +25,8 @@ module UORAMController
     LoadDataReady, LoadDataValid, LoadData
 );
 
-	`include "UORAM.vh"
 	`include "PathORAM.vh"
-	`include "PLB.vh"
+	`include "UORAM.vh"
 
     `include "PathORAMBackendLocal.vh"
     `include "CacheCmdLocal.vh"

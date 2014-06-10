@@ -33,7 +33,6 @@ module TinyORAMCore(
 
 	`include "PathORAM.vh"
 	`include "UORAM.vh" 
-	`include "PLB.vh"
 	
 	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
@@ -130,7 +129,7 @@ module TinyORAMCore(
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	
-	UORamController #(  	.ORAMU(         		ORAMU), 
+	UORAMController #(  	.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),

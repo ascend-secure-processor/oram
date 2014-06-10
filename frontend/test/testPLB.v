@@ -2,8 +2,8 @@
 
 module testPLB;
 
-    `include "PathORAM.vh";
-    `include "PLB.vh";
+    `include "PathORAM.vh"
+    `include "UORAM.vh"
 
     
     wire Clock, Reset, Enable, Hit, Ready, EvictValid;
