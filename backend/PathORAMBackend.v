@@ -256,8 +256,7 @@ module PathORAMBackend(
 							.BOIFromCC(				BOIFromCC),
 							.BktOfIIdx(				BktOfIIdx),
 							.BOIDone_IV(			BOIDone_IV),
-							.BucketOfITurn(			BucketOfITurn)
-						);		
+							.BucketOfITurn(			BucketOfITurn));		
 			
 		`ifdef SIMULATION
 			always @(posedge Clock) begin
@@ -293,11 +292,7 @@ module PathORAMBackend(
 								.BucketOfITurn(		BucketOfITurn),
 								
 								.ROIBV(				CC_ROIBV),
-								.ROIBID(			CC_ROIBID)
-							);
-									
-			// TODO: debugging now
-		
+								.ROIBID(			CC_ROIBID));
 		end	else begin: NO_INTEGRITY		
 			assign	IVRequest = 					1'b0;
 			assign 	IVWrite = 						1'b0;
