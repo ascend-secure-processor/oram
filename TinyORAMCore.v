@@ -11,7 +11,7 @@
 //				verification, & a FIFO DRAM interface.
 //==============================================================================
 module TinyORAMCore(
-  	Clock, FastClock, Reset,
+  	Clock, AESClock, Reset,
 	
 	Cmd, PAddr, 
 	CmdValid, CmdReady, 
@@ -56,7 +56,7 @@ module TinyORAMCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					Clock, FastClock, Reset;
+  	input 					Clock, AESClock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	Interface to network
@@ -183,7 +183,7 @@ module TinyORAMCore(
 							.DebugAES(				DebugAES),
 							.ORAMUValid(			ORAMUValid))
 				back_end (	.Clock(					Clock),
-			                .FastClock(				FastClock),
+			                .AESClock(				AESClock),
 							.Reset(					Reset),
 							
 							.Command(				BEnd_Cmd),
@@ -217,6 +217,10 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 	
 	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
+		// This code will prevent the rest of the ORAM from seeing any data from 
+		// the path buffer until all data has arrived.  This eliminates bugs 
+		// caused by unpredictable DRAM read timing.
+
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
 		
@@ -245,19 +249,7 @@ module TinyORAMCore(
 		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
 	end endgenerate	
 		
-	generate if (UseBRAM) begin:INBUF_BRAM
-		wire				PathBuffer_Full;
-		
-		assign	PathBuffer_InReady =				~PathBuffer_Full;
-		PathBuffer in_P_buf(.clk(					Clock),
-							.din(					DRAMReadData), 
-							.wr_en(					DRAMReadDataValid), 
-							.rd_en(					PathBuffer_OutReady), 
-							.dout(					PathBuffer_OutData), 
-							.full(					PathBuffer_Full), 
-							.valid(					PathBuffer_OutValid_Pre));						
-	end else begin:INBUF_LUTRAM
-		FIFORAM	#(			.Width(					DDRDWidth),
+	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				PathSize_DRBursts))
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -267,7 +259,6 @@ module TinyORAMCore(
 							.OutData(				PathBuffer_OutData),
 							.OutSend(				PathBuffer_OutValid_Pre),
 							.OutReady(				PathBuffer_OutReady));
-	end endgenerate
 
 	//--------------------------------------------------------------------------
 	//	DRAM Write Interface

@@ -11,7 +11,7 @@
 //				logic (e.g., dummy access control, R^(E+1)W pattern control)
 //==============================================================================
 module PathORAMBackend(
-	Clock, FastClock, Reset,
+	Clock, AESClock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf, 
 	CommandValid, CommandReady,
@@ -51,7 +51,7 @@ module PathORAMBackend(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-	input 					Clock, FastClock, Reset;
+	input 					Clock, AESClock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
@@ -199,9 +199,8 @@ module PathORAMBackend(
 	//	Integrity Verification (REW ORAM only)
 	//----------------------------------------------------------------------
 	
-	localparam	BRAMLatency = 2;
+	localparam	BRAMLatency = 2; // TODO clean up
 	generate if (EnableREW) begin:CC
-					
 		CoherenceController #(.ORAMB(				ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -333,9 +332,8 @@ module PathORAMBackend(
 							.DelayedWB(				DelayedWB),
 							.DebugAES(				DebugAES),
 							.ORAMUValid(			ORAMUValid))
-							
 				aes(		.Clock(					Clock), 
-							.FastClock(				FastClock),
+							.FastClock(				AESClock),
 				`ifdef ASIC
 							.Reset(					Reset),
 				`else
@@ -360,7 +358,6 @@ module PathORAMBackend(
 							.DRAMWriteData(			DRAMWriteData), 
 							.DRAMWriteDataValid(	DRAMWriteDataValid), 
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
-							
 		end else begin:BASIC_AES
 			AESPathORAM #(	.ORAMB(					ORAMB), // TODO which of these params are really needed?
 							.ORAMU(					ORAMU),
@@ -402,35 +399,34 @@ module PathORAMBackend(
 			assign	AES_DRAMReadDataValid =			DRAMReadDataValid;
 			assign	DRAMReadDataReady = 			AES_DRAMReadDataReady;
 		end else begin:BASIC_AES_PASS
-			// We still want to model AES latencies
+			// These buffers are here so that we can model AES timing.  If you 
+			// don't, comment them out ;-)
 
-			localparam		AESLatency =			21 + 8; // assuming tiny_aes
+			localparam		AESLatency =			21 + 8; // assuming tiny_aes			
 			
-			AESPathORAMDelayModel #(.Width(			DDRDWidth),
+			FIFORAM	#(		.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
-				indelay(	.Clock(					Clock), 
+				indelay(	.Clock(					Clock),
 							.Reset(					Reset),
-
-							.DataIn(				DRAMReadData),
-							.DataInValid(			DRAMReadDataValid), 
-							.DataInReady(			DRAMReadDataReady),
-
-							.DataOut(				AES_DRAMReadData),
-							.DataOutValid(			AES_DRAMReadDataValid), 
-							.DataOutReady(			AES_DRAMReadDataReady));
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				DRAMReadDataReady),
+							.OutData(				AES_DRAMReadData),
+							.OutSend(				AES_DRAMReadDataValid),
+							.OutReady(				AES_DRAMReadDataReady));
 							
-			AESPathORAMDelayModel #(.Width(			DDRDWidth),
+			FIFORAM	#(		.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
-				outdelay(	.Clock(					Clock), 
+				outdelay(	.Clock(					Clock),
 							.Reset(					Reset),
-
-							.DataIn(				AES_DRAMWriteData),
-							.DataInValid(			AES_DRAMWriteDataValid), 
-							.DataInReady(			AES_DRAMWriteDataReady),
-
-							.DataOut(				DRAMWriteData),
-							.DataOutValid(			DRAMWriteDataValid), 
-							.DataOutReady(			DRAMWriteDataReady));							
+							.InData(				AES_DRAMWriteData),
+							.InValid(				AES_DRAMWriteDataValid),
+							.InAccept(				AES_DRAMWriteDataReady),
+							.OutData(				DRAMWriteData),
+							.OutSend(				DRAMWriteDataValid),
+							.OutReady(				DRAMWriteDataReady));								
 		end
 	end endgenerate
 	//--------------------------------------------------------------------------
