@@ -406,11 +406,9 @@ module AESREWORAM(
 	`endif
 	
 		always @(posedge Clock) begin
-			if (BufferedDataInValid & ~BufferedDataInReady) begin
-				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger. (If you set SlowAESClock, you can ignore this message...)", $time);
-			end
 			if (ERROR_OF1) begin // "may" happen because data_buf has no backpressure in this state but should never happen
 				$display("[%m @ %t] ERROR: Data buffer overflow.", $time);
+				$finish;
 			end
 			
 			if (ERROR_UF1) begin
@@ -738,7 +736,7 @@ module AESREWORAM(
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM	#(			.Width(						BDWidth),
-						.Buffering(					AESLatencyPlus))
+						.Buffering(					128)) // really, this only needs to be ~AESLatencyPlus deep; but we get the extra depth for free if it is BRAM ...
 			data_buf(	.Clock(						Clock),
 						.Reset(						Reset),
 						.InData(					BufferedDataIn_Wide),
@@ -816,6 +814,7 @@ module AESREWORAM(
 							.OutSend(				BufferedROIVOutValid_DWB),
 							.OutReady(				BufferedROIVOutReady_DWB));
 	end else begin:NORMAL_RW_WRITEBACKS
+		assign	BufferedROIVOutData_DWB = 			{AESEntropy{1'bx}};
 		assign	BufferedROIVOutValid_DWB =			1'b0;
 		assign	BufferedROIVOutReady_DWB =			1'b0;
 		
