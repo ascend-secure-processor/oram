@@ -1,10 +1,10 @@
-This REAMDE describes the code structure for TinyORAM.
+This REAMDE describes the code structure for Tiny ORAM.
 
 --------------------------------------------------------------------------------
 								Introduction
 --------------------------------------------------------------------------------
 
-TinyORAM is partitioned into a frontend and a backend for a better modular design.
+Tiny ORAM is partitioned into a frontend and a backend for a better modular design.
 Frontend provides the same interface as a RAM. 
 Each frontend access takes as input an (operation, address, data) tuple.
 Backend provides a Position ORAM interface. 
@@ -18,13 +18,13 @@ A basic (non-recursive) frontend is under development.
 Backend is built on Path ORAM by Stefanov et. al [1].
 Backend structures the memory as a binary tree, reads random paths in the tree to retrieve the blocks requested by frontend.
 Backend also manages the stash and evicts blocks back to the tree.
-TinyORAM currently supports two backend protocols.
+Tiny ORAM currently supports two backend protocols.
 One is the original Path ORAM in [1].
 The other is RAW Path ORAM, a variant of Path ORAM proposed in [2].
 RAW Path ORAM simplifies integrity verification, and reduces the number of encryption and hash units required.
 (Note: we have REW instead of RAW in the code due to legacy. Will be corrected in future releases.)
 
-To choose between different configurations, users only need to change the parameters passed to TinyORAMCore.
+To choose between different configurations, users only need to change the parameters passed to Tiny ORAMCore.
 	EnableREW 	==> 	Path ORAM vs. RAW Path ORAM 
 	EnableIV 	==> 	whether or not to enable integrity verification (EnableIV = 1 only works when EnableREW = 1)
 
@@ -40,7 +40,7 @@ To choose between different configurations, users only need to change the parame
 --------------------------------------------------------------------------------
 	 
 
-	- TinyORAM							(TinyORAMCore.v, top module)
+	- Tiny ORAM							(Tiny ORAMCore.v, top module)
 		FrontEnd 							(choose between Basic or Unified)
 		Backend								(choose between Path ORAM or RAW Path ORAM)		
 										
