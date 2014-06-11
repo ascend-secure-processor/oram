@@ -1,7 +1,7 @@
 // Copyright 1986-1999, 2001-2013 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2013.4 (win64) Build 353583 Mon Dec  9 17:49:19 MST 2013
-// Date        : Mon Jun 09 18:08:51 2014
+// Date        : Tue Jun 10 17:05:58 2014
 // Host        : sinister running 64-bit Service Pack 1  (build 7601)
 // Command     : write_verilog -force -mode synth_stub C:/chip/oram/xilinx_ip/DDR3SDRAM/DDR3SDRAM_stub.v
 // Design      : DDR3SDRAM
