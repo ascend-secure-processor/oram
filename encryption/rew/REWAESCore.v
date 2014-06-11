@@ -156,7 +156,7 @@ module REWAESCore(
 		
 	`ifdef SIMULATION
 		initial begin
-			if ((AESEntropy + BIDWidth + PCCMDWidth) > 108) begin
+			if ((AESEntropy + BIDWidth + PCCMDWidth) > 128) begin
 				$display("[%m @ %t] ERROR: Data is too wide for ro_I_fifo.", $time);
 				$finish;
 			end
@@ -205,7 +205,7 @@ module REWAESCore(
 	// RO commands.  
 	
 	assign	ROCommandInReady =						~ROCommandFull;
-	AESSeedFIFO ro_I_fifo(	.wr_clk(				SlowClock), 
+	ClkCross512x128 rofifo(	.wr_clk(				SlowClock), 
 							.rd_clk(				FastClock), 
 							.din(					{ROIVIn, 	ROBIDIn, 	ROCommandIn}), 
 							.wr_en(					ROCommandInValid),
@@ -272,7 +272,7 @@ module REWAESCore(
 	//--------------------------------------------------------------------------
 	
 	assign	RWCommandInReady =						~RWCommandFull;
-	AESSeedFIFO rw_I_fifo(	.wr_clk(				SlowClock),
+	ClkCross512x128 rwfifo(	.wr_clk(				SlowClock),
 							.rd_clk(				FastClock),
 							.din(					{RWIVIn, RWBIDIn}), 
 							.wr_en(					RWCommandInValid),
@@ -348,7 +348,7 @@ module REWAESCore(
 	// ECC bits.
 
 	// Note: we don't do backpressure on this FIFO so it must be deep enough
-	AESROFIFO 	ro_O_fifo(	.wr_clk(				FastClock), 
+	ClkCross512x144 roOfifo(.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
 							.wr_en(					CommandOutIsRO),
@@ -414,7 +414,7 @@ module REWAESCore(
 							.POut(					MaskFIFODataIn));
 	
 	// Note: we don't do backpressure on this FIFO so it must be deep enough
-	REWMaskFIFO rw_O_fifo(	.wr_clk(				FastClock), 
+	ClkCross512x512 rwOfifo(.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					MaskFIFODataIn), 
 							.wr_en(					MaskFIFODataInValid), 

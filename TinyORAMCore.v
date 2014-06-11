@@ -43,9 +43,10 @@ module TinyORAMCore(
 	`include "PLBLocal.vh"
 	
 	/* Debugging.
-		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until PathBuffer 
-								is full.  This eliminates differences in MIG vs. 
-								simulation read timing.
+		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the 
+								PathBuffer has received an entire path.  This 
+								eliminates differences in MIG vs. simulation 
+								read timing.
 		DebugAES:				Disable AES masks. */
 	parameter				DebugDRAMReadTiming =	0; 
 	parameter				DebugAES =				0; 
@@ -217,10 +218,6 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 	
 	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
-		// This code will prevent the rest of the ORAM from seeing any data from 
-		// the path buffer until all data has arrived.  This eliminates bugs 
-		// caused by unpredictable DRAM read timing.
-
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
 		

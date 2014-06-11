@@ -327,7 +327,7 @@ module AESREWORAM(
 	//	Simulation Checks
 	//--------------------------------------------------------------------------
 	
-	Register1b 	chk1(  Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
+	Register1b 	chk1(Clock, Reset | FinishWBIn, ROI_FoundBucket, 									FoundBOIThisAccess);
 	
 	generate for (i = 0; i < ORAMZ; i = i + 1) begin:RO_BOGUS_U
 		assign	BogusORAMU_Read[i] =				|DataOutU[ORAMU*(i+1)-1:ORAMU*i+ORAMUValid] && DataOutU[ORAMU*(i+1)-1:ORAMU*i] != DummyBlockAddress;
@@ -358,12 +358,7 @@ module AESREWORAM(
 										ERROR_OF1 | ERROR_UF1 | ERROR_OF2 | ERROR_UF2 | ERROR_OF3 | ERROR_OF4 | ERROR_UF3 | ERROR_ISC1 | ERROR_ISC2 | ERROR_DUP1 | ERROR_BOGUSU | ERROR_BOGUSDATA, ERROR_AES);
 	
 	`ifdef SIMULATION
-		initial begin	
-			if ((PathMaskBuffering * RWPath_MaskChunks) > 512) begin
-				$display("[%m @ %t] ERROR: The mask header FIFO is too shallow for the Mask data FIFO (sized @ 512x512).", $time);
-				$finish;
-			end
-		
+		initial begin
 			if (BktHSize_DRBursts > 1) begin
 				$display("[%m @ %t] ERROR: Not supported yet.", $time);
 				$finish;
@@ -412,7 +407,7 @@ module AESREWORAM(
 	
 		always @(posedge Clock) begin
 			if (BufferedDataInValid & ~BufferedDataInReady) begin
-				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger.", $time);
+				$display("[%m @ %t] WARNING: Data buffer is full; you may want to make it a bit larger. (If you set SlowAESClock, you can ignore this message...)", $time);
 			end
 			if (ERROR_OF1) begin // "may" happen because data_buf has no backpressure in this state but should never happen
 				$display("[%m @ %t] ERROR: Data buffer overflow.", $time);
