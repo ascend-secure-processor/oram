@@ -1,7 +1,8 @@
+
 This REAMDE describes the code structure for Tiny ORAM.
 
 --------------------------------------------------------------------------------
-								Introduction
+Introduction
 --------------------------------------------------------------------------------
 
 Tiny ORAM is partitioned into a frontend and a backend for a better modular design.
