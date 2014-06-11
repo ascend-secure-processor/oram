@@ -1,6 +1,6 @@
 `include "Const.vh"
 
-module testORAM;
+module testUORAM;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
 	parameter                   ORAML = `ifdef ORAML `ORAML `else 13 `endif; // don't change. Why?
