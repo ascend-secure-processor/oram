@@ -775,10 +775,11 @@ module StashCore(
 							.AWidth(				SEAWidth))
 				StashP(		.Clock(					Clock),
 							.Reset(					Reset),
-							.Write(					StashP_WE),
-							.ReadAddress(			StashP_Address), 
+							.Write(					StashP_EN & StashP_WE),						 
 							.WriteAddress(			StashP_Address),
 							.WriteData(				StashP_DataIn),
+							.Read(					StashP_EN),
+							.ReadAddress(			StashP_Address),
 							.ReadData(				StashP_DataOut));			
 			
 	/* 
