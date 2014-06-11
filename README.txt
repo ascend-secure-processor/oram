@@ -17,7 +17,7 @@ The 'Memory interface' is:
   (op, address, data) where op = read/write.
 
 The 'Position-based ORAM interface' is: 
-  (rd/wr, address, data, currentPos, NewPos) 
+  (op, address, data, currentPos, NewPos) 
   where op = read/write/some additional low-level commands.
 
 The frontend manages the block-to-position mapping, and translates a frontend 
@@ -67,7 +67,7 @@ Tiny ORAM								(TinyORAMCore.v, top module)
 			Coherence Controller		(backend/CoherenceController.v)
 			Integrity Verification		(integrity/*.v)
 			Symmetric Encryption		(encryption/rew/*.v)					
-		Shared across different backend designs
+		Shared across both backend designs
 			Address Generator			(addr/*.v)             
 			Stash						(stash/*.v)
 			
@@ -83,5 +83,5 @@ Conventions
 	these testbenches are _out of data_ and no longer maintained.  To test Tiny 
 	ORAM, refer to ../tests/README.txt.
 
--	Files with a suffix 'Top' are FPGA top files.  That is, they contain FPGA 
+-	Files named 'TinyORAMTop' are FPGA top files.  That is, they contain FPGA 
 	pinouts and can be used to generate an FPGA bitstream.
