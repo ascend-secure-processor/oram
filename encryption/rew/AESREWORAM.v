@@ -736,7 +736,8 @@ module AESREWORAM(
 	
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM	#(			.Width(						BDWidth),
-						.Buffering(					128)) // really, this only needs to be ~AESLatencyPlus deep; but we get the extra depth for free if it is BRAM ...
+						.Buffering(					128)
+						`ifdef ASIC , .ASIC(1) `endif) // really, this only needs to be ~AESLatencyPlus deep; but we get the extra depth for free if it is BRAM ...
 			data_buf(	.Clock(						Clock),
 						.Reset(						Reset),
 						.InData(					BufferedDataIn_Wide),

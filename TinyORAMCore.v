@@ -247,7 +247,8 @@ module TinyORAMCore(
 	end endgenerate	
 		
 	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				PathSize_DRBursts))
+							.Buffering(				PathSize_DRBursts)
+							`ifdef ASIC , .ASIC(1) `endif)
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMReadData),

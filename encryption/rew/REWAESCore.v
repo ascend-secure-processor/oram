@@ -148,7 +148,7 @@ module REWAESCore(
 	wire	[DDRDWidth-1:0]	MaskFIFODataIn;
 	wire					MaskFIFODataInValid, MaskFIFOFull;
 	
-	wire					ROFIFOFull;
+	wire					ROFIFOReady, ROFIFOFull;
 
 	//--------------------------------------------------------------------------
 	//	Simulation Checks
@@ -178,12 +178,12 @@ module REWAESCore(
 		end
 		
 		always @(posedge FastClock) begin
-			if (ROFIFOFull & CommandOutIsRO) begin
+			if (~ROFIFOReady & CommandOutIsRO) begin
 				$display("[%m @ %t] ERROR: AES RO out fifo overflow.", $time);
 				$finish;
 			end
 			 
-			if (MaskFIFOFull & MaskFIFODataInValid) begin
+			if (~MaskFIFODataInReady & MaskFIFODataInValid) begin
 				$display("[%m @ %t] ERROR: AES RW out fifo overflow.", $time);
 				$finish;
 			end			
@@ -196,16 +196,28 @@ module REWAESCore(
 	
 	// TODO: Set it to something dynamic [this is actually important to get correct area numbers ...]
 	assign	CoreKey =								{AESWidth{1'b1}}; 
-	
-	//--------------------------------------------------------------------------
-	//	RO Input Interface
-	//--------------------------------------------------------------------------
 
+	//--------------------------------------------------------------------------
+	//	Input FIFOs
+	//--------------------------------------------------------------------------
+	
 	// Note: We split the input buffers so RW commands don't head of line block
 	// RO commands.  
 	
+	`ifdef ASIC
+	FIFORAM		#(			.Width(					AESEntropy + BIDWidth + PCCMDWidth),
+							.Buffering(				InFlightMaskLimit)) // probably can be smaller than this 
+				rofifo(		.Clock(					SlowClock),
+							.Reset(					1'b0), // TODO add asic reset
+							.InData(				{ROIVIn, 	ROBIDIn, 	ROCommandIn}),
+							.InValid(				ROCommandInValid),
+							.InAccept(				ROCommandInReady),
+							.OutData(				{ROIV_Fifo, ROBID_Fifo, ROCommand_Fifo}),
+							.OutSend(				ROValid_Fifo),
+							.OutReady(				ROReady_Fifo));
+	`else
 	assign	ROCommandInReady =						~ROCommandFull;
-	ClkCross512x128 rofifo(	.wr_clk(				SlowClock), 
+	ClkCross512x128 rofifo(	.wr_clk(				SlowClock),
 							.rd_clk(				FastClock), 
 							.din(					{ROIVIn, 	ROBIDIn, 	ROCommandIn}), 
 							.wr_en(					ROCommandInValid),
@@ -213,6 +225,34 @@ module REWAESCore(
 							.dout(					{ROIV_Fifo, ROBID_Fifo, ROCommand_Fifo}), 
 							.rd_en(					ROReady_Fifo), 
 							.valid(					ROValid_Fifo));
+	`endif
+	
+	`ifdef ASIC
+	FIFORAM		#(			.Width(					AESEntropy + BIDWidth),
+							.Buffering(				InFlightMaskLimit))
+				rwfifo(		.Clock(					SlowClock),
+							.Reset(					1'b0), // TODO add asic reset
+							.InData(				{RWIVIn, RWBIDIn}),
+							.InValid(				RWCommandInValid),
+							.InAccept(				RWCommandInReady),
+							.OutData(				{RWIV_Fifo, RWBID_Fifo}),
+							.OutSend(				RWValid_Fifo),
+							.OutReady(				RWReady_Fifo));	
+	`else
+	assign	RWCommandInReady =						~RWCommandFull;
+	ClkCross512x128 rwfifo(	.wr_clk(				SlowClock),
+							.rd_clk(				FastClock),
+							.din(					{RWIVIn, RWBIDIn}), 
+							.wr_en(					RWCommandInValid),
+							.full(					RWCommandFull),
+							.dout(					{RWIV_Fifo, RWBID_Fifo}),
+							.rd_en(					RWReady_Fifo),
+							.valid(					RWValid_Fifo));
+	`endif	
+	
+	//--------------------------------------------------------------------------
+	//	RO Input Interface
+	//--------------------------------------------------------------------------
 
 	FIFORegister #(			.Width(					AESEntropy + BIDWidth + PCCMDWidth),
 							.Initial(				0),
@@ -271,16 +311,6 @@ module REWAESCore(
 	//	RW Input Interface
 	//--------------------------------------------------------------------------
 	
-	assign	RWCommandInReady =						~RWCommandFull;
-	ClkCross512x128 rwfifo(	.wr_clk(				SlowClock),
-							.rd_clk(				FastClock),
-							.din(					{RWIVIn, RWBIDIn}), 
-							.wr_en(					RWCommandInValid),
-							.full(					RWCommandFull),
-							.dout(					{RWIV_Fifo, RWBID_Fifo}),
-							.rd_en(					RWReady_Fifo),
-							.valid(					RWValid_Fifo));
-	
 	FIFORegister #(			.Width(					AESEntropy + BIDWidth),
 							.Initial(				0),
 							.InitialValid(			0))
@@ -336,26 +366,7 @@ module REWAESCore(
 							.SOut(					{CoreDataOutValid, 	CoreCommandOut}));						
 	
 	assign	CommandOutIsRW =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] == CMD_RWData[ACMDRWBit];
-	assign	CommandOutIsRO =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] != CMD_RWData[ACMDRWBit];
-	
-	//--------------------------------------------------------------------------
-	//	RO Output Interface
-	//--------------------------------------------------------------------------
-	
-	// Note: we use a single FIFO for all RO stuff (header masks, data of 
-	// interest) so save on the routing / area cost of a second FIFO.  Adding 
-	// the command bit here adds 0 additional logic since we just use the BRAM 
-	// ECC bits.
-
-	// Note: we don't do backpressure on this FIFO so it must be deep enough
-	ClkCross512x144 roOfifo(.wr_clk(				FastClock), 
-							.rd_clk(				SlowClock), 
-							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
-							.wr_en(					CommandOutIsRO),
-							.full(					ROFIFOFull),
-							.dout(					{RODataOut,		ROCommandOut}),
-							.rd_en(					RODataOutReady),  
-							.valid(					RODataOutValid));	
+	assign	CommandOutIsRO =						CoreDataOutValid & CoreCommandOut[ACMDRWBit] != CMD_RWData[ACMDRWBit];	
 	
 	//--------------------------------------------------------------------------
 	//	RW Output Interface
@@ -413,7 +424,53 @@ module REWAESCore(
 							.SIn(					CoreDataOut),
 							.POut(					MaskFIFODataIn));
 	
+	//--------------------------------------------------------------------------
+	//	Output FIFOs
+	//--------------------------------------------------------------------------
+	
+	// Note: we use a single FIFO for all RO stuff (header masks, data of 
+	// interest) so save on the routing / area cost of a second FIFO.  Adding 
+	// the command bit here adds 0 additional logic since we just use the BRAM 
+	// ECC bits.
+
+	`ifdef ASIC
+	FIFORAM		#(			.Width(					AESWidth + PCCMDWidth),
+							.Buffering(				128)) // TODO: how to set this?  just make it big to be conservative ...
+				roOfifo(	.Clock(					SlowClock),
+							.Reset(					1'b0), // TODO add asic reset
+							.InData(				{CoreDataOut,	CoreCommandOut[ACMDROBit]}),
+							.InValid(				CommandOutIsRO),
+							.InAccept(				ROFIFOReady),
+							.OutData(				{RODataOut,		ROCommandOut}),
+							.OutSend(				RODataOutValid),
+							.OutReady(				RODataOutReady));	
+	`else
 	// Note: we don't do backpressure on this FIFO so it must be deep enough
+	assign	ROFIFOReady =							~ROFIFOFull;
+	ClkCross512x144 roOfifo(.wr_clk(				FastClock), 
+							.rd_clk(				SlowClock), 
+							.din(					{CoreDataOut,	CoreCommandOut[ACMDROBit]}), 
+							.wr_en(					CommandOutIsRO),
+							.full(					ROFIFOFull),
+							.dout(					{RODataOut,		ROCommandOut}),
+							.rd_en(					RODataOutReady),
+							.valid(					RODataOutValid));						
+	`endif
+	
+	`ifdef ASIC
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				MaskFIFODepth))
+				rwOfifo(	.Clock(					SlowClock),
+							.Reset(					1'b0), // TODO add asic reset
+							.InData(				MaskFIFODataIn),
+							.InValid(				MaskFIFODataInValid),
+							.InAccept(				MaskFIFODataInReady),
+							.OutData(				RWDataOut),
+							.OutSend(				RWDataOutValid),
+							.OutReady(				RWDataOutReady));	
+	`else
+	// Note: we don't do backpressure on this FIFO so it must be deep enough
+	assign	MaskFIFODataInReady =					~MaskFIFOFull;
 	ClkCross512x512 rwOfifo(.wr_clk(				FastClock), 
 							.rd_clk(				SlowClock), 
 							.din(					MaskFIFODataIn), 
@@ -421,8 +478,9 @@ module REWAESCore(
 							.full(					MaskFIFOFull),
 							.dout(					RWDataOut),
 							.rd_en(					RWDataOutReady),
-							.valid(					RWDataOutValid));
-
+							.valid(					RWDataOutValid));	
+	`endif
+	
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------
