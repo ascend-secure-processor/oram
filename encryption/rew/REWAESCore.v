@@ -146,7 +146,7 @@ module REWAESCore(
 	wire 					MaskFIFODataMaskValid, MaskFIFOHeaderMaskValid;		
 	
 	wire	[DDRDWidth-1:0]	MaskFIFODataIn;
-	wire					MaskFIFODataInValid, MaskFIFOFull;
+	wire					MaskFIFODataInReady, MaskFIFODataInValid, MaskFIFOFull;
 	
 	wire					ROFIFOReady, ROFIFOFull;
 
