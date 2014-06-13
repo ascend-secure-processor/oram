@@ -11,7 +11,7 @@
 //				verification, & a FIFO DRAM interface.
 //==============================================================================
 module TinyORAMCore(
-  	Clock, AESClock, Reset,
+  	Clock, Reset,
 	
 	Cmd, PAddr, 
 	CmdValid, CmdReady, 
@@ -28,11 +28,53 @@ module TinyORAMCore(
 	);
 	
 	//--------------------------------------------------------------------------
+	//	Parameters
+	//--------------------------------------------------------------------------
+	
+	// Debugging
+	
+	/* 	
+		SlowAESClock:			AES should use the same clock as the rest of the 
+								design			
+		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the 
+								PathBuffer has received an entire path.  This 
+								eliminates differences in MIG vs. simulation 
+								read timing. 
+	*/
+	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	
+	// Frontend-backend
+	
+	parameter				EnablePLB = 			1,
+							EnableREW =				1,
+							EnableAES =				1,
+							EnableIV =				`ifdef EnableIV `EnableIV `else 0 `endif;
+	
+	// ORAM
+	
+	parameter				ORAMB =					512,
+							ORAMU =					32,
+							ORAML =					`ifdef ORAML 	`ORAML 
+													`else			(EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10 `endif,
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
+							ORAMC =					10,
+							ORAME =					5;
+
+	parameter				FEDWidth =				512,
+							BEDWidth =				512;
+
+    parameter				NumValidBlock = 		1 << ORAML,
+							Recursion = 			3,
+							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif; // 8KB PLB
+		
+	// Hardware
+
+	parameter				Overclock =				1;
+	
+	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
-
-	`include "PathORAM.vh"
-	`include "UORAM.vh" 
 	
 	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
@@ -42,20 +84,15 @@ module TinyORAMCore(
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh"
 	
-	/* Debugging.
-		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the 
-								PathBuffer has received an entire path.  This 
-								eliminates differences in MIG vs. simulation 
-								read timing. */
-	parameter				DebugDRAMReadTiming =	0; 
-	
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 	
+	localparam				DelayedWB =				EnableIV;
+		
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					Clock, AESClock, Reset;
+  	input 					Clock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	User interface
@@ -95,6 +132,8 @@ module TinyORAMCore(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
+	wire					AESClock;
+	
 	// Frontend - Backend
 	
 	(* mark_debug = "TRUE" *)	wire					BEnd_CmdReady, BEnd_CmdValid;
@@ -130,6 +169,20 @@ module TinyORAMCore(
 			end
 		end
 	`endif
+	
+	//--------------------------------------------------------------------------
+	//	Clocking
+	//-------------------------------------------------------------------------- 	
+	
+	generate if (SlowAESClock) begin:SLOW_AES
+		assign	AESClock =							Clock;
+	end else begin:FAST_AES
+		// Increases the clock by 50%
+		aes_clock	ci15( 	.clk_in1(				Clock),
+							.clk_out1(				AESClock),
+							.reset(					Reset),
+							.locked(				));
+	end endgenerate
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
