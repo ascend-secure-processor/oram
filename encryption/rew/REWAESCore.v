@@ -22,6 +22,9 @@
 //					- RW Output buffer: stores masks in DDRDWidth chunks; header 
 //					  masks always come first
 //
+//	Note: 		This module's reset must be 1'b0 if SlowClock != FastClock 
+//				(i.e., only use reset for the ASIC design).
+//
 //				This module is meant to be clocked as fast as possible 
 //				(e.g., 300+ Mhz).
 //
@@ -35,7 +38,7 @@
 //				- No backpressure [Done]
 //==============================================================================
 module REWAESCore(
-	SlowClock, FastClock,
+	SlowClock, FastClock, Reset,
 
 	ROIVIn, ROBIDIn, ROCommandIn, ROCommandInValid, ROCommandInReady,
 	RWIVIn, RWBIDIn, RWCommandInValid, RWCommandInReady,
@@ -61,7 +64,7 @@ module REWAESCore(
 	//	System I/O
 	//--------------------------------------------------------------------------
 		
-  	input 					SlowClock, FastClock;
+  	input 					SlowClock, FastClock, Reset;
 	
 	//--------------------------------------------------------------------------
 	//	Input Interfaces
@@ -208,7 +211,7 @@ module REWAESCore(
 	FIFORAM		#(			.Width(					AESEntropy + BIDWidth + PCCMDWidth),
 							.Buffering(				InFlightMaskLimit)) // probably can be smaller than this 
 				rofifo(		.Clock(					SlowClock),
-							.Reset(					1'b0), // TODO add asic reset
+							.Reset(					Reset),
 							.InData(				{ROIVIn, 	ROBIDIn, 	ROCommandIn}),
 							.InValid(				ROCommandInValid),
 							.InAccept(				ROCommandInReady),
@@ -231,7 +234,7 @@ module REWAESCore(
 	FIFORAM		#(			.Width(					AESEntropy + BIDWidth),
 							.Buffering(				InFlightMaskLimit))
 				rwfifo(		.Clock(					SlowClock),
-							.Reset(					1'b0), // TODO add asic reset
+							.Reset(					Reset),
 							.InData(				{RWIVIn, RWBIDIn}),
 							.InValid(				RWCommandInValid),
 							.InAccept(				RWCommandInReady),
@@ -258,7 +261,7 @@ module REWAESCore(
 							.Initial(				0),
 							.InitialValid(			0))
 				ro_state(	.Clock(					FastClock),
-							.Reset(					1'b0),
+							.Reset(					Reset),
 							.InData(				{ROIV_Fifo, ROBID_Fifo, ROCommand_Fifo}),
 							.InValid(				ROValid_Fifo),
 							.InAccept(				ROReady_Fifo),
@@ -273,7 +276,7 @@ module REWAESCore(
 	Counter		#(			.Width(					CIDWidth),
 							.Initial(				0))
 				ro_cid(		.Clock(					FastClock),
-							.Reset(					ROReady | (RODataRestart & ~RODataRestarted)),
+							.Reset(					Reset | ROReady | (RODataRestart & ~RODataRestarted)),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				ROSend),
@@ -293,13 +296,13 @@ module REWAESCore(
 	CountAlarm #(			.Threshold(				ROIWaitSteps),
 							.Initial(				0))
 				roi_waste(	.Clock(					FastClock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Enable(				~RODataRestarted & ~ROCommandIsHeader & ROSend),
 							.Done(					RODataRestart));
 	Register #(				.Width(					1), // state machine to switch modes
 							.Initial(				0))
 				roi_hdr_chk(.Clock(					FastClock),
-							.Reset(					ROReady),
+							.Reset(					Reset | ROReady),
 							.Set(					~ROCommandIsHeader & RODataRestart),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -315,7 +318,7 @@ module REWAESCore(
 							.Initial(				0),
 							.InitialValid(			0))
 				rw_state(	.Clock(					FastClock),
-							.Reset(					1'b0),
+							.Reset(					Reset),
 							.InData(				{RWIV_Fifo, RWBID_Fifo}),
 							.InValid(				RWValid_Fifo),
 							.InAccept(				RWReady_Fifo),
@@ -329,7 +332,7 @@ module REWAESCore(
 	Counter		#(			.Width(					CIDWidth),
 							.Initial(				0))
 				rw_cid(		.Clock(					FastClock),
-							.Reset(					RWReady),
+							.Reset(					Reset | RWReady),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				RWSend),
@@ -359,7 +362,7 @@ module REWAESCore(
 							.SWidth(				1 + ACCMDWidth),
 							.Initial(				{AESLatency{1'b0}}))
 				V_shift(	.Clock(					FastClock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Load(					1'b0), 
 							.Enable(				1'b1),
 							.SIn(					{CoreDataInValid, 	CoreCommandIn}),
@@ -382,14 +385,14 @@ module REWAESCore(
 	CountAlarm #(			.Threshold(				RWBkt_MaskChunks),
 							.Initial(				0))
 				rw_bkt_done(.Clock(					FastClock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Enable(				MaskFIFODataInValid),
 							.Done(					RWBucketWritten));
 
 	Counter		#(			.Width(					BAWidth),
 							.Initial(				0))
 				rw_O_cnt(	.Clock(					FastClock),
-							.Reset(					MaskFIFODataInValid & ~CommandOutIsRW),
+							.Reset(					Reset | (MaskFIFODataInValid & ~CommandOutIsRW)),
 							.Set(					1'b0),
 							.Load(					MaskFIFODataInValid & CommandOutIsRW),
 							.Enable(				CommandOutIsRW),
@@ -406,7 +409,7 @@ module REWAESCore(
 	Register #(				.Width(					1), // state machine to switch modes
 							.Initial(				0))
 				rw_hdr_chk(	.Clock(					FastClock),
-							.Reset(					RWBucketWritten),
+							.Reset(					Reset | RWBucketWritten),
 							.Set(					MaskFIFOHeaderMaskValid),
 							.Enable(				1'b0),
 							.In(					1'bx),
@@ -418,7 +421,7 @@ module REWAESCore(
 							.SWidth(				AESWidth),
 							.Initial(				{DDRDWidth{1'b0}}))
 				rw_shift(	.Clock(					FastClock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Load(					1'b0), 
 							.Enable(				CommandOutIsRW),
 							.SIn(					CoreDataOut),
@@ -437,7 +440,7 @@ module REWAESCore(
 	FIFORAM		#(			.Width(					AESWidth + PCCMDWidth),
 							.Buffering(				128)) // TODO: how to set this?  just make it big to be conservative ...
 				roOfifo(	.Clock(					SlowClock),
-							.Reset(					1'b0), // TODO add asic reset
+							.Reset(					Reset),
 							.InData(				{CoreDataOut,	CoreCommandOut[ACMDROBit]}),
 							.InValid(				CommandOutIsRO),
 							.InAccept(				ROFIFOReady),
@@ -461,7 +464,7 @@ module REWAESCore(
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				MaskFIFODepth))
 				rwOfifo(	.Clock(					SlowClock),
-							.Reset(					1'b0), // TODO add asic reset
+							.Reset(					Reset),
 							.InData(				MaskFIFODataIn),
 							.InValid(				MaskFIFODataInValid),
 							.InAccept(				MaskFIFODataInReady),

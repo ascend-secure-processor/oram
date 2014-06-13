@@ -890,7 +890,11 @@ module AESREWORAM(
 							.ORAMB(					ORAMB))
 				core(		.SlowClock(				Clock),
 							.FastClock(				FastClock),
-
+				`ifdef ASIC
+							.Reset(					Reset),
+				`else
+							.Reset(					1'b0),
+				`endif
 							.ROIVIn(				Core_ROIVIn), 
 							.ROBIDIn(				Core_ROBIDIn), 
 							.ROCommandIn(			Core_ROCommandIn), 
