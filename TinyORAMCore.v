@@ -46,10 +46,8 @@ module TinyORAMCore(
 		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the 
 								PathBuffer has received an entire path.  This 
 								eliminates differences in MIG vs. simulation 
-								read timing.
-		DebugAES:				Disable AES masks. */
+								read timing. */
 	parameter				DebugDRAMReadTiming =	0; 
-	parameter				DebugAES =				0; 
 	
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 	
@@ -188,7 +186,6 @@ module TinyORAMCore(
 							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
-							.DebugAES(				DebugAES),
 							.ORAMUValid(			ORAMUValid))
 				back_end (	.Clock(					Clock),
 			                .AESClock(				AESClock),

@@ -1,5 +1,6 @@
 
 	// algorithm-level ORAM parameters
+	
 	parameter				ORAMB =					512, // block size in bits
 							ORAMU =					32, // program addr (at byte-addressable block granularity) width
 							ORAML =					13, // the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
@@ -11,7 +12,7 @@
 							BEDWidth =				512, // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
 	
 							Overclock = 			1, // Pipeline various operations inside the stash (needed for 200 Mhz operation)
-							UseBRAM = 			`ifdef ASIC 0 `else Overclock `endif, 
+							UseBRAM = 				`ifdef ASIC 0 `else Overclock `endif, 
 								
 							EnableAES =				0, // Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
 

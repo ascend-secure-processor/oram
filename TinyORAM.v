@@ -10,8 +10,7 @@
 //==============================================================================
 //	Module:		TinyORAM
 //	Desc: 		This wrapper sets ORAM specific clocks and declares all ORAM 
-//				parameters.  It is meant to be a convenient way to use 
-//				TinyORAMCore.
+//				parameters in one place to reasonable default values.
 //==============================================================================
 module TinyORAM(
   	Clock, Reset,
@@ -70,6 +69,9 @@ module TinyORAM(
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
+	
+	`include "DDR3SDRAMLocal.vh"	
+	`include "PathORAMBackendLocal.vh"	
 	
 	localparam				DelayedWB =				EnableIV;
 		
