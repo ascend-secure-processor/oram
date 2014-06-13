@@ -60,7 +60,7 @@ module TinyORAMCore(
   	input 					Clock, AESClock, Reset;
 	
 	//--------------------------------------------------------------------------
-	//	Interface to network
+	//	User interface
 	//--------------------------------------------------------------------------
 
 	input	[BECMDWidth-1:0] Cmd;
@@ -77,7 +77,7 @@ module TinyORAMCore(
 	input 					DataOutReady;
 	
 	//--------------------------------------------------------------------------
-	//	Interface to DRAM
+	//	DRAM interface
 	//--------------------------------------------------------------------------
 
 	output	[DDRAWidth-1:0]	DRAMAddress;
@@ -109,7 +109,7 @@ module TinyORAMCore(
 
 	// Path buffer
 
-	wire					PathBuffer_OutReady_Pre, PathBuffer_OutValid_Pre;	
+	wire					PathBuffer_InReady, PathBuffer_OutReady_Pre, PathBuffer_OutValid_Pre;	
 	
 	wire					PathBuffer_OutValid, PathBuffer_OutReady;
 	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
@@ -122,6 +122,13 @@ module TinyORAMCore(
 		initial begin	
 			if (ORAML + 1 > 32) begin
 				$display("[%m @ %t] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.", $time);
+			end
+		end
+
+		always @(posedge Clock) begin
+			if (DRAMReadDataValid && ~PathBuffer_InReady) begin
+				$display("[%m @ %t] ERROR: Path buffer overflow", $time);
+				$finish;
 			end
 		end
 	`endif

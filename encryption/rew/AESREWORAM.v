@@ -82,6 +82,11 @@ module AESREWORAM(
 							ST_RO_StartWrite =		3'd6, 
 							ST_RO_Write =			3'd7; // Masks for header writebacks
 							
+	localparam				COSWidth =				2,
+							ST_CO_Read =			2'd0,
+							ST_CO_ROI =				2'd1,
+							ST_CO_Write =			2'd2;
+
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -135,7 +140,7 @@ module AESREWORAM(
 	(* mark_debug = "TRUE" *)	wire					PathRead, ROAccess, RWAccess, PathWriteback;	
 	
 	wire	[ORAMU-1:0]		ROPAddr_Internal;
-	wire	[ORAML-1:0]		ROLeaf_Internal;	
+	wire	[ORAML-1:0]		ROLeaf_Internal;
 	
 	// AES Core
 	
@@ -179,6 +184,9 @@ module AESREWORAM(
 	
 	wire	[DDRDWidth-1:0]	BufferedDataOut;
 	(* mark_debug = "TRUE" *)	wire					BufferedDataTransfer;
+
+	wire					MaskIsHeader_Pre, MaskIsHeader;
+	wire					BufferedDataBucketTransition;
 
 	wire	ROIDataInValid_Inner;
 	wire	[DDRDWidth-1:0]	BufferedDataOut_Inner;	
@@ -227,6 +235,7 @@ module AESREWORAM(
 
 	(* mark_debug = "TRUE" *)	wire					ROIMaskShiftInValid, ROIMaskShiftInReady;
 	wire	[DDRDWidth-1:0]	ROIMaskShiftOutData;
+	wire					RMMaskReady;
 	(* mark_debug = "TRUE" *)	wire					ROIMaskShiftOutValid, ROIMaskShiftOutReady;	
 	
 	// RW background mask generation
@@ -285,7 +294,7 @@ module AESREWORAM(
 	wire	[AESEntropy-1:0] OutputExternalIV;
 	
 	wire	[DDRDWidth-1:0]	DataOut_Unmask, DataOut_Read1, DataOut_Read, DataOut_Write;
-	(* mark_debug = "TRUE" *)	wire					DataOutValid, DataOutReady;
+	(* mark_debug = "TRUE" *)	wire					DataOutValid, DataOutReady, DataOutTransfer;
 	
 	(* mark_debug = "TRUE" *)	wire					ROMask_Needed, ROIMask_Needed, RMMask_Needed;
 	
@@ -1004,11 +1013,6 @@ module AESREWORAM(
 			Bucket headers: 	X										X
 			Bucket payloads:											X
 	*/
-		
-	localparam				COSWidth =				2,
-							ST_CO_Read =			2'd0,
-							ST_CO_ROI =				2'd1,
-							ST_CO_Write =			2'd2;		
 	
 	assign	BufferedDataTransfer =					BufferedDataOutValid & BufferedDataOutReady;
 	assign	BufferedDataTransfer_Write =			BufferedDataOutValid & BufferedDataOutReady_Write;
@@ -1054,7 +1058,7 @@ module AESREWORAM(
 							.Reset(					Reset | FinishWBOut), 
 							.Enable(				BufferedDataBucketTransition),
 							.Done(					StartROI));
-							
+
 	assign	FinishROI =								~StartROI & CSCOROI & BufferedDataBucketTransition; // after one more bucket
 	assign	FinishWBOut =							(ROAccess) ? HWBPathTransitionOut : RWWBPathTransitionOut;
 	

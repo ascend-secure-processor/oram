@@ -215,8 +215,8 @@ module StashTop(
 	//--------------------------------------------------------------------------
 	
 	Register1b 	errno1(Clock, Reset, OuterCount < InnerCount, 															ERROR_ISC1);
-	Register1b 	errno2(Clock, Reset, CSIdle & CommandValid & (Command !== STCMD_StartRead & Command !== STCMD_Append), 	ERROR_ISC2);
-	Register1b 	errno3(Clock, Reset, CSRead & CommandValid & Command !== STCMD_StartWrite, 								ERROR_ISC3);
+	Register1b 	errno2(Clock, Reset, CSIdle & CommandValid & (Command != STCMD_StartRead & Command != STCMD_Append), 	ERROR_ISC2);
+	Register1b 	errno3(Clock, Reset, CSRead & CommandValid & Command != STCMD_StartWrite, 								ERROR_ISC3);
 	Register1b 	errno4(Clock, Reset, CommandValid & Command == STCMD_Append & BECommand != BECMD_Append, 				ERROR_ISC4);
 	Register1b 	errno5(Clock, Reset, LatchBECommand & StashAlmostFull & ~AccessIsDummy, 								ERROR_SOF);
 	

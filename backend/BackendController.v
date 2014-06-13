@@ -142,7 +142,7 @@ module BackendController(
 	(* mark_debug = "FALSE" *)	wire					RW_R_DoneAlarm, RW_W_DoneAlarm, RO_R_DoneAlarm;	
 	(* mark_debug = "FALSE" *)	wire 					Addr_RW_W_DoneAlarm, Addr_RO_W_DoneAlarm;
 	
-	(* mark_debug = "FALSE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite;
+	(* mark_debug = "FALSE" *)	wire					CSIdle, CSAppend, CSAppendWait, CSAddrGenRead, CSAddrGenWrite, CSStashRead, CSStashWrite, CSWrite;
 
 	wire					AddrRWDone, DataRWDone, OperationComplete; // NOTE: do not add debug here; mysteriously causes the tools to fail @ impl
 	(* mark_debug = "FALSE" *)	wire					Stash_AppendCmdValid, Stash_DummyCmdValid, Stash_OtherCmdValid;
@@ -158,6 +158,10 @@ module BackendController(
 	//--------------------------------------------------------------------------
 	//	Initial state
 	//--------------------------------------------------------------------------
+
+	// TODO remove this hack.  The idea is that we don't want to do the first RW 
+	// access until we do a few appends.  But that logic should set 'RWAccess', 
+	// not 'SetDummy' like the logic does right now.
 	wire	OneAccessHasOccurred;
 	Register #( .Width(1),	.Initial(1'b0))
 		first_access (Clock, Reset, CommandRequest, 1'b0, 1'bx, OneAccessHasOccurred);
@@ -165,7 +169,6 @@ module BackendController(
 	`ifndef ASIC
 		initial begin
 			CS = ST_Idle;
-			
 		end 
 	`endif
 	
@@ -211,9 +214,6 @@ module BackendController(
 	assign	Stash_DummyCmdValid =					DummyLeaf_Valid & AccessIsDummy;
 	assign	Stash_OtherCmdValid =					DummyLeaf_Valid & CommandRequest & ~Stash_AppendCmdValid & ~Stash_DummyCmdValid;
 
-	assign	ROStartCCValid =						CS == ST_CCROStart;
-	assign	ROStartAESValid =						CS == ST_AESROStart;
-	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Idle;
 		else CS <= 									NS;
@@ -339,6 +339,9 @@ module BackendController(
 
 		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
 
+		assign	ROStartCCValid =					CS == ST_CCROStart;
+		assign	ROStartAESValid =					CS == ST_AESROStart;
+	
 		assign	ROPAddr_Pre =						PAddr;
 		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
 		assign	REWRoundDummy_Pre =					AccessIsDummy;

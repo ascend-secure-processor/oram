@@ -20,7 +20,7 @@ module testUORAM;
 	parameter					Overclock = 		1;
 	parameter					EnableREW =			0;	
 	parameter					EnableAES =			EnableREW;
-    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
+    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else 0 `endif;
 	parameter					DelayedWB =			EnableIV;
 
 	localparam  NN = 100;

@@ -276,7 +276,7 @@ module StashCore(
 	reg		[SEAWidth-1:0] 	StashWalk_Delayed;
 	reg						CSDumping_Delayed, CSSyncing_Delayed, FirstChunk_Transfer_Delayed;
 	wire					CSPushing_FirstCycle, CSDumping_FirstCycle, 
-							CSSyncing_FirstCycle;
+							CSSyncing_FirstCycle, CSSyncing_PreLatch;
 
 	// debugging
 	
