@@ -259,7 +259,7 @@ module StashCore(
 	// Syncing
 	
 	reg 	[SyncSTWidth-1:0] NS_Sync, CS_Sync, SyncState;
-	wire 					CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL;
+	wire 					CSSyncing, CSSyncing_Main, CSSyncing_CapUL, CSSyncing_CapFL, CSSyncing_PreLatch;
 	
 	wire	[SEAWidth-1:0]	SyncCount_PreLatch;
 	
