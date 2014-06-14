@@ -20,10 +20,10 @@ module testUORAM;
 	parameter					Overclock = 		1;
 	parameter					EnableREW =			0;	
 	parameter					EnableAES =			EnableREW;
-    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else 0 `endif;
+    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
 	parameter					DelayedWB =			EnableIV;
 
-	localparam  NN = 100;
+	localparam  NN = 200;
 	localparam	nn = 73;
 	localparam	nn2 = nn * 29;	
 	
@@ -77,7 +77,6 @@ module testUORAM;
                             .PLBCapacity(           PLBCapacity))
                             
             ORAM    (		.Clock(					Clock),
-							.AESClock(				AESClock),
                             .Reset(					Reset),
                             
                             // interface with network			
