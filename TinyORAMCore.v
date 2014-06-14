@@ -194,7 +194,7 @@ module TinyORAMCore(
 	//	Clocking
 	//-------------------------------------------------------------------------- 	
 	
-	generate if (SlowAESClock) begin:SLOW_AES
+	generate if (SlowAESClock || `ifdef ASIC 1 `else 0 `endif) begin:SLOW_AES
 		assign	AESClock =							Clock;
 	end else begin:FAST_AES
 		// Increases the clock by 50%
