@@ -210,7 +210,6 @@ module StashTop(
 		end
 	`endif
 		
-	`ifdef SIMULATION
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
@@ -223,6 +222,7 @@ module StashTop(
 	
 	Register1b 	errANY(Clock, Reset, ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_SOF, 					ERROR_StashTop);
 	
+	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
