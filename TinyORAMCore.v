@@ -8,7 +8,7 @@
 //==============================================================================
 //	Module:		TinyORAMCore
 //	Desc:		{Unified} x {Basic, REW} ORAM core with encryption, integrity 
-//				verification, & a FIFO DRAM interface.
+//				verification, & a FIFO DRAM interface. 
 //==============================================================================
 module TinyORAMCore(
   	Clock, Reset,
@@ -30,6 +30,17 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 	//	Parameters
 	//--------------------------------------------------------------------------
+
+	`ifdef ASIC
+	parameter				Hardware =				"ASIC"; 
+	`else
+	// FPGA design
+	parameter				Hardware =				"X"; // An outer module must override this parameter; legal values: VC707, KC705, VC709 
+	`endif
+	
+	//--------------------------------------------------------------------------
+	//	Internal Parameters
+	//--------------------------------------------------------------------------
 	
 	// Debugging
 	
@@ -47,26 +58,25 @@ module TinyORAMCore(
 	// Frontend-backend
 	
 	parameter				EnablePLB = 			1,
-							EnableREW =				1,
+							EnableREW =				(Hardware == "ASIC") ? 0 : 1,
 							EnableAES =				1,
-							EnableIV =				`ifdef EnableIV `EnableIV `else 0 `endif;
+							EnableIV =				(Hardware == "ASIC") ? 1 : 0;
 	
 	// ORAM
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					`ifdef ORAML 	`ORAML 
-													`else			(EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10 `endif,
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
+							ORAML =					(Hardware == "ASIC") ? 32 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
+							ORAMZ =					(Hardware == "ASIC") ? 3 : (EnableREW) ? 5 : 4,
 							ORAMC =					10,
 							ORAME =					5;
 
-	parameter				FEDWidth =				512,
-							BEDWidth =				512;
+	parameter				FEDWidth =				(Hardware == "ASIC") ? 64 : 512,
+							BEDWidth =				(Hardware == "ASIC") ? 64 : 512;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
-							PLBCapacity = 			`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif; // 8KB PLB
+							PLBCapacity = 			8192 << 3; // 8KB PLB
 		
 	// Hardware
 
@@ -158,8 +168,18 @@ module TinyORAMCore(
 	`ifdef SIMULATION
 		initial begin	
 			if (ORAML + 1 > 32) begin
-				$display("[%m @ %t] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.", $time);
+				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
 			end
+		`ifndef ASIC
+			if (Hardware == "X") begin
+				$display("[%m] ERROR: Specify FPGA board.");
+				$finish;
+			end
+			if (Hardware != "VC707") begin
+				$display("[%m] ERROR: Unrecognized FPGA board.");
+				$finish;
+			end			
+		`endif
 		end
 
 		always @(posedge Clock) begin
