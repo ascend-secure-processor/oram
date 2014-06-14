@@ -57,24 +57,16 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-    TinyORAMCore #(   		.ORAMB(					ORAMB),
-                            .ORAMU(					ORAMU),
+   TinyORAMCore 
+				#(   		
                             .ORAML(					ORAML),
-                            .ORAMZ(					ORAMZ),
-                            .ORAME(					ORAME),
 							.FEDWidth(				FEDWidth),
                             .BEDWidth(				BEDWidth),
 							
-							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
-							.EnableREW(				EnableREW),
-							.EnableIV(				EnableIV),
-							.DelayedWB(				DelayedWB),
 										
                             .NumValidBlock(         NumValidBlock), 
-                            .Recursion(             Recursion), 
-							.EnablePLB(				EnablePLB),
-                            .PLBCapacity(           PLBCapacity))
+                            .Recursion(             Recursion)) 
                             
             ORAM    (		.Clock(					Clock),
                             .Reset(					Reset),
