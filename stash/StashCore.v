@@ -407,14 +407,14 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.core.BEHAVIORAL.Mem[MS_pt], StashC.BEHAVIORAL.Mem[MS_pt] == EN_Used);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], StashC.BEHAVIORAL.Mem[MS_pt] == EN_Used);
 	`endif
 					if (~ROAccess & StashC.BEHAVIORAL.Mem[MS_pt] == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$finish;
 					end
 					
-					MS_pt = StashP.core.BEHAVIORAL.Mem[MS_pt];
+					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
 					
 					if (i > StashCapacity) begin
@@ -434,7 +434,7 @@ module StashCore(
 	`ifdef SIMULATION_VERBOSE_STASH
 	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
 	`endif
-					MS_pt = StashP.core.BEHAVIORAL.Mem[MS_pt];
+					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (FreeList)");
@@ -448,7 +448,7 @@ module StashCore(
 				MS_pt = UsedListHead;
 				i = 0;
 				while (MS_pt != SNULL) begin
-					MS_pt = StashP.core.BEHAVIORAL.Mem[MS_pt];
+					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
 				end
 				if (i != StashOccupancy) begin
@@ -467,7 +467,7 @@ module StashCore(
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
 						$finish;
 					end
-					MS_pt = StashP.core.BEHAVIORAL.Mem[MS_pt];
+					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
 					if (i > StashCapacity) begin
 						$display("[ERROR] no terminator (UsedList)");
