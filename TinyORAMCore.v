@@ -57,19 +57,22 @@ module TinyORAMCore(
 	
 	// Frontend-backend
 	
+	// TODO: for ASIC, re-enable AES.
+	// TODO: for ASIC, re-enable IV.
+
 	parameter				EnablePLB = 			1,
 							EnableREW =				(Hardware == "ASIC") ? 0 : 1,
 							EnableAES =				(Hardware == "ASIC") ? 0 : 1,
-							EnableIV =				(Hardware == "ASIC") ? 1 : 0;
+							EnableIV =				(Hardware == "ASIC") ? 0 : 0;
 	
 	// ORAM
 
-	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion)
+	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion). but use 13 for simulation
 	
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					(Hardware == "ASIC") ? 13 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
-							ORAMZ =					(Hardware == "ASIC") ? 3 : (EnableREW) ? 5 : 4,
+							ORAMZ =					(Hardware == "ASIC") ? 3 : 	(EnableREW) ? 5 : 4,
 							ORAMC =					10,
 							ORAME =					5;
 

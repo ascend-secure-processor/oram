@@ -25,6 +25,7 @@
 //						Out:	Encrypted path
 //
 //	TODO: encrypt/decrypt IV hashes
+//	TODO: remove `ifdef for ASIC... and in AESCore; we won't implement REW for ASIC
 //==============================================================================
 module AESREWORAM(
 	Clock, FastClock, 
