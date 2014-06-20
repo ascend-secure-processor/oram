@@ -37,7 +37,8 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore ORAM(		.Clock(					Clock),
+   TinyORAMCore #(			.Hardware(				"ASIC")) // Even if we are debugging on Vivado, we'd like to reproduce same bugs as when we simulate with VCS
+				ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			

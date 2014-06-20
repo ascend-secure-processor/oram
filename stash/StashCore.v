@@ -840,13 +840,13 @@ module StashCore(
 	Mux			#(			.Width(					ENWidth),
 							.NPorts(				StashCapacity),
 							.SelectCode(			0))
-				stashc_rd1(	.Select(				0), 
+				stashc_rd1(	.Select(				StashC_ROAddress), 
 							.Input(					StashC_DataOut_Wide),
 							.Output(				StashC_RODataOut_Pre));
 	Mux			#(			.Width(					ENWidth),
 							.NPorts(				StashCapacity),
 							.SelectCode(			0))
-				stashc_rd2(	.Select(				0), 
+				stashc_rd2(	.Select(				StashC_Address), 
 							.Input(					StashC_DataOut_Wide),
 							.Output(				StashC_DataOut_Pre));
 

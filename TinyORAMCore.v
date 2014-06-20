@@ -176,16 +176,14 @@ module TinyORAMCore(
 			if (ORAML + 1 > 32) begin
 				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
 			end
-		`ifndef ASIC
 			if (Hardware == "X") begin
 				$display("[%m] ERROR: Specify FPGA board.");
 				$finish;
 			end
-			if (Hardware != "VC707") begin
-				$display("[%m] ERROR: Unrecognized FPGA board.");
+			if (Hardware != "VC707" && Hardware != "ASIC") begin
+				$display("[%m] ERROR: Unrecognized FPGA board / spec.");
 				$finish;
 			end			
-		`endif
 		end
 
 		always @(posedge Clock) begin
