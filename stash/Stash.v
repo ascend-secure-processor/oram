@@ -686,7 +686,7 @@ module Stash(
 							.OutScanDone(			Scanned_Done),
 							.OutScanStreaming(		Scanned_Streaming),
 							
-							.InDMAAddr(				BlocksReading),
+							.InDMAAddr(				BlocksReading[STAWidth-1:0]),
 							.InDMAValid(			InDMAValid),
 							
 							.OutDMAAddr(			OutDMAAddr),

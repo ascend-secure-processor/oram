@@ -98,7 +98,9 @@ module StashCore(
 	localparam				ENWidth =				1,
 							EN_Free =				1'b0,
 							EN_Used =				1'b1;
-	
+
+	localparam				ENWWidth = 				ENWidth * StashCapacity;
+		
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -227,6 +229,9 @@ module StashCore(
 	wire	[SEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
 	wire					StashP_WE;
 	wire					StashP_EN;
+	
+	wire	[ENWWidth-1:0]	StashC_DataIn_Wide, StashC_DataOut_Wide;
+	wire	[ENWidth-1:0]	StashC_RODataOut_Pre, StashC_DataOut_Pre;
 	
 	wire	[SEAWidth-1:0]	StashC_Address;
 	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;
@@ -407,9 +412,9 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], StashC.BEHAVIORAL.Mem[MS_pt] == EN_Used);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], StashC_DataOut_Wide[MS_pt] == EN_Used);
 	`endif
-					if (~ROAccess & StashC.BEHAVIORAL.Mem[MS_pt] == EN_Free) begin
+					if (~ROAccess & StashC_DataOut_Wide[MS_pt] == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$finish;
 					end
@@ -432,7 +437,7 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC.Mem[MS_pt] == EN_Used);
+	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC_DataOut_Wide[MS_pt] == EN_Used);
 	`endif
 					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
@@ -463,7 +468,7 @@ module StashCore(
 				i = 0;
 				while (MS_pt != SNULL) begin
 					PAddrTemp = StashH.BEHAVIORAL.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
-					if (PAddrTemp == InPAddr && StashC.BEHAVIORAL.Mem[MS_pt] == EN_Used) begin
+					if (PAddrTemp == InPAddr && StashC_DataOut_Wide[MS_pt] == EN_Used) begin
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
 						$finish;
 					end
@@ -481,7 +486,7 @@ module StashCore(
 				if (OutPAddr == DummyBlockAddress)
 					$display("[%m @ %t] Reading dummy block", $time);
 				else
-					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d, stashc_bit=%b]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed, StashC.BEHAVIORAL.Mem[StashE_Address_Delayed]);
+					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d, stashc_bit=%b]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed, StashC_DataOut_Wide[StashE_Address_Delayed]);
 		end	
 	`endif
 	
@@ -724,7 +729,7 @@ module StashCore(
 	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeafLabel 		: OutLeaf_Pre;
 	
 	//--------------------------------------------------------------------------
-	//	Management
+	//	Pointer table management
 	//--------------------------------------------------------------------------
 
 	assign	FreeList_Resolved =						(CSPushing_FirstCycle) ? 					FreeListHead :
@@ -782,6 +787,10 @@ module StashCore(
 							.ReadAddress(			StashP_Address),
 							.ReadData(				StashP_DataOut));			
 			
+	//--------------------------------------------------------------------------
+	//	Quick-remove bitvector management
+	//--------------------------------------------------------------------------
+
 	/* 
 		StashC: indicates whether each element in the stash is in the used list 
 		or free list.  This is needed to avoid a subtlety in the stash scan 
@@ -814,7 +823,37 @@ module StashCore(
 													(CSReset) ? 			EN_Free : 
 																			{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
-		
+
+	genvar	j;
+	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
+		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];
+	end endgenerate
+
+	Register	#(			.Width(					ENWWidth))
+				StashC(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				StashC_WE),
+							.In(					StashC_DataIn_Wide),
+							.Out(					StashC_DataOut_Wide));
+
+	Mux			#(			.Width(					ENWidth),
+							.NPorts(				StashCapacity),
+							.SelectCode(			0))
+				stashc_rd1(	.Select(				0), 
+							.Input(					StashC_DataOut_Wide),
+							.Output(				StashC_RODataOut_Pre));
+	Mux			#(			.Width(					ENWidth),
+							.NPorts(				StashCapacity),
+							.SelectCode(			0))
+				stashc_rd2(	.Select(				0), 
+							.Input(					StashC_DataOut_Wide),
+							.Output(				StashC_DataOut_Pre));
+
+	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlya(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
+	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlyb(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
+
+/*
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),
 							.RLatency(				Overclock),
@@ -828,6 +867,7 @@ module StashCore(
 							.Address(				{StashC_ROAddress,	StashC_Address}),
 							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
 							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
+*/
 
 	//--------------------------------------------------------------------------
 	//	Element counting
@@ -869,7 +909,7 @@ module StashCore(
 	// accesses and therefore need to tolerate invalid StashC entries.
 	assign	StashC_ROAddress =						StashWalk;
 	generate if (Overclock == 0) begin:OC_DUMP_DLY // Note: StashP read latency must always == StashC read latency
-		Register #(			.Width(					ENWidth))
+		Register #(			.Width(					ENWidth)) // TODO change to Pipeline.v
 				ROdly(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),

@@ -1,27 +1,14 @@
 `include "Const.vh"
 
 module testUORAM;
+	// *** NOTE *** DON'T CHANGE THESE PARAMETERS WITHOUT MAKING THE SAME CHANGE IN TinyORAMCore
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = `ifdef ORAML `ORAML `else 13 `endif; // don't change. Why?
-	parameter                   ORAMZ = `ifdef ORAMZ `ORAMZ `else 5 `endif;
-	parameter					ORAMC =				10; 
-	parameter					ORAME =				5;
-	
-	parameter                   FEDWidth = `ifdef FEDWidth `FEDWidth `else 64 `endif;
-	parameter                   BEDWidth = `ifdef BEDWidth `BEDWidth `else 512 `endif;
-	
-	parameter                   NumValidBlock = 	1 << ORAML;
-	parameter                   Recursion = 		3;
-	
-    parameter					EnablePLB = 		1;               
-    parameter                   PLBCapacity = 		`ifdef PLBCapacity `PLBCapacity `else 8192 << 3 `endif;
-
-	parameter					Overclock = 		1;
-	parameter					EnableREW =			0;	
-	parameter					EnableAES =			EnableREW;
-    parameter					EnableIV =          `ifdef EnableIV `EnableIV `else EnableREW `endif;
-	parameter					DelayedWB =			EnableIV;
+	parameter                   ORAML = 			13;
+	parameter                   FEDWidth = 			64;
+	parameter                   NumValidBlock = 	1 << ORAML;	
+	parameter                   Recursion = 		3;       
+    parameter                   PLBCapacity = 		8192 << 3;
 
 	localparam  NN = 200;
 	localparam	nn = 73;
@@ -31,14 +18,7 @@ module testUORAM;
 	`include "DDR3SDRAMLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	`include "PLBLocal.vh" 
-	`include "BucketLocal.vh"
-	`include "BucketDRAMLocal.vh"
-	`include "SubTreeLocal.vh"
-		
-	localparam 					TreeInDQChunks =	`divceil(BktSize_RndBits, DDRDQWidth) * ( (1 << (ORAML + 1)) + numTotalST);
 	
-    parameter                   DDRAWidth_Sim =		`log2(TreeInDQChunks);
-    
     wire Clock, AESClock; 
     wire Reset; 
     reg  CmdInValid, DataInValid, ReturnDataReady;
@@ -49,7 +29,7 @@ module testUORAM;
 	reg  [FEDWidth-1:0] DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth_Sim-1:0]	DDR3SDRAM_Address;
+	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 	
@@ -57,18 +37,7 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore 
-				#(   		
-                            .ORAML(					ORAML),
-							.FEDWidth(				FEDWidth),
-                            .BEDWidth(				BEDWidth),
-							
-							.EnableAES(				EnableAES),
-										
-                            .NumValidBlock(         NumValidBlock), 
-                            .Recursion(             Recursion)) 
-                            
-            ORAM    (		.Clock(					Clock),
+   TinyORAMCore ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			
@@ -108,7 +77,7 @@ module testUORAM;
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
                             .UWidth(				64),
-                            .AWidth(				DDRAWidth_Sim),
+                            .AWidth(				DDRAWidth),
                             .DWidth(				DDRDWidth),
                             .BurstLen(				1),
                             .EnableMask(			1),

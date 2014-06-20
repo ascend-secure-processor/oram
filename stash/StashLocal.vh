@@ -10,7 +10,7 @@
 	localparam					DummyBlock =		{BEDWidth{1'b0}};
 	
 	localparam					NumChunks =			ORAMB / BEDWidth;
-	localparam					ChnkAWidth =		`log2(NumChunks);
+	localparam					ChnkAWidth =		`max(1, `log2(NumChunks));
 	localparam					SEAWidth =			`log2(StashCapacity); // Stash entry address width (into header-based memories)
 	localparam					SDAWidth =			SEAWidth + ChnkAWidth; // addr width into data-based memories
 	localparam					SHDWidth =			ORAMU + ORAML; // Stash header width

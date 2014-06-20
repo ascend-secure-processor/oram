@@ -68,7 +68,8 @@ module TinyORAMCore(
 	// ORAM
 
 	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion). but use 13 for simulation
-	
+	// TODO: for ASIC, use BEDWidth = 64
+
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					(Hardware == "ASIC") ? 13 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
@@ -77,7 +78,7 @@ module TinyORAMCore(
 							ORAME =					5;
 
 	parameter				FEDWidth =				(Hardware == "ASIC") ? 64 : 512,
-							BEDWidth =				(Hardware == "ASIC") ? 64 : 512;
+							BEDWidth =				(Hardware == "ASIC") ? 512 : 512;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,

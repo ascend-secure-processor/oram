@@ -123,8 +123,6 @@ module StashScanTable(
 	wire					DMAGate;
 	wire					OutDMAValid_Pre, OutDMAReady_Pre;
 	
-	wire	[SEAWidth-1:0]	DummyWire;
-	
 	// debugging
 	
 	wire					InScanAdd_Dbg0, InScanAdd_Dbg1;
@@ -377,16 +375,17 @@ module StashScanTable(
 		NOTE: This table is scanned from address 0 ... 2^SEAWidth-1 in that 
 		order.
 	*/
-	RAM			#(			.DWidth(				SEAWidth),
-							.AWidth(				STAWidth),
-							.NPorts(				2))
-				st_ram(		.Clock(					{2{Clock}}),
-							.Reset(					/* not connected */),
-							.Enable(				2'b11),
-							.Write(					{1'b0, 					ScanTable_WE}),
-							.Address(				{InDMAAddr, 			ScanTable_Address}),
-							.DIn(					{{SEAWidth{1'bx}}, 		ScanTable_DataIn}),
-							.DOut(					{DMAAddr_Internal, 		DummyWire}));
+	SDPRAM		#(			.DWidth(				SEAWidth),
+							.AWidth(				STAWidth)
+							`ifdef ASIC , .ASIC(1) `endif)
+				st_ram(		.Clock(					Clock),
+							.Reset(					1'b0),
+							.Write(					ScanTable_WE),								
+							.WriteAddress(			ScanTable_Address),
+							.WriteData(				ScanTable_DataIn),
+							.Read(					1'b1),
+							.ReadAddress(			InDMAAddr), 
+							.ReadData(				DMAAddr_Internal));
 
 	Pipeline	#(			.Width(					1),
 							.Stages(				1))
