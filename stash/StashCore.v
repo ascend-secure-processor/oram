@@ -829,6 +829,8 @@ module StashCore(
 		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];
 	end endgenerate
 
+	// This is a 2-read 1-write register file
+
 	Register	#(			.Width(					ENWWidth))
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -852,22 +854,6 @@ module StashCore(
 
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlya(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlyb(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
-
-/*
-	RAM			#(			.DWidth(				ENWidth), // 1b typically
-							.AWidth(				SEAWidth),
-							.RLatency(				Overclock),
-							.EnableInitial(			1),
-							.Initial(				{1 << SEAWidth{EN_Free}}),
-							.NPorts(				2))
-				StashC(		.Clock(					{2{Clock}}),
-							.Reset(					{2{Reset}}),
-							.Enable(				2'b11),
-							.Write(					{1'b0,				StashC_WE}),
-							.Address(				{StashC_ROAddress,	StashC_Address}),
-							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
-							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
-*/
 
 	//--------------------------------------------------------------------------
 	//	Element counting
