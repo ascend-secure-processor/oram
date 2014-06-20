@@ -334,7 +334,13 @@ module StashCore(
 		wire				MS_StartingWrite;
 		reg [STWidth-1:0]	CS_Delayed, LS;
 		wire				MS_FinishedSync;
-		
+	
+	`ifdef ASIC	
+		`define STASHC StashC_DataOut_Wide[MS_pt]
+	`else
+		`define STASHC StashC.BEHAVIORAL.Mem[MS_pt]
+	`endif
+
 		initial begin
 			LS = 			ST_Reset;
 			
@@ -412,9 +418,9 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], StashC_DataOut_Wide[MS_pt] == EN_Used);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], STASHC == EN_Used);
 	`endif
-					if (~ROAccess & StashC_DataOut_Wide[MS_pt] == EN_Free) begin
+					if (~ROAccess & STASHC == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$finish;
 					end
@@ -437,7 +443,7 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], StashC_DataOut_Wide[MS_pt] == EN_Used);
+	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], STASHC == EN_Used);
 	`endif
 					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
@@ -468,7 +474,7 @@ module StashCore(
 				i = 0;
 				while (MS_pt != SNULL) begin
 					PAddrTemp = StashH.BEHAVIORAL.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
-					if (PAddrTemp == InPAddr && StashC_DataOut_Wide[MS_pt] == EN_Used) begin
+					if (PAddrTemp == InPAddr && STASHC == EN_Used) begin
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
 						$finish;
 					end
@@ -486,7 +492,7 @@ module StashCore(
 				if (OutPAddr == DummyBlockAddress)
 					$display("[%m @ %t] Reading dummy block", $time);
 				else
-					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d, stashc_bit=%b]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed, StashC_DataOut_Wide[StashE_Address_Delayed]);
+					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed);
 		end	
 	`endif
 	
@@ -830,7 +836,10 @@ module StashCore(
 	end endgenerate
 
 	// This is a 2-read 1-write register file
+	// On FPGA, this should become a LUTRAM
+	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM)
 
+	`ifdef ASIC
 	Register	#(			.Width(					ENWWidth))
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -854,6 +863,21 @@ module StashCore(
 
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlya(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlyb(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
+	`else
+	RAM			#(			.DWidth(				ENWidth), // 1b typically
+							.AWidth(				SEAWidth),
+							.RLatency(				Overclock),
+							.EnableInitial(			1),
+							.Initial(				{1 << SEAWidth{EN_Free}}),
+							.NPorts(				2))
+				StashC(		.Clock(					{2{Clock}}),
+							.Reset(					{2{Reset}}),
+							.Enable(				2'b11),
+							.Write(					{1'b0,				StashC_WE}),
+							.Address(				{StashC_ROAddress,	StashC_Address}),
+							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
+							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
+	`endif
 
 	//--------------------------------------------------------------------------
 	//	Element counting
