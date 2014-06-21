@@ -54,7 +54,7 @@ module TinyORAMCore(
 	*/
 	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
-	
+
 	// Frontend-backend
 	
 	// TODO: for ASIC, re-enable AES.
@@ -72,7 +72,7 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					(Hardware == "ASIC") ? 13 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
+							ORAML =					(Hardware == "ASIC") ? 10 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
 							ORAMZ =					(Hardware == "ASIC") ? 3 : 	(EnableREW) ? 5 : 4,
 							ORAMC =					10,
 							ORAME =					5;

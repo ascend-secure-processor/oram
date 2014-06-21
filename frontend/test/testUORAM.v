@@ -4,7 +4,7 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE THESE PARAMETERS WITHOUT MAKING THE SAME CHANGE IN TinyORAMCore
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
-	parameter                   ORAML = 			13;
+	parameter                   ORAML = 			10;
 	parameter                   FEDWidth = 			64;
 	parameter                   NumValidBlock = 	1 << ORAML;	
 	parameter                   Recursion = 		3;       

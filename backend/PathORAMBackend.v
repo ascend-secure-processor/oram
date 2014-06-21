@@ -386,6 +386,15 @@ module PathORAMBackend(
 
 						.DRAMInitDone(			DRAMInitComplete));
 	end else begin:NO_AES
+	`ifdef ASIC
+	assign	AES_DRAMReadData =					DRAMReadData;
+	assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
+	assign	DRAMReadDataReady =					AES_DRAMReadDataReady;
+
+	assign	DRAMWriteData =						AES_DRAMWriteData;
+	assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
+	assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
+	`else
 		// These buffers are here so that we can model AES timing.  If you 
 		// don't, comment them out ;-)
 
@@ -414,6 +423,7 @@ module PathORAMBackend(
 						.OutData(				DRAMWriteData),
 						.OutSend(				DRAMWriteDataValid),
 						.OutReady(				DRAMWriteDataReady));
+	`endif
 	end endgenerate
 	//--------------------------------------------------------------------------
 endmodule
