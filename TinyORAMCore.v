@@ -30,17 +30,6 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 	//	Parameters
 	//--------------------------------------------------------------------------
-
-	`ifdef ASIC
-	parameter				Hardware =				"ASIC"; 
-	`else
-	// FPGA design
-	parameter				Hardware =				"X"; // An outer module must override this parameter; legal values: VC707, KC705, VC709 
-	`endif
-	
-	//--------------------------------------------------------------------------
-	//	Internal Parameters
-	//--------------------------------------------------------------------------
 	
 	// Debugging
 	
@@ -61,24 +50,23 @@ module TinyORAMCore(
 	// TODO: for ASIC, re-enable IV.
 
 	parameter				EnablePLB = 			1,
-							EnableREW =				(Hardware == "ASIC") ? 0 : 1,
-							EnableAES =				(Hardware == "ASIC") ? 0 : 1,
-							EnableIV =				(Hardware == "ASIC") ? 0 : 0;
+							EnableREW =				`ifdef ASIC 0 `else 1 `endif,
+							EnableAES =				`ifdef ASIC 0 `else 1 `endif,
+							EnableIV =				`ifdef ASIC 0 `else 0 `endif;
 	
 	// ORAM
 
 	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion). but use 13 for simulation
-	// TODO: for ASIC, use BEDWidth = 64
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					(Hardware == "ASIC") ? 10 : (EnableREW || `ifdef SIMULATION 0 `else 1 `endif) ? 20 : 10,
-							ORAMZ =					(Hardware == "ASIC") ? 3 : 	(EnableREW) ? 5 : 4,
+							ORAML =					10,
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 3 `endif,
 							ORAMC =					10,
 							ORAME =					5;
 
-	parameter				FEDWidth =				(Hardware == "ASIC") ? 64 : 512,
-							BEDWidth =				(Hardware == "ASIC") ? 512 : 512;
+	parameter				FEDWidth =				`ifdef ASIC 64 `else 512 `endif,
+							BEDWidth =				`ifdef ASIC 64 `else 512 `endif;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
@@ -175,15 +163,7 @@ module TinyORAMCore(
 		initial begin	
 			if (ORAML + 1 > 32) begin
 				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
-			end
-			if (Hardware == "X") begin
-				$display("[%m] ERROR: Specify FPGA board.");
-				$finish;
-			end
-			if (Hardware != "VC707" && Hardware != "ASIC") begin
-				$display("[%m] ERROR: Unrecognized FPGA board / spec.");
-				$finish;
-			end			
+			end	
 		end
 
 		always @(posedge Clock) begin

@@ -1,9 +1,4 @@
 
-	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
-	localparam                  LogFEORAMBChunks = 	`log2(FEORAMBChunks);
-	
-	// TODO this command naming scheme is terrible.  And make it correspond better to the convention in Stash.v
-	
 	// Commands understood by PathORAMBackend, called by PathORAMFrontend/top module
 	localparam					BECMDWidth =		2,
 								BECMD_Update =		2'd0, // update existing block (Write)

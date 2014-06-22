@@ -12,12 +12,9 @@
 							BEDWidth =				512, // backend datapath width (AES bits/cycle, should be == to DDRDWidth if possible)
 	
 							Overclock = 			1, // Pipeline various operations inside the stash (needed for 200 Mhz operation)
-							UseBRAM = 				`ifdef ASIC 0 `else Overclock `endif, 
 								
 							EnableAES =				0, // Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
-
 							EnableREW =				0, // Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
-
 							EnableIV =          	0, // Integrity verification
 							
 							DelayedWB = 			0;	// delayed write back to save SHA engines for integrity
