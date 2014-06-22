@@ -418,9 +418,9 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], STASHC == EN_Used);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], `STASHC == EN_Used);
 	`endif
-					if (~ROAccess & STASHC == EN_Free) begin
+					if (~ROAccess & `STASHC == EN_Free) begin
 						$display("[ERROR] used list entry %d tagged as free", MS_pt);
 						$finish;
 					end
@@ -443,7 +443,7 @@ module StashCore(
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], STASHC == EN_Used);
+	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], `STASHC == EN_Used);
 	`endif
 					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
@@ -474,7 +474,7 @@ module StashCore(
 				i = 0;
 				while (MS_pt != SNULL) begin
 					PAddrTemp = StashH.BEHAVIORAL.Mem[MS_pt][ORAMU+ORAML-1:ORAML];
-					if (PAddrTemp == InPAddr && STASHC == EN_Used) begin
+					if (PAddrTemp == InPAddr && `STASHC == EN_Used) begin
 						$display("FAIL: Tried to add block (paddr = %x) to stash but it was already present @ sloc = %d!", InPAddr, MS_pt);
 						$finish;
 					end
@@ -554,12 +554,12 @@ module StashCore(
 	assign	CSDumping_FirstCycle = 					CSDumping & ~CSDumping_Delayed;
 	assign	CSSyncing_FirstCycle =					CSSyncing & ~CSSyncing_Delayed;
 		
-	assign	EnterPeak =								InCommandValid & InCommandReady & CSIdle & InCommand == SCMD_Peak;
+	assign	EnterPeak =								InCommandValid & InCommandReady & CSIdle & InCommand == SCMD_Read;
 	assign	ExitPeak =								CSPeaking & ~ContinuePeak & LastChunk_Transfer_Read;
 	
-	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Push & 		LastChunk_Transfer_Write;
-	assign	ContinueOverwrite =						InCommandValid & InCommand == SCMD_Overwrite &	LastChunk_Transfer_Write;
-	assign	ContinuePeak =							InCommandValid & InCommand == SCMD_Peak & 		LastChunk_Transfer_Read;	
+	assign	ContinuePush =							InCommandValid & InCommand == SCMD_Append & 	LastChunk_Transfer_Write;
+	assign	ContinueOverwrite =						InCommandValid & InCommand == SCMD_Update &		LastChunk_Transfer_Write;
+	assign	ContinuePeak =							InCommandValid & InCommand == SCMD_Read & 		LastChunk_Transfer_Read;	
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Reset;
@@ -582,11 +582,11 @@ module StashCore(
 				if (ERROR_StashCore)
 					NS =							ST_Error;
 				else if (InCommandValid) begin
-					if (InCommand == SCMD_Push & ~CancelPushCommand)
+					if (InCommand == SCMD_Append & ~CancelPushCommand)
 						NS =						ST_Pushing;
-					if (InCommand == SCMD_Overwrite)
+					if (InCommand == SCMD_Update)
 						NS =						ST_Overwriting;
-					if (InCommand == SCMD_Peak)
+					if (InCommand == SCMD_Read)
 						NS =						ST_Peaking;
 					if (InCommand == SCMD_Dump)
 						NS =						ST_Dumping;
@@ -830,16 +830,16 @@ module StashCore(
 																			{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
 
-	genvar	j;
-	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
-		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];
-	end endgenerate
-
 	// This is a 2-read 1-write register file
 	// On FPGA, this should become a LUTRAM
 	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM)
 
 	`ifdef ASIC
+	genvar	j;
+	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
+		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];
+	end endgenerate	
+	
 	Register	#(			.Width(					ENWWidth))
 				StashC(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -848,21 +848,10 @@ module StashCore(
 							.In(					StashC_DataIn_Wide),
 							.Out(					StashC_DataOut_Wide));
 
-	Mux			#(			.Width(					ENWidth),
-							.NPorts(				StashCapacity),
-							.SelectCode(			0))
-				stashc_rd1(	.Select(				StashC_ROAddress), 
-							.Input(					StashC_DataOut_Wide),
-							.Output(				StashC_RODataOut_Pre));
-	Mux			#(			.Width(					ENWidth),
-							.NPorts(				StashCapacity),
-							.SelectCode(			0))
-				stashc_rd2(	.Select(				StashC_Address), 
-							.Input(					StashC_DataOut_Wide),
-							.Output(				StashC_DataOut_Pre));
-
-	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlya(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
-	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dlyb(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
+	Mux	#(.Width(ENWidth), .NPorts(StashCapacity), .SelectCode(0)) 	sc_rd1(	StashC_ROAddress, 	StashC_DataOut_Wide, StashC_RODataOut_Pre);
+	Mux #(.Width(ENWidth), .NPorts(StashCapacity), .SelectCode(0))	sc_rd2(	StashC_Address, 	StashC_DataOut_Wide, StashC_DataOut_Pre);
+	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly1(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
+	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly2(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
 	`else
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),

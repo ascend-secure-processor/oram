@@ -50,8 +50,8 @@ module Stash(
 	//	Parameters & Constants
 	//-------------------------------------------------------------------------- 
 	
-	`include "PathORAM.vh";
-	`include "Stash.vh";	
+	`include "PathORAM.vh"
+	`include "Stash.vh"
 	
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
@@ -535,14 +535,14 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	assign	Core_Command =							(CSScan) ? 												SCMD_Dump :
-													(CSPathRead | CSEvict) ? 								SCMD_Push :
-													(CSTurnaround1 & AccessIsDummy) ? 						SCMD_Peak : // read something random
-													(CSTurnaround1 & (AccessCommand == BECMD_Update)) ? 	SCMD_Overwrite :
-													(CSTurnaround1 & (AccessCommand == BECMD_Read)) ? 		SCMD_Peak :
-													(CSTurnaround1 & (AccessCommand == BECMD_ReadRmv)) ? 	SCMD_Peak :
+													(CSPathRead | CSEvict) ? 								SCMD_Append :
+													(CSTurnaround1 & AccessIsDummy) ? 						SCMD_Read : // read something random
+													(CSTurnaround1 & (AccessCommand == BECMD_Update)) ? 	SCMD_Update :
+													(CSTurnaround1 & (AccessCommand == BECMD_Read)) ? 		SCMD_Read :
+													(CSTurnaround1 & (AccessCommand == BECMD_ReadRmv)) ? 	SCMD_Read :
 													(CSTurnaround2) ? 										SCMD_UpdateHeader :
 													(CSCoreSync) ?											SCMD_Sync :
-													(CSPathWriteback) ? 									SCMD_Peak : 
+													(CSPathWriteback) ? 									SCMD_Read : 
 																											{SCMDWidth{1'bx}};
 							
 	assign	Core_CommandSAddr =						(CSTurnaround1 | CSTurnaround2) ? CRUD_SAddr : OutDMAAddr;
