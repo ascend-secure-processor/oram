@@ -539,9 +539,9 @@ module PathORAMBackendInner(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
 							.EnableREW(             EnableREW),
-							
 							.ORAMUValid(			ORAMUValid))
 				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),
