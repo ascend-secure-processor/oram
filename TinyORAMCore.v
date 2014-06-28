@@ -61,9 +61,9 @@ module TinyORAMCore(
 	parameter				ORAMB =					512,
 							ORAMU =					32,
 							ORAML =					10,
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 3 `endif,
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 3 `endif, // TODO change REW Z to 4
 							ORAMC =					10,
-							ORAME =					5;
+							ORAME =					5;  // TODO change REW E to 4
 
 	parameter				FEDWidth =				`ifdef ASIC 64 `else 512 `endif,
 							BEDWidth =				`ifdef ASIC 64 `else 512 `endif;

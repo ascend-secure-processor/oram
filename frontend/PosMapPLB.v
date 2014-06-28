@@ -164,12 +164,14 @@ module PosMapPLB
 				// CacheRefill must use NewLeafOut (not NewLeafIn), the previous leaf that's still in store.
 	
 `ifdef SIMULATION
+`ifndef ASIC
 	always @ (posedge Clock) begin
-		if (PLBRefill && PLB.RefillWriting && !DInValid) begin
+		if (PLBRefill && PLB.RefillWriting && !DInValid) begin // Note: PLB.RefillWriting causes ASIC tool to complain
 			$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
 			$finish;
 		end
 	end
+`endif
 `endif	
 									  
     // =============================================================================  

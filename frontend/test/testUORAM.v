@@ -74,6 +74,10 @@ module testUORAM;
                 OutInitLat = 30,
                 OutBandWidth = 57;
 	
+	//always @(posedge Clock) begin
+	//	if (DDR3SDRAM_ReadValid) $display("DRAM read data: %x", DDR3SDRAM_ReadData);
+	//end
+
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
