@@ -163,7 +163,18 @@ module TinyORAMCore(
 		initial begin	
 			if (ORAML + 1 > 32) begin
 				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
-			end	
+			end
+			
+			if (DDRDWidth < BEDWidth || 
+				DDRDWidth % BEDWidth != 0) begin
+				$display("[%m] ERROR: Illegal parameter setting.");
+				$finish;
+			end
+			
+			if (EnableAES) begin
+				$display("[%m] ERROR: Has AES been verified with the new BEDWidth funnels?");
+				$finish;			
+			end
 		end
 
 		always @(posedge Clock) begin

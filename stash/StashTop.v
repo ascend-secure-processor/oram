@@ -7,8 +7,9 @@
 
 //==============================================================================
 //	Module:		StashTop
-//	Desc:		The stash itself and an interface conversion between DRAM and 
-//				what the stash expects.
+//	Desc:		A simple command interface for the stash.  This module also 
+//				converts the DRAM bucket format into a more stash-efficient 
+//				format that will be stored in the Stash internal memories.
 //==============================================================================
 module StashTop(
 	Clock, Reset,
@@ -34,7 +35,6 @@ module StashTop(
 	
 	`include "SecurityLocal.vh"
 	`include "StashLocal.vh"
-	`include "StashTopLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "BucketDRAMLocal.vh"
@@ -115,8 +115,6 @@ module StashTop(
 	
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;	
 	wire					CSIdle, CSRead, CSStartWrite, CSWrite, CSAppend, CSUpdate;
-	
-	wire	[PBEDP1Width-1:0] InnerCount, OuterCount;
 
 	wire					LatchCommand, LatchBECommand;
 	
@@ -198,7 +196,7 @@ module StashTop(
 	
 	// debugging
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_ISC1, ERROR_ISC2, ERROR_ISC3, ERROR_ISC4, ERROR_SOF, ERROR_StashTop;
+	(* mark_debug = "TRUE" *)	wire					ERROR_ISC2, ERROR_ISC3, ERROR_ISC4, ERROR_SOF, ERROR_StashTop;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -214,7 +212,6 @@ module StashTop(
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 	
-	Register1b 	errno1(Clock, Reset, OuterCount < InnerCount, 															ERROR_ISC1);
 	Register1b 	errno2(Clock, Reset, CSIdle & CommandValid & (Command != STCMD_StartRead & Command != STCMD_Append), 	ERROR_ISC2);
 	Register1b 	errno3(Clock, Reset, CSRead & CommandValid & Command != STCMD_StartWrite, 								ERROR_ISC3);
 	Register1b 	errno4(Clock, Reset, CommandValid & Command == STCMD_Append & BECommand != BECMD_Append, 				ERROR_ISC4);
@@ -259,6 +256,8 @@ module StashTop(
 	//--------------------------------------------------------------------------
 	//	Control logic
 	//--------------------------------------------------------------------------
+	
+	PathReadCommitted
 	
 	assign	EvictGate =								CSAppend;
 	assign	UpdateGate = 							CSUpdate;
@@ -309,9 +308,9 @@ module StashTop(
 				if (CommandValid)
 					NS =						 	ST_StartWriteback;
 			ST_StartWriteback :
-				if (		OuterCount == InnerCount & ~AccessIsDummy_Internal & BECommand_Internal == BECMD_Update)
+				if (		PathReadCommitted & ~AccessIsDummy_Internal & BECommand_Internal == BECMD_Update)
 					 NS =							ST_Update;
-				else if (	OuterCount == InnerCount)
+				else if (	PathReadCommitted)
 					NS =							ST_Writeback;
 			ST_Update :
 				if (UpdateComplete)
@@ -324,16 +323,7 @@ module StashTop(
 					NS =						 	ST_Idle;
 		endcase
 	end	
-	
-	Counter		#(			.Width(					PBEDP1Width))
-				outer_cnt(	.Clock(					Clock),
-							.Reset(					Reset | CSIdle),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMReadDataValid & DRAMReadDataReady & ~ReadProcessingHeader & CSRead),
-							.In(					{PBEDP1Width{1'bx}}),
-							.Count(					OuterCount));
-	
+
 	//--------------------------------------------------------------------------
 	//	Commands from the Backend
 	//--------------------------------------------------------------------------

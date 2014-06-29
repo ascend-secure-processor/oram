@@ -6,11 +6,11 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		PathORAMBackendInner
+//	Module:		PathORAMBackendCore
 //	Desc:		Stash, DRAM address and top level state machine that interfaces 
 //				with the FrontEnd
 //==============================================================================
-module PathORAMBackendInner(
+module PathORAMBackendCore(
 	Clock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf, 
@@ -403,7 +403,7 @@ module PathORAMBackendInner(
 	//	Stash & AddrGen Control
 	//--------------------------------------------------------------------------
 
-	BackendController #(	.ORAMB(					ORAMB),
+	BackendCoreController #(.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),

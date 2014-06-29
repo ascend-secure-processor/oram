@@ -6,16 +6,17 @@
 //==============================================================================
 
 //==============================================================================
-//	Module:		BackendController
-//	Desc:		Helper module for BackendInner.
+//	Module:		BackendCoreController
+//	Desc:		Helper module for BackendCore.
 //				Controls the stash and addr gen & manages background evictions /
 //				strange writeback patterns / optimizations like delayed RW
 //				writeback.
 //
-//				The original reason this module was created was to make sending
-//				_different_ sequences of commands to stash/addr gen easier.
+//				The original reason this module was created was to better 
+//				contain the logic that will change as one adds different 
+//				read/write orders.
 //==============================================================================
-module BackendController(
+module BackendCoreController(
 	Clock, Reset,
 
 	Command, PAddr, CurrentLeaf, RemappedLeaf,
@@ -219,7 +220,7 @@ module BackendController(
 		else CS <= 									NS;
 	end
 
-	// Implement all the hacky schemes in this FSM
+	// Implement all the hacky read/write order schemes in this FSM
 
 	always @( * ) begin
 		NS = 										CS;

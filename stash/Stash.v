@@ -7,16 +7,19 @@
 
 //------------------------------------------------------------------------------
 //	Module:		Stash
-//	Desc:		The Path ORAM stash
+//	Desc:		The Path ORAM stash.  This module provides interfaces for both 
+//				the path read/writeback operations and also frontend update/read
+//				/read-remove/append operations.
 //
 //	NOTE #1:	This stash does not pre-empt its internal scan when the path 
-//				read data arrives.  This is fine (= no performance penalty & no 
-//				possibility to lose data even with pathological DRAM behavior) 
-//				as long as we buffer the whole path OUTSIDE of the stash.
+//				read data arrives.  This is fine (no possibility to lose data 
+//				even with pathological DRAM behavior) as long as we buffer the 
+//				whole path OUTSIDE of the stash.  This won't cause performance 
+//				penalty unless ORAMC is large (> 60; where 60 is a reasonable 
+//				estimate for the AES/etc module's latency).
 //
-//	NOTE #2:
-//		- Leaf orientation: least significant bit is root bucket
-// 		- Writeback occurs in root -> leaf bucket order
+//	NOTE #2:	Leaf orientation: least significant bit is root bucket.
+// 				Writeback occurs in root -> leaf bucket order.
 //------------------------------------------------------------------------------
 module Stash(
   	Clock, Reset,
@@ -54,10 +57,17 @@ module Stash(
 	`include "Stash.vh"
 	
 	`include "BucketLocal.vh"
-	`include "StashLocal.vh"
 	`include "PathORAMBackendLocal.vh"
 	
-	parameter				ORAMUValid =			21;	
+	parameter				ORAMUValid =			21,
+	
+							// improves throughput for path writeback operations
+							// [if == 2, throughput will be <= 50%, == 3, 100% is possible, > 3 for very unpredictable DRAM]
+							StashOutBuffering =		3,
+								
+							// When we simulate, should we fail if we are looking for a block but cannot find it?
+							// KEEP THIS DEFAULTED TO 1
+							StopOnBlockNotFound = 	1;
 	
 	localparam				OBWidth =				`log2(BlkSize_BEDChunks * StashOutBuffering + 1);		
 		

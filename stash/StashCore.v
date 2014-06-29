@@ -7,7 +7,7 @@
 
 //------------------------------------------------------------------------------
 //	Module:		StashCore
-//	Desc:		Implements core stash operations
+//	Desc:		Implements low-level stash operations.
 //
 //	Commands:
 //		Push - 	add element to stash.  This is only used on a path read --- NOT 

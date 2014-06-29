@@ -24,12 +24,3 @@
 	localparam					ScanTableLatency =	(Overclock) ? 4 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
 	localparam					ScanDelay =			ORAMC + ScanTableLatency + 2*ORAME;
 	localparam					SCWidth =			`log2(ScanDelay);
-
-	// Commands understood by StashCore, called by Stash
-	localparam					SCMDWidth =			3,
-								SCMD_Update =		3'd0,
-								SCMD_Append =		3'd1,
-								SCMD_Read = 		3'd2,
-								SCMD_Dump =			3'd3,
-								SCMD_Sync =			3'd4,
-								SCMD_UpdateHeader =	3'd5;

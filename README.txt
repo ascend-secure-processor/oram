@@ -43,15 +43,8 @@ parameters passed to TinyORAMCore:
 	EnableIV 	==> 	whether or not to enable integrity verification 
 						(EnableIV = 1 only works when EnableREW = 1)
 
-[1] Emil Stefanov, Marten van Dijk, Elaine Shi, Christopher Fletcher, Ling Ren, Xiangyao Yu, and Srinivas Devadas. 2013. 
-	Path ORAM: an extremely simple oblivious RAM protocol. 
-	In Proceedings of the 2013 ACM SIGSAC conference on Computer & communications security (CCS '13). ACM, New York, NY, USA, 299-310. 
-	DOI=10.1145/2508859.2516660 http://doi.acm.org/10.1145/2508859.2516660 
-	
-[2] In submission.
-
 --------------------------------------------------------------------------------
-								Code structure
+Code structure
 --------------------------------------------------------------------------------
 
 Tiny ORAM								(TinyORAMCore.v, top module)
@@ -75,7 +68,7 @@ Tiny ORAM								(TinyORAMCore.v, top module)
 Conventions
 --------------------------------------------------------------------------------
 
-- 	All Verilog files assume tab = 4 spaces.
+- 	All Verilog files (*.v and *.vh) assume tab = 4 spaces.
 
 - 	Files with a suffix 'Testbench' are RTL testbenches.  These are found in 
 	/test subdirectories below each major code branch (e.g., ./frontend/test).  
@@ -84,4 +77,20 @@ Conventions
 	ORAM, refer to ../tests/README.txt.
 
 -	Files named 'TinyORAMTop' are FPGA top files.  That is, they contain FPGA 
-	pinouts and can be used to generate an FPGA bitstream.
+	pinouts and can be used to generate an FPGA bitstream.  Some examples are 
+	given in ../boards.
+	
+-	Files with the extension *.vh are include files.  Each include file may have a prefix 'Const', which indicates ... TODO
+	
+--------------------------------------------------------------------------------
+Citations
+--------------------------------------------------------------------------------	
+	
+[1] Emil Stefanov, Marten van Dijk, Elaine Shi, Christopher Fletcher, Ling Ren, 
+	Xiangyao Yu, and Srinivas Devadas. 2013. 
+	Path ORAM: an extremely simple oblivious RAM protocol. 
+	In Proceedings of the 2013 ACM SIGSAC conference on Computer & 
+	communications security (CCS '13). ACM, New York, NY, USA, 299-310. 
+	DOI=10.1145/2508859.2516660 http://doi.acm.org/10.1145/2508859.2516660 
+	
+[2] In submission.	
