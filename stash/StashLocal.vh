@@ -23,4 +23,4 @@
 			
 	localparam					ScanTableLatency =	(Overclock) ? 4 : 0; // = total latency through ScanTable [count the number of mpipe_X instances]
 	localparam					ScanDelay =			ORAMC + ScanTableLatency + 2*ORAME;
-	localparam					SCWidth =			`log2(ScanDelay);
+	localparam					SCWidth =			`max(1, `log2(ScanDelay));

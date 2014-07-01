@@ -16,9 +16,9 @@ module AddrGen
 );
 
 	`include "PathORAM.vh"
-	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketDRAMLocal.vh"
+	`include "ConstBucketHelpers.vh"
+	`include "ConstCommands.vh"
 	
 	localparam ORAMLogL = `log2(ORAML) + 1; // TODO need +1 for Ready signal corner case (e.g., ORAML = 31); find a better solution?
 	

@@ -28,9 +28,8 @@ module UORAMController
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
 
-    `include "PathORAMBackendLocal.vh"
+    `include "ConstCommands.vh"
     `include "CacheCmdLocal.vh"
-    `include "BucketLocal.vh"
     `include "PLBLocal.vh"
 
     localparam MaxLogRecursion = 4;
@@ -74,6 +73,8 @@ module UORAMController
 	(* mark_debug = "FALSE" *) wire 	[FEDWidth-1:0] 	DataIn_Internal;
 	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
 
+	localparam				BlkSize_FEDChunks =		`divceil(ORAMB, FEDWidth);	
+	
 	FIFORAM	#(				.Width(					FEDWidth),
 							.Buffering(				BlkSize_FEDChunks))
 				in_D_buf(	.Clock(					Clock),

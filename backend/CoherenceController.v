@@ -45,9 +45,8 @@ module CoherenceController(
 
     `include "PathORAM.vh"
     
-	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketDRAMLocal.vh"
+	`include "ConstBucketHelpers.vh"
 	`include "SHA3Local.vh"
 	
 	parameter	BRAMLatency = 2;
@@ -430,7 +429,7 @@ module CoherenceController(
 		// Port control signals
 		(* mark_debug = "TRUE" *) wire  					PthRW, HdRW;
 		(* mark_debug = "TRUE" *) wire [ORAMLogL-1:0]		HdOnPthCtr, LastHdOnPthCtr;
-		wire [PthBSTWidth-1:0]	BlkOnPthCtr;
+		wire [PBSTWidth-1:0]	BlkOnPthCtr;
 		wire 					PthCtrEnable, HdCtrEnable;
 		wire 					HdRW_Transition, PthRW_Transition;			
 					

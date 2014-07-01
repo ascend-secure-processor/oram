@@ -71,10 +71,11 @@ module StashCore(
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 	
-	`include "PathORAM.vh"; 
-	`include "Stash.vh";
+	`include "PathORAM.vh"
 	
-	`include "BucketLocal.vh"
+	`include "DDR3SDRAMLocal.vh" // TODO cleanup
+	`include "ConstBucketHelpers.vh"
+	`include "ConstCommands.vh"
 	`include "StashLocal.vh"
 
 	localparam				STWidth =				4,

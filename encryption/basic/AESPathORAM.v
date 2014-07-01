@@ -27,10 +27,8 @@ module AESPathORAM(
 
 	`include "PathORAM.vh";
 	
-    `include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketDRAMLocal.vh"
-	`include "BucketLocal.vh"
+	`include "ConstBucketHelpers.vh"
 
 	localparam W = DDRDWidth / AESWidth;
 	localparam D = 12; 
@@ -124,19 +122,19 @@ module AESPathORAM(
     wire                                           DataInValid;
     wire                                           DataInReady;
 
-    wire [BktBSTWidth-1:0]                         BucketReadCtr;
+    wire [BBSTWidth-1:0]                           BucketReadCtr;
     wire                                           BucketReadCtr_Reset;
     wire                                           ReadBucketTransition;
 
-    wire [BktBSTWidth-1:0]                         DWBucketReadCtr;
+    wire [BBSTWidth-1:0]                         DWBucketReadCtr;
     wire                                           DWBucketReadCtr_Reset;
     wire                                           DWBucketTransition;
 
-    wire [BktBSTWidth-1:0]                         IVDeqCtr;
+    wire [BBSTWidth-1:0]                         IVDeqCtr;
     wire                                           IVDeqCtr_Reset;
     wire                                           IVDeqTransition;
 
-    wire [BktBSTWidth-1:0]                         AESBucketReadCtr;
+    wire [BBSTWidth-1:0]                         AESBucketReadCtr;
     wire                                           AESBucketReadCtr_Reset;
     wire                                           AESReadBucketTransition;
 
@@ -239,17 +237,17 @@ module AESPathORAM(
     wire WriteGood = DRAMInitDone & BackendWValid & AESDataInAccept;
 
     // Count where we are in a bucket (so we can determine when we are at a header)
-    Counter#(.Width(BktBSTWidth))
+    Counter#(.Width(BBSTWidth))
     in_bkt_cnt(.Clock(Clock),
                .Reset(Reset | ReadBucketTransition),
                .Set(1'b0),
                .Load(1'b0),
                .Enable(DRAMInitDone & (ReadGood | WriteGood)), //read | write
-               .In({BktBSTWidth{1'bx}}),
+               .In({BBSTWidth{1'bx}}),
                .Count(BucketReadCtr)
                );
 
-    CountCompare#(.Width(BktBSTWidth),
+    CountCompare#(.Width(BBSTWidth),
                   .Compare(BktSize_DRBursts - 1))
     in_bkt_cmp(.Count(BucketReadCtr),
                .TerminalCount(BucketReadCtr_Reset)
@@ -258,17 +256,17 @@ module AESPathORAM(
     assign ReadBucketTransition = BucketReadCtr_Reset & (ReadGood | WriteGood);
 
     // Count number of already processed ivs
-    Counter#(.Width(BktBSTWidth))
+    Counter#(.Width(BBSTWidth))
     ivdeq_cnt(.Clock(Clock),
               .Reset(Reset | IVDeqTransition),
               .Set(1'b0),
               .Load(1'b0),
               .Enable(IVDataOutValid & AESDWDataInAccept),
-              .In({BktBSTWidth{1'bx}}),
+              .In({BBSTWidth{1'bx}}),
               .Count(IVDeqCtr)
               );
 
-    CountCompare#(.Width(BktBSTWidth),
+    CountCompare#(.Width(BBSTWidth),
                   .Compare(BktSize_DRBursts - 1))
     ivdeq_cmp(.Count(IVDeqCtr),
               .TerminalCount(IVDeqCtr_Reset)
@@ -351,17 +349,17 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
 
     // Count where we are in a bucket (so we can determine when we are at a header)
-    Counter#(.Width(BktBSTWidth))
+    Counter#(.Width(BBSTWidth))
     dw_in_bkt_cnt(.Clock(Clock),
                   .Reset(Reset | DWBucketTransition),
                   .Set(1'b0),
                   .Load(1'b0),
                   .Enable(InitDone & AESDWDataInValid & AESDWDataInAccept),
-                  .In({BktBSTWidth{1'bx}}),
+                  .In({BBSTWidth{1'bx}}),
                   .Count(DWBucketReadCtr)
                   );
 
-    CountCompare#(.Width(BktBSTWidth),
+    CountCompare#(.Width(BBSTWidth),
                   .Compare(BktSize_DRBursts - 1))
     dw_in_bkt_cmp(.Count(DWBucketReadCtr),
                .TerminalCount(DWBucketReadCtr_Reset)
@@ -411,17 +409,17 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
 
     //counts how many things we've encrypted
-    Counter #(.Width(BktBSTWidth))
+    Counter #(.Width(BBSTWidth))
     in_bkt_aes_cnt(.Clock(Clock),
                    .Reset(Reset | AESReadBucketTransition),
                    .Set(1'b0),
                    .Load(1'b0),
                    .Enable(InitDone & DataOutValid & DataOutReady),
-                   .In({BktBSTWidth{1'bx}}),
+                   .In({BBSTWidth{1'bx}}),
                    .Count(AESBucketReadCtr)
                    );
 
-    CountCompare #(.Width(BktBSTWidth),
+    CountCompare #(.Width(BBSTWidth),
                    .Compare(BktSize_DRBursts - 1))
     in_bkt_aes_cmp(.Count(AESBucketReadCtr),
                    .TerminalCount(AESBucketReadCtr_Reset)

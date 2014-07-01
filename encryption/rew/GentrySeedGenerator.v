@@ -20,16 +20,7 @@ module GentrySeedGenerator(
 	//	Constants
 	//--------------------------------------------------------------------------
 
-	parameter				ORAML = 0;
-
-	`include "SecurityLocal.vh"
-
-	// TODO We only need these includes because we need BIDWidth in REWAESLocal.vh
-	// Clean up param system to avoid the crazy includes ...
-//	`include "PathORAM.v h"
-//	`include "DDR3SDRAMLocal.v h"
-//	`include "BucketDRAMLocal.v h"
-//	`include "REWAESLocal.v h"
+	`include "PathORAM.vh"
 
 	localparam				BIDWidth = ORAML + 1;
 
@@ -114,19 +105,18 @@ module GentrySeedGenerator(
 							.SIn(					1'b0),
 							.POut(					GentryCounterShifted));
 
-	assign  GentryCounterIn = 		GentryCounter + (RWPathTransition & CSRWWrite);
+	assign  GentryCounterIn = 						GentryCounter + (RWPathTransition & CSRWWrite);
 
-	assign	OutIV =					GentryCounterShifted + CSRWWrite;
+	assign	OutIV =									GentryCounterShifted + CSRWWrite;
 
-	assign	GentryLeaf =			GentryCounterIn[ORAML-1:0];
+	assign	GentryLeaf =							GentryCounterIn[ORAML-1:0];
 
-	BktIDGen # 	(	.ORAML(		ORAML))
-		rw_bid 	(	.Clock(		Clock),
-					.ReStart(	CSStartOp || RWPathTransition),
-					.leaf(		GentryLeaf),
-					.Enable(	Transfer),
-					.BktIdx(	OutBID)
-				);
+	BktIDGen 	#(			.ORAML(					ORAML))
+				rw_bid(		.Clock(					Clock),
+							.ReStart(				CSStartOp || RWPathTransition),
+							.leaf(					GentryLeaf),
+							.Enable(				Transfer),
+							.BktIdx(				OutBID));
 
 	assign	OutValid = !CSStartOp;
 	assign	Transfer = OutValid && OutReady;

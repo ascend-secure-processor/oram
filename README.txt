@@ -61,7 +61,7 @@ Tiny ORAM								(TinyORAMCore.v, top module)
 			Integrity Verification		(integrity/*.v)
 			Symmetric Encryption		(encryption/rew/*.v)					
 		Shared across both backend designs
-			Address Generator			(addr/*.v)             
+			Address Generator			(addr/*.v)
 			Stash						(stash/*.v)
 			
 --------------------------------------------------------------------------------

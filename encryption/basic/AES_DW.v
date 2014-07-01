@@ -32,7 +32,7 @@ module AES_DW
 	parameter W = 4;
 	parameter D = 12;
 	
-	`include "SecurityLocal.vh"
+	`include "PathORAM.vh"
 	
      //--------------------------------------------------------------------------
      //	System I/O

@@ -23,7 +23,7 @@ module PathORAMBackend(
 	StoreValid, StoreReady,
 	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
-	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
+	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
 	);
 	
@@ -33,15 +33,15 @@ module PathORAMBackend(
 
 	`include "PathORAM.vh"
 	
-	`include "SecurityLocal.vh"	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketLocal.vh"
-	`include "BucketDRAMLocal.vh"
-	`include "PathORAMBackendLocal.vh"
+	`include "ConstBucketHelpers.vh"
+	`include "ConstCommands.vh"
 	`include "SHA3Local.vh"
 	
 	parameter				ORAMUValid =			21;
+	
+	parameter				DebugDRAMReadTiming =	0;
 	
 	localparam				ORAMLogL = 				`log2(ORAML+1);
 	
@@ -83,7 +83,6 @@ module PathORAMBackend(
 	
 	input	[DDRDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
-	output					DRAMReadDataReady;
 	
 	output	[DDRDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
@@ -107,14 +106,19 @@ module PathORAMBackend(
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 
-	// AES - DRAM
+	// AES - PHY
 
 	wire 	[DDRDWidth-1:0]	BED_DRAMReadData;
 	wire					BED_DRAMReadDataValid, BED_DRAMReadDataReady;
 	
 	wire 	[DDRDWidth-1:0]	BED_DRAMWriteData;
 	wire					BED_DRAMWriteDataValid, BED_DRAMWriteDataReady;
-		
+	
+	// PHY - DRAM
+	
+	wire	[DDRDWidth-1:0]	PBF_DRAMReadData;
+	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;	
+	
 	// REW
 
 	wire    [ORAMU-1:0]		ROPAddr;
@@ -137,6 +141,19 @@ module PathORAMBackend(
 	wire	[ORAMLogL-1:0]	BktOfIIdx;
 
 	wire					FromStashDataDone; // TODO remove?
+	
+	//--------------------------------------------------------------------------
+	//	Simulation checks
+	//--------------------------------------------------------------------------
+	
+	`ifdef SIMULATION
+		always @(posedge Clock) begin
+			if (DRAMReadDataValid && ~PathBuffer_InReady) begin
+				$display("[%m @ %t] ERROR: Path buffer overflow", $time);
+				$finish;
+			end
+		end
+	`endif
 		
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
@@ -441,18 +458,18 @@ module PathORAMBackend(
 	//	DRAM->Backend width shifters
 	//--------------------------------------------------------------------------
 	
-	FIFOShiftRound #(		.IWidth(				MEMWidth),
+	FIFOShiftRound #(		.IWidth(				DDRDWidth), // TODO change to MEMWidth
 							.OWidth(				BEDWidth))
 				in_shft(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				DRAMReadDataReady),
+							.InData(				PBF_DRAMReadData),
+							.InValid(				PBF_DRAMReadDataValid),
+							.InAccept(				PBF_DRAMReadDataReady),
 							.OutData(				BED_DRAMReadData),
 							.OutValid(				BED_DRAMReadDataValid),
 							.OutReady(				BED_DRAMReadDataReady));
 							
-	FIFOShiftRound #(		.IWidth(				MEMWidth),
+	FIFOShiftRound #(		.IWidth(				DDRDWidth), // TODO change to MEMWidth
 							.OWidth(				BEDWidth))
 				out_shft(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -464,5 +481,58 @@ module PathORAMBackend(
 							.OutReady(				DRAMWriteDataReady));								
 	
 	//--------------------------------------------------------------------------	
+	//	DRAM Read Interface
+	//--------------------------------------------------------------------------	
+	
+	/*
+	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
+		wire	[PthBSTWidth-1:0] PthCnt;
+		wire				ReadStarted, ReadStopped;
+		
+		assign	ReadStopped =						ReadStarted & ~PBF_DRAMReadDataValid;
+		
+		Register #(			.Width(					1))
+				seen_first(	.Clock(					Clock),
+							.Reset(					Reset | ReadStopped),
+							.Set(					PBF_DRAMReadDataValid),
+							.Enable(				1'b0),
+							.In(					1'bx),
+							.Out(					ReadStarted));
+		Counter	 #(			.Width(					PthBSTWidth))
+				dbg_cnt(	.Clock(					Clock),
+							.Reset(					Reset | ReadStopped),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DRAMReadDataValid),
+							.In(					{PthBSTWidth{1'bx}}),
+							.Count(					PthCnt));
+								
+		assign	PathBuffer_OutValid =				PthCnt == PathSize_DRBursts & PBF_DRAMReadDataValid;
+		assign	PathBuffer_OutReady =				PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
+	end else begin:NORMAL_TIMING
+		assign	PathBuffer_OutValid =				PBF_DRAMReadDataValid;
+		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
+	end endgenerate
+	*/
+		
+	FIFORAM		#(			.Width(					DDRDWidth),
+							.Buffering(				PathSize_DRBursts)
+							`ifdef ASIC , .ASIC(1) `endif)
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady),
+							.OutData(				PBF_DRAMReadData),
+							.OutSend(				PBF_DRAMReadDataValid),
+							.OutReady(				PBF_DRAMReadDataReady));
+
+	//--------------------------------------------------------------------------
+	//	DRAM Write Interface
+	//--------------------------------------------------------------------------
+
+	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
+	
+	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

@@ -8,7 +8,7 @@
 //==============================================================================
 //	Module:		PathORAMBackendCore
 //	Desc:		Stash, DRAM address and top level state machine that interfaces 
-//				with the FrontEnd
+//				with the FrontEnd.
 //==============================================================================
 module PathORAMBackendCore(
 	Clock, Reset,
@@ -38,14 +38,10 @@ module PathORAMBackendCore(
 	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
-
-	`include "SecurityLocal.vh"	
-	`include "StashLocal.vh"
-	`include "StashTopLocal.vh"
+	
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketLocal.vh"
-	`include "BucketDRAMLocal.vh"
-	`include "PathORAMBackendLocal.vh"
+	`include "ConstBuckethelpers.vh"
+	`include "ConstCommands.vh"
 	
 	localparam				STWidth =				2,
 							ST_Initialize =			2'd0,
@@ -134,8 +130,8 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
 	(* mark_debug = "FALSE" *)	wire					Command_InternalValid, Command_InternalReady;
 
-	(* mark_debug = "FALSE" *)	wire	[BlkBEDWidth-1:0] EvictBuf_Chunks;
-	(* mark_debug = "FALSE" *)	wire	[BlkBEDWidth-1:0] ReturnBuf_Space;
+	(* mark_debug = "FALSE" *)	wire	[BBEDWidth-1:0] EvictBuf_Chunks;
+	(* mark_debug = "FALSE" *)	wire	[BBEDWidth-1:0] ReturnBuf_Space;
 		
 	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Store_ShiftBufData;	
 	(* mark_debug = "FALSE" *)	wire					Store_ShiftBufValid, Store_ShiftBufReady;
@@ -325,11 +321,11 @@ module PathORAMBackendCore(
 			ST_Idle :
 				if (~ERROR_BEndInner)
 					if (Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
-						NS =							ST_Append;
+						NS =						ST_Append;
 					else if (Stash_RdRmvCmdValid)
-						NS =							ST_Access;
+						NS =						ST_Access;
 					else if (Stash_UpdateCmdValid)
-						NS = 							ST_Access;
+						NS = 						ST_Access;
 			ST_Append :
 				if (Control_CommandDone) // When last chunk of data is appended
 					NS = 							ST_Idle;
@@ -467,7 +463,8 @@ module PathORAMBackendCore(
     AddrGen #(				.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.BEDWidth(				BEDWidth))
 				addr_gen(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Start(					AddrGen_InValid),
@@ -516,7 +513,8 @@ module PathORAMBackendCore(
 		DRAMInitializer #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.BEDWidth(				BEDWidth))
 				dram_init(	.Clock(					Clock),
 							.Reset(					Reset),
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
@@ -539,6 +537,8 @@ module PathORAMBackendCore(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
+							.ORAME(					ORAME),
+							.ORAMC(					ORAMC),
 							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
 							.EnableREW(             EnableREW),

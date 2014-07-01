@@ -21,7 +21,3 @@
 							SCMD_Sync =				3'd4,
 							SCMD_UpdateHeader =		3'd5;
 							
-	// Understood by DDR3SDRAM controllers
-	localparam				DDR3CMD_Write = 		3'd0,
-							DDR3CMD_Read = 			3'd1;
-							

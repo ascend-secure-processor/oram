@@ -7,8 +7,13 @@
 
 //==============================================================================
 //	Module:		TinyORAMCore
-//	Desc:		{Unified} x {Basic, REW} ORAM core with encryption, integrity 
-//				verification, & a FIFO DRAM interface. 
+//	Desc:		The Top-level TinyORAM module.  
+//				Includes {Unified} x {Basic, REW} frontends/backends with 
+//				encryption, integrity verification, & a FIFO DRAM interface.
+//
+//				This module can be instantiated in a larger design or 
+//				synthesized directly as a top module (using the default 
+//				parameters specified below).
 //==============================================================================
 module TinyORAMCore(
   	Clock, Reset,
@@ -50,8 +55,8 @@ module TinyORAMCore(
 	// TODO: for ASIC, re-enable IV.
 
 	parameter				EnablePLB = 			1,
-							EnableREW =				`ifdef ASIC 0 `else 1 `endif,
-							EnableAES =				`ifdef ASIC 0 `else 1 `endif,
+							EnableREW =				`ifdef ASIC 0 `else 0 `endif,
+							EnableAES =				`ifdef ASIC 0 `else 0 `endif,
 							EnableIV =				`ifdef ASIC 0 `else 0 `endif;
 	
 	// ORAM
@@ -79,14 +84,10 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
-	
-	`include "SecurityLocal.vh"	
+		
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketLocal.vh"
-	`include "BucketDRAMLocal.vh"
-	`include "PathORAMBackendLocal.vh"
-	`include "PLBLocal.vh"
+	`include "ConstCommands.vh"
 	
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 	
@@ -166,6 +167,7 @@ module TinyORAMCore(
 			end
 			
 			if (DDRDWidth < BEDWidth || 
+				DebugDRAMReadTiming || // TODO this is commented out in backend right now ...
 				DDRDWidth % BEDWidth != 0) begin
 				$display("[%m] ERROR: Illegal parameter setting.");
 				$finish;
@@ -174,13 +176,6 @@ module TinyORAMCore(
 			if (EnableAES) begin
 				$display("[%m] ERROR: Has AES been verified with the new BEDWidth funnels?");
 				$finish;			
-			end
-		end
-
-		always @(posedge Clock) begin
-			if (DRAMReadDataValid && ~PathBuffer_InReady) begin
-				$display("[%m @ %t] ERROR: Path buffer overflow", $time);
-				$finish;
 			end
 		end
 	`endif
@@ -254,7 +249,8 @@ module TinyORAMCore(
 							
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
-							.ORAMUValid(			ORAMUValid))
+							.ORAMUValid(			ORAMUValid),
+							.DebugDRAMReadTiming(	DebugDRAMReadTiming))
 				back_end (	.Clock(					Clock),
 			                .AESClock(				AESClock),
 							.Reset(					Reset),
@@ -277,65 +273,13 @@ module TinyORAMCore(
 							.DRAMCommandValid(		DRAMCommandValid),
 							.DRAMCommandReady(		DRAMCommandReady),			
 
-							.DRAMReadData(			PathBuffer_OutData),
-							.DRAMReadDataValid(		PathBuffer_OutValid),
-							.DRAMReadDataReady(		PathBuffer_OutReady_Pre),
+							.DRAMReadData(			DRAMReadData),
+							.DRAMReadDataValid(		DRAMReadDataValid),
 							
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMWriteDataReady));					
-	
-	//--------------------------------------------------------------------------
-	//	DRAM Read Interface
-	//--------------------------------------------------------------------------
-	
-	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
-		wire	[PthBSTWidth-1:0] PthCnt;
-		wire				ReadStarted, ReadStopped;
-		
-		assign	ReadStopped =						ReadStarted & ~PathBuffer_OutValid_Pre;
-		
-		Register #(			.Width(					1))
-				seen_first(	.Clock(					Clock),
-							.Reset(					Reset | ReadStopped),
-							.Set(					PathBuffer_OutValid_Pre),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ReadStarted));
-		Counter	 #(			.Width(					PthBSTWidth))
-				dbg_cnt(	.Clock(					Clock),
-							.Reset(					Reset | ReadStopped),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMReadDataValid),
-							.In(					{PthBSTWidth{1'bx}}),
-							.Count(					PthCnt));
-								
-		assign	PathBuffer_OutValid =				PthCnt == PathSize_DRBursts & PathBuffer_OutValid_Pre;
-		assign	PathBuffer_OutReady =				PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
-	end else begin:NORMAL_TIMING
-		assign	PathBuffer_OutValid =				PathBuffer_OutValid_Pre;
-		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
-	end endgenerate	
-		
-	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				PathSize_DRBursts)
-							`ifdef ASIC , .ASIC(1) `endif)
-				in_P_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady),
-							.OutData(				PathBuffer_OutData),
-							.OutSend(				PathBuffer_OutValid_Pre),
-							.OutReady(				PathBuffer_OutReady));
-
-	//--------------------------------------------------------------------------
-	//	DRAM Write Interface
-	//--------------------------------------------------------------------------
-
-	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
+							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	
 	//--------------------------------------------------------------------------
 endmodule
-//--------------------------------------------------------------------------
+//------------------------------------------------------------------------------

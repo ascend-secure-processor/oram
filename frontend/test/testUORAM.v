@@ -5,7 +5,7 @@ module testUORAM;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32; 
 	parameter                   ORAML = 			10;
-	parameter                   FEDWidth = 			64;
+	parameter                   FEDWidth = 			`ifdef ASIC 64 `else 512 `endif;
 	parameter                   NumValidBlock = 	1 << ORAML;	
 	parameter                   Recursion = 		3;       
     parameter                   PLBCapacity = 		8192 << 3;
@@ -13,10 +13,11 @@ module testUORAM;
 	localparam  NN = 200;
 	localparam	nn = 73;
 	localparam	nn2 = nn * 29;	
+
+	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
 	
-	`include "SecurityLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "PathORAMBackendLocal.vh"
+	`include "ConstCommands.vh"
 	`include "PLBLocal.vh" 
 	
     wire Clock, AESClock; 
@@ -37,8 +38,7 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore #(			.Hardware(				"ASIC")) // Even if we are debugging on Vivado, we'd like to reproduce same bugs as when we simulate with VCS
-				ORAM(		.Clock(					Clock),
+   TinyORAMCore ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			

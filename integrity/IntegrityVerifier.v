@@ -23,9 +23,8 @@ module IntegrityVerifier (
 	
     `include "PathORAM.vh"
 	
-	`include "SecurityLocal.vh"	
 	`include "DDR3SDRAMLocal.vh"
-	`include "BucketDRAMLocal.vh"
+	`include "ConstBucketHelpers.vh"
 	`include "SHA3Local.vh"
 	`include "IVCCLocal.vh"
 	

@@ -1,4 +1,6 @@
 
+	// TODO update this whole file
+
 	// Configured for the VC707 Evaluation board
 	localparam	 			DDR_nCK_PER_CLK = 		4, // 200 Mhz interface; 800 Mhz DRAM
 							DDRDQWidth =			64, // DQ bus width / DRAM word width
@@ -13,3 +15,7 @@
 							DDRDWidth = 			DDRBstLen * DDRDQWidth, // Data width (512b @ 200 Mhz)
 							DDRMWidth =				DDRDWidth / 8, // Write mask width
 							DDRROWWidth =			8192; // Big Row size in DRAM column width: 1024 column * 8 banks (TODO: make this in terms of ROW/BANK params)
+
+	// Understood by DDR3SDRAM controllers
+	localparam				DDR3CMD_Write = 		3'd0,
+							DDR3CMD_Read = 			3'd1;

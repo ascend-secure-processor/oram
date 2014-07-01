@@ -10,7 +10,7 @@ module PRNG (Clock, Reset, RandOutReady, RandOutValid, RandOut, SecretKey);
 
 	parameter RandWidth = 32;
 	
-	`include "SecurityLocal.vh"
+	`include "PathORAM.vh"
 	
 	input  Clock, Reset;
 	input  RandOutReady;

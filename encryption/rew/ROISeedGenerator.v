@@ -8,8 +8,7 @@ module ROISeedGenerator(
 	ROIBV, ROIBID
 );
 
-	parameter					ORAML = 0;
-	`include "SecurityLocal.vh"
+	`include "PathORAM.vh"
 
 	input						Clock, ROStart, Enable;
 	input	[ORAML-1:0]			ROLeaf;
