@@ -63,6 +63,7 @@ Tiny ORAM								(TinyORAMCore.v, top module)
 		Shared across both backend designs
 			Address Generator			(addr/*.v)
 			Stash						(stash/*.v)
+	User-level parameters				(local/PathORAM.vh)
 			
 --------------------------------------------------------------------------------
 Conventions
@@ -80,7 +81,9 @@ Conventions
 	pinouts and can be used to generate an FPGA bitstream.  Some examples are 
 	given in ../boards.
 	
--	Files with the extension *.vh are include files.  Each include file may have a prefix 'Const', which indicates ... TODO
+-	Files with the extension *.vh are include files.  If an include file has the 
+	suffix 'Local', it contains only derived constants/localparams -- i.e., you 
+	shouldn't modify it unless you know what you are doing.
 	
 --------------------------------------------------------------------------------
 Citations

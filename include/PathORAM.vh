@@ -5,11 +5,12 @@
 	//	Per-ORAM instance parameters
 	//--------------------------------------------------------------------------
 	
-	/* 	These should be set for every instance of TinyORAMCore in your design.	
-		They should not be changed for inner modules. 
-		
-		Note: leave each setting set to -1 in this file.  That makes it easier 
-		to detect when some parameter hasn't been initialized properly. */
+	/* 	Main design/user-specific parameters.  We put the parameter definitions 
+		here.  To set each parameter, instantiate TinyORAMCore and use defparam/
+		parameter override syntax to set the parameter.
+	
+		Note: leave each setting set to PINIT in this file.  That makes it 
+		easier to detect when some parameter hasn't been initialized properly. */
 	
 	parameter				ORAMB =					PINIT, 	// block size in bits
 							ORAMU =					PINIT, 	// program addr (at byte-addressable block granularity) width
