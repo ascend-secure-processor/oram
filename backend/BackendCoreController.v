@@ -53,8 +53,8 @@ module BackendCoreController(
 	`include "PathORAM.vh"
 
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 
 	localparam				STWidth =				4,
 							ST_Idle =				4'd0,

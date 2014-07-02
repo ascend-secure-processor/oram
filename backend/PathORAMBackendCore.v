@@ -41,7 +41,7 @@ module PathORAMBackendCore(
 	
 	`include "DDR3SDRAMLocal.vh"
 	`include "ConstBuckethelpers.vh"
-	`include "ConstCommands.vh"
+	`include "CommandsLocal.vh"
 	
 	localparam				STWidth =				2,
 							ST_Initialize =			2'd0,

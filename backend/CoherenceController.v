@@ -46,7 +46,7 @@ module CoherenceController(
     `include "PathORAM.vh"
     
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
+	`include "BucketLocal.vh"
 	`include "SHA3Local.vh"
 	
 	parameter	BRAMLatency = 2;

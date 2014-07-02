@@ -35,8 +35,8 @@ module PathORAMBackend(
 	
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 	`include "SHA3Local.vh"
 	
 	parameter				ORAMUValid =			21;

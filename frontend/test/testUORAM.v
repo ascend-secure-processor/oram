@@ -17,7 +17,7 @@ module testUORAM;
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
 	
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstCommands.vh"
+	`include "CommandsLocal.vh"
 	`include "PLBLocal.vh" 
 	
     wire Clock, AESClock; 

@@ -56,8 +56,8 @@ module DRAMToStash(
 
 	`include "PathORAM.vh"
 	
-	`include "ConstCommands.vh"
-	`include "ConstBucketHelpers.vh"
+	`include "CommandsLocal.vh"
+	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
 	
 	`include "DDR3SDRAMLocal.vh"

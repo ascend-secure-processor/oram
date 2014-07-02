@@ -54,7 +54,7 @@ module REWAESCore(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
+	`include "BucketLocal.vh"
 	`include "REWAESLocal.vh"
 	
 	localparam				BAWidth =				`max(`log2(RWHeader_AESChunks), `log2(Blk_AESChunks)) + 1;

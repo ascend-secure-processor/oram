@@ -87,7 +87,7 @@ module TinyORAMCore(
 		
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstCommands.vh"
+	`include "CommandsLocal.vh"
 	
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 	

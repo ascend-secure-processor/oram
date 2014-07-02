@@ -50,7 +50,7 @@ module AESREWORAM(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
+	`include "BucketLocal.vh"
 	`include "REWAESLocal.vh"
 	`include "StashLocal.vh"
 	

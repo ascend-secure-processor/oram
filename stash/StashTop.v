@@ -35,8 +35,8 @@ module StashTop(
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 	
 	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits,
 							PBEDP1Width = 			PBEDWidth + 1;

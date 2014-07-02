@@ -34,7 +34,7 @@ module StashScanTable(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh" // TODO cleanup
-	`include "ConstBucketHelpers.vh"
+	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
 	
 	localparam				FIFOWidth =				`log2(BlocksOnPath+1);

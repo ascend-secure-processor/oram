@@ -28,7 +28,7 @@ module AESPathORAM(
 	`include "PathORAM.vh";
 	
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
+	`include "BucketLocal.vh"
 
 	localparam W = DDRDWidth / AESWidth;
 	localparam D = 12; 

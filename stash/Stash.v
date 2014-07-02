@@ -56,8 +56,8 @@ module Stash(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh" // TODO cleanup
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 	`include "StashLocal.vh"
 	
 	parameter				ORAMUValid =			21,

@@ -74,8 +74,8 @@ module StashCore(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh" // TODO cleanup
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 	`include "StashLocal.vh"
 
 	localparam				STWidth =				4,

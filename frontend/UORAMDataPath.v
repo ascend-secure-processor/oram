@@ -24,7 +24,7 @@ module UORAMDataPath
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
 
-    `include "ConstCommands.vh"
+    `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
 

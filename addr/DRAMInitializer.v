@@ -29,8 +29,8 @@ module DRAMInitializer(
 	`include "PathORAM.vh"
 	
 	`include "DDR3SDRAMLocal.vh"
-	`include "ConstBucketHelpers.vh"
-	`include "ConstCommands.vh"
+	`include "BucketLocal.vh"
+	`include "CommandsLocal.vh"
 	`include "SubTreeLocal.vh"
 	
 	parameter					IV =				IVINITValue;
