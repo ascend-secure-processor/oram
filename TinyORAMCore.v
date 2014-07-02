@@ -149,13 +149,6 @@ module TinyORAMCore(
 	(* mark_debug = "TRUE" *)	wire	[FEDWidth-1:0]	LoadData, StoreData;
 	(* mark_debug = "TRUE" *)	wire					LoadReady, LoadValid, StoreValid, StoreReady;
 
-	// Path buffer
-
-	wire					PathBuffer_InReady, PathBuffer_OutReady_Pre, PathBuffer_OutValid_Pre;	
-	
-	wire					PathBuffer_OutValid, PathBuffer_OutReady;
-	wire	[DDRDWidth-1:0]	PathBuffer_OutData;
-
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//-------------------------------------------------------------------------- 		
@@ -173,7 +166,7 @@ module TinyORAMCore(
 				$finish;
 			end
 			
-			if (EnableAES) begin
+			if (EnableAES && DDRDWidth != BEDWidth) begin
 				$display("[%m] ERROR: Has AES been verified with the new BEDWidth funnels?");
 				$finish;			
 			end
@@ -277,6 +270,7 @@ module TinyORAMCore(
 							.DRAMReadDataValid(		DRAMReadDataValid),
 							
 							.DRAMWriteData(			DRAMWriteData),
+							.DRAMWriteMask(			DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	

@@ -15,7 +15,7 @@ module REWStatCtr(
 	);
 
 	parameter	USE_REW = 1;
-	parameter	ORAME = 0;
+	parameter	ORAME = -1;
 	
 	// Most of these alarms aren't performance critical, so we can delay them by 1 (helps timing)
 	parameter	LatchOutput = 1; 
@@ -37,6 +37,11 @@ module REWStatCtr(
 	
 	`ifdef SIMULATION
 		initial begin
+			if (ORAME == -1) begin
+				$display("Error: illegal parameter setting.");
+				$finish;
+			end
+		
 			if ( !(ORAME && RW_R_Chunk > 1 && RO_R_Chunk > 1) ) begin
 				// TODO: CountAlarm cannot handle chunk <= 1
 				$display("Error: parameter uninitialized or unsupported.");

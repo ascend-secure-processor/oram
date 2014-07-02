@@ -680,7 +680,8 @@ module AESREWORAM(
     AddrGen 	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ))
+							.ORAMZ(					ORAMZ),
+							.BEDWidth(				BEDWidth))
 				ro_bid(		.Clock(					Clock),
 							.Reset(					Reset),
 							.Start(					CSROStartOp),
@@ -893,10 +894,11 @@ module AESREWORAM(
 	//	AES Core
 	//--------------------------------------------------------------------------
 	
-	REWAESCore	#(			.ORAMZ(					ORAMZ),
+	REWAESCore	#(			.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMB(					ORAMB))
+							.ORAMZ(					ORAMZ),
+							.BEDWidth(				BEDWidth))
 				core(		.SlowClock(				Clock),
 							.FastClock(				FastClock),
 				`ifdef ASIC

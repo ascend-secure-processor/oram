@@ -102,8 +102,6 @@ module StashTop(
 	
 	// Control logic & commands
 	
-	wire	[STCMDWidth-1:0] WritebackCommand;
-	
 	wire					ResetDone, StashIdle;
 	
 	wire					StartAppendOp, StartScanOp, StartWritebackOp;
@@ -114,7 +112,7 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;	
 	wire					CSIdle, CSRead, CSStartWrite, CSWrite, CSAppend, CSUpdate;
 
-	wire					LatchCommand, LatchBECommand;
+	wire					LatchBECommand;
 	
 	wire	[BECMDWidth-1:0] BECommand_Internal;
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PAddr_Internal;
@@ -197,15 +195,10 @@ module StashTop(
 	Register1b 	errno4(Clock, Reset, CommandValid & Command == STCMD_Append & BECommand != BECMD_Append, 				ERROR_ISC4);
 	Register1b 	errno5(Clock, Reset, LatchBECommand & StashAlmostFull & ~AccessIsDummy, 								ERROR_SOF);
 	
-	Register1b 	errANY(Clock, Reset, ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_SOF, 					ERROR_StashTop);
+	Register1b 	errANY(Clock, Reset, ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_SOF, ERROR_StashTop);
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (ERROR_ISC1) begin
-				$display("[%m] ERROR: Stash received more blocks than BEndInner sent ...");
-				$finish;
-			end
-			
 			if (ERROR_ISC2) begin
 				$display("[%m] ERROR: Only start read commands/appends accepted at this time.");
 				$finish;
@@ -240,7 +233,7 @@ module StashTop(
 	assign	Stash_EvictBlockValid = 				FEWriteDataValid & 			EvictGate;
 	assign	Stash_UpdateBlockValid =				FEWriteDataValid & 			UpdateGate;
 	
-	assign	CommandReady =							(CSIdle & StashIdle) | CSRead;
+	assign	CommandReady =							(CSIdle & StashIdle) | CSStartWrite;
 	
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSRead =								CS == ST_Read;
@@ -251,7 +244,7 @@ module StashTop(
 	
 	assign	StartAppendOp =							CSAppend_FirstCycle;
 	assign	StartScanOp =							CSRead_FirstCycle;
-	assign	StartWritebackOp =						CSStartWrite & WritebackCommand == STCMD_StartWrite;
+	assign	StartWritebackOp =						CSStartWrite & Command == STCMD_StartWrite;
 
 	assign	CSAppend_FirstCycle =					CSAppend & ~CSAppend_Delayed;
 	assign	CSRead_FirstCycle =						CSRead & ~CSRead_Delayed;
@@ -278,12 +271,12 @@ module StashTop(
 				else if (CommandValid)
 					NS =						 	ST_Read;
 			ST_Read :
-				if (CommandValid)
+				if (PathReadCommitted)
 					NS =						 	ST_StartWriteback;
 			ST_StartWriteback :
-				if (		PathReadCommitted & ~AccessIsDummy_Internal & BECommand_Internal == BECMD_Update)
-					 NS =							ST_Update;
-				else if (	PathReadCommitted)
+				if (CommandValid & ~AccessIsDummy_Internal & BECommand_Internal == BECMD_Update)
+					NS =							ST_Update;
+				else if (CommandValid)
 					NS =							ST_Writeback;
 			ST_Update :
 				if (UpdateComplete)
@@ -301,16 +294,7 @@ module StashTop(
 	//	Commands from the Backend
 	//--------------------------------------------------------------------------
 	
-	assign	LatchCommand =							CommandValid & CommandReady & CSRead;
 	assign	LatchBECommand =						CommandValid & CommandReady & CSIdle;
-	
-	Register	#(			.Width(					STCMDWidth))
-				cmd_reg(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Enable(				LatchCommand),
-							.In(					Command),
-							.Out(					WritebackCommand));
 	
 	Register	#(			.Width(					BECMDWidth + ORAMU + 2*ORAML + 1 + 1))
 				becmd_reg(	.Clock(					Clock),
@@ -356,6 +340,7 @@ module StashTop(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
 							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
 							.ORAMUValid(			ORAMUValid),

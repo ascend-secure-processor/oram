@@ -24,7 +24,7 @@ module PathORAMBackend(
 	
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
+	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
 	);
 	
 	//--------------------------------------------------------------------------
@@ -85,6 +85,7 @@ module PathORAMBackend(
 	input					DRAMReadDataValid;
 	
 	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -231,6 +232,7 @@ module PathORAMBackend(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
+							.BEDWidth(				BEDWidth),
 							
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
@@ -345,11 +347,12 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 
 	generate if (EnableREW) begin:REW_AES
-		AESREWORAM	#(		.ORAMZ(					ORAMZ),
+		AESREWORAM	#(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
-							.ORAMB(					ORAMB),
+							.ORAMZ(					ORAMZ),
 							.ORAME(					ORAME),
+							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableIV(				EnableIV),

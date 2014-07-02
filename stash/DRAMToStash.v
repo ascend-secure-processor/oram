@@ -10,9 +10,33 @@
 //	Desc:		Takes a stream of data formatted as DRAM buckets as input and 
 //				outputs what the Stash expects (i.e., Leaf:Addr:Data in 
 //				parallel).
+//
 //				This is a separate module because depending on ORAML, ORAMU, 
 //				ORAMZ and BEDWidth, this logic will look quite different and 
 //				it's cleaner to quarantine the mess in one place.
+//
+//				When BEDWidth == large, we can peel out ORAML,U,V bits for free 
+//				because all become available at _known offsets_ in a single 
+//				cycle. 
+//
+//				When BEDWidth == small (e.g., 64b), we need to de-packetsize the 
+//				BEDWidth chunks.  Here are some design options:
+//
+//				(a) extract L/U/V from BEDWidth stream of flits: this requires
+//				complicated re-alignment logic.
+//
+//				(b) put gaps in the data stream so that L/U/V is aligned: this
+//				adds some wasted bandwidth
+//
+//				(c) use a shifter to widen the L/U/V out, then do the same bit
+//				extraction we do in the BEDWidth case: this adds the cost of the
+//				shifter. [NOTE: THIS IS HOW WE ENDED UP IMPLEMENTING IT --- its
+//				simple, and the header flit shifter isn't that big]
+//
+//	Opt note:	When BEDWidth is small, we will have some wasted bandwidth due
+//				to flits we don't need (AES IV, hash, etc).  We can peel them
+//				out like a de-packetizer as an optimization but this probably
+//				doesn't help much.
 //==============================================================================
 module DRAMToStash(
 	Clock, Reset,
@@ -222,9 +246,8 @@ module DRAMToStash(
 		commit_count(		.Clock(					Clock),
 							.Reset(					Reset),
 
-							.RW_R_Transfer(			DataReadTransfer),
-							.RW_W_Transfer(			DataWriteTransfer),
-							.RO_R_Transfer(			DataReadTransfer),
+							.RW_R_Transfer(			DataDownShift_Transfer),
+							.RO_R_Transfer(			DataDownShift_Transfer),
 							
 							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
 							.RO_R_DoneAlarm(		RO_R_DoneAlarm));
