@@ -15,7 +15,7 @@
 //				ORAMZ and BEDWidth, this logic will look quite different and 
 //				it's cleaner to quarantine the mess in one place.
 //
-//				When BEDWidth == large, we can peel out ORAML,U,V bits for free 
+//				When BEDWidth == large, we can peel out L,U,V bits for free 
 //				because all become available at _known offsets_ in a single 
 //				cycle. 
 //
@@ -47,7 +47,7 @@ module DRAMToStash(
 	
 	StashData, StashValid, StashReady,
 	StashPAddr, StashLeaf,
-	BlockWriteComplete
+	OperationComplete
 	);
 
 	//--------------------------------------------------------------------------
@@ -56,10 +56,7 @@ module DRAMToStash(
 
 	`include "PathORAM.vh"
 	
-	`include "CommandsLocal.vh"
 	`include "BucketLocal.vh"
-	`include "StashLocal.vh"
-	
 	`include "DDR3SDRAMLocal.vh"
 	
 	//--------------------------------------------------------------------------
@@ -91,7 +88,7 @@ module DRAMToStash(
 	output	[ORAML-1:0]		StashLeaf;
 	output					StashValid;
 	input					StashReady;
-	input					BlockWriteComplete;
+	input					OperationComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -197,7 +194,7 @@ module DRAMToStash(
 	//	Dummy block handling
 	//--------------------------------------------------------------------------
 
-	assign	InPath_BlockReadComplete =				BlockWriteComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
+	assign	InPath_BlockReadComplete =				OperationComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
 	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ValidDownShift_OutData & ValidDownShift_OutValid);
 	assign	DataDownShift_OutReady =				(ValidDownShift_OutValid) ? ((ValidDownShift_OutData) ? StashReady : 1'b1) : 1'b0; 
 	
