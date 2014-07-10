@@ -11,6 +11,11 @@
 //				outputs what the Stash expects (i.e., Leaf:Addr:Data in 
 //				parallel).
 //
+//				Specifically, translate:
+//					{ {Z{U}}, {Z{L}}, {Z{L}} } (the DRAM's format)
+//					to 
+//					{Z{ULD}} (the stash's format) 
+//
 //				This is a separate module because depending on ORAML, ORAMU, 
 //				ORAMZ and BEDWidth, this logic will look quite different and 
 //				it's cleaner to quarantine the mess in one place.
@@ -41,13 +46,12 @@
 module DRAMToStash(
 	Clock, Reset,
 
-	PathReadCommitted,
+	PathTransition,
 	
 	DRAMData, DRAMValid, DRAMReady,
 	
 	StashData, StashValid, StashReady,
-	StashPAddr, StashLeaf,
-	OperationComplete
+	StashPAddr, StashLeaf
 	);
 
 	//--------------------------------------------------------------------------
@@ -59,6 +63,8 @@ module DRAMToStash(
 	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	
+	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth;
+	
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -69,7 +75,7 @@ module DRAMToStash(
 	//	Command Interface
 	//--------------------------------------------------------------------------
 	
-	output					PathReadCommitted;
+	output					PathTransition;
 	
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
@@ -88,37 +94,25 @@ module DRAMToStash(
 	output	[ORAML-1:0]		StashLeaf;
 	output					StashValid;
 	input					StashReady;
-	input					OperationComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
-		
-	wire					HeaderDownShift_InValid, HeaderDownShift_InReady;
-	wire					DataDownShift_InValid, DataDownShift_InReady;
-		
-	wire	[BBSTWidth-1:0] BucketReadCtr;
-	wire					ReadProcessingHeader;	
 	
-	wire	[ORAMZ-1:0] 	HeaderDownShift_ValidBits;
-	wire	[BigUWidth-1:0]	HeaderDownShift_PAddrs;
-	wire	[BigLWidth-1:0]	HeaderDownShift_Leaves;
-		
-	wire					ValidDownShift_OutData, ValidDownShift_OutValid;
+	wire					HeaderValid, PayloadValid, ReadingPayload;
 	
-	wire	[BEDWidth-1:0]	DataDownShift_OutData;
-	wire					DataDownShift_OutValid, DataDownShift_OutReady;
-	wire					BlockReadValid;
+	wire					BucketTransition, BlockTransition;
+							
+	wire	[BEDWidth-1:0]	DRAMData_Inner;
+	wire					DRAMValid_Inner;
 	
-	wire	[ORAMU-1:0]		HeaderDownShift_OutPAddr;
-	wire	[ORAML-1:0]		HeaderDownShift_OutLeaf;
-	wire					HeaderDownShift_OutValid;		
+	wire	[ORAMZ-1:0] 	HeaderDown_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderDown_Leaves;
 	
-	wire					DataDownShift_Transfer;
-	
-	wire					BlockReadCtr_Reset;
-	wire	[BBEDWidth-1:0] BlockReadCtr; 	
-	wire 					InPath_BlockReadComplete;	
+	wire	[ORAMU-1:0]		HeaderDown_PAddr;
+	wire	[ORAML-1:0]		HeaderDown_Leaf;
+	wire					HeaderDown_ValidBit;		
 	
 	wire					RW_R_DoneAlarm, RO_R_DoneAlarm;
 	
@@ -128,7 +122,7 @@ module DRAMToStash(
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (ValidDownShift_OutValid & ^ValidDownShift_OutData === 1'bx) begin
+			if (PayloadValid && HeaderDown_ValidBit === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
 				$finish;
 			end	
@@ -136,94 +130,78 @@ module DRAMToStash(
 	`endif
 	
 	//--------------------------------------------------------------------------
-	//	
+	//	Shifters
 	//--------------------------------------------------------------------------	
 	
-	//generate if (BEDWidth > BktHSize_RawBits) begin:WIDE_BEDWIDTH
-	
-	// Count where we are in a bucket (so we can determine when we are at a header)
-	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+	CountAlarm  #(  		.Threshold(             BktSize_BEDChunks))
 				in_bkt_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				DRAMValid & DRAMReady),
-							.Count(					BucketReadCtr));
+							.Done(					BucketTransition));
 	
-	// Per-bucket header/payload arbitration
-	assign	ReadProcessingHeader =					BucketReadCtr < BktHSize_DRBursts;
-	assign	HeaderDownShift_InValid =				DRAMValid & ReadProcessingHeader;
-	assign	DataDownShift_InValid =					DRAMValid & ~ReadProcessingHeader;
-	assign	DRAMReady =								(ReadProcessingHeader) ? HeaderDownShift_InReady : DataDownShift_InReady;
+	generate if (BEDWidth < BktHSize_RawBits) begin:NARROW_BEDWIDTH
+		// NOTE: this isn't the optimal ASIC design because we have so many 
+		// flops.  But I don't think it matters much in overall area...
 	
-	assign	HeaderDownShift_ValidBits =				DRAMData[BktHVStart+BigVWidth-1:BktHVStart];
-	assign	HeaderDownShift_PAddrs =				DRAMData[BktHUStart+BigUWidth-1:BktHUStart];
-	assign	HeaderDownShift_Leaves =				DRAMData[BktHLStart+BigLWidth-1:BktHLStart];
-	
-	FIFOShiftRound #(		.IWidth(				BigUWidth),
-							.OWidth(				ORAMU))
-				in_U_shft(	.Clock(					Clock),
+		FIFOShiftRound #(	.IWidth(				BEDWidth),
+							.OWidth(				RHWidth))
+				in_DR_shft(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				HeaderDownShift_PAddrs),
-							.InValid(				HeaderDownShift_InValid),
-							.InAccept(				HeaderDownShift_InReady),
-							.OutData(			    HeaderDownShift_OutPAddr),
-							.OutValid(				HeaderDownShift_OutValid),
-							.OutReady(				InPath_BlockReadComplete));
+							.InData(				DRAMData),
+							.InValid(				HeaderValid),
+							.InAccept(				),
+							.OutData(			    DRAMData_Inner),
+							.OutValid(				DRAMValid_Inner),
+							.OutReady(				1'b1));
+	end else begin:WIDE_BEDWIDTH
+		assign	DRAMData_Inner =					DRAMData;
+		assign	DRAMValid_Inner =					DRAMValid;
+	end endgenerate
+
+	assign	DRAMReady = 							StashReady;	
+	
+	Register1b pheader(Clock, Reset || BucketTransition, DRAMValid_Inner, ReadingPayload);					
+								
+	assign	HeaderValid =							DRAMValid_Inner && ~ReadingPayload;
+	assign	PayloadValid = 							DRAMValid && 		ReadingPayload;
+
+	assign	HeaderDown_ValidBits =					DRAMData_Inner[BktHVStart+BigVWidth-1:BktHVStart];
+	assign	HeaderDown_PAddrs =						DRAMData_Inner[BktHUStart+BigUWidth-1:BktHUStart];
+	assign	HeaderDown_Leaves =						DRAMData_Inner[BktHLStart+BigLWidth-1:BktHLStart];
+	
+	ShiftRegister #(		.PWidth(				BigUWidth),
+							.SWidth(				ORAMU))
+				in_U_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					HeaderValid), 
+							.Enable(				BlockTransition), 
+							.PIn(					HeaderDown_PAddrs), 
+							.SIn(					{ORAMU{1'bx}}),
+							.SOut(					HeaderDown_PAddr));							
 	ShiftRegister #(		.PWidth(				BigLWidth),
 							.SWidth(				ORAML))
 				in_L_shft(	.Clock(					Clock), 
 							.Reset(					Reset), 
-							.Load(					HeaderDownShift_InValid & HeaderDownShift_InReady), 
-							.Enable(				InPath_BlockReadComplete), 
-							.PIn(					HeaderDownShift_Leaves), 
+							.Load(					HeaderValid), 
+							.Enable(				BlockTransition), 
+							.PIn(					HeaderDown_Leaves), 
 							.SIn(					{ORAML{1'bx}}),
-							.SOut(					HeaderDownShift_OutLeaf));
+							.SOut(					HeaderDown_Leaf));
+	ShiftRegister #(		.PWidth(				ORAMZ),
+							.SWidth(				1))
+				in_V_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					HeaderValid), 
+							.Enable(				BlockTransition), 
+							.PIn(					HeaderDown_ValidBits), 
+							.SIn(					{ORAML{1'bx}}),
+							.SOut(					HeaderDown_ValidBit));							
 
-	FIFOShiftRound #(		.IWidth(				DDRDWidth),
-							.OWidth(				BEDWidth),
-							.Register(				1))
-				in_D_shft(	.Clock(					Clock),
+	CountAlarm  #(  		.Threshold(             BlkSize_BEDChunks))
+				valid_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				DRAMData),
-							.InValid(				DataDownShift_InValid),
-							.InAccept(				DataDownShift_InReady),
-							.OutData(				DataDownShift_OutData),
-							.OutValid(				DataDownShift_OutValid),
-							.OutReady(				DataDownShift_OutReady));
-
-	//--------------------------------------------------------------------------
-	//	Dummy block handling
-	//--------------------------------------------------------------------------
-
-	assign	InPath_BlockReadComplete =				OperationComplete | (BlockReadCtr_Reset & DataDownShift_Transfer);
-	assign	BlockReadValid =						DataDownShift_OutValid & HeaderDownShift_OutValid & (ValidDownShift_OutData & ValidDownShift_OutValid);
-	assign	DataDownShift_OutReady =				(ValidDownShift_OutValid) ? ((ValidDownShift_OutData) ? StashReady : 1'b1) : 1'b0; 
-	
-	assign	DataDownShift_Transfer =				DataDownShift_OutValid & DataDownShift_OutReady;
-	
-	// Use FIFOShiftRound to generate ValidDownShift_OutValid signal
-	FIFOShiftRound #(		.IWidth(				ORAMZ),
-							.OWidth(				1))
-				in_V_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				HeaderDownShift_ValidBits),
-							.InValid(				HeaderDownShift_InValid),
-							.InAccept(				), // will be the same as in_L_shft
-							.OutData(			    ValidDownShift_OutData),
-							.OutValid(				ValidDownShift_OutValid),
-							.OutReady(				InPath_BlockReadComplete));	
-	
-	Counter		#(			.Width(					BBEDWidth))
-				in_blk_cnt(	.Clock(					Clock),
-							.Reset(					Reset | BlockReadCtr_Reset),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DataDownShift_Transfer & ~ValidDownShift_OutData & ValidDownShift_OutValid),
-							.In(					{BBEDWidth{1'bx}}),
-							.Count(					BlockReadCtr));	
-	CountCompare #(			.Width(					BBEDWidth),
-							.Compare(				BlkSize_BEDChunks - 1))
-				in_blk_cmp(	.Count(					BlockReadCtr), 
-							.TerminalCount(			BlockReadCtr_Reset));
+							.Enable(				PayloadValid && StashReady),
+							.Done(					BlockTransition));
 	
 	//--------------------------------------------------------------------------
 	//	Path counters
@@ -243,23 +221,23 @@ module DRAMToStash(
 		commit_count(		.Clock(					Clock),
 							.Reset(					Reset),
 
-							.RW_R_Transfer(			DataDownShift_Transfer),
-							.RO_R_Transfer(			DataDownShift_Transfer),
+							.RW_R_Transfer(			PayloadValid),
+							.RO_R_Transfer(			PayloadValid),
 							
 							.RW_R_DoneAlarm(		RW_R_DoneAlarm),
 							.RO_R_DoneAlarm(		RO_R_DoneAlarm));
 	
-	assign	PathReadCommitted =						RW_R_DoneAlarm || RO_R_DoneAlarm;
+	assign	PathTransition =						RW_R_DoneAlarm || RO_R_DoneAlarm;
 
 	//--------------------------------------------------------------------------
 	//	Stash Interface
 	//--------------------------------------------------------------------------
 		
-	assign	StashData =								DataDownShift_OutData;
-	assign	StashValid =							BlockReadValid;
+	assign	StashData =								DRAMData;
+	assign	StashValid =							PayloadValid && HeaderDown_ValidBit;
 	
-	assign	StashPAddr =							HeaderDownShift_OutPAddr;
-	assign	StashLeaf =								HeaderDownShift_OutLeaf;
+	assign	StashPAddr =							HeaderDown_PAddr;
+	assign	StashLeaf =								HeaderDown_Leaf;
 	
 	//--------------------------------------------------------------------------
 endmodule

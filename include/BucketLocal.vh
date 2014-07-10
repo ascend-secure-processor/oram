@@ -25,17 +25,8 @@
 	`endif
 
 	//--------------------------------------------------------------------------
-	//	Quantities in terms of BEDWidth
+	//	Raw parameters
 	//--------------------------------------------------------------------------	
-	
-	// BEDWidth/FEDWidth-related quantities
-	localparam				BlkSize_BEDChunks =		`divceil(ORAMB, BEDWidth),
-							BktSize_BEDChunks =		ORAMZ * BlkSize_BEDChunks,
-							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
-
-	// ... and associated widths
-	localparam				BBEDWidth =				`max(`log2(BlkSize_BEDChunks + 1), 1), // Block BED width
-							PBEDWidth =				`log2(PathSize_BEDChunks); // Path BED width
 	
 	// Header flit
 	localparam				BigVWidth =				ORAMZ,
@@ -49,13 +40,24 @@
 							BktHSize_RawBits = 		BktHLStart + BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
 	
 	localparam				BktPSize_RawBits =		ORAMZ * ORAMB;
-							
+
+	//--------------------------------------------------------------------------
+	//	Quantities in terms of BEDWidth
+	//--------------------------------------------------------------------------
+
+	// BEDWidth/FEDWidth-related quantities
+	localparam				BlkSize_BEDChunks =		`divceil(ORAMB, BEDWidth),
+							BktHSize_BEDChunks =	`divceil(BktHSize_RawBits, BEDWidth),
+							BktPSize_BEDChunks =	BlkSize_BEDChunks * ORAMZ,
+							BktSize_BEDChunks =		BktHSize_BEDChunks + BktPSize_BEDChunks,
+							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
+
 	//--------------------------------------------------------------------------
 	//	Quantities in terms of the Memory/DRAM width
 	//--------------------------------------------------------------------------
-							
-	// TODO I think some of these aren't used at this point ...						
-							
+
+	// TODO these should get phased out as we push more of the design to BEDWidth ...
+
 	localparam				BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
 							BktPSize_DRBursts =		`divceil(BktPSize_RawBits, DDRDWidth),
 							BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth, // = 512 for all configs we care about

@@ -43,14 +43,16 @@ module PathORAMBackendCore(
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 	
+	parameter				ORAMUValid =			21;
+									
 	localparam				STWidth =				2,
 							ST_Initialize =			2'd0,
 							ST_Idle =				2'd1,
 							ST_Append =				2'd2,
 							ST_Access =				2'd3;
 	
-	parameter				ORAMUValid =			21;
-								
+	localparam				BBEDWidth =				`max(`log2(BlkSize_BEDChunks + 1), 1); // Block BED width
+							
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------

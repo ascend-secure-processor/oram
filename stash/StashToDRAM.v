@@ -29,8 +29,9 @@ module StashToDRAM(
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	
-	localparam				SpaceRemaining =		BktHSize_RndBits - BktHSize_RawBits;
-	
+	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth,
+							Space =					RHWidth - BktHSize_RawBits,
+							BBEDWidth =				`log2(BktSize_BEDChunks);
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -61,36 +62,29 @@ module StashToDRAM(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 		
-	wire					HeaderUpShift_InReady;
-	wire					HeaderUpShift_OutValid, HeaderUpShift_OutReady;
+	wire					HeaderUp_InReady, HeaderUp_OutValid, HeaderUp_OutReady;
 
-	wire	[ORAMZ-1:0] 	HeaderUpShift_ValidBits;
-	wire	[BigUWidth-1:0]	HeaderUpShift_PAddrs;
-	wire	[BigLWidth-1:0]	HeaderUpShift_Leaves;	
-
-	wire	[DDRDWidth-1:0]	DataUpShift_OutData;
-	wire					DataUpShift_OutValid, DataUpShift_OutReady;
+	wire	[ORAMZ-1:0] 	HeaderUp_ValidBits;
+	wire	[BigUWidth-1:0]	HeaderUp_PAddrs;
+	wire	[BigLWidth-1:0]	HeaderUp_Leaves;	
 
 	wire					WritebackBlockIsValid;
 	wire 					WritebackBlockCommit;
 	
-	wire 					WritebackProcessingHeader;		
-	wire	[DDRDWidth-1:0]	UpShift_HeaderFlit, BucketBuf_OutData;
-	wire					BucketBuf_OutValid, BucketBuf_OutReady;
+	wire	[BEDWidth-1:0]	HeaderOut;
+	wire					HeaderOutValid, HeaderOutReady;
+	
+	wire	[BEDWidth-1:0]	PayloadOut;
+	wire					PayloadOutValid, PayloadOutReady;	
+	
+	wire 					ReadingHeader;		
+	wire	[BEDWidth-1:0]	HeaderUp;
 							
-	wire					BucketWritebackValid;
-	wire	[BBSTWidth-1:0] BucketWritebackCtr;
-							
-	wire	[DDRDWidth-1:0]	UpShift_DRAMWriteData;
+	wire	[BBEDWidth-1:0] BucketCtr;
 				
 	//--------------------------------------------------------------------------
 	//	Data path
 	//--------------------------------------------------------------------------
-	
-	// Translate:
-	//		{Z{ULD}} (the stash's format) 
-	//		to 
-	//		{ {Z{U}}, {Z{L}}, {Z{L}} } (the DRAM's format)
 	
 	// Note: It is probably best that Stash computes these; not changing them now to save time
 	assign	WritebackBlockIsValid =					StashPAddr != DummyBlockAddress;
@@ -98,8 +92,8 @@ module StashToDRAM(
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (~HeaderUpShift_InReady & WritebackBlockCommit) begin
-				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);
+			if (~HeaderUp_InReady & WritebackBlockCommit) begin
+				$display("[%m @ %t] ERROR: Illegal signal combination (data will be lost)", $time);  
 				$finish;
 			end
 		end
@@ -111,10 +105,10 @@ module StashToDRAM(
 							.Reset(					Reset),
 							.InData(				StashPAddr),
 							.InValid(				WritebackBlockCommit),
-							.InAccept(				HeaderUpShift_InReady),
-							.OutData(			    HeaderUpShift_PAddrs),
-							.OutValid(				HeaderUpShift_OutValid),
-							.OutReady(				HeaderUpShift_OutReady));
+							.InAccept(				HeaderUp_InReady),
+							.OutData(			    HeaderUp_PAddrs),
+							.OutValid(				HeaderUp_OutValid),
+							.OutReady(				HeaderUp_OutReady));
 	ShiftRegister #(		.PWidth(				BigLWidth),
 							.SWidth(				ORAML))
 				out_L_shft(	.Clock(					Clock), 
@@ -122,7 +116,7 @@ module StashToDRAM(
 							.Load(					1'b0), 
 							.Enable(				WritebackBlockCommit), 
 							.SIn(					StashLeaf), 
-							.POut(					HeaderUpShift_Leaves));							
+							.POut(					HeaderUp_Leaves));							
 	ShiftRegister #(		.PWidth(				ORAMZ),
 							.SWidth(				1))
 				out_V_shft(	.Clock(					Clock), 
@@ -130,55 +124,66 @@ module StashToDRAM(
 							.Load(					1'b0), 
 							.Enable(				WritebackBlockCommit), 
 							.SIn(					WritebackBlockIsValid), 
-							.POut(					HeaderUpShift_ValidBits));
-	FIFOShiftRound #(		.IWidth(				BEDWidth),
-							.OWidth(				DDRDWidth))
-				out_D_shft(	.Clock(					Clock),
+							.POut(					HeaderUp_ValidBits));
+						
+	assign	HeaderUp =								{	
+														{Space{1'b0}},
+														HeaderUp_Leaves,
+														HeaderUp_PAddrs,
+														{BktHWaste_ValidBits{1'b0}},
+														HeaderUp_ValidBits, 
+														IVINITValue	
+													};
+	
+	generate if (BEDWidth < BktHSize_RawBits) begin:NARROW_BEDWIDTH
+		FIFOShiftRound #(	.IWidth(				RHWidth),
+							.OWidth(				BEDWidth))
+				out_DR_shft(.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				HeaderUp),
+							.InValid(				HeaderUp_OutValid),
+							.InAccept(				HeaderUp_OutReady),
+							.OutData(				HeaderOut),
+							.OutValid(				HeaderOutValid),
+							.OutReady(				HeaderOutReady));
+	end else begin:WIDE_BEDWIDTH
+		assign	HeaderOut = 						HeaderUp;
+		assign	HeaderOutValid = 					HeaderUp_OutValid;
+		assign	HeaderUp_OutReady = 				HeaderOutReady;
+	end endgenerate
+	
+	// PERFORMANCE/FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer 
+	// whole bucket so that we can write back to DRAM in {Header, Payload} order
+	FIFORAM		#(			.Width(					BEDWidth),
+							.Buffering(				BktPSize_BEDChunks))
+				out_D_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				StashData),
 							.InValid(				StashValid),
 							.InAccept(				StashReady),
-							.OutData(			    DataUpShift_OutData),
-							.OutValid(				DataUpShift_OutValid),
-							.OutReady(				DataUpShift_OutReady));
-							
-	// FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer whole bucket 
-	// so that we can write back to DRAM in {Header, Payload} order
-	FIFORAM		#(			.Width(					DDRDWidth),
-							.Buffering(				BktPSize_DRBursts))
-				out_bkt_buf(.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DataUpShift_OutData),
-							.InValid(				DataUpShift_OutValid),
-							.InAccept(				DataUpShift_OutReady),
-							.OutData(				BucketBuf_OutData),
-							.OutSend(				BucketBuf_OutValid),
-							.OutReady(				BucketBuf_OutReady));
+							.OutData(				PayloadOut),
+							.OutSend(				PayloadOutValid),
+							.OutReady(				PayloadOutReady));
 
-	assign	WritebackProcessingHeader =				BucketWritebackCtr < BktHSize_DRBursts;
-	
-	assign	UpShift_HeaderFlit =					{	{SpaceRemaining{1'b0}},
-														HeaderUpShift_Leaves,
-														HeaderUpShift_PAddrs,
-														{BktHWaste_ValidBits{1'b0}},
-														HeaderUpShift_ValidBits, 
-														IVINITValue	};
-	assign	UpShift_DRAMWriteData =					(WritebackProcessingHeader) ? UpShift_HeaderFlit : BucketBuf_OutData;
+	assign	ReadingHeader =							BucketCtr < BktHSize_BEDChunks;
 
-	assign	BucketWritebackValid =					(WritebackProcessingHeader & 	HeaderUpShift_OutValid) | 
-													(~WritebackProcessingHeader & 	BucketBuf_OutValid);
-
-	CountAlarm  #(  		.Threshold(             BktHSize_DRBursts + BktPSize_DRBursts))
+	CountAlarm  #(  		.Threshold(             BktSize_BEDChunks))
 				out_bkt_cnt(.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				BucketWritebackValid & DRAMReady),
-							.Count(					BucketWritebackCtr));
+							.Enable(				DRAMValid & DRAMReady),
+							.Count(					BucketCtr));
+		
+	//--------------------------------------------------------------------------
+	//	DRAM Interface
+	//--------------------------------------------------------------------------
 	
-	assign	DRAMData = 								UpShift_DRAMWriteData;
-	assign	DRAMValid = 							BucketWritebackValid;	
+	assign	DRAMData =								(ReadingHeader) ? HeaderOut : PayloadOut;
 
-	assign	BucketBuf_OutReady =					~WritebackProcessingHeader & DRAMReady;
-	assign	HeaderUpShift_OutReady =				WritebackProcessingHeader & DRAMReady;
+	assign	DRAMValid =								( ReadingHeader & 	HeaderOutValid) | 
+													(~ReadingHeader & 	PayloadOutValid);
+
+	assign	PayloadOutReady =						 ~ReadingHeader & 	DRAMReady;
+	assign	HeaderOutReady =						  ReadingHeader & 	DRAMReady;
 	
 	//--------------------------------------------------------------------------
 endmodule

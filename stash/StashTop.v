@@ -126,8 +126,6 @@ module StashTop(
 	wire	[ORAMU-1:0]		StashWritePAddr; 
 	wire	[ORAML-1:0]		StashWriteLeaf;
 	
-	wire					StashBlockWriteComplete;
-	
 	// Writeback pipeline
 
 	wire	[BEDWidth-1:0]	StashReadData;
@@ -294,7 +292,7 @@ module StashTop(
 				in_convert(	.Clock(					Clock), 
 							.Reset(					Reset),
 
-							.PathReadCommitted(		PathReadCommitted),
+							.PathTransition(		PathReadCommitted),
 							
 							.DRAMData(				DRAMReadData), 
 							.DRAMValid(				DRAMReadDataValid), 
@@ -304,8 +302,7 @@ module StashTop(
 							.StashValid(			StashWriteValid), 
 							.StashReady(			StashWriteReady),
 							.StashPAddr(			StashWritePAddr), 
-							.StashLeaf(				StashWriteLeaf),
-							.OperationComplete(		StashBlockWriteComplete));
+							.StashLeaf(				StashWriteLeaf));
 	
 	//--------------------------------------------------------------------------
 	//	Stash
@@ -362,7 +359,7 @@ module StashTop(
 							.WriteInReady(			StashWriteReady), 
 							.WritePAddr(			StashWritePAddr),
 							.WriteLeaf(				StashWriteLeaf),
-							.BlockWriteComplete(	StashBlockWriteComplete), 
+							.BlockWriteComplete(	), 
 							
 							.ReadData(				StashReadData),
 							.ReadPAddr(				StashReadPAddr),
@@ -398,7 +395,7 @@ module StashTop(
 							
 							.DRAMData(				DRAMWriteData), 
 							.DRAMValid(				DRAMWriteDataValid), 
-							.DRAMReady(				DRAMWriteDataReady));	
+							.DRAMReady(				DRAMWriteDataReady));
 
 	//--------------------------------------------------------------------------
 endmodule
