@@ -2,12 +2,14 @@
 
 module testUORAM;
 	// *** NOTE *** DON'T CHANGE THESE PARAMETERS WITHOUT MAKING THE SAME CHANGE IN TinyORAMCore
+	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
-	parameter				    ORAMU =				32; 
+	parameter				    ORAMU =				32;
 	parameter                   ORAML = 			10;
-	parameter                   FEDWidth = 			`ifdef ASIC 64 `else 512 `endif;
+	parameter                   FEDWidth = 			`ifdef ASIC 64 `else 64 `endif;
+	parameter					BEDWidth =			`ifdef ASIC 64 `else 64 `endif;
 	parameter                   NumValidBlock = 	1 << ORAML;	
-	parameter                   Recursion = 		3;       
+	parameter                   Recursion = 		3;
     parameter                   PLBCapacity = 		8192 << 3;
 
 	localparam  NN = 200;
@@ -20,19 +22,27 @@ module testUORAM;
 	`include "CommandsLocal.vh"
 	`include "PLBLocal.vh" 
 	
-    wire Clock, AESClock; 
-    wire Reset; 
-    reg  CmdInValid, DataInValid, ReturnDataReady;
-    wire CmdInReady, DataInReady, ReturnDataValid;
-    reg [1:0] CmdIn;
-    reg [ORAMU-1:0] AddrIn;
-    wire [FEDWidth-1:0] ReturnData;
-	reg  [FEDWidth-1:0] DataIn;
+    wire 						Clock, AESClock; 
+    wire 						Reset; 
+    reg  						CmdInValid, DataInValid, ReturnDataReady;
+    wire 						CmdInReady, DataInReady, ReturnDataValid;
+    reg [1:0] 					CmdIn;
+    reg [ORAMU-1:0] 			AddrIn;
+    wire [FEDWidth-1:0] 		ReturnData;
+	reg  [FEDWidth-1:0] 		DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth-1:0]	DDR3SDRAM_Address;
-	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
+	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
+	wire	[BEDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
+
+	wire	[DDRDWidth-1:0]		DDR3SDRAM_ReadData_Wide;
+	wire						DDR3SDRAM_ReadValid_Wide, DDR3SDRAM_ReadReady_Wide;
+	
+	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData_Wide;
+	wire						DDR3SDRAM_WriteValid_Wide, DDR3SDRAM_WriteReady_Wide;
+
+	wire						DDR3SDRAM_ReadReady;
 	
 	wire						DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
@@ -55,11 +65,11 @@ module testUORAM;
                             
                             // interface with DRAM		
                             .DRAMAddress(           DDR3SDRAM_Address),
-                            .DRAMCommand(			DDR3SDRAM_Command),
+                            .DRAMCommand(			DDR3SDRAM_Command),			
                             .DRAMCommandValid(		DDR3SDRAM_CommandValid),
-                            .DRAMCommandReady(		DDR3SDRAM_CommandReady),			
+                            .DRAMCommandReady(		DDR3SDRAM_CommandReady),	
                             .DRAMReadData(			DDR3SDRAM_ReadData),
-                            .DRAMReadDataValid(		DDR3SDRAM_ReadValid),			
+                            .DRAMReadDataValid(		DDR3SDRAM_ReadValid),		
                             .DRAMWriteData(			DDR3SDRAM_WriteData),
                             .DRAMWriteMask(			DDR3SDRAM_WriteMask),
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
@@ -72,12 +82,44 @@ module testUORAM;
 	//--------------------------------------------------------------------------
     parameter   InBufDepth = 6,
                 OutInitLat = 30,
-                OutBandWidth = 57;
+                OutBandWidth = 100;
 	
 	//always @(posedge Clock) begin
 	//	if (DDR3SDRAM_ReadValid) $display("DRAM read data: %x", DDR3SDRAM_ReadData);
 	//end
-
+	
+	FIFOShiftRound #(		.IWidth(				DDRDWidth),
+							.OWidth(				BEDWidth))
+				in_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DDR3SDRAM_ReadData_Wide),
+							.InValid(				DDR3SDRAM_ReadValid_Wide),
+							.InAccept(				DDR3SDRAM_ReadReady_Wide),
+							.OutData(				DDR3SDRAM_ReadData),
+							.OutValid(				DDR3SDRAM_ReadValid),
+							.OutReady(				1'b1));
+							
+	FIFOShiftRound #(		.IWidth(				BEDWidth),
+							.OWidth(				DDRDWidth))
+				out_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DDR3SDRAM_WriteData),
+							.InValid(				DDR3SDRAM_WriteValid),
+							.InAccept(				DDR3SDRAM_WriteReady),
+							.OutData(				DDR3SDRAM_WriteData_Wide),
+							.OutValid(				DDR3SDRAM_WriteValid_Wide),
+							.OutReady(				DDR3SDRAM_WriteReady_Wide));
+	
+	always @(posedge Clock) begin
+		if (DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide) begin
+			$display("[%m @ %t] Write DRAM:    %x", $time, DDR3SDRAM_WriteData_Wide);
+		end
+		
+		if (DDR3SDRAM_ReadValid_Wide & DDR3SDRAM_ReadReady_Wide) begin
+			$display("[%m @ %t] Read DRAM:     %x", $time, DDR3SDRAM_ReadData_Wide);
+		end
+	end
+	
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
@@ -97,14 +139,14 @@ module testUORAM;
                             .CommandValid(			DDR3SDRAM_CommandValid),
                             .CommandReady(			DDR3SDRAM_CommandReady),
                             
-                            .DataIn(				DDR3SDRAM_WriteData),
-                            .DataInMask(			DDR3SDRAM_WriteMask),
-                            .DataInValid(			DDR3SDRAM_WriteValid),
-                            .DataInReady(			DDR3SDRAM_WriteReady),
+                            .DataIn(				DDR3SDRAM_WriteData_Wide),
+                            .DataInMask(			DDR3SDRAM_WriteMask), // this may get mis-aligned because of the shifters, but we won't change it anyway
+                            .DataInValid(			DDR3SDRAM_WriteValid_Wide),
+                            .DataInReady(			DDR3SDRAM_WriteReady_Wide),
                             
-                            .DataOut(				DDR3SDRAM_ReadData),
-                            .DataOutValid(			DDR3SDRAM_ReadValid),
-                            .DataOutReady(			1'b1));
+                            .DataOut(				DDR3SDRAM_ReadData_Wide),
+                            .DataOutValid(			DDR3SDRAM_ReadValid_Wide),
+                            .DataOutReady(			DDR3SDRAM_ReadReady_Wide));
 
     reg [64-1:0] CycleCount;
     initial begin
@@ -177,7 +219,7 @@ module testUORAM;
 			#(Cycle / 2.0) DataInValid <= 1;
 			GlobalData[AddrIn] = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = 512 + ($random % 512);
+				DataIn = AddrIn + i;//512 + ($random % 512);
 				GlobalData[AddrIn] <= (GlobalData[AddrIn] << FEDWidth) + DataIn;
 				while (!DataInReady)  #(Cycle);   
 				#(Cycle);
