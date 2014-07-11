@@ -35,12 +35,15 @@ module DRAMInitializer(
 	
 	parameter					IV =				IVINITValue;
 	
-	localparam					SpaceRemaining = 	BktHSize_RndBits - AESEntropy - BktHSize_ValidBits;
+	localparam					Space = 			BktHSize_RndBits - AESEntropy - BktHSize_ValidBits;
 	
-    localparam					EndOfTree =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
-    localparam					EndOfTreeAddr =  	EndOfTree * BktSize_DRWords;                                    
-		                                       
-	localparam					BAWidth =			`log2(EndOfTree);	
+    localparam					NumBuckets =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
+    localparam					LastBuckerAddr =  	NumBuckets * BktSize_DRWords; // DRAM burst address for last bucket               
+
+	localparam					NumBSTHFlits =		NumBuckets,
+								NumBEDHFlits =		NumBuckets * `divceil(DDRDWidth, BEDWidth), // num header flits in tree in BEDWidth chunks
+								BANWidth =			`log2(NumBSTHFlits),
+								BAWidth =			`log2(NumBEDHFlits); 
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -57,7 +60,7 @@ module DRAMInitializer(
 	output						DRAMCommandValid;
 	input						DRAMCommandReady;
 
-	output	[DDRDWidth-1:0]		DRAMWriteData;
+	output	[BEDWidth-1:0]		DRAMWriteData;
 	output						DRAMWriteDataValid;
 	input						DRAMWriteDataReady;
 	
@@ -71,11 +74,18 @@ module DRAMInitializer(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 
-	wire	[BAWidth-1:0] 		DRAMWriteCount;
+	wire	[BANWidth-1:0] 		DRAMWriteCount_Inner;
+	wire	[BAWidth-1:0] 		DRAMWriteCount_Outer;
+	
+	wire	[DDRDWidth-1:0]		DRAMWriteData_Pre;
+	wire						DRAMWriteDataValid_Pre, DRAMWriteDataReady_Pre;
+	wire						AddressDone, DataDone;	
 	
 	//--------------------------------------------------------------------------
-	//	Address generation
+	//	Commands
 	//-------------------------------------------------------------------------- 
+	
+	assign	Done =									AddressDone & DataDone;	
 	
 	Counter		#(			.Width(					DDRAWidth),
 							.Factor(				BktSize_DRWords))
@@ -87,24 +97,60 @@ module DRAMInitializer(
 							.In(					{DDRAWidth{1'bx}}),
 							.Count(					DRAMCommandAddress));
 							
-	Counter		#(			.Width(					BAWidth))
+	assign	DRAMCommand =							DDR3CMD_Write;
+	assign	DRAMCommandValid =						DRAMCommandAddress != LastBuckerAddr;
+	
+	assign	AddressDone =							~DRAMCommandValid;
+	
+	//--------------------------------------------------------------------------
+	//	Write data
+	//-------------------------------------------------------------------------- 
+	
+	Counter		#(			.Width(					BANWidth))
+				wrt_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Load(					1'b0),
+							.Enable(				DRAMWriteDataValid_Pre & DRAMWriteDataReady_Pre),
+							.In(					{BANWidth{1'bx}}),
+							.Count(					DRAMWriteCount_Inner));	
+	
+	assign	DRAMWriteData_Pre = 					{	
+														{Space{1'bx}},  
+														{BktHSize_ValidBits{1'b0}}, 
+														IV	
+													};
+	assign	DRAMWriteDataValid_Pre =				DRAMWriteCount_Inner != NumBSTHFlits;
+	
+	generate if (BEDWidth < DDRDWidth) begin:NARROW_BEDWIDTH
+		FIFOShiftRound #(	.IWidth(				DDRDWidth),
+							.OWidth(				BEDWidth))
+				in_DR_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMWriteData_Pre),
+							.InValid(				DRAMWriteDataValid_Pre),
+							.InAccept(				DRAMWriteDataReady_Pre),
+							.OutData(				DRAMWriteData),
+							.OutValid(				DRAMWriteDataValid),
+							.OutReady(				DRAMWriteDataReady));
+							
+		Counter		#(		.Width(					BAWidth))
 				wrt_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Load(					1'b0),
 							.Enable(				DRAMWriteDataValid & DRAMWriteDataReady),
 							.In(					{BAWidth{1'bx}}),
-							.Count(					DRAMWriteCount));							
-	
-	assign	DRAMCommandValid =						DRAMCommandAddress != EndOfTreeAddr;
-	assign	DRAMWriteDataValid =					DRAMWriteCount != EndOfTree;
-	assign	Done =									~DRAMCommandValid & ~DRAMWriteDataValid;
-	
-	assign	DRAMCommand =							DDR3CMD_Write;
-	
-	assign	DRAMWriteData = 						{	{SpaceRemaining{1'bx}},  
-														{BktHSize_ValidBits{1'b0}}, 
-														IV	};
+							.Count(					DRAMWriteCount_Outer));
+
+		assign	DataDone =							DRAMWriteCount_Outer == NumBEDHFlits;
+	end else begin:WIDE_BEDWIDTH
+		assign	DRAMWriteData =						DRAMWriteData_Pre;
+		assign	DRAMWriteDataValid =				DRAMWriteDataValid_Pre;
+		assign	DRAMWriteDataReady_Pre =			DRAMWriteDataReady;
+		
+		assign	DataDone =							DRAMWriteCount_Inner == NumBEDHFlits;
+	end endgenerate	
 	
 	//--------------------------------------------------------------------------	
 endmodule

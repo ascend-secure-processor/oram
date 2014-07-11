@@ -81,10 +81,10 @@ module PathORAMBackend(
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
 	
-	input	[DDRDWidth-1:0]	DRAMReadData;
+	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
 	
-	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[BEDWidth-1:0]	DRAMWriteData;
 	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
@@ -95,7 +95,7 @@ module PathORAMBackend(
 	
 	// Backend - CC
 
-	wire 	[DDRDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
+	wire 	[BEDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
 
@@ -103,21 +103,13 @@ module PathORAMBackend(
 	
 	// CC - AES
 
-    (* mark_debug = "TRUE" *)	wire 	[DDRDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
+    (* mark_debug = "TRUE" *)	wire 	[BEDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
 
-	// AES - PHY
-
-	wire 	[DDRDWidth-1:0]	BED_DRAMReadData;
-	wire					BED_DRAMReadDataValid, BED_DRAMReadDataReady;
-	
-	wire 	[DDRDWidth-1:0]	BED_DRAMWriteData;
-	wire					BED_DRAMWriteDataValid, BED_DRAMWriteDataReady;
-	
 	// PHY - DRAM
 	
-	wire	[DDRDWidth-1:0]	PBF_DRAMReadData;
+	wire	[BEDWidth-1:0]	PBF_DRAMReadData;
 	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;	
 	
 	// REW
@@ -134,7 +126,7 @@ module PathORAMBackend(
 	(* mark_debug = "TRUE" *)	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn, BOIFromCC;
 	(* mark_debug = "TRUE" *)	wire 					IVRequest, IVWrite;
 	wire 	[PathBufAWidth-1:0]	IVAddress;
-	wire 	[DDRDWidth-1:0]  DataFromIV, DataToIV;
+	wire 	[BEDWidth-1:0]  DataFromIV, DataToIV;
 
 	wire	[AESEntropy-1:0] CC_ROIBV;
 	wire	[ORAML:0]		 CC_ROIBID;
@@ -377,13 +369,13 @@ module PathORAMBackend(
 							.BEDataInValid(			AES_DRAMWriteDataValid), 
 							.BEDataInReady(			AES_DRAMWriteDataReady),	
 							
-							.DRAMReadData(			BED_DRAMReadData), 
-							.DRAMReadDataValid(		BED_DRAMReadDataValid), 
-							.DRAMReadDataReady(		BED_DRAMReadDataReady),
+							.DRAMReadData(			PBF_DRAMReadData), 
+							.DRAMReadDataValid(		PBF_DRAMReadDataValid), 
+							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
 							
-							.DRAMWriteData(			BED_DRAMWriteData), 
-							.DRAMWriteDataValid(	BED_DRAMWriteDataValid), 
-							.DRAMWriteDataReady(	BED_DRAMWriteDataReady));
+							.DRAMWriteData(			DRAMWriteData), 
+							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	end else if (EnableAES) begin:BASIC_AES
 		AESPathORAM #(		.ORAMB(					ORAMB), // TODO which of these params are really needed?
 							.ORAMU(					ORAMU),
@@ -397,13 +389,13 @@ module PathORAMBackend(
 				aes(		.Clock(					Clock),
 							.Reset(					Reset),
 							
-							.DRAMReadData(			BED_DRAMReadData), 
-							.DRAMReadDataValid(		BED_DRAMReadDataValid), 
-							.DRAMReadDataReady(		BED_DRAMReadDataReady),
+							.DRAMReadData(			PBF_DRAMReadData), 
+							.DRAMReadDataValid(		PBF_DRAMReadDataValid), 
+							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
 							
-							.DRAMWriteData(			BED_DRAMWriteData), 
-							.DRAMWriteDataValid(	BED_DRAMWriteDataValid), 
-							.DRAMWriteDataReady(	BED_DRAMWriteDataReady),
+							.DRAMWriteData(			DRAMWriteData), 
+							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+							.DRAMWriteDataReady(	DRAMWriteDataReady),
 													
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
@@ -417,32 +409,32 @@ module PathORAMBackend(
 	end else begin:NO_AES
 	`ifdef ASIC
 	// TODO this is a hack: just because we don't care about "modeling" AES latency in ASIC
-	assign	AES_DRAMReadData =						BED_DRAMReadData;
-	assign	AES_DRAMReadDataValid =					BED_DRAMReadDataValid;
+	assign	AES_DRAMReadData =						PBF_DRAMReadData;
+	assign	AES_DRAMReadDataValid =					PBF_DRAMReadDataValid;
 	assign	DRAMReadDataReady =						AES_DRAMReadDataReady;
 	
 	assign	DRAMWriteData =							AES_DRAMWriteData;
 	assign	DRAMWriteDataValid =					AES_DRAMWriteDataValid;
-	assign	AES_DRAMWriteDataReady =				BED_DRAMWriteDataReady;
+	assign	AES_DRAMWriteDataReady =				DRAMWriteDataReady;
 	`else
 	// These buffers are here so that we can model AES timing.  If you 
 	// don't, comment them out ;-)
 
 	localparam				AESLatency =			21 + 8; // assuming tiny_aes		
-			
-	FIFORAM	#(				.Width(					DDRDWidth),
+	
+	FIFORAM	#(				.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
 		indelay(			.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				BED_DRAMReadData),
-							.InValid(				BED_DRAMReadDataValid),
-							.InAccept(				BED_DRAMReadDataReady),
+							.InData(				PBF_DRAMReadData),
+							.InValid(				PBF_DRAMReadDataValid),
+							.InAccept(				PBF_DRAMReadDataReady),
 							.OutData(				AES_DRAMReadData),
 							.OutSend(				AES_DRAMReadDataValid),
 							.OutReady(				AES_DRAMReadDataReady));
 							
-	FIFORAM	#(				.Width(					DDRDWidth),
+	FIFORAM	#(				.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
 		outdelay(			.Clock(					Clock),
@@ -450,38 +442,12 @@ module PathORAMBackend(
 							.InData(				AES_DRAMWriteData),
 							.InValid(				AES_DRAMWriteDataValid),
 							.InAccept(				AES_DRAMWriteDataReady),
-							.OutData(				BED_DRAMWriteData),
-							.OutSend(				BED_DRAMWriteDataValid),
-							.OutReady(				BED_DRAMWriteDataReady));
+							.OutData(				DRAMWriteData),
+							.OutSend(				DRAMWriteDataValid),
+							.OutReady(				DRAMWriteDataReady));
 	`endif
 	end endgenerate
-	//--------------------------------------------------------------------------
-	
-	//--------------------------------------------------------------------------
-	//	DRAM->Backend width shifters
-	//--------------------------------------------------------------------------
-	
-	FIFOShiftRound #(		.IWidth(				DDRDWidth), // TODO change to MEMWidth
-							.OWidth(				BEDWidth))
-				in_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				PBF_DRAMReadData),
-							.InValid(				PBF_DRAMReadDataValid),
-							.InAccept(				PBF_DRAMReadDataReady),
-							.OutData(				BED_DRAMReadData),
-							.OutValid(				BED_DRAMReadDataValid),
-							.OutReady(				BED_DRAMReadDataReady));
-							
-	FIFOShiftRound #(		.IWidth(				DDRDWidth), // TODO change to MEMWidth
-							.OWidth(				BEDWidth))
-				out_shft(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				BED_DRAMWriteData),
-							.InValid(				BED_DRAMWriteDataValid),
-							.InAccept(				BED_DRAMWriteDataReady),
-							.OutData(				DRAMWriteData),
-							.OutValid(				DRAMWriteDataValid),
-							.OutReady(				DRAMWriteDataReady));								
+	//--------------------------------------------------------------------------						
 	
 	//--------------------------------------------------------------------------	
 	//	DRAM Read Interface
@@ -518,7 +484,7 @@ module PathORAMBackend(
 	end endgenerate
 	*/
 		
-	FIFORAM		#(			.Width(					DDRDWidth),
+	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts)
 							`ifdef ASIC , .ASIC(1) `endif)
 				in_P_buf(	.Clock(					Clock),

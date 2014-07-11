@@ -29,8 +29,7 @@ module StashToDRAM(
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	
-	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth,
-							Space =					RHWidth - BktHSize_RawBits,
+	localparam				Space =					RHWidth - BktHSize_RawBits,
 							BBEDWidth =				`log2(BktSize_BEDChunks);
 	
 	//--------------------------------------------------------------------------
@@ -78,7 +77,7 @@ module StashToDRAM(
 	wire					PayloadOutValid, PayloadOutReady;	
 	
 	wire 					ReadingHeader;		
-	wire	[BEDWidth-1:0]	HeaderUp;
+	wire	[RHWidth-1:0]	HeaderUp;
 							
 	wire	[BBEDWidth-1:0] BucketCtr;
 				

@@ -63,7 +63,7 @@ module DRAMToStash(
 	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	
-	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth;
+	localparam				BCWidth =				`log2(ORAMZ);
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -99,12 +99,11 @@ module DRAMToStash(
 	//	Wires & Regs
 	//-------------------------------------------------------------------------- 
 	
-	wire					HeaderValid, PayloadValid, ReadingPayload;
+	wire					HeaderValid, PayloadValid;
 	
 	wire					BucketTransition, BlockTransition;
-							
-	wire	[BEDWidth-1:0]	DRAMData_Inner;
-	wire					DRAMValid_Inner;
+	wire	[BCWidth-1:0] 	CurrentBlock;
+	wire	[RHWidth-1:0]	Header_Wide;
 	
 	wire	[ORAMZ-1:0] 	HeaderDown_ValidBits;
 	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
@@ -133,75 +132,46 @@ module DRAMToStash(
 	//	Shifters
 	//--------------------------------------------------------------------------	
 	
-	CountAlarm  #(  		.Threshold(             BktSize_BEDChunks))
-				in_bkt_cnt(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Enable(				DRAMValid & DRAMReady),
-							.Done(					BucketTransition));
+	assign	DRAMReady = 							StashReady;
 	
-	generate if (BEDWidth < BktHSize_RawBits) begin:NARROW_BEDWIDTH
-		// NOTE: this isn't the optimal ASIC design because we have so many 
-		// flops.  But I don't think it matters much in overall area...
-	
-		FIFOShiftRound #(	.IWidth(				BEDWidth),
-							.OWidth(				RHWidth))
-				in_DR_shft(	.Clock(					Clock),
+	assign	PayloadValid = 							DRAMValid && HeaderValid;
+
+	FIFOShiftRound #(		.IWidth(				BEDWidth),
+							.OWidth(				RHWidth),
+							.Register(				1))
+				in_H_SP(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMData),
-							.InValid(				HeaderValid),
+							.InValid(				DRAMValid & ~BucketTransition),
 							.InAccept(				),
-							.OutData(			    DRAMData_Inner),
-							.OutValid(				DRAMValid_Inner),
-							.OutReady(				1'b1));
-	end else begin:WIDE_BEDWIDTH
-		assign	DRAMData_Inner =					DRAMData;
-		assign	DRAMValid_Inner =					DRAMValid;
-	end endgenerate
+							.OutData(			    Header_Wide),
+							.OutValid(				HeaderValid),
+							.OutReady(				BucketTransition));
 
-	assign	DRAMReady = 							StashReady;	
+	assign	HeaderDown_ValidBits =					Header_Wide[BktHVStart+BigVWidth-1:BktHVStart];
+	assign	HeaderDown_PAddrs =						Header_Wide[BktHUStart+BigUWidth-1:BktHUStart];
+	assign	HeaderDown_Leaves =						Header_Wide[BktHLStart+BigLWidth-1:BktHLStart];
 	
-	Register1b pheader(Clock, Reset || BucketTransition, DRAMValid_Inner, ReadingPayload);					
-								
-	assign	HeaderValid =							DRAMValid_Inner && ~ReadingPayload;
-	assign	PayloadValid = 							DRAMValid && 		ReadingPayload;
-
-	assign	HeaderDown_ValidBits =					DRAMData_Inner[BktHVStart+BigVWidth-1:BktHVStart];
-	assign	HeaderDown_PAddrs =						DRAMData_Inner[BktHUStart+BigUWidth-1:BktHUStart];
-	assign	HeaderDown_Leaves =						DRAMData_Inner[BktHLStart+BigLWidth-1:BktHLStart];
+	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
+	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_PAddrs, 		HeaderDown_PAddr);
+	Mux	#(.Width(ORAML), 	.NPorts(ORAMZ), .SelectCode(0)) L_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_Leaves, 		HeaderDown_Leaf);
 	
-	ShiftRegister #(		.PWidth(				BigUWidth),
-							.SWidth(				ORAMU))
-				in_U_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					HeaderValid), 
-							.Enable(				BlockTransition), 
-							.PIn(					HeaderDown_PAddrs), 
-							.SIn(					{ORAMU{1'bx}}),
-							.SOut(					HeaderDown_PAddr));							
-	ShiftRegister #(		.PWidth(				BigLWidth),
-							.SWidth(				ORAML))
-				in_L_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					HeaderValid), 
-							.Enable(				BlockTransition), 
-							.PIn(					HeaderDown_Leaves), 
-							.SIn(					{ORAML{1'bx}}),
-							.SOut(					HeaderDown_Leaf));
-	ShiftRegister #(		.PWidth(				ORAMZ),
-							.SWidth(				1))
-				in_V_shft(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					HeaderValid), 
-							.Enable(				BlockTransition), 
-							.PIn(					HeaderDown_ValidBits), 
-							.SIn(					{ORAML{1'bx}}),
-							.SOut(					HeaderDown_ValidBit));							
-
 	CountAlarm  #(  		.Threshold(             BlkSize_BEDChunks))
 				valid_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				PayloadValid && StashReady),
 							.Done(					BlockTransition));
+	CountAlarm  #(  		.Threshold(             ORAMZ))
+				blk_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				BlockTransition),
+							.Count(					CurrentBlock));
+							
+	CountAlarm  #(  		.Threshold(             BktSize_BEDChunks))
+				in_bkt_cnt(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				DRAMValid & DRAMReady),
+							.Done(					BucketTransition));	
 	
 	//--------------------------------------------------------------------------
 	//	Path counters
@@ -213,9 +183,9 @@ module DRAMToStash(
 	REWStatCtr	#(			.USE_REW(				EnableREW),
 							.ORAME(					ORAME),
 							.Overlap(				0),
-							.RW_R_Chunk(			PathPSize_DRBursts),
+							.RW_R_Chunk(			PathPSize_BEDChunks),
 							.RW_W_Chunk(			0),
-							.RO_R_Chunk(			BktPSize_DRBursts),
+							.RO_R_Chunk(			BktPSize_BEDChunks),
 							.RO_W_Chunk(			0))
 
 		commit_count(		.Clock(					Clock),

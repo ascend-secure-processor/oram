@@ -70,8 +70,8 @@ module TinyORAMCore(
 							ORAMC =					10,
 							ORAME =					5;  // TODO change REW E to 4
 
-	parameter				FEDWidth =				`ifdef ASIC 64 `else 512 `endif,
-							BEDWidth =				`ifdef ASIC 64 `else 512 `endif;
+	parameter				FEDWidth =				`ifdef ASIC 64 `else 64 `endif,
+							BEDWidth =				`ifdef ASIC 64 `else 64 `endif;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
@@ -125,10 +125,10 @@ module TinyORAMCore(
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
 	
-	input	[DDRDWidth-1:0]	DRAMReadData;
+	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
 	
-	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[BEDWidth-1:0]	DRAMWriteData;
 	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;	
@@ -162,7 +162,7 @@ module TinyORAMCore(
 			if (DDRDWidth < BEDWidth || 
 				DebugDRAMReadTiming || // TODO this is commented out in backend right now ...
 				DDRDWidth % BEDWidth != 0) begin
-				$display("[%m] ERROR: Illegal parameter setting.");
+				$display("[%m] ERROR: Illegal parameter setting."); // See BucketLocal.vh for more information.
 				$finish;
 			end
 			

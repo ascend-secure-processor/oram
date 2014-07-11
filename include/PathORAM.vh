@@ -21,12 +21,8 @@
 								
 	parameter				FEDWidth =				PINIT, 	// data width of frontend busses (reading/writing from/to stash, LLC network interface width)
 															// This is typically (but doesn't have to be) <= BEDWidth
-							BEDWidth =				PINIT, 	// backend datapath width (AES bits/cycle, should be == to MEMWidth if possible)
-							MEMWidth =				PINIT;	// memory (e.g., DRAM) bus width
-															// Note: 	- Specifying 	BEDWidth < MEMWidth will cause TinyORAM area and bandwidth to decrease proportionally
-															//							BEDWidth == MEMWidth means ORAM will rate match memory
-															//							BEDWidth > MEMWidth is bogus
-															
+							BEDWidth =				PINIT; 	// backend datapath width (access latency is \propto Path size / BEDWidth)
+					
 	parameter				Overclock = 			PINIT; 	// Pipeline various operations inside the stash (needed for 200 Mhz operation)
 								
 	parameter				EnableAES =				PINIT, 	// Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)

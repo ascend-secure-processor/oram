@@ -231,8 +231,10 @@ module StashCore(
 	wire					StashP_WE;
 	wire					StashP_EN;
 	
+	`ifdef ASIC
 	wire	[ENWWidth-1:0]	StashC_DataIn_Wide, StashC_DataOut_Wide;
 	wire	[ENWidth-1:0]	StashC_RODataOut_Pre, StashC_DataOut_Pre;
+	`endif
 	
 	wire	[SEAWidth-1:0]	StashC_Address;
 	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;

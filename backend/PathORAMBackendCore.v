@@ -89,11 +89,11 @@ module PathORAMBackendCore(
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
 	
-	input	[DDRDWidth-1:0]	DRAMReadData;
+	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
 	output					DRAMReadDataReady;
 	
-	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[BEDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -149,7 +149,7 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_ReturnData;
 	(* mark_debug = "FALSE" *)	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
-	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	Stash_DRAMWriteData;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_DRAMWriteData;
 	(* mark_debug = "FALSE" *)	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
 	
 	(* mark_debug = "FALSE" *)	wire					StashAlmostFull;
@@ -160,7 +160,7 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
 	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
 
-	(* mark_debug = "FALSE" *)	wire	[DDRDWidth-1:0]	DRAMInit_DRAMWriteData;
+	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	DRAMInit_DRAMWriteData;
 	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
 
 	(* mark_debug = "FALSE" *)	wire					DRAMInitializing;
@@ -221,13 +221,6 @@ module PathORAMBackendCore(
 		reg [STWidth-1:0] CS_Delayed;
 		integer WriteCount_Sim = 0;
 		reg	StartedFirstAccess = 1'b0;
-
-		initial begin
-			if (BEDWidth > DDRDWidth) begin
-				$display("[%m @ %t] ERROR: BEDWidth should never be > DDRDWidth", $time);
-				$finish;
-			end
-		end
 
 		always @(posedge Clock) begin
 			CS_Delayed <= CS;
@@ -509,7 +502,7 @@ module PathORAMBackendCore(
 		assign	DRAMInit_DRAMCommand =				DDR3CMD_Write;
 		assign	DRAMInit_DRAMCommandValid =			1'b0;
 
-		assign	DRAMInit_DRAMWriteData =			{DDRDWidth{1'bx}};
+		assign	DRAMInit_DRAMWriteData =			{BEDWidth{1'bx}};
 		assign	DRAMInit_DRAMWriteDataValid =		1'b0;
 	end else begin:DRAM_INIT
 		DRAMInitializer #(	.ORAMB(					ORAMB),

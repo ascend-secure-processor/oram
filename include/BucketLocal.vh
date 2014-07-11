@@ -25,7 +25,7 @@
 	`endif
 
 	//--------------------------------------------------------------------------
-	//	Raw parameters
+	//	Raw bit fields
 	//--------------------------------------------------------------------------	
 	
 	// Header flit
@@ -38,28 +38,19 @@
 							BktHUStart =			BktHVStart + BktHSize_ValidBits, // at what position do the U's start?
 							BktHLStart =			BktHUStart + BigUWidth, // at what position do the U's start?
 							BktHSize_RawBits = 		BktHLStart + BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
-	
-	localparam				BktPSize_RawBits =		ORAMZ * ORAMB;
-
-	//--------------------------------------------------------------------------
-	//	Quantities in terms of BEDWidth
-	//--------------------------------------------------------------------------
-
-	// BEDWidth/FEDWidth-related quantities
-	localparam				BlkSize_BEDChunks =		`divceil(ORAMB, BEDWidth),
-							BktHSize_BEDChunks =	`divceil(BktHSize_RawBits, BEDWidth),
-							BktPSize_BEDChunks =	BlkSize_BEDChunks * ORAMZ,
-							BktSize_BEDChunks =		BktHSize_BEDChunks + BktPSize_BEDChunks,
-							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
 
 	//--------------------------------------------------------------------------
 	//	Quantities in terms of the Memory/DRAM width
 	//--------------------------------------------------------------------------
 
-	// TODO these should get phased out as we push more of the design to BEDWidth ...
+	// Now, we align bitfields to DDR3 burst lengths.  This means (for BEDWidth 
+	// == DDRDWidth) that we won't need expensive re-alignment logic in ORAM.  
+	// For the BEDWidth < DDRDWidth case, we will lose bandwidth if ORAMB % 
+	// DDRDWidth != 0.
 
-	localparam				BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
-							BktPSize_DRBursts =		`divceil(BktPSize_RawBits, DDRDWidth),
+	localparam				BlkSize_DRBursts =		`divceil(ORAMB, DDRDWidth),
+							BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
+							BktPSize_DRBursts =		ORAMZ * BlkSize_DRBursts,
 							BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth, // = 512 for all configs we care about
 							BktPSize_RndBits =		BktPSize_DRBursts * DDRDWidth;	
 							
@@ -68,8 +59,23 @@
 							BktSize_DRWords =		BktSize_RndBits / DDRDQWidth; // = E.g., for Z = 5, BktSize_TotalRnd = 3072 and BktSize_DDRWords = 48
 
 	// ... and associated helper params
-	localparam				BlkSize_DRBursts =		`divceil(ORAMB, DDRDWidth),
+	localparam				
 							PathSize_DRBursts =		(ORAML + 1) * BktSize_DRBursts,
 							PathPSize_DRBursts =	(ORAML + 1) * BktPSize_DRBursts,
 							BBSTWidth =				`log2(BktSize_DRBursts), // Block DRAM burst width
-							PBSTWidth =				`log2(PathSize_DRBursts); // Path DRAM burst width							
+							PBSTWidth =				`log2(PathSize_DRBursts); // Path DRAM burst width		
+	
+	//--------------------------------------------------------------------------
+	//	Quantities in terms of BEDWidth
+	//--------------------------------------------------------------------------
+
+	// BEDWidth/FEDWidth-related quantities
+	localparam				BlkSize_BEDChunks =		BlkSize_DRBursts * `divceil(DDRDWidth, BEDWidth),
+							BktHSize_BEDChunks =	`divceil(BktHSize_RndBits, BEDWidth),
+							BktPSize_BEDChunks =	`divceil(BktPSize_RndBits, BEDWidth),
+							BktSize_BEDChunks =		BktHSize_BEDChunks + BktPSize_BEDChunks,
+							PathPSize_BEDChunks =	(ORAML + 1) * BktPSize_BEDChunks,
+							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
+
+	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth;
+	

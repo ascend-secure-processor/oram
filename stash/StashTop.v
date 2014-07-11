@@ -84,11 +84,11 @@ module StashTop(
 	//	Backend Interface
 	//--------------------------------------------------------------------------
 	
-	input	[DDRDWidth-1:0]	DRAMReadData;
+	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
 	output					DRAMReadDataReady;
 	
-	output	[DDRDWidth-1:0]	DRAMWriteData;
+	output	[BEDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 	
