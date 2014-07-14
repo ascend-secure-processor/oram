@@ -57,7 +57,7 @@ module TinyORAMCore(
 	parameter				EnablePLB = 			1,
 							EnableREW =				`ifdef ASIC 0 `else 0 `endif,
 							EnableAES =				`ifdef ASIC 0 `else 0 `endif,
-							EnableIV =				`ifdef ASIC 0 `else 0 `endif;
+   							EnableIV =				`ifdef ASIC 0 `else 0 `endif;
 	
 	// ORAM
 
@@ -71,7 +71,7 @@ module TinyORAMCore(
 							ORAME =					5;  // TODO change REW E to 4
 
 	parameter				FEDWidth =				`ifdef ASIC 64 `else 64 `endif,
-							BEDWidth =				`ifdef ASIC 64 `else 64 `endif;
+							BEDWidth =				`ifdef ASIC 64 `else 512 `endif;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,

@@ -82,7 +82,7 @@ module testUORAM;
 	//--------------------------------------------------------------------------
     parameter   InBufDepth = 6,
                 OutInitLat = 30,
-                OutBandWidth = 100;
+                OutBandWidth = 57;
 	
 	//always @(posedge Clock) begin
 	//	if (DDR3SDRAM_ReadValid) $display("DRAM read data: %x", DDR3SDRAM_ReadData);
