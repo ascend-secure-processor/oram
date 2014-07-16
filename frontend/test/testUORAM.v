@@ -11,6 +11,7 @@ module testUORAM;
 	parameter                   NumValidBlock = 	1 << ORAML;	
 	parameter                   Recursion = 		3;
     parameter                   PLBCapacity = 		8192 << 3;
+    parameter                   PRFPosMap =         0;
 
 	localparam  NN = 200;
 	localparam	nn = 73;

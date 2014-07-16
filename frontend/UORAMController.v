@@ -57,7 +57,7 @@ module UORAMController
     output CmdOutValid;
     output [BECMDWidth-1:0] CmdOut;
     output [ORAMU-1:0] AddrOut;
-    output [ORAML-1:0] OldLeaf, NewLeaf;
+    output [LeafOutWidth-1:0] OldLeaf, NewLeaf;
 
     // send data to backend
     input  StoreDataReady;
@@ -139,7 +139,8 @@ module UORAMController
                 .NumValidBlock(     NumValidBlock),
                 .Recursion(         Recursion),
                 .EnablePLB(			EnablePLB),
-				.PLBCapacity(       PLBCapacity))
+				.PLBCapacity(       PLBCapacity),
+				.PRFPosMap(			PRFPosMap))
         PPP (   .Clock(             Clock),
                 .Reset(             Reset),
                 .CmdReady(          PPPCmdReady),

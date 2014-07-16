@@ -35,8 +35,7 @@ module PosMapPLB
     output Valid;
     output reg Hit;
     output reg UnInit;
-    output reg [ORAML-1:0] OldLeafOut;
-    output reg [ORAML-1:0] NewLeafOut;    
+    output reg [LeafOutWidth-1:0] OldLeafOut, NewLeafOut;   
     output reg Evict;
     output reg [ORAMU-1:0] AddrOut;
     // evict and refill data
@@ -70,23 +69,13 @@ module PosMapPLB
 	// PRNG to generate new leaf
 	(* mark_debug = "TRUE" *) wire [LeafWidth-1:0] NewLeafIn_Pre;
     (* mark_debug = "TRUE" *) wire [ORAML-1:0] NewLeafIn;
-    (* mark_debug = "TRUE" *) wire NewLeafValid, NewLeafAccept;
-    PRNG #(	.RandWidth(	LeafWidth))
-        LeafGen (   .Clock(Clock), 
-					.Reset(Reset),
-                    .RandOutReady(NewLeafAccept),
-                    .RandOutValid(NewLeafValid),
-                    .RandOut(NewLeafIn_Pre),
-					.SecretKey(128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73)
-                );
-	assign NewLeafIn = NewLeafIn_Pre[ORAML-1:0];
-
+	
     // ============================== onchip PosMap ====================================
     (* mark_debug = "TRUE" *) wire PosMapEnable, PosMapWrite;
     (* mark_debug = "TRUE" *) wire [LogFinalPosMapEntry-1:0] PosMapAddr;
-    (* mark_debug = "TRUE" *) wire [ORAML:0] PosMapIn, PosMapOut;
+    (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PosMapIn, PosMapOut;
 
-    RAM #(.DWidth(ORAML+1), .AWidth(LogFinalPosMapEntry) `ifdef ASIC , .ASIC(1) `endif )
+    RAM #(.DWidth(LeafWidth), .AWidth(LogFinalPosMapEntry) `ifdef ASIC , .ASIC(1) `endif )
         PosMap (    .Clock(Clock), .Reset(Reset), 
                     .Enable(PosMapEnable), .Write(PosMapWrite), .Address(PosMapAddr), 
                     .DIn(PosMapIn), .DOut(PosMapOut)
@@ -113,7 +102,7 @@ module PosMapPLB
     assign PosMapEnable = PosMapInit || PosMapSelect || PosMapBusy;
     assign PosMapWrite = PosMapInit || PosMapBusy;        
     assign PosMapAddr = PosMapInit ? InitAddr : AddrIn - FinalPosMapStart;
-    assign PosMapIn = {!PosMapInit, NewLeafIn};     // if init, invalidate; otherwise, validate
+    assign PosMapIn = PosMapInit ? {LeafWidth{1'b0}} : {1'b1, NewLeafIn};	// if init, invalidate; otherwise, validate		
     // ===============================================================================
 
     // ============================================= PLB =============================
@@ -153,34 +142,56 @@ module PosMapPLB
     assign EvictDataOut = PLBDOut;
                                                       
     // PLB control and input	
-    (* mark_debug = "TRUE" *) wire PLBRefill;
-	assign PLBRefill = (CmdTransfer && CmdIsRefill) || (!CmdTransfer && LastCmd == CacheRefill);   // Refill start or Refilling	
+    (* mark_debug = "TRUE" *) wire PLBRefill, PLBInitRefill;
+	assign PLBRefill = (CmdTransfer ? Cmd : LastCmd) == CacheRefill;   // Refill start or Refilling
+	assign PLBInitRefill = (CmdTransfer ? Cmd : LastCmd) == CacheInitRefill;
     assign PLBEnable = CmdTransfer && !InOnChipPosMap;
     assign PLBCmd = CmdIsInitRefill ? CacheRefill : Cmd; 
     assign PLBAddrIn = (CmdIsRefill || CmdIsInitRefill) ? (AddrIn >> LogLeafInBlock) << LogLeafInBlock : AddrIn;
-    assign PLBDIn = PLBRefill ? DIn : {CmdTransfer && CmdIsWrite, NewLeafIn};
-				// Refill --> data from backend; Write --> {1'b1, NewLeafIn}; InitRefill --> {1'b0, xxxx}
+    assign PLBDIn = PLBRefill ? DIn : PLBInitRefill ? {LeafWidth{1'b0}}
+						: {1'b1, NewLeafIn};
+				// Refill --> data from backend; Write --> {1'b1, NewLeafIn}; InitRefill --> {1'b0, xxxx} (32'b0 if PRF mode)
     assign PLBLeafIn = NewLeafOut;    
 				// CacheRefill must use NewLeafOut (not NewLeafIn), the previous leaf that's still in store.
 	
 `ifdef SIMULATION
-`ifndef ASIC
-	always @ (posedge Clock) begin
-		if (PLBRefill && PLB.RefillWriting && !DInValid) begin // Note: PLB.RefillWriting causes ASIC tool to complain
-			$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
-			$finish;
+	`ifndef ASIC
+		always @ (posedge Clock) begin
+			if (PLBRefill && PLB.RefillWriting && !DInValid) begin // Note: PLB.RefillWriting causes ASIC tool to complain
+				$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");
+				$finish;
+			end
 		end
-	end
-`endif
+	`endif
 `endif	
-									  
-    // =============================================================================  
-    (* mark_debug = "TRUE" *) wire PPPHit;
-    assign PPPHit = PosMapValid || (PLBValid && PLBHit);
-       
-    assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;	// random leaf is used only on a write hit
-    assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
 
+    (* mark_debug = "TRUE" *) wire PPPHit;
+    assign PPPHit = PosMapValid || (PLBValid && PLBHit);									  
+    // =============================================================================  
+
+	// =================================== PRNG or PRF =============================	
+	wire NewLeafValid, NewLeafAccept;
+	generate if (PRFPosMap) begin
+		assign NewLeafValid = 1'b1;
+		assign NewLeafAccept = 1'bx;
+		assign NewLeafIn = (PosMapValid ? PosMapOut : PLBDOut) + 1;
+		
+	end else begin		
+		PRNG #(	.RandWidth(	LeafWidth))
+			LeafGen (   .Clock(Clock), 
+						.Reset(Reset),
+						.RandOutReady(NewLeafAccept),
+						.RandOutValid(NewLeafValid),
+						.RandOut(NewLeafIn_Pre),
+						.SecretKey(128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73)
+					);
+		assign NewLeafAccept = PPPHit && !Valid && LastCmd == CacheWrite;	// random leaf is used only on a write hit
+		assign NewLeafIn = NewLeafIn_Pre[ORAML-1:0];	  	
+	end endgenerate
+	 
+	// =============================================================================  	
+	  
+	assign CmdReady = !PosMapInit && !Busy && !PosMapBusy && PLBReady;        
 	Register1b ValidReg (	.Clock(		Clock), 
 							.Reset(		Reset || (Valid && OutReady)), 
 							.Set(		PosMapValid || PLBValid), 

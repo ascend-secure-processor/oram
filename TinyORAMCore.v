@@ -71,12 +71,12 @@ module TinyORAMCore(
 							ORAME =					5;  // TODO change REW E to 4
 
 	parameter				FEDWidth =				`ifdef ASIC 64 `else 64 `endif,
-							BEDWidth =				`ifdef ASIC 64 `else 512 `endif;
+							BEDWidth =				`ifdef ASIC 64 `else 64 `endif;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
-							PLBCapacity = 			8192 << 3; // 8KB PLB
-		
+							PLBCapacity = 			8192 << 3, // 8KB PLB
+							PRFPosMap =         	0;		
 	// Hardware
 
 	parameter				Overclock =				1;
@@ -191,14 +191,15 @@ module TinyORAMCore(
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	
-	UORAMController #(  	.ORAMU(         		ORAMU), 
+	Frontend #(  	.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
 							.NumValidBlock( 		NumValidBlock), 
 							.Recursion(     		Recursion),
 							.EnablePLB(				EnablePLB),
-							.PLBCapacity(   		PLBCapacity)) 
+							.PLBCapacity(   		PLBCapacity),
+							.PRFPosMap(				PRFPosMap)) 
 							
 				front_end(	.Clock(             	Clock), 
 							.Reset(					Reset), 
