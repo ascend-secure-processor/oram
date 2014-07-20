@@ -17,9 +17,10 @@ module StashTop(
 	StashAlmostFull,
 	
 	Command, CommandValid, CommandReady,
-	BECommand, PAddr, CurrentLeaf, RemappedLeaf, AccessIsDummy, AccessSkipsWriteback,
+	BECommand, PAddr, CurrentLeaf, RemappedLeaf, MAC, AccessIsDummy, AccessSkipsWriteback,
 
-	FEReadData, FEReadDataValid,
+	FEReadData, FEReadDataValid, FEReadMAC, FEReadComplete,
+							
 	FEWriteData, FEWriteDataValid, FEWriteDataReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
@@ -70,10 +71,13 @@ module StashTop(
 	input	[ORAMU-1:0]		PAddr;
 	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX 
 	input	[ORAML-1:0]		RemappedLeaf;
+	input	[ORAMH-1:0]		MAC;
 	input					AccessIsDummy;
 	input					AccessSkipsWriteback;
 	
 	output	[BEDWidth-1:0]	FEReadData;
+	output	[ORAMH-1:0]		FEReadMAC;
+	output					FEReadComplete;
 	output					FEReadDataValid;
 	
 	input	[BEDWidth-1:0]	FEWriteData;						
@@ -114,6 +118,7 @@ module StashTop(
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		PAddr_Internal;
 	wire	[ORAML-1:0]		CurrentLeaf_Internal;
 	wire	[ORAML-1:0]		RemappedLeaf_Internal;
+	wire	[ORAMH-1:0]		MAC_Internal;
 	wire					AccessIsDummy_Internal, AccessSkipsWriteback_Internal;
 	
 	// Read pipeline
@@ -125,6 +130,7 @@ module StashTop(
 	
 	wire	[ORAMU-1:0]		StashWritePAddr; 
 	wire	[ORAML-1:0]		StashWriteLeaf;
+	wire	[ORAMH-1:0]		StashWriteMAC;
 	
 	// Writeback pipeline
 
@@ -133,6 +139,7 @@ module StashTop(
 	
 	wire	[ORAMU-1:0]		StashReadPAddr; 
 	wire	[ORAML-1:0]		StashReadLeaf;
+	wire	[ORAMH-1:0]		StashReadMAC;
 	
 	wire					StashBlockReadComplete;	
 
@@ -278,6 +285,18 @@ module StashTop(
 							.In(					{BECommand, 			PAddr, 			CurrentLeaf, 			RemappedLeaf, 			AccessIsDummy,				AccessSkipsWriteback}),
 							.Out(					{BECommand_Internal, 	PAddr_Internal, CurrentLeaf_Internal, 	RemappedLeaf_Internal,	AccessIsDummy_Internal, 	AccessSkipsWriteback_Internal}));			
 
+	generate if (EnableIV) begin:MAC_MODE
+	Register	#(			.Width(					ORAMH))
+				becmd_mac(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				LatchBECommand),
+							.In(					MAC),
+							.Out(					MAC_Internal));			
+	end else begin:NO_MAC_MODE
+		assign	MAC_Internal =						{ORAMH{1'bx}};
+	end endgenerate
+						
 	//--------------------------------------------------------------------------
 	//	In Path
 	//--------------------------------------------------------------------------
@@ -288,6 +307,7 @@ module StashTop(
 							.ORAMZ(					ORAMZ),
 							.ORAME(					ORAME),
 							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV),
 							.EnableREW(				EnableREW))
 				in_convert(	.Clock(					Clock), 
 							.Reset(					Reset),
@@ -302,7 +322,8 @@ module StashTop(
 							.StashValid(			StashWriteValid), 
 							.StashReady(			StashWriteReady),
 							.StashPAddr(			StashWritePAddr), 
-							.StashLeaf(				StashWriteLeaf));
+							.StashLeaf(				StashWriteLeaf),
+							.StashMAC(				StashWriteMAC));
 	
 	//--------------------------------------------------------------------------
 	//	Stash
@@ -315,6 +336,7 @@ module StashTop(
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
 							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV),
 							.Overclock(				Overclock),
 							.ORAMUValid(			ORAMUValid),
 							.StashOutBuffering(		4), // this should be good enough ...
@@ -328,6 +350,7 @@ module StashTop(
 							.AccessCommand(			BECommand_Internal),
 							.RemapLeaf(				RemappedLeaf_Internal),
 							.AccessLeaf(			CurrentLeaf_Internal),
+							.AccessMAC(				MAC_Internal),
 							.AccessPAddr(			PAddr_Internal),
 							.AccessIsDummy(			AccessIsDummy_Internal),
 							.AccessSkipsWriteback(	AccessSkipsWriteback_Internal),
@@ -339,8 +362,9 @@ module StashTop(
 							.ReturnData(			FEReadData),
 							.ReturnPAddr(			), // not connected
 							.ReturnLeaf(			), // not connected
+							.ReturnMAC(				FEReadMAC),
 							.ReturnDataOutValid(	FEReadDataValid),
-							.BlockReturnComplete(	), // not connected
+							.BlockReturnComplete(	FEReadComplete),
 							
 							.UpdateData(			FEWriteData),
 							.UpdateDataInValid(		Stash_UpdateBlockValid),
@@ -350,6 +374,7 @@ module StashTop(
 							.EvictData(				FEWriteData),
 							.EvictPAddr(			PAddr_Internal),
 							.EvictLeaf(				RemappedLeaf_Internal),
+							.EvictMAC(				MAC_Internal),
 							.EvictDataInValid(		Stash_EvictBlockValid),
 							.EvictDataInReady(		Stash_EvictBlockReady),
 							.BlockEvictComplete(	AppendComplete),
@@ -359,11 +384,13 @@ module StashTop(
 							.WriteInReady(			StashWriteReady), 
 							.WritePAddr(			StashWritePAddr),
 							.WriteLeaf(				StashWriteLeaf),
+							.WriteMAC(				StashWriteMAC),
 							.BlockWriteComplete(	), 
 							
 							.ReadData(				StashReadData),
 							.ReadPAddr(				StashReadPAddr),
 							.ReadLeaf(				StashReadLeaf),
+							.ReadMAC(				StashReadMAC),
 							.ReadOutValid(			StashReadValid), 
 							.ReadOutReady(			StashReadReady), 
 							.BlockReadComplete(		StashBlockReadComplete),
@@ -382,7 +409,8 @@ module StashTop(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV))
 				out_convert(.Clock(					Clock), 
 							.Reset(					Reset),
 
@@ -391,6 +419,7 @@ module StashTop(
 							.StashReady(			StashReadReady),
 							.StashPAddr(			StashReadPAddr), 
 							.StashLeaf(				StashReadLeaf),
+							.StashMAC(				StashReadMAC),
 							.OperationComplete(		StashBlockReadComplete),					
 							
 							.DRAMData(				DRAMWriteData), 

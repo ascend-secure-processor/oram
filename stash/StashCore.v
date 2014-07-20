@@ -47,12 +47,12 @@ module StashCore(
   	Clock, Reset, PerAccessReset,
 	ResetDone,
 
-	InCommand, InSAddr, InPAddr, InLeaf,
+	InCommand, InSAddr, InPAddr, InLeaf, InMAC,
 	InHeaderUpdate, InHeaderRemove, 
 	InCommandValid, InCommandReady, InCommandComplete,
 
 	InData, InValid, InReady,
-	OutData, OutPAddr, OutLeaf, OutValid,
+	OutData, OutPAddr, OutLeaf, OutMAC, OutValid,
 
 	OutScanPAddr, OutScanLeaf, OutScanSAddr, OutScanAdd, 
 	OutScanValid, OutScanDone, OutScanStreaming,
@@ -117,6 +117,7 @@ module StashCore(
 	input	[SEAWidth-1:0]	InSAddr;
 	input	[ORAMU-1:0]		InPAddr;
 	input	[ORAML-1:0]		InLeaf;
+	input	[ORAMH-1:0]		InMAC;
 	/* 	Only used for header update command
 		SECURITY: InHeaderUpdate is redundant, but we will always do real/dummy 
 		header update to prevent timing variations (we could also just use a 
@@ -145,6 +146,7 @@ module StashCore(
 	output	[BEDWidth-1:0]	OutData;
 	output	[ORAMU-1:0]		OutPAddr;
 	output	[ORAML-1:0]		OutLeaf;
+	output	[ORAMH-1:0]		OutMAC;
 	output 					OutValid;
 
 	//--------------------------------------------------------------------------
@@ -495,7 +497,7 @@ module StashCore(
 				if (OutPAddr == DummyBlockAddress)
 					$display("[%m @ %t] Reading dummy block", $time);
 				else
-					$display("[%m @ %t] Reading [a=%x, l=%x, sloc=%d]", $time, OutPAddr, OutLeaf, StashE_Address_Delayed);
+					$display("[%m @ %t] Reading [a=%x, l=%x, h=%x, sloc=%d]", $time, OutPAddr, OutLeaf, OutMAC, StashE_Address_Delayed);
 		end	
 	`endif
 	
@@ -732,8 +734,8 @@ module StashCore(
 							.Enable(				1'b1),
 							.Write(					StashH_WE),
 							.Address(				StashE_Address),
-							.DIn(					{InPAddr, 		InLeaf}),
-							.DOut(					{OutPAddr_Pre, 	OutLeaf_Pre}));
+							.DIn(					{InMAC,		InPAddr, 		InLeaf}),
+							.DOut(					{OutMAC, 	OutPAddr_Pre, 	OutLeaf_Pre}));
 	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress 	: OutPAddr_Pre;
 	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeafLabel 		: OutLeaf_Pre;
 	

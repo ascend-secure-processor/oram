@@ -13,7 +13,7 @@ module StashToDRAM(
 	Clock, Reset,
 
 	StashData, StashValid, StashReady,
-	StashPAddr, StashLeaf,
+	StashPAddr, StashLeaf, StashMAC,
 	OperationComplete,
 	
 	DRAMData, DRAMValid, DRAMReady
@@ -45,6 +45,7 @@ module StashToDRAM(
 	input	[BEDWidth-1:0]	StashData;
 	input	[ORAMU-1:0]		StashPAddr;
 	input	[ORAML-1:0]		StashLeaf;
+	input	[ORAMH-1:0]		StashMAC;
 	input					StashValid;
 	output					StashReady;
 	input					OperationComplete;	
@@ -65,7 +66,8 @@ module StashToDRAM(
 
 	wire	[ORAMZ-1:0] 	HeaderUp_ValidBits;
 	wire	[BigUWidth-1:0]	HeaderUp_PAddrs;
-	wire	[BigLWidth-1:0]	HeaderUp_Leaves;	
+	wire	[BigLWidth-1:0]	HeaderUp_Leaves;
+	wire	[BigHWidth-1:0]	HeaderUp_MACs;
 
 	wire					WritebackBlockIsValid;
 	wire 					WritebackBlockCommit;
@@ -115,7 +117,17 @@ module StashToDRAM(
 							.Load(					1'b0), 
 							.Enable(				WritebackBlockCommit), 
 							.SIn(					StashLeaf), 
-							.POut(					HeaderUp_Leaves));							
+							.POut(					HeaderUp_Leaves));
+	generate if (EnableIV) begin:MAC
+		ShiftRegister #(	.PWidth(				BigHWidth),
+							.SWidth(				ORAMH))
+				out_H_shft(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				WritebackBlockCommit), 
+							.SIn(					StashMAC), 
+							.POut(					HeaderUp_MACs));							
+	end endgenerate
 	ShiftRegister #(		.PWidth(				ORAMZ),
 							.SWidth(				1))
 				out_V_shft(	.Clock(					Clock), 
@@ -126,7 +138,8 @@ module StashToDRAM(
 							.POut(					HeaderUp_ValidBits));
 						
 	assign	HeaderUp =								{	
-														{Space{1'b0}},
+														(EnableIV) ? 	{{Space{1'b0}}, HeaderUp_MACs} : 
+																		 {Space{1'b0}},
 														HeaderUp_Leaves,
 														HeaderUp_PAddrs,
 														{BktHWaste_ValidBits{1'b0}},

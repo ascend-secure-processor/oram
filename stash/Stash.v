@@ -27,23 +27,23 @@ module Stash(
 
 	IsIdle,
 	
-	RemapLeaf, AccessLeaf, AccessPAddr,
+	RemapLeaf, AccessLeaf, AccessPAddr, AccessMAC,
 	AccessIsDummy, AccessCommand,
 	StartAppend, StartScan, AccessSkipsWriteback, StartWriteback,
 		
-	ReturnData, ReturnPAddr, ReturnLeaf,
+	ReturnData, ReturnPAddr, ReturnLeaf, ReturnMAC,
 	ReturnDataOutValid, BlockReturnComplete,
 	
-	EvictData, EvictPAddr, EvictLeaf, 
+	EvictData, EvictPAddr, EvictLeaf, EvictMAC,
 	EvictDataInValid, EvictDataInReady, BlockEvictComplete,	
 	
 	UpdateData, 
 	UpdateDataInValid, UpdateDataInReady, BlockUpdateComplete,
  
-	WriteData, WritePAddr, WriteLeaf,
+	WriteData, WritePAddr, WriteLeaf, WriteMAC,
 	WriteInValid, WriteInReady, BlockWriteComplete,
 	
-	ReadData, ReadPAddr, ReadLeaf,
+	ReadData, ReadPAddr, ReadLeaf, ReadMAC,
 	ReadOutValid, ReadOutReady, BlockReadComplete, PathReadComplete,
 	
 	StashAlmostFull, StashOverflow, StashOccupancy
@@ -101,6 +101,7 @@ module Stash(
 	input	[ORAML-1:0]		RemapLeaf;
 	input	[ORAML-1:0]		AccessLeaf;
 	input	[ORAMU-1:0]		AccessPAddr;
+	input	[ORAMH-1:0]		AccessMAC;
 	/*	Controls the Return/Eviction interfaces 
 		Command code:
 			IsDummy ==	1		Command ==	X
@@ -127,6 +128,7 @@ module Stash(
 	output	[BEDWidth-1:0]	ReturnData;
 	output	[ORAMU-1:0]		ReturnPAddr;
 	output	[ORAML-1:0]		ReturnLeaf;
+	output	[ORAMH-1:0]		ReturnMAC;
 	output					ReturnDataOutValid;
 	//input					ReturnDataOutReady;	// reads are block DMAs
 	output					BlockReturnComplete;
@@ -138,6 +140,7 @@ module Stash(
 	input	[BEDWidth-1:0]	EvictData;
 	input	[ORAMU-1:0]		EvictPAddr;
 	input	[ORAML-1:0]		EvictLeaf;
+	input	[ORAMH-1:0]		EvictMAC;
 	input					EvictDataInValid;
 	output					EvictDataInReady;
 	output					BlockEvictComplete;	
@@ -158,6 +161,7 @@ module Stash(
 	input	[BEDWidth-1:0]	WriteData;
 	input	[ORAMU-1:0]		WritePAddr;
 	input	[ORAML-1:0]		WriteLeaf;
+	input	[ORAMH-1:0]		WriteMAC;
 	input					WriteInValid;
 	output					WriteInReady;	
 	/* Pulsed during the last cycle that a block is being written */
@@ -171,6 +175,7 @@ module Stash(
 	/* Set to DummyBlockAddress (see StashCore.constants) for dummy block. */
 	output	[ORAMU-1:0]		ReadPAddr;
 	output	[ORAML-1:0]		ReadLeaf;
+	output	[ORAMH-1:0]		ReadMAC;
 	output					ReadOutValid;
 	input					ReadOutReady;
 	/* Pulsed during last cycle that a block is being read */
@@ -218,6 +223,7 @@ module Stash(
 	wire	[BEDWidth-1:0]	Core_InData;
 	wire	[ORAMU-1:0]		Core_InPAddr;
 	wire	[ORAML-1:0]		Core_InLeaf;
+	wire	[ORAMH-1:0]		Core_InMAC;
 	wire					Core_InValid, Core_InReady;			
 	
 	wire					TurnoverUpdate;
@@ -225,6 +231,7 @@ module Stash(
 	wire	[BEDWidth-1:0]	Core_OutData;
 	wire	[ORAMU-1:0]		Core_OutPAddr;
 	wire	[ORAML-1:0]		Core_OutLeaf;
+	wire	[ORAMH-1:0]		Core_OutMAC;
 	wire					Core_OutValid;
 	
 	// ScanTable interface
@@ -565,7 +572,11 @@ module Stash(
 	assign	Core_InLeaf = 							(CSEvict) ? 		EvictLeaf : 
 													(CSTurnaround2) ? 	RemapLeaf : 
 																		WriteLeaf;
-							
+	
+	assign	Core_InMAC =							(CSEvict) ? 		EvictMAC : 
+													(CSTurnaround2) ? 	AccessMAC : 
+																		WriteMAC;
+	
 	assign	PerformCoreHeaderUpdate =				AccessStarted & ~AccessIsDummy & 
 													(	(AccessCommand == BECMD_Update) | 
 														(AccessCommand == BECMD_Read) |
@@ -611,6 +622,7 @@ module Stash(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV),
 							.Overclock(				Overclock))
 				core(		.Clock(					Clock), 
 							.Reset(					Reset),
@@ -624,11 +636,13 @@ module Stash(
 							.OutData(				Core_OutData),
 							.OutPAddr(				Core_OutPAddr),
 							.OutLeaf(				Core_OutLeaf),
+							.OutMAC(				Core_OutMAC),
 							.OutValid(				Core_OutValid),
 
 							.InSAddr(				Core_CommandSAddr),
 							.InPAddr(				Core_InPAddr),
 							.InLeaf(				Core_InLeaf),
+							.InMAC(					Core_InMAC),
 							.InHeaderUpdate(		PerformCoreHeaderUpdate),
 							.InHeaderRemove(		CoreHeaderRemove),
 							.InCommand(				Core_Command),
@@ -671,6 +685,7 @@ module Stash(
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
+							.EnableIV(				EnableIV),
 							.Overclock(				Overclock),
 							.BEDWidth(				BEDWidth)) 
 				scan_table(	.Clock(					Clock),
@@ -833,14 +848,14 @@ module Stash(
 							.OutSend(				ReadOutValid),
 							.OutReady(				ReadOutReady));
 
-	FIFORAM		#(			.Width(					ORAMU + ORAML),
+	FIFORAM		#(			.Width(					SHDWidth),
 							.Buffering(				StashOutBuffering))
 				out_H_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{Core_OutPAddr, Core_OutLeaf}),
+							.InData(				{Core_OutMAC, 	Core_OutPAddr, 	Core_OutLeaf}),
 							.InValid(				OutHBufferInValid),
 							.InAccept(				OutHBufferInReady),
-							.OutData(				{ReadPAddr, ReadLeaf}),
+							.OutData(				{ReadMAC, 		ReadPAddr, 		ReadLeaf}),
 							.OutSend(				OutHeaderValid),
 							.OutReady(				BlockReadCommit));		
 

@@ -1,4 +1,18 @@
 
+	`ifdef SIMULATION
+	initial begin
+		if (ORAMB == PINIT || 
+			ORAMU == PINIT ||
+			ORAML == PINIT ||
+			ORAMZ == PINIT ||
+			BEDWidth == PINIT ||
+			EnableIV == PINIT) begin
+			$display("[%m] ERROR: parameter uninitialized.");
+			$finish;
+		end
+	end
+	`endif
+
 	localparam					ORAMLP1 =			ORAML + 1; // the actual number of levels
 	localparam					BktAWidth =			`log2(ORAMLP1); // bucket lookup
 	localparam					BlocksOnPath =		ORAMLP1 * ORAMZ;
@@ -13,7 +27,7 @@
 	localparam					ChnkAWidth =		`max(1, `log2(NumChunks));
 	localparam					SEAWidth =			`log2(StashCapacity); // Stash entry address width (into header-based memories)
 	localparam					SDAWidth =			SEAWidth + ChnkAWidth; // addr width into data-based memories
-	localparam					SHDWidth =			ORAMU + ORAML; // Stash header width
+	localparam					SHDWidth =			ORAMU + ORAML + ((EnableIV) ? ORAMH : 0); // Stash header width
 
 	localparam					STAWidth =			`log2(BlocksOnPath); // ScanTable Address Width
 	localparam					STAP1Width =		STAWidth + 1;

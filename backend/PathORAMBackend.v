@@ -37,7 +37,6 @@ module PathORAMBackend(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
-	`include "SHA3Local.vh"
 	
 	parameter				ORAMUValid =			21;
 	
@@ -93,16 +92,10 @@ module PathORAMBackend(
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 	
-	// Backend - CC
-
-	wire 	[BEDWidth-1:0]	BE_DRAMWriteData, BE_DRAMReadData;
-	(* mark_debug = "TRUE" *)	wire					BE_DRAMWriteDataValid, BE_DRAMWriteDataReady;
-	(* mark_debug = "TRUE" *)	wire					BE_DRAMReadDataValid, BE_DRAMReadDataReady;	
+	// Backend - AES
 
     (* mark_debug = "FALSE" *)	wire                    DRAMInitComplete;
 	
-	// CC - AES
-
     (* mark_debug = "TRUE" *)	wire 	[BEDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
@@ -120,21 +113,7 @@ module PathORAMBackend(
 
 	(* mark_debug = "TRUE" *)	wire					ROStartCCValid, ROStartAESValid;
 	(* mark_debug = "TRUE" *)	wire					ROStartCCReady, ROStartAESReady;
-	
-	// Integrity verification
-		
-	(* mark_debug = "TRUE" *)	wire 					PathReady_IV, PathDone_IV, BOIReady_IV, BOIDone_IV, BucketOfITurn, BOIFromCC;
-	(* mark_debug = "TRUE" *)	wire 					IVRequest, IVWrite;
-	wire 	[PathBufAWidth-1:0]	IVAddress;
-	wire 	[BEDWidth-1:0]  DataFromIV, DataToIV;
 
-	wire	[AESEntropy-1:0] CC_ROIBV;
-	wire	[ORAML:0]		 CC_ROIBID;
-	
-	wire	[ORAMLogL-1:0]	BktOfIIdx;
-
-	wire					FromStashDataDone; // TODO remove?
-	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
@@ -193,13 +172,13 @@ module PathORAMBackend(
 							.DRAMCommandValid(		DRAMCommandValid),
 							.DRAMCommandReady(		DRAMCommandReady),			
 
-							.DRAMReadData(			BE_DRAMReadData),
-							.DRAMReadDataValid(		BE_DRAMReadDataValid),
-							.DRAMReadDataReady(		BE_DRAMReadDataReady),
+							.DRAMReadData(			AES_DRAMReadData),
+							.DRAMReadDataValid(		AES_DRAMReadDataValid),
+							.DRAMReadDataReady(		AES_DRAMReadDataReady),
 							
-							.DRAMWriteData(			BE_DRAMWriteData),
-							.DRAMWriteDataValid(	BE_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	BE_DRAMWriteDataReady),
+							.DRAMWriteData(			AES_DRAMWriteData),
+							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
+							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
 							
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
@@ -210,129 +189,7 @@ module PathORAMBackend(
 							.ROStartCCReady(		ROStartCCReady), 
 							.ROStartAESReady(		ROStartAESReady),
 							
-							.DRAMInitComplete(		DRAMInitComplete));							
-	
-	//----------------------------------------------------------------------
-	//	Integrity Verification (REW ORAM only)
-	//----------------------------------------------------------------------
-	
-	localparam	BRAMLatency = 2; // TODO clean up
-	generate if (EnableREW) begin:CC
-		CoherenceController #(.ORAMB(				ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.ORAME(					ORAME),
-							.BEDWidth(				BEDWidth),
-							
-							.Overclock(				Overclock),
-							.EnableAES(				EnableAES),
-							.EnableREW(				EnableREW),
-							.EnableIV(				EnableIV),
-							.DelayedWB(				DelayedWB),
-							.BRAMLatency(			BRAMLatency))
-									
-				cc(			.Clock(					Clock),
-							.Reset(					Reset),
-							
-							.ROCmdValid(			ROStartCCValid),	
-							.ROCmdReady(			ROStartCCReady),							
-							.ROPAddrIn(             ROPAddr),
-							.ROLeafIn(				ROLeaf),
-							.RODummyIn(				REWRoundDummy),
-							
-							.FromDecData(			AES_DRAMReadData), 
-							.FromDecDataValid(		AES_DRAMReadDataValid),
-							
-							.ToEncData(				AES_DRAMWriteData), 
-							.ToEncDataValid(		AES_DRAMWriteDataValid), 
-							.ToEncDataReady(		AES_DRAMWriteDataReady),	
-
-							.ToStashData(			BE_DRAMReadData),
-							.ToStashDataValid(		BE_DRAMReadDataValid), 
-							.ToStashDataReady(		1'b1),
-
-							.FromStashData(			BE_DRAMWriteData), 
-							.FromStashDataValid(	BE_DRAMWriteDataValid), 
-							.FromStashDataReady(	BE_DRAMWriteDataReady),
-							.FromStashDataDone(		FromStashDataDone),
-							
-							.PathReady_IV(			PathReady_IV),
-							.PathDone_IV(			PathDone_IV),
-							.IVRequest(				IVRequest),
-							.IVWrite(				IVWrite),
-							.IVAddress(				IVAddress),
-							.DataFromIV(			DataFromIV),
-							.DataToIV(				DataToIV),
-							
-							.ROIBV(					CC_ROIBV),
-							.ROIBID(				CC_ROIBID),
-							
-							.BOIReady_IV(			BOIReady_IV),
-							.BOIFromCC(				BOIFromCC),
-							.BktOfIIdx(				BktOfIIdx),
-							.BOIDone_IV(			BOIDone_IV),
-							.BucketOfITurn(			BucketOfITurn));		
-			
-		`ifdef SIMULATION
-			always @(posedge Clock) begin
-				if (BE_DRAMReadDataValid && !BE_DRAMReadDataReady) begin
-					$display("Error: ToStashData Valid not Stash not ready");
-					$finish;
-				end
-			end
-		`endif	
-					
-		 if (EnableIV) begin:INTEGRITY
-			IntegrityVerifier #(.ORAMB(				ORAMB),
-								.ORAMU(				ORAMU),
-								.ORAML(				ORAML),
-								.ORAMZ(				ORAMZ),
-								.BRAMLatency(		BRAMLatency))
-					
-				iv(				.Clock(				Clock),
-								.Reset(				Reset),
-							
-								.Request(			IVRequest),
-								.Write(				IVWrite),
-								.Address(			IVAddress),
-								.DataIn(			DataToIV),
-								.DataOut(			DataFromIV),
-							
-								.PathReady(			PathReady_IV),
-								.PathDone(			PathDone_IV),
-								.BOIReady(			BOIReady_IV),
-								.BOIFromCC(			BOIFromCC),
-								.ROILevel(			BktOfIIdx),
-								.BOIDone(			BOIDone_IV),
-								.BucketOfITurn(		BucketOfITurn),
-								
-								.ROIBV(				CC_ROIBV),
-								.ROIBID(			CC_ROIBID));
-		end	else begin: NO_INTEGRITY		
-			assign	IVRequest = 					1'b0;
-			assign 	IVWrite = 						1'b0;
-			assign 	IVAddress = 					0;
-			assign	DataFromIV = 					0;
-		
-			// only the following two are important
-			assign	PathDone_IV = 					1'b1;
-			assign	BOIDone_IV = 					1'b1;
-		end
-		
-	end else begin: NO_CC
-		assign	ROStartCCReady = 					1'b1;
-		assign	FromStashDataDone = 				1'b1;
-		
-		assign	BE_DRAMReadData = 					AES_DRAMReadData;
-		assign	BE_DRAMReadDataValid = 				AES_DRAMReadDataValid;
-		assign	AES_DRAMReadDataReady = 			BE_DRAMReadDataReady;
-		
-		assign	AES_DRAMWriteData = 				BE_DRAMWriteData;
-		assign  AES_DRAMWriteDataValid = 			BE_DRAMWriteDataValid;
-		assign	BE_DRAMWriteDataReady = 			AES_DRAMWriteDataReady;
-	end endgenerate
+							.DRAMInitComplete(		DRAMInitComplete));
 	
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption

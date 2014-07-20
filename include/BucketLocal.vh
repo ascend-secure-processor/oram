@@ -15,7 +15,8 @@
 			ORAMU == PINIT ||
 			ORAML == PINIT ||
 			ORAMZ == PINIT ||
-			BEDWidth == PINIT) begin
+			BEDWidth == PINIT ||
+			EnableIV == PINIT) begin
 			$display("[%m] ERROR: parameter uninitialized.");
 			$finish;
 		end
@@ -31,13 +32,15 @@
 	// Header flit
 	localparam				BigVWidth =				ORAMZ,
 							BigUWidth =				ORAMU * ORAMZ,
-							BigLWidth =				ORAML * ORAMZ;
+							BigLWidth =				ORAML * ORAMZ,
+							BigHWidth =				ORAMH * ORAMZ;
 	localparam				BktHSize_ValidBits =	`divceil(ORAMZ, 8) * 8, // = 8 bits for Z < 9
 							BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ,
 							BktHVStart =			AESEntropy,
 							BktHUStart =			BktHVStart + BktHSize_ValidBits, // at what position do the U's start?
 							BktHLStart =			BktHUStart + BigUWidth, // at what position do the U's start?
-							BktHSize_RawBits = 		BktHLStart + BigLWidth; // valid bits, addresses, leaf labels; TODO change to be in terms of BktHLStart
+							BktHHStart =			BktHLStart + BigLWidth,
+							BktHSize_RawBits = 		BktHHStart + ((EnableIV) ? BigHWidth : 0);
 
 	//--------------------------------------------------------------------------
 	//	Quantities in terms of the Memory/DRAM width

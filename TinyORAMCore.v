@@ -76,7 +76,7 @@ module TinyORAMCore(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
-							PRFPosMap =         	0;		
+							PRFPosMap =         	0;
 	// Hardware
 
 	parameter				Overclock =				1;
@@ -85,7 +85,6 @@ module TinyORAMCore(
 	//	Constants
 	//--------------------------------------------------------------------------
 		
-	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
 	
@@ -191,10 +190,11 @@ module TinyORAMCore(
 	//	Core modules
 	//-------------------------------------------------------------------------- 	
 	
-	Frontend #(  	.ORAMU(         		ORAMU), 
+	Frontend #(  			.ORAMU(         		ORAMU), 
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
+							.EnableIV(				EnableIV),
 							.NumValidBlock( 		NumValidBlock), 
 							.Recursion(     		Recursion),
 							.EnablePLB(				EnablePLB),

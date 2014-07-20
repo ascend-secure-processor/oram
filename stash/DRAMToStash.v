@@ -51,7 +51,7 @@ module DRAMToStash(
 	DRAMData, DRAMValid, DRAMReady,
 	
 	StashData, StashValid, StashReady,
-	StashPAddr, StashLeaf
+	StashPAddr, StashLeaf, StashMAC
 	);
 
 	//--------------------------------------------------------------------------
@@ -92,6 +92,7 @@ module DRAMToStash(
 	output	[BEDWidth-1:0]	StashData;
 	output	[ORAMU-1:0]		StashPAddr;
 	output	[ORAML-1:0]		StashLeaf;
+	output	[ORAMH-1:0]		StashMAC;
 	output					StashValid;
 	input					StashReady;
 	
@@ -108,11 +109,11 @@ module DRAMToStash(
 	wire	[ORAMZ-1:0] 	HeaderDown_ValidBits;
 	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
 	wire	[BigLWidth-1:0]	HeaderDown_Leaves;
-	
+
 	wire	[ORAMU-1:0]		HeaderDown_PAddr;
 	wire	[ORAML-1:0]		HeaderDown_Leaf;
 	wire					HeaderDown_ValidBit;		
-	
+		
 	wire					RW_R_DoneAlarm, RO_R_DoneAlarm;
 	
 	//--------------------------------------------------------------------------
@@ -208,6 +209,21 @@ module DRAMToStash(
 	
 	assign	StashPAddr =							HeaderDown_PAddr;
 	assign	StashLeaf =								HeaderDown_Leaf;
+	
+	//--------------------------------------------------------------------------
+	//	MAC Handling
+	//--------------------------------------------------------------------------
+	
+	generate if (EnableIV) begin:MAC
+		wire	[ORAMH-1:0] HeaderDown_MAC;
+		wire	[BigHWidth-1:0]	HeaderDown_MACs;
+	
+		assign	HeaderDown_MACs =					Header_Wide[BktHHStart+BigHWidth-1:BktHHStart];
+		Mux	#(.Width(ORAMH), .NPorts(ORAMZ), .SelectCode(0)) H_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_MACs, HeaderDown_MAC);
+		assign	StashMAC =							HeaderDown_MAC;
+	end else begin:NO_MAC
+		assign	StashMAC =							{ORAMH{1'bx}};
+	end endgenerate 
 	
 	//--------------------------------------------------------------------------
 endmodule

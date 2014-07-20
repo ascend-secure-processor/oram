@@ -41,6 +41,7 @@ module PathORAMBackendCore(
 	
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
+	`include "IVLocal.vh"
 	`include "CommandsLocal.vh"
 	
 	parameter				ORAMUValid =			21;
@@ -132,6 +133,12 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		CurrentLeaf_Internal, RemappedLeaf_Internal;
 	(* mark_debug = "FALSE" *)	wire					Command_InternalValid, Command_InternalReady;
 
+	wire	[BEPWidth-1:0]	MACSCount;
+	wire					StoringMAC, Store_MACValid;
+		
+	wire	[FEDWidth-1:0]	LoadData_Pre;
+	wire					LoadValid_Pre, LoadReady_Pre;	
+			
 	(* mark_debug = "FALSE" *)	wire	[BBEDWidth-1:0] EvictBuf_Chunks;
 	(* mark_debug = "FALSE" *)	wire	[BBEDWidth-1:0] ReturnBuf_Space;
 		
@@ -184,6 +191,7 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire	[ORAMU-1:0]		Stash_PAddr;
 	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Stash_CurrentLeaf;
 	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		Stash_RemappedLeaf;
+	(* mark_debug = "FALSE" *)	wire	[ORAMH-1:0]		Stash_MAC;
 	(* mark_debug = "FALSE" *)	wire					Stash_SkipWriteback, Stash_AccessIsDummy;
 
 	(* mark_debug = "FALSE" *)	wire	[BECMDWidth-1:0] Control_Command;
@@ -290,10 +298,11 @@ module PathORAMBackendCore(
 
 	// SECURITY: We don't allow _any_ access to start until DummyLeaf_Valid; we
 	// don't want to start real accesses _earlier_ than dummy accesses
-	assign	Stash_AppendCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Append) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
+	assign	Stash_AppendCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Append) & (EvictBuf_Chunks >= BlkSize_BEDChunks) & Store_MACValid;
+	assign	Stash_UpdateCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Update) & (EvictBuf_Chunks >= BlkSize_BEDChunks) & Store_MACValid;
+	
 	assign	Stash_RdRmvCmdValid = 					CSIdle & Command_InternalValid & ((Command_Internal == BECMD_Read) | (Command_Internal == BECMD_ReadRmv)) & (ReturnBuf_Space >= BlkSize_BEDChunks);
-	assign	Stash_UpdateCmdValid =					CSIdle & Command_InternalValid & ( Command_Internal == BECMD_Update) & 										(EvictBuf_Chunks >= BlkSize_BEDChunks);
-
+	
 	assign	Control_Command =						Command_Internal;
 	assign	Control_PAddr =							PAddr_Internal;
 	assign	Control_CurrentLeaf =					CurrentLeaf_Internal;
@@ -334,12 +343,36 @@ module PathORAMBackendCore(
 	//	Front-end stores
 	//--------------------------------------------------------------------------
 
+	generate if (EnableIV) begin:STORE_MAC
+		wire				StoreMACReady;
+
+		MCounter #(BEPWidth) MAC_sc(Clock, 	Reset || Control_CommandDone, 
+									StoreValid && ( (!StoringMAC && StoreReady) || (StoringMAC && StoreMACReady) ), 
+									MACSCount);
+	
+		assign	StoringMAC =						MACSCount >= BlkSize_FEDChunks;
+	
+		FIFOShiftRound #(	.IWidth(				FEDWidth),
+							.OWidth(				ORAMH))
+				st_m_shift(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				StoreData),
+							.InValid(				StoreValid && StoringMAC),
+							.InAccept(				StoreMACReady),
+							.OutData(				Stash_MAC),
+							.OutValid(				Store_MACValid),
+							.OutReady(				Control_CommandDone));
+	end else begin:STORE_NO_MAC
+		assign	Store_MACValid =					1'b1;
+		assign	StoringMAC =						1'b0;
+	end endgenerate
+	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				BEDWidth))
 				st_shift(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				StoreData),
-							.InValid(				StoreValid),
+							.InValid(				StoreValid && !StoringMAC),
 							.InAccept(				StoreReady),
 							.OutData(				Store_ShiftBufData),
 							.OutValid(				Store_ShiftBufValid),
@@ -362,6 +395,42 @@ module PathORAMBackendCore(
 	//	Front-end loads
 	//--------------------------------------------------------------------------
 
+	generate if (EnableIV) begin:LOAD_MAC
+		wire	[FEDWidth-1:0] LoadMACData;
+		wire				LoadMACValid, LoadMACReady;
+		wire				BlockLoaded, LoadingMAC, LoadComplete;
+		
+		CountAlarm  #(  	.IThreshold(			BlkSize_FEDChunks),
+							.Threshold(             BlkSize_FEDChunks + MAC_FEDChunks))
+				MAC_lc(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Enable(				LoadValid && LoadReady),
+							.Intermediate(			BlockLoaded),
+							.Done(					LoadComplete));	
+		
+		Register1b ldm_m(Clock, Reset || LoadComplete, BlockLoaded, LoadingMAC);
+	
+		FIFOShiftRound #(	.IWidth(				ORAMH),
+							.OWidth(				FEDWidth))
+				st_m_shift(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				Stash_ReturnMAC),
+							.InValid(				Stash_ReturnComplete),
+							.InAccept(				),
+							.OutData(				LoadMACData),
+							.OutValid(				LoadMACValid),
+							.OutReady(				LoadMACReady));
+
+		assign	LoadData =							(LoadingMAC) ? LoadMACData : LoadData_Pre;
+		assign	LoadValid =							(LoadingMAC) ? LoadMACValid : LoadValid_Pre;
+		assign	LoadMACReady =						 LoadingMAC && LoadReady;
+		assign	LoadReady_Pre =						~LoadingMAC && LoadReady;
+	end else begin:NO_LOAD_MAC
+		assign	LoadData =							LoadData_Pre;
+		assign	LoadValid =							LoadValid_Pre;
+		assign	LoadReady_Pre =						LoadReady;
+	end endgenerate
+	
 	// SECURITY: Don't perform a read/rm until the front-end can take a whole block
 	// NOTE: this should come before the shifter because the Stash ReturnData path
 	// doesn't have backpressure
@@ -386,9 +455,9 @@ module PathORAMBackendCore(
 							.InData(				Load_ShiftBufData),
 							.InValid(				Load_ShiftBufValid),
 							.InAccept(				Load_ShiftBufReady),
-							.OutData(				LoadData),
-							.OutValid(				LoadValid),
-							.OutReady(				LoadReady));
+							.OutData(				LoadData_Pre),
+							.OutValid(				LoadValid_Pre),
+							.OutReady(				LoadReady_Pre));
 
 	//--------------------------------------------------------------------------
 	//	Stash & AddrGen Control
@@ -459,7 +528,8 @@ module PathORAMBackendCore(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV))
 				addr_gen(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Start(					AddrGen_InValid),
@@ -509,7 +579,8 @@ module PathORAMBackendCore(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth),
+							.EnableIV(				EnableIV))
 				dram_init(	.Clock(					Clock),
 							.Reset(					Reset),
 							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
@@ -536,6 +607,7 @@ module PathORAMBackendCore(
 							.ORAMC(					ORAMC),
 							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
+							.EnableIV(				EnableIV),
 							.EnableREW(             EnableREW),
 							.ORAMUValid(			ORAMUValid))
 				stash_top(	.Clock(					Clock),
@@ -551,10 +623,13 @@ module PathORAMBackendCore(
 							.PAddr(					Stash_PAddr),
 							.CurrentLeaf(			Stash_CurrentLeaf),
 							.RemappedLeaf(			Stash_RemappedLeaf),
+							.MAC(					Stash_MAC),
 							.AccessSkipsWriteback(	Stash_SkipWriteback),
 							.AccessIsDummy(			Stash_AccessIsDummy),
 
 							.FEReadData(			Stash_ReturnData),
+							.FEReadMAC(				Stash_ReturnMAC),
+							.FEReadComplete(		Stash_ReturnComplete),
 							.FEReadDataValid(		Stash_ReturnDataValid),
 
 							.FEWriteData(			Stash_StoreData),
