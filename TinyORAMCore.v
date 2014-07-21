@@ -57,7 +57,7 @@ module TinyORAMCore(
 	parameter				EnablePLB = 			1,
 							EnableREW =				`ifdef ASIC 0 `else 0 `endif,
 							EnableAES =				`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				`ifdef ASIC 0 `else 0 `endif;
+   							EnableIV =				`ifdef ASIC 1 `else 1 `endif;
 	
 	// ORAM
 

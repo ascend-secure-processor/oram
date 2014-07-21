@@ -128,37 +128,37 @@ module Frontend
 				iv(			.Clock(					Clock), 
 							.Reset(					Reset),
 
-							.FECommand(				), 
-							.FEPAddr(				), 
-							.FECurrentLeaf(			), 
-							.FERemappedLeaf(		), 
+							.FECommand(				CmdOut_Pre), 
+							.FEPAddr(				AddrOut_Pre), 
+							.FECurrentLeaf(			OldLeaf_Pre), 
+							.FERemappedLeaf(		NewLeaf_Pre), 
 							.FECurrentCounter(		{AESEntropy{1'b0}}), // TODO 
 							.FERemappedCounter(		{AESEntropy{1'b0}}), // TODO
-							.FECommandValid(		), 
-							.FECommandReady(		),
+							.FECommandValid(		CmdOutValid_Pre), 
+							.FECommandReady(		CmdOutReady_Pre),
 							
-							.FELoadData(			), 
-							.FELoadValid(			), 
-							.FELoadReady(			),
+							.FELoadData(			LoadData_Pre), 
+							.FELoadValid(			LoadDataValid_Pre), 
+							.FELoadReady(			LoadDataReady_Pre),
 							
-							.FEStoreData(			),
-							.FEStoreValid(			), 
-							.FEStoreReady(			),
+							.FEStoreData(			StoreData_Pre),
+							.FEStoreValid(			StoreDataValid_Pre), 
+							.FEStoreReady(			StoreDataReady_Pre),
 							
-							.BECommand(				), 
-							.BEPAddr(				), 
-							.BECurrentLeaf(			), 
-							.BERemappedLeaf(		),
-							.BECommandValid(		), 
-							.BECommandReady(		),
+							.BECommand(				CmdOut), 
+							.BEPAddr(				AddrOut), 
+							.BECurrentLeaf(			OldLeaf), 
+							.BERemappedLeaf(		NewLeaf),
+							.BECommandValid(		CmdOutValid),
+							.BECommandReady(		CmdOutReady),
 							
-							.BELoadData(			), 
-							.BELoadValid(			), 
-							.BELoadReady(			),
+							.BELoadData(			LoadData), 
+							.BELoadValid(			LoadDataValid), 
+							.BELoadReady(			LoadDataReady),
 							
-							.BEStoreData(			),
-							.BEStoreValid(			), 
-							.BEStoreReady(			));	
+							.BEStoreData(			StoreData),
+							.BEStoreValid(			StoreDataValid), 
+							.BEStoreReady(			StoreDataReady));	
 	end else begin:NO_MAC	
 		assign	CmdOut =							CmdOut_Pre;
 		assign	CmdOutValid =						CmdOutValid_Pre;

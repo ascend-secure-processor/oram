@@ -763,6 +763,7 @@ module Stash(
 	assign	ReturnData =							Core_OutData;
 	assign	ReturnPAddr =							Core_OutPAddr;
 	assign	ReturnLeaf =							Core_OutLeaf;
+	assign	ReturnMAC =								Core_OutMAC;
 	assign	ReturnDataOutValid =					ReturnInProgress & Core_OutValid;
 	assign	BlockReturnComplete =					ReturnInProgress & BlockReadComplete_Internal;
 	

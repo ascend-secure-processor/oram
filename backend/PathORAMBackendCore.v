@@ -134,7 +134,7 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire					Command_InternalValid, Command_InternalReady;
 
 	wire	[BEPWidth-1:0]	MACSCount;
-	wire					StoringMAC, Store_MACValid;
+	wire					StoreReady_Pre, StoringMAC, Store_MACValid;
 		
 	wire	[FEDWidth-1:0]	LoadData_Pre;
 	wire					LoadValid_Pre, LoadReady_Pre;	
@@ -342,16 +342,15 @@ module PathORAMBackendCore(
 	//--------------------------------------------------------------------------
 	//	Front-end stores
 	//--------------------------------------------------------------------------
-
+	
 	generate if (EnableIV) begin:STORE_MAC
 		wire				StoreMACReady;
 
-		MCounter #(BEPWidth) MAC_sc(Clock, 	Reset || Control_CommandDone, 
-									StoreValid && ( (!StoringMAC && StoreReady) || (StoringMAC && StoreMACReady) ), 
-									MACSCount);
+		MCounter #(BEPWidth) MAC_sc(Clock, 	Reset || Control_CommandDone, StoreValid && StoreReady, MACSCount);
 	
 		assign	StoringMAC =						MACSCount >= BlkSize_FEDChunks;
-	
+		assign	StoreReady =						(StoringMAC) ? StoreMACReady : StoreReady_Pre;
+		
 		FIFOShiftRound #(	.IWidth(				FEDWidth),
 							.OWidth(				ORAMH))
 				st_m_shift(	.Clock(					Clock),
@@ -365,6 +364,7 @@ module PathORAMBackendCore(
 	end else begin:STORE_NO_MAC
 		assign	Store_MACValid =					1'b1;
 		assign	StoringMAC =						1'b0;
+		assign	StoreReady =						StoreReady_Pre;
 	end endgenerate
 	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
@@ -373,7 +373,7 @@ module PathORAMBackendCore(
 							.Reset(					Reset),
 							.InData(				StoreData),
 							.InValid(				StoreValid && !StoringMAC),
-							.InAccept(				StoreReady),
+							.InAccept(				StoreReady_Pre),
 							.OutData(				Store_ShiftBufData),
 							.OutValid(				Store_ShiftBufValid),
 							.OutReady(				Store_ShiftBufReady));

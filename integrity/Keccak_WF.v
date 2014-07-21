@@ -57,7 +57,7 @@ module Keccak_WF (
 							.OWidth(			HashInWidth),
 							.Class1(			1))				// Hopefully this serves as a input Register
         HashInFunnel(	    .Clock(				Clock),
-							.Reset(				Reset || LastChunk),
+							.Reset(				Reset),
 							.InData(			DataIn),
 							.InValid(			DataInValid),
 							.InAccept(			DataInReady),
@@ -130,7 +130,7 @@ module Keccak_WF (
 		assign PrependingKey = 0;		
 	end endgenerate
 		
-	assign LastEmptyChunk = LastBut2Chunk && !BytesInLastChunk;
+	assign LastEmptyChunk = 1'b0;//LastBut2Chunk && !BytesInLastChunk;
 	
 	assign HashIn = PrependingKey ? KeyChunk : HashFunnelOut;
 	assign HashInReady = !HashBusy && !HashBufFull;

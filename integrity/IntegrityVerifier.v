@@ -35,7 +35,7 @@ module IntegrityVerifier(
 	`include "CommandsLocal.vh"
 	`include "IVLocal.vh"
 	
-	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, 8),
+	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, FEDWidth) * `divceil(FEDWidth, 8),
 							FullDigestWidth = 		224;
 							
 	localparam				STWidth =				3,
