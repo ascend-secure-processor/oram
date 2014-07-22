@@ -155,6 +155,7 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire					Stash_StoreDataValid, Stash_StoreDataReady;
 	
 	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_ReturnData;
+	wire					Stash_ReturnComplete;
 	(* mark_debug = "FALSE" *)	wire					Stash_ReturnDataValid, Stash_ReturnDataReady;
 	
 	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	Stash_DRAMWriteData;
