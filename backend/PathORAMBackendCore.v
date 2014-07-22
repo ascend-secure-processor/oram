@@ -134,7 +134,8 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire					Command_InternalValid, Command_InternalReady;
 
 	wire	[BEPWidth-1:0]	MACSCount;
-	wire					StoreReady_Pre, StoringMAC, Store_MACValid;
+	wire	[ORAMH-1:0]		Stash_ReturnMAC;
+	wire					StoreValid_Pre, StoreReady_Pre, StoringMAC, Store_MACValid;
 		
 	wire	[FEDWidth-1:0]	LoadData_Pre;
 	wire					LoadValid_Pre, LoadReady_Pre;	
@@ -300,7 +301,6 @@ module PathORAMBackendCore(
 	// don't want to start real accesses _earlier_ than dummy accesses
 	assign	Stash_AppendCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Append) & (EvictBuf_Chunks >= BlkSize_BEDChunks) & Store_MACValid;
 	assign	Stash_UpdateCmdValid =					CSIdle & Command_InternalValid & (Command_Internal == BECMD_Update) & (EvictBuf_Chunks >= BlkSize_BEDChunks) & Store_MACValid;
-	
 	assign	Stash_RdRmvCmdValid = 					CSIdle & Command_InternalValid & ((Command_Internal == BECMD_Read) | (Command_Internal == BECMD_ReadRmv)) & (ReturnBuf_Space >= BlkSize_BEDChunks);
 	
 	assign	Control_Command =						Command_Internal;
@@ -344,35 +344,42 @@ module PathORAMBackendCore(
 	//--------------------------------------------------------------------------
 	
 	generate if (EnableIV) begin:STORE_MAC
-		wire				StoreMACReady;
+		wire	[MACPADWidth-1:0] Stash_MAC_Wide;
+		wire				StoreMACValid, StoreMACReady;
 
 		MCounter #(BEPWidth) MAC_sc(Clock, 	Reset || Control_CommandDone, StoreValid && StoreReady, MACSCount);
 	
 		assign	StoringMAC =						MACSCount >= BlkSize_FEDChunks;
-		assign	StoreReady =						(StoringMAC) ? StoreMACReady : StoreReady_Pre;
+		assign	StoreReady =						CSIdle && ((StoringMAC) ? StoreMACReady : StoreReady_Pre);
+		
+		assign	StoreMACValid =						CSIdle && StoreValid && StoringMAC;
 		
 		FIFOShiftRound #(	.IWidth(				FEDWidth),
-							.OWidth(				ORAMH))
+							.OWidth(				MACPADWidth),
+							.Reverse(				1))
 				st_m_shift(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				StoreData),
-							.InValid(				StoreValid && StoringMAC),
+							.InValid(				StoreMACValid),
 							.InAccept(				StoreMACReady),
-							.OutData(				Stash_MAC),
+							.OutData(				Stash_MAC_Wide),
 							.OutValid(				Store_MACValid),
 							.OutReady(				Control_CommandDone));
+		assign	Stash_MAC =							Stash_MAC_Wide[ORAMH-1:0];
 	end else begin:STORE_NO_MAC
 		assign	Store_MACValid =					1'b1;
 		assign	StoringMAC =						1'b0;
-		assign	StoreReady =						StoreReady_Pre;
+		assign	StoreReady =						CSIdle && StoreReady_Pre;
 	end endgenerate
+	
+	assign	StoreValid_Pre =						CSIdle && StoreValid && !StoringMAC;
 	
 	FIFOShiftRound #(		.IWidth(				FEDWidth),
 							.OWidth(				BEDWidth))
 				st_shift(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				StoreData),
-							.InValid(				StoreValid && !StoringMAC),
+							.InValid(				StoreValid_Pre),
 							.InAccept(				StoreReady_Pre),
 							.OutData(				Store_ShiftBufData),
 							.OutValid(				Store_ShiftBufValid),

@@ -121,11 +121,11 @@ module IntegrityVerifier(
 	
 	// Store Path	
 		
-	wire	[MACHPADWidth-1:0] StoreMACHeader_Wide;
+	wire	[MIPADWidth-1:0] StoreMACHeader_Wide;
 	wire	[FEDWidth-1:0]	StoreMACHeader;
 	wire	[BFHWidth-1:0]	SMICount;
 	
-	wire	[FEDWidth-1:0]	FEStoreMAC;
+	wire	[FEDWidth-1:0]	FEStoreMAC, StoreHashDataIn;
 	
 	wire					StoreTransfer, HashTransfer;
 	
@@ -150,7 +150,21 @@ module IntegrityVerifier(
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
+			if (HashDataInValid && HashDataInReady) begin
+				$display("Hash in: %x", HashDataIn);
+			end
+			
+			if (HashOutValid && HashOutReady) begin
+				$display("Hash out: %x", HashOut);
+			end
+			
+			if (FECommandValid_Final && FECommandReady_Final) begin
+				$display("Command: %x %x %x %x", FECommand, FEPAddr, FECurrentLeaf, FERemappedLeaf);
+			end
 
+			if (BEStoreValid && BEStoreReady) begin
+				$display("Store data: %x", BEStoreData);
+			end
 		end
 	`endif
 
@@ -241,9 +255,9 @@ module IntegrityVerifier(
 	//--------------------------------------------------------------------------
 
 	assign	BEStoreData =							(CSWriteP) ? FEStoreData : FEStoreMAC;
-	assign	BEStoreValid =							(CSWriteP && FEStoreValid && HashDataInReady) ||
-													(CSWriteMO && HashOutValid);
-	assign	FEStoreReady =							CSWriteP && BEStoreReady && HashDataInReady;
+	assign	BEStoreValid =							(CSWriteP 	&& FEStoreValid && HashDataInReady) ||
+													(CSWriteMO 	&& HashOutValid);
+	assign	FEStoreReady =							 CSWriteP 	&& BEStoreReady && HashDataInReady;
 	
 	assign	StoreTransfer =							BEStoreValid && BEStoreReady;	
 	
@@ -251,15 +265,15 @@ module IntegrityVerifier(
 	// Phase 1: Write {PAddr,Count} to hash engine
 	//
 	
-	assign	StoreMACHeader_Wide =					{SMH_Padding, PAddr_Int, FECurrentCounter_Int};
+	assign	StoreMACHeader_Wide =					{{MIPADWidth - MIWidth{1'b0}}, PAddr_Int, FECurrentCounter_Int};
 	
-	CountAlarm  #(  		.Threshold(             MACHeader_FEDChunks))
+	CountAlarm  #(  		.Threshold(             MI_FEDChunks))
 				smh_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Enable(				CSWriteMI && HashTransfer),
 							.Count(					SMICount),
 							.Done(					SMI_Terminal));		
-	Mux	#(.Width(FEDWidth), .NPorts(MACHeader_FEDChunks), .SelectCode(0)) SMI_mux(SMICount, StoreMACHeader_Wide, StoreMACHeader);	
+	Mux	#(.Width(FEDWidth), .NPorts(MI_FEDChunks), .SelectCode(0)) SMI_mux(SMICount, StoreMACHeader_Wide, StoreMACHeader);	
 		
 	assign	StoreHashDataIn =						(CSWriteMI) ? StoreMACHeader : FEStoreData;
 	
@@ -327,7 +341,7 @@ module IntegrityVerifier(
 							.HashOutValid(			HashOutValid),
 							.HashOut(				HashOut));
 	assign	MACOut =								HashOut[ORAMH-1:0];
-	assign	MACOut_Padded =							{{MACPADWidth-AESEntropy{1'b0}} , MACOut};
+	assign	MACOut_Padded =							{{MACPADWidth-ORAMH{1'b0}} , MACOut};
 	
 	assign	HashOutReady =							SMO_Terminal;
 	

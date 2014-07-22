@@ -275,6 +275,9 @@ module Stash(
 	wire	[OBWidth-1:0]	OutBufferSpace, OutBufferCount;	
 	wire					OutBufferInValid, OutBufferInReady;
 	wire					TickOutHeader, BlockReadCommit;
+	
+	wire	[SHDWidth-1:0]	OutHBufferDataIn, OutHBufferDataOut;
+	
 	wire					OutHBufferInValid, OutHBufferInReady;
 	wire					OutHeaderValid;
 	
@@ -849,17 +852,26 @@ module Stash(
 							.OutSend(				ReadOutValid),
 							.OutReady(				ReadOutReady));
 
+	assign	OutHBufferDataIn =						(EnableIV) ? 	{Core_OutMAC, Core_OutPAddr, Core_OutLeaf} :
+																				{ Core_OutPAddr, Core_OutLeaf};
+	
 	FIFORAM		#(			.Width(					SHDWidth),
 							.Buffering(				StashOutBuffering))
 				out_H_buf(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{Core_OutMAC, 	Core_OutPAddr, 	Core_OutLeaf}),
+							.InData(				OutHBufferDataIn),
 							.InValid(				OutHBufferInValid),
 							.InAccept(				OutHBufferInReady),
-							.OutData(				{ReadMAC, 		ReadPAddr, 		ReadLeaf}),
+							.OutData(				OutHBufferDataOut),
 							.OutSend(				OutHeaderValid),
 							.OutReady(				BlockReadCommit));		
 
+	generate if (EnableIV) begin:MAC_BUFFEROUT
+		assign	{ReadMAC, ReadPAddr, ReadLeaf} =	OutHBufferDataOut;
+	end else begin:MAC_NOBUFFEROUT
+		assign	{ReadPAddr, ReadLeaf} =				OutHBufferDataOut;
+	end endgenerate
+	
 	Counter		#(			.Width(					OBWidth))
 				out_H_cnt(	.Clock(					Clock),
 							.Reset(					Reset | BlockReadCommit),

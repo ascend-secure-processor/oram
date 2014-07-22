@@ -132,8 +132,8 @@ module Frontend
 							.FEPAddr(				AddrOut_Pre), 
 							.FECurrentLeaf(			OldLeaf_Pre), 
 							.FERemappedLeaf(		NewLeaf_Pre), 
-							.FECurrentCounter(		{AESEntropy{1'b0}}), // TODO 
-							.FERemappedCounter(		{AESEntropy{1'b0}}), // TODO
+							.FECurrentCounter(		64'hdeadbeef), // TODO 
+							.FERemappedCounter(		64'hba5eba11), // TODO
 							.FECommandValid(		CmdOutValid_Pre), 
 							.FECommandReady(		CmdOutReady_Pre),
 							

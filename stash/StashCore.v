@@ -228,7 +228,8 @@ module StashCore(
 	reg		[SEAWidth-1:0]	StashE_Address_Delayed;
 
 	wire					StashH_WE;
-		
+	wire	[SHDWidth-1:0]	StashHDataIn, StashHDataOut;
+	
 	wire	[SEAWidth-1:0]	StashP_Address, StashP_DataOut, StashP_DataIn;
 	wire					StashP_WE;
 	wire					StashP_EN;
@@ -726,6 +727,10 @@ module StashCore(
 	/*
 		For each data block, store its program address / leaf label.
 	*/
+	
+	assign	StashHDataIn =							(EnableIV) ? {InMAC, InPAddr, InLeaf} :
+																		{InPAddr, InLeaf};
+	
 	RAM			#(			.DWidth(				SHDWidth),
 							.AWidth(				SEAWidth)
 							`ifdef ASIC , .ASIC(1) `endif)
@@ -734,8 +739,15 @@ module StashCore(
 							.Enable(				1'b1),
 							.Write(					StashH_WE),
 							.Address(				StashE_Address),
-							.DIn(					{InMAC,		InPAddr, 		InLeaf}),
-							.DOut(					{OutMAC, 	OutPAddr_Pre, 	OutLeaf_Pre}));
+							.DIn(					StashHDataIn),
+							.DOut(					StashHDataOut));
+							
+	generate if (EnableIV) begin:MAC_BUFFEROUT
+		assign	{OutMAC, OutPAddr_Pre, OutLeaf_Pre} = StashHDataOut;
+	end else begin:MAC_NOBUFFEROUT
+		assign	{OutPAddr_Pre, OutLeaf_Pre} =		StashHDataOut;
+	end endgenerate						
+							
 	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress 	: OutPAddr_Pre;
 	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeafLabel 		: OutLeaf_Pre;
 	

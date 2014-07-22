@@ -1,15 +1,14 @@
 
 	localparam				MIWidth =				ORAMU + AESEntropy,
-							BlkSize_FEDChunks = 	`divceil(ORAMB, FEDWidth),
-							
+	
+							BlkSize_FEDChunks = 	`divceil(ORAMB, FEDWidth),						
+							MI_FEDChunks =			`divceil(MIWidth, FEDWidth),
 							MAC_FEDChunks =			`divceil(ORAMH, FEDWidth),
-							MACHeader_FEDChunks =	`divceil(MIWidth, FEDWidth),
 							
-							MACHPADWidth =			MACHeader_FEDChunks * FEDWidth,
-							MACPADWidth =			AESEntropy * MAC_FEDChunks,
-							SMH_Padding =			MACHeader_FEDChunks * FEDWidth - MIWidth,
+							MIPADWidth =			MI_FEDChunks * FEDWidth,
+							MACPADWidth =			MAC_FEDChunks * FEDWidth,
 							
-							BFHWidth =				`log2(MACHeader_FEDChunks),
+							BFHWidth =				`log2(MI_FEDChunks),
 							BFPWidth =				`log2(BlkSize_FEDChunks),
 							BEPWidth =				`log2(BlkSize_FEDChunks + MAC_FEDChunks); // FED chunks in ORAMB + hash
 				
