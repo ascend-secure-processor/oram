@@ -130,6 +130,8 @@ module Keccak_WF (
 		assign PrependingKey = 0;		
 	end endgenerate
 		
+	// TODO this is needed to satisfy Keccak padding
+	// Do something about it
 	assign LastEmptyChunk = 1'b0;//LastBut2Chunk && !BytesInLastChunk;
 	
 	assign HashIn = PrependingKey ? KeyChunk : HashFunnelOut;

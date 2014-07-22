@@ -38,16 +38,21 @@ module IntegrityVerifier(
 	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, FEDWidth) * `divceil(FEDWidth, 8),
 							FullDigestWidth = 		224;
 							
-	localparam				STWidth =				3,
-							ST_Idle =				3'd0,
-							ST_WriteMI =			3'd1,
-							ST_WriteP =				3'd2,
-							ST_WriteMO =			3'd3,
-							ST_WriteCommand =		3'd4,
-							ST_ReadCommand =		3'd5,
-							ST_ReadCheck =			3'd6,
-							ST_Error =				3'd7;
-							
+	localparam				STWidth =				4,
+							ST_Idle =				4'd0,
+							ST_WriteMI =			4'd1,
+							ST_WriteP =				4'd2,
+							ST_WriteMO =			4'd3,
+							ST_WriteCommand =		4'd4,
+							ST_ReadCommand =		4'd5,
+							ST_ReadMI =				4'd6,
+							ST_ReadP =				4'd7,
+							ST_ReadMO =				4'd8,
+							ST_ReadCheck =			4'd9,
+							ST_ReadFETransfer =		4'd10,
+							ST_ReadTurnaround =		4'd11,
+							ST_Error =				4'd12;
+													
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -110,14 +115,19 @@ module IntegrityVerifier(
 	wire	[ORAMU-1:0]		PAddr_Int;
 	wire	[ORAML-1:0]		CurrentLeaf_Int, RemappedLeaf_Int;
 
+	wire	[BECMDWidth-1:0] FECommand_Final;
+	wire	[ORAMU-1:0]		FEPAddr_Final, FEShadowPAddr;
+	wire	[ORAML-1:0]		FECurrentLeaf_Final, FERemappedLeaf_Final, FEShadowLeaf;
+	
 	wire	[AESEntropy-1:0] FECurrentCounter_Int, FERemappedCounter_Int;
 	wire					Command_IntValid, Command_IntReady;
 
-	wire					CSIdle, CSWriteMI, CSWriteP, CSWriteMO, CSWriteCommand, CSReadCommand;	
+	wire					CSIdle, CSMI, CSWriteP, CSWriteMO, CSWriteCommand, 
+							CSReadCommand, CSReadP, CSReadMO, CSReadCheck, CSReadFETransfer, CSReadTurnaround;	
 	
-	wire					SMI_Terminal, SP_Terminal, SMO_Terminal, LD_Terminal;
+	wire					SMI_Terminal, SP_Terminal, SMO_Terminal;
 	
-	wire					CommandTransfer;
+	wire					CommandTransfer, FECommandTransfer, BELoadTransfer, FELoadTransfer;
 	
 	// Store Path	
 		
@@ -125,13 +135,25 @@ module IntegrityVerifier(
 	wire	[FEDWidth-1:0]	StoreMACHeader;
 	wire	[BFHWidth-1:0]	SMICount;
 	
-	wire	[FEDWidth-1:0]	FEStoreMAC, StoreHashDataIn;
+	wire	[FEDWidth-1:0]	FEStoreMAC;
 	
 	wire					StoreTransfer, HashTransfer;
+
+	wire	[FEDWidth-1:0]	StoreSourceData;
+	
+	wire					CSMOTransfer, CSPTransfer;	
 	
 	// Load Path
 	
-	wire					BlockLoaded, LoadingMAC;
+	wire	[MACPADWidth-1:0] LoadMAC_Wide;
+	
+	wire	[ORAMH-1:0]		LoadMAC;
+	wire					LoadMACValid, LoadMACInReady, MACCheckComplete;
+	
+	wire					LDD_WE;
+	wire	[BFPWidth-1:0]	LDD_Addr;
+	
+	wire					StoringLoadMode;
 	
 	// Hash engine
 	
@@ -141,8 +163,12 @@ module IntegrityVerifier(
 	wire	[FullDigestWidth-1:0] HashOut;
 	wire					HashOutReady, HashOutValid;
 	
-	wire	[ORAMH-1:0] MACOut;
+	wire	[ORAMH-1:0] 	MACOut;
 	wire	[MACPADWidth-1:0] MACOut_Padded;	
+	
+	// Derived signals
+	
+	reg						CSFERT_Delayed;
 	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
@@ -150,6 +176,11 @@ module IntegrityVerifier(
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
+			if (ERROR_IV !== 1'b0) begin
+				$display("ERROR: Integrity violation (expected,actual) : (%x:%x)", MACOut, LoadMAC);
+				$finish;
+			end
+			
 			if (HashDataInValid && HashDataInReady) begin
 				$display("Hash in: %x", HashDataIn);
 			end
@@ -169,32 +200,48 @@ module IntegrityVerifier(
 	`endif
 
 	//--------------------------------------------------------------------------
+	//	Derived signals
+	//--------------------------------------------------------------------------
+	
+	always @(posedge Clock) begin
+		CSFERT_Delayed <=							CSReadFETransfer;
+	end
+	
+	//--------------------------------------------------------------------------
 	//	Control logic
 	//--------------------------------------------------------------------------
 	
-	assign	ERROR_IV =								1'b0; // TODO set to IV violation						
-	
-	assign	FECommandValid_Final =					CSIdle && FECommandValid;	
+	assign	FECommandValid_Final =					(CSIdle && FECommandValid) || CSReadTurnaround;
 	assign	FECommandReady =						CSIdle && FECommandReady_Final;
+	
+	assign	FECommand_Final =						(FECommand == BECMD_Read) ? BECMD_ReadRmv : 
+													(CSReadTurnaround) ? 		BECMD_Append : 
+																				FECommand;
+	assign	FEPAddr_Final =							(CSReadTurnaround) ? 		FEShadowPAddr :
+																				FEPAddr;
+	assign	FECurrentLeaf_Final =					(CSReadTurnaround) ? 		FEShadowLeaf :
+																				FECurrentLeaf;
+	assign	FERemappedLeaf_Final =					(CSReadTurnaround) ? 		{ORAML{1'bx}} : 
+																				FERemappedLeaf;
 		
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2),
 							.BWLatency(				1))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{FECommand,		FEPAddr, 	FECurrentLeaf, 	FERemappedLeaf}),
+							.InData(				{FECommand_Final,	FEPAddr_Final, 	FECurrentLeaf_Final, 	FERemappedLeaf_Final}),
 							.InValid(				FECommandValid_Final),
 							.InAccept(				FECommandReady_Final),
-							.OutData(				{Command_Int,	PAddr_Int,	CurrentLeaf_Int,RemappedLeaf_Int}),
+							.OutData(				{Command_Int,		PAddr_Int,		CurrentLeaf_Int,		RemappedLeaf_Int}),
 							.OutSend(				Command_IntValid),
 							.OutReady(				Command_IntReady));
 
-	Register #(				.Width(					AESEntropy*2))
-				cnt_reg(	.Clock(					Clock),
+	Register #(				.Width(					ORAMU + ORAML + AESEntropy*2))
+				shdw_reg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
 							.Enable(				FECommandValid_Final && FECommandReady_Final),
-							.In(					{FECurrentCounter, 		FERemappedCounter}),
-							.Out(					{FECurrentCounter_Int, 	FERemappedCounter_Int}));		
+							.In(					{FEPAddr,		FERemappedLeaf,	FECurrentCounter,		FERemappedCounter}),
+							.Out(					{FEShadowPAddr, FEShadowLeaf, 	FECurrentCounter_Int, 	FERemappedCounter_Int}));		
 	
 	assign	BECommand =								Command_Int;
 	assign	BEPAddr =								PAddr_Int;
@@ -204,14 +251,24 @@ module IntegrityVerifier(
 	assign	BECommandValid =						(CSWriteCommand || CSReadCommand) && Command_IntValid;
 	assign	Command_IntReady =						(CSWriteCommand || CSReadCommand) && BECommandReady;
 	
+	assign	FECommandTransfer =						FECommandValid_Final && FECommandReady_Final;
 	assign	CommandTransfer =						BECommandValid && BECommandReady;
 	
+	assign	StoreTransfer =							BEStoreValid && BEStoreReady;	
+	assign	BELoadTransfer =						BELoadValid && BELoadReady;
+	assign	FELoadTransfer =						FELoadValid && FELoadReady;
+	
 	assign	CSIdle =								CS == ST_Idle; 
-	assign	CSWriteMI =								CS == ST_WriteMI;
+	assign	CSMI =									CS == ST_WriteMI || CS == ST_ReadMI;
 	assign	CSWriteP =								CS == ST_WriteP;
+	assign	CSReadP =								CS == ST_ReadP;
+	assign	CSReadMO =								CS == ST_ReadMO;
 	assign	CSWriteMO =								CS == ST_WriteMO;
 	assign	CSWriteCommand =						CS == ST_WriteCommand;
 	assign	CSReadCommand =							CS == ST_ReadCommand;
+	assign	CSReadCheck =							CS == ST_ReadCheck;
+	assign	CSReadFETransfer =						CS == ST_ReadFETransfer;
+	assign	CSReadTurnaround =						CS == ST_ReadTurnaround;
 	
 	always @(posedge Clock) begin
 		if (Reset) CS <= 							ST_Idle;
@@ -222,13 +279,14 @@ module IntegrityVerifier(
 		NS = 										CS;
 		case (CS)
 			ST_Idle :
-				if (ERROR_IV)
-					NS =							ST_Error;
-				else if (Command_IntValid && (	Command_Int == BECMD_Update || 
-												Command_Int == BECMD_Append))
+				if (Command_IntValid && (	Command_Int == BECMD_Update || 
+											Command_Int == BECMD_Append))
 					NS =							ST_WriteMI;
 				else if (Command_IntValid)
-					NS =							ST_ReadCommand;
+					NS =							ST_ReadMI;
+			//
+			// Write states
+			//
 			ST_WriteMI :
 				if (SMI_Terminal)
 					NS =							ST_WriteP;
@@ -241,89 +299,146 @@ module IntegrityVerifier(
 			ST_WriteCommand :
 				if (CommandTransfer)
 					NS =							ST_Idle;
+			//
+			// Read states
+			//
+			ST_ReadMI :
+				if (SMI_Terminal)
+					NS =							ST_ReadCommand;
 			ST_ReadCommand :
 				if (CommandTransfer)
+					NS =							ST_ReadP;
+			ST_ReadP :
+				if (SP_Terminal)
+					NS =							ST_ReadMO;
+			ST_ReadMO :
+				if (SMO_Terminal)
 					NS =							ST_ReadCheck;
 			ST_ReadCheck :
-				if (LD_Terminal)
-					NS =							ST_Idle;
+				if (ERROR_IV)
+					NS =							ST_Error;
+				else if (MACCheckComplete)
+					NS =							ST_ReadFETransfer;
+			ST_ReadFETransfer :
+				if (SP_Terminal)
+					NS =							ST_WriteMI;
+			ST_ReadTurnaround :
+				if (FECommandTransfer)
+					NS =							ST_WriteMI;
 		endcase
 	end
 	
 	//--------------------------------------------------------------------------
-	//	Store Path
+	//	Load U,C into hash engine
 	//--------------------------------------------------------------------------
 
-	assign	BEStoreData =							(CSWriteP) ? FEStoreData : FEStoreMAC;
-	assign	BEStoreValid =							(CSWriteP 	&& FEStoreValid && HashDataInReady) ||
-													(CSWriteMO 	&& HashOutValid);
-	assign	FEStoreReady =							 CSWriteP 	&& BEStoreReady && HashDataInReady;
-	
-	assign	StoreTransfer =							BEStoreValid && BEStoreReady;	
-	
-	//
-	// Phase 1: Write {PAddr,Count} to hash engine
-	//
-	
-	assign	StoreMACHeader_Wide =					{{MIPADWidth - MIWidth{1'b0}}, PAddr_Int, FECurrentCounter_Int};
+	assign	StoreMACHeader_Wide =					{
+														{MIPADWidth - MIWidth{1'b0}}, 
+														PAddr_Int, 
+														(StoringLoadMode) ? FERemappedCounter_Int : FECurrentCounter_Int
+													};
 	
 	CountAlarm  #(  		.Threshold(             MI_FEDChunks))
 				smh_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				CSWriteMI && HashTransfer),
+							.Enable(				CSMI && HashTransfer),
 							.Count(					SMICount),
 							.Done(					SMI_Terminal));		
 	Mux	#(.Width(FEDWidth), .NPorts(MI_FEDChunks), .SelectCode(0)) SMI_mux(SMICount, StoreMACHeader_Wide, StoreMACHeader);	
-		
-	assign	StoreHashDataIn =						(CSWriteMI) ? StoreMACHeader : FEStoreData;
-	
-	//
-	// Phase 2: Write block to backend & hash engine
-	//
+
+	//--------------------------------------------------------------------------
+	//	Load D into hash engine
+	//--------------------------------------------------------------------------
+	 
+	assign	CSPTransfer =							(CSWriteP && StoreTransfer) || 
+													(CSReadP && BELoadTransfer) ||
+													(CSReadFETransfer && FELoadTransfer);
 	
 	CountAlarm  #(  		.Threshold(             BlkSize_FEDChunks))
 				smp_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				CSWriteP && StoreTransfer),
+							.Enable(				CSPTransfer),
+							.Count(					LDD_Addr),
 							.Done(					SP_Terminal));
-							 
-	//
-	// Phase 3: Write MAC to backend
-	//
+			
+	//--------------------------------------------------------------------------
+	//	Rd/Wr hash from/to data stream
+	//--------------------------------------------------------------------------
 	
+	assign	CSMOTransfer =							(CSWriteMO && StoreTransfer) || 
+													(CSReadMO && BELoadTransfer);	
+			
 	CountAlarm  #(  		.Threshold(             MAC_FEDChunks))
 				smo_cnt(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				CSWriteMO && StoreTransfer),
+							.Enable(				CSMOTransfer),
 							.Count(					SMOCount),
 							.Done(					SMO_Terminal));	
-	Mux	#(.Width(FEDWidth), .NPorts(MAC_FEDChunks), .SelectCode(0)) SMO_mux(SMOCount, MACOut_Padded, FEStoreMAC);							
+			
+	//--------------------------------------------------------------------------
+	//	Store Path
+	//--------------------------------------------------------------------------
+	
+	assign	StoreSourceData =						(StoringLoadMode) ? FELoadData : FEStoreData;
+	
+	assign	BEStoreData =							(CSWriteP) ? StoreSourceData : FEStoreMAC;
+	assign	BEStoreValid =							(CSWriteP 	&& (FEStoreValid || StoringLoadMode) && HashDataInReady) ||
+													(CSWriteMO 	&& HashOutValid);
+
+	assign	FEStoreReady =							 CSWriteP 	&& BEStoreReady && HashDataInReady && ~StoringLoadMode;
+	
+	Mux	#(.Width(FEDWidth), .NPorts(MAC_FEDChunks), .SelectCode(0)) SMO_mux(SMOCount, MACOut_Padded, FEStoreMAC);
 							
 	//--------------------------------------------------------------------------
 	//	Load Path
 	//--------------------------------------------------------------------------
 
-	CountAlarm  #(  		.IThreshold(			BlkSize_FEDChunks),
-							.Threshold(             BlkSize_FEDChunks + MAC_FEDChunks))
-				MAC_lc(		.Clock(					Clock),
+	assign	FELoadValid	=							CSFERT_Delayed;
+	assign	BELoadReady	=							(CSReadP  && HashDataInReady) ||
+													(CSReadMO && LoadMACInReady);
+	
+	FIFOShiftRound #(		.IWidth(				FEDWidth),
+							.OWidth(				MACPADWidth),
+							.Reverse(				1))
+				st_m_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Enable(				BELoadValid && FELoadReady),
-							.Intermediate(			BlockLoaded),
-							.Done(					LD_Terminal));	
-		
-	Register1b ldm_m(Clock, Reset || LD_Terminal, BlockLoaded, LoadingMAC);
-		
-	assign	FELoadData =							BELoadData;
-	assign	FELoadValid	=							BELoadValid && !LoadingMAC;
-	assign	BELoadReady	=							FELoadReady;
+							.InData(				BELoadData),
+							.InValid(				CSReadMO && BELoadTransfer),
+							.InAccept(				LoadMACInReady),
+							.OutData(				LoadMAC_Wide),
+							.OutValid(				LoadMACValid),
+							.OutReady(				MACCheckComplete));
+	assign	LoadMAC =								LoadMAC_Wide[ORAMH-1:0];
+	
+	assign	MACCheckComplete =						CSReadCheck && LoadMACValid && HashOutValid;
+	assign	ERROR_IV =								MACCheckComplete && (LoadMAC != MACOut);
+	
+	Register1b ld_m(Clock, Reset || CSIdle, CSReadP, StoringLoadMode);
+	
+	assign	LDD_WE =								CSReadP && BELoadTransfer;
+	
+	RAM			#(			.DWidth(				FEDWidth),
+							.AWidth(				BFPWidth)
+							`ifdef ASIC , .ASIC(1) `endif)
+				ld_d(		.Clock(					Clock),
+							.Reset(					1'b0),
+							.Enable(				1'b1),
+							.Write(					LDD_WE),
+							.Address(				LDD_Addr),
+							.DIn(					BELoadData),
+							.DOut(					FELoadData));
 	
 	//--------------------------------------------------------------------------
 	//	MAC core
 	//--------------------------------------------------------------------------
 	
-	assign	HashDataIn =							StoreHashDataIn;
-	assign	HashDataInValid =						(CSWriteMI) ||
-													(CSWriteP && FEStoreValid && BEStoreReady);
+	assign	HashDataIn =							(CSMI) ? 			StoreMACHeader : 
+													(CSReadP) ? 		BELoadData : // on load
+													(StoringLoadMode) ? FELoadData : // on writeback
+																		FEStoreData;
+	assign	HashDataInValid =						CSMI ||
+													(CSWriteP && FEStoreValid && BEStoreReady) ||
+													(CSReadP && BELoadValid);
 	
 	assign	HashTransfer =							HashDataInReady && HashDataInValid;
 	
@@ -343,7 +458,7 @@ module IntegrityVerifier(
 	assign	MACOut =								HashOut[ORAMH-1:0];
 	assign	MACOut_Padded =							{{MACPADWidth-ORAMH{1'b0}} , MACOut};
 	
-	assign	HashOutReady =							SMO_Terminal;
+	assign	HashOutReady =							(CSWriteMO && SMO_Terminal) || MACCheckComplete;
 	
 	//--------------------------------------------------------------------------
 endmodule

@@ -418,11 +418,12 @@ module PathORAMBackendCore(
 		
 		Register1b ldm_m(Clock, Reset || LoadComplete, BlockLoaded, LoadingMAC);
 	
-		FIFOShiftRound #(	.IWidth(				ORAMH),
-							.OWidth(				FEDWidth))
+		FIFOShiftRound #(	.IWidth(				MACPADWidth),
+							.OWidth(				FEDWidth),
+							.Reverse(				1))
 				st_m_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				Stash_ReturnMAC),
+							.InData(				{{MACPADWidth-ORAMH{1'bx}}, Stash_ReturnMAC}),
 							.InValid(				Stash_ReturnComplete),
 							.InAccept(				),
 							.OutData(				LoadMACData),
