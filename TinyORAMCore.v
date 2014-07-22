@@ -89,8 +89,10 @@ module TinyORAMCore(
 	`include "CommandsLocal.vh"
 	
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
-	
-	localparam				DelayedWB =				EnableIV;
+
+	// No scheme currently needs DWB
+	// [Note: there is some logic in BackendControllerCore that implicitly assumes REW==DWB.  Careful when enabling it.	
+	localparam				DelayedWB =				0; 
 		
 	//--------------------------------------------------------------------------
 	//	System I/O

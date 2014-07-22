@@ -111,13 +111,47 @@ module testUORAM;
 							.OutValid(				DDR3SDRAM_WriteValid_Wide),
 							.OutReady(				DDR3SDRAM_WriteReady_Wide));
 	
+	wire	[DDRAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
+	wire					DRAMReadAddrValid, DRAMWriteAddrValid;
+	FIFORAM	#(				.Width(					DDRAWidth),
+							.Buffering(				500))
+		rd_addr(			.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DDR3SDRAM_Address),
+							.InValid(				DDR3SDRAM_Command == DDR3CMD_Read && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady),
+							.InAccept(				),
+							.OutData(				DRAMReadAddr),
+							.OutSend(				DRAMReadAddrValid),
+							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
+	/*
+	FIFORAM	#(				.Width(					DDRAWidth),
+							.Buffering(				500))
+		wr_addr(			.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DDR3SDRAM_Address),
+							.InValid(				DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady),
+							.InAccept(				),
+							.OutData(				DRAMWriteAddr),
+							.OutSend(				DRAMWriteAddrValid),
+							.OutReady(				DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide));
+	*/
 	always @(posedge Clock) begin
+		if (DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady) begin
+			$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
+		end
+	
 		if (DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide) begin
-			$display("[%m @ %t] Write DRAM:    %x", $time, DDR3SDRAM_WriteData_Wide);
+			$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
+			/*if (!DRAMWriteAddrValid) begin
+				$finish;
+			end*/
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide & DDR3SDRAM_ReadReady_Wide) begin
-			$display("[%m @ %t] Read DRAM:     %x", $time, DDR3SDRAM_ReadData_Wide);
+			$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
+			if (!DRAMReadAddrValid) begin
+				$finish;
+			end
 		end
 	end
 	
