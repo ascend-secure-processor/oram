@@ -91,7 +91,8 @@ module TinyORAMCore(
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 
 	// No scheme currently needs DWB
-	// [Note: there is some logic in BackendControllerCore that implicitly assumes REW==DWB.  Careful when enabling it.	
+	// [Note] there is some logic in BackendControllerCore that implicitly 
+	// assumes REW==DWB.  Careful when enabling it.	
 	localparam				DelayedWB =				0; 
 		
 	//--------------------------------------------------------------------------
@@ -162,7 +163,8 @@ module TinyORAMCore(
 			
 			if (DDRDWidth < BEDWidth || 
 				DebugDRAMReadTiming || // TODO this is commented out in backend right now ...
-				DDRDWidth % BEDWidth != 0) begin
+				DDRDWidth % BEDWidth != 0 ||
+				DelayedWB && !EnableREW) begin
 				$display("[%m] ERROR: Illegal parameter setting."); // See BucketLocal.vh for more information.
 				$finish;
 			end
