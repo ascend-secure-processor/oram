@@ -81,7 +81,7 @@ module Keccak_WF (
 							.in(			HashIn), 
 							.in_ready(		HashInValid), 
 							.is_last(		LastChunk), 
-							.byte_num(		BytesInLastChunk), 
+							.byte_num(		BytesInLastChunk[3:0]), 
 							.buffer_full(	HashBufFull), 
 							.out(			HashOut_pre), 
 							.out_ready(		HashOutValid_pre)
