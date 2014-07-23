@@ -208,7 +208,7 @@ module PathORAMBackendCore(
 
 	// debugging
 	
-	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_BEndInner;
+	(* mark_debug = "TRUE" *)	wire					ERROR_OF1, ERROR_OF2, ERROR_BEndInner;
 	
 	//--------------------------------------------------------------------------
 	//	Initial state
@@ -224,9 +224,10 @@ module PathORAMBackendCore(
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 	
-	Register1b 	errno1(Clock, Reset, DRAMReadDataValid && ~DRAMReadDataReady, 	ERROR_OF1);	
-	Register1b 	errANY(Clock, Reset, ERROR_OF1, 								ERROR_BEndInner);
-	
+	Register1b 	errno1(Clock, Reset, DRAMReadDataValid && ~DRAMReadDataReady, 			ERROR_OF1);	
+	Register1b 	errno2(Clock, Reset, Stash_ReturnDataValid && !Stash_ReturnDataReady, 	ERROR_OF2);	
+	Register1b 	errANY(Clock, Reset, ERROR_OF1 || ERROR_OF2,							ERROR_BEndInner);
+							
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
 		integer WriteCount_Sim = 0;
@@ -238,6 +239,11 @@ module PathORAMBackendCore(
 			if (ERROR_OF1) begin
 				$display("[%m @ %t] ERROR: BEnd needed backpressure!", $time);
 				$finish;			
+			end
+			
+			if (ERROR_OF2) begin
+				$display("[%m @ %t] ERROR: BEnd load buffer needed backpressure! (or we returned data when we shouldn't have ...)", $time);
+				$finish;						
 			end
 			
 			if (CSAccess) StartedFirstAccess <= 1'b1;

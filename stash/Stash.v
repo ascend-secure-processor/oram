@@ -218,7 +218,7 @@ module Stash(
 	wire					Core_ResetDone;
 	wire	[SCMDWidth-1:0]	Core_Command;
 	wire					Core_CommandValid, Core_CommandReady, Core_CommandComplete;
-	wire					PerformCoreHeaderUpdate, CoreHeaderRemove;
+	wire					PerformReturnData, PerformCoreHeaderUpdate, CoreHeaderRemove;
 	
 	wire	[BEDWidth-1:0]	Core_InData;
 	wire	[ORAMU-1:0]		Core_InPAddr;
@@ -584,7 +584,11 @@ module Stash(
 													(	(AccessCommand == BECMD_Update) | 
 														(AccessCommand == BECMD_Read) |
 														(AccessCommand == BECMD_ReadRmv));
-														
+									
+	assign	PerformReturnData =						AccessStarted & ~AccessIsDummy & 
+													(	(AccessCommand == BECMD_Read) |
+														(AccessCommand == BECMD_ReadRmv));
+									
 	// Having BlockWasFound prevents us from removing blocks that aren't there.  
 	// Handling this case is only important for debugging											
 	assign	CoreHeaderRemove =						AccessStarted & ~AccessIsDummy & BlockWasFound & 
@@ -757,8 +761,8 @@ module Stash(
 	// operation
 	Register	#(			.Width(					1))
 				ret_start(	.Clock(					Clock),
-							.Reset(					Reset | BlockReturnComplete),
-							.Set(					CSTurnaround1 & PerformCoreHeaderUpdate & BlockWasFound & ~BlockReturnComplete),
+							.Reset(					Reset | ( Core_CommandComplete && CSTurnaround1)),
+							.Set(							 ~Core_CommandComplete && CSTurnaround1 && PerformReturnData && BlockWasFound),
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					ReturnInProgress));							
@@ -768,7 +772,7 @@ module Stash(
 	assign	ReturnLeaf =							Core_OutLeaf;
 	assign	ReturnMAC =								Core_OutMAC;
 	assign	ReturnDataOutValid =					ReturnInProgress & Core_OutValid;
-	assign	BlockReturnComplete =					ReturnInProgress & BlockReadComplete_Internal;
+	assign	BlockReturnComplete =					ReturnInProgress & Core_CommandComplete;
 	
 	//--------------------------------------------------------------------------
 	//	Intra-access waiting
