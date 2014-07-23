@@ -60,10 +60,12 @@ module DRAMToStash(
 
 	`include "PathORAM.vh"
 	
-	`include "BucketLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketLocal.vh"
 	
-	localparam				BCWidth =				`log2(ORAMZ);
+	localparam				BCWidth =				`log2(ORAMZ),
+
+	`max(1,`log2(ORAMZ));
 	
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -110,6 +112,8 @@ module DRAMToStash(
 	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
 	wire	[BigLWidth-1:0]	HeaderDown_Leaves;
 
+	wire	[DMWidth-1:0]	DMSelect;
+
 	wire	[ORAMU-1:0]		HeaderDown_PAddr;
 	wire	[ORAML-1:0]		HeaderDown_Leaf;
 	wire					HeaderDown_ValidBit;		
@@ -153,9 +157,10 @@ module DRAMToStash(
 	assign	HeaderDown_PAddrs =						Header_Wide[BktHUStart+BigUWidth-1:BktHUStart];
 	assign	HeaderDown_Leaves =						Header_Wide[BktHLStart+BigLWidth-1:BktHLStart];
 	
-	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
-	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_PAddrs, 		HeaderDown_PAddr);
-	Mux	#(.Width(ORAML), 	.NPorts(ORAMZ), .SelectCode(0)) L_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_Leaves, 		HeaderDown_Leaf);
+	assign	DMSelect =								ORAMZ - 1 - CurrentBlock;
+	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(DMSelect, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
+	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(DMSelect, HeaderDown_PAddrs, 		HeaderDown_PAddr);
+	Mux	#(.Width(ORAML), 	.NPorts(ORAMZ), .SelectCode(0)) L_mux(DMSelect, HeaderDown_Leaves, 		HeaderDown_Leaf);
 	
 	CountAlarm  #(  		.Threshold(             BlkSize_BEDChunks))
 				valid_cnt(	.Clock(					Clock),
@@ -219,7 +224,7 @@ module DRAMToStash(
 		wire	[BigHWidth-1:0]	HeaderDown_MACs;
 	
 		assign	HeaderDown_MACs =					Header_Wide[BktHHStart+BigHWidth-1:BktHHStart];
-		Mux	#(.Width(ORAMH), .NPorts(ORAMZ), .SelectCode(0)) H_mux(ORAMZ - 1 - CurrentBlock, HeaderDown_MACs, HeaderDown_MAC);
+		Mux	#(.Width(ORAMH), .NPorts(ORAMZ), .SelectCode(0)) H_mux(DMSelect, HeaderDown_MACs, HeaderDown_MAC);
 		assign	StashMAC =							HeaderDown_MAC;
 	end else begin:NO_MAC
 		assign	StashMAC =							{ORAMH{1'bx}};

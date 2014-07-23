@@ -25,9 +25,9 @@ module StashToDRAM(
 
 	`include "PathORAM.vh"
 	
+	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "StashLocal.vh"
-	`include "DDR3SDRAMLocal.vh"
 	
 	localparam				Space =					RHWidth - BktHSize_RawBits,
 							BBEDWidth =				`log2(BktSize_BEDChunks);
