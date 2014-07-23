@@ -63,7 +63,7 @@ module DRAMToStash(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	
-	localparam				BCWidth =				`max(1,`log2(ORAMZ)),
+	localparam				BCWidth =				`max(1,`log2(ORAMZ));
 
 	//--------------------------------------------------------------------------
 	//	System I/O
