@@ -362,7 +362,7 @@ module StashCore(
 		
 		always @(posedge Clock) begin
 			if (MS_StartingWrite) begin
-				$display("[%m @ %t] Writing [a=%x, l=%x (dec = %d), sloc=%d]", $time, InPAddr, InLeaf, InLeaf, StashE_Address);
+				$display("[%m @ %t] Writing [a=%x, l=%x, h=%x, sloc=%d]", $time, InPAddr, InLeaf, InMAC, StashE_Address);
 				if (CSOverwriting) begin
 					$display("\t(Overwrite)");
 				end

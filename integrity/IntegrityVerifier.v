@@ -140,6 +140,7 @@ module IntegrityVerifier(
 	wire					StoreTransfer, HashTransfer;
 
 	wire	[FEDWidth-1:0]	StoreSourceData;
+	wire					StoreSourceValid;
 	
 	wire					CSMOTransfer, CSPTransfer;	
 	
@@ -166,10 +167,6 @@ module IntegrityVerifier(
 	wire	[ORAMH-1:0] 	MACOut;
 	wire	[MACPADWidth-1:0] MACOut_Padded;	
 	
-	// Derived signals
-	
-	reg						CSFERT_Delayed;
-	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
@@ -182,31 +179,27 @@ module IntegrityVerifier(
 			end
 			
 			if (HashDataInValid && HashDataInReady) begin
-				$display("Hash in: %x", HashDataIn);
+				$display("[IV] Hash in: %x", HashDataIn);
 			end
 			
 			if (HashOutValid && HashOutReady) begin
-				$display("Hash out: %x", HashOut);
+				$display("[IV] Hash out: %x", HashOut);
 			end
 			
-			if (FECommandValid_Final && FECommandReady_Final) begin
-				$display("Command: %x %x %x %x", FECommand, FEPAddr, FECurrentLeaf, FERemappedLeaf);
+			if (Command_IntValid && Command_IntReady) begin
+				$display("[IV] Command: %x %x %x %x", Command_Int, PAddr_Int, CurrentLeaf_Int, RemappedLeaf_Int);
 			end
 
 			if (BEStoreValid && BEStoreReady) begin
-				$display("Store data: %x", BEStoreData);
+				$display("[IV] Store data: %x", BEStoreData);
+			end
+			
+			if (BELoadValid && BELoadReady) begin
+				$display("[IV] Load data: %x", BELoadData);
 			end
 		end
 	`endif
 
-	//--------------------------------------------------------------------------
-	//	Derived signals
-	//--------------------------------------------------------------------------
-	
-	always @(posedge Clock) begin
-		CSFERT_Delayed <=							CSReadFETransfer;
-	end
-	
 	//--------------------------------------------------------------------------
 	//	Control logic
 	//--------------------------------------------------------------------------
@@ -219,9 +212,9 @@ module IntegrityVerifier(
 																				FECommand;
 	assign	FEPAddr_Final =							(CSReadTurnaround) ? 		FEShadowPAddr :
 																				FEPAddr;
-	assign	FECurrentLeaf_Final =					(CSReadTurnaround) ? 		FEShadowLeaf :
+	assign	FECurrentLeaf_Final =					(CSReadTurnaround) ? 		{ORAML{1'bx}} :
 																				FECurrentLeaf;
-	assign	FERemappedLeaf_Final =					(CSReadTurnaround) ? 		{ORAML{1'bx}} : 
+	assign	FERemappedLeaf_Final =					(CSReadTurnaround) ? 		FEShadowLeaf : 
 																				FERemappedLeaf;
 		
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2),
@@ -321,7 +314,7 @@ module IntegrityVerifier(
 					NS =							ST_ReadFETransfer;
 			ST_ReadFETransfer :
 				if (SP_Terminal)
-					NS =							ST_WriteMI;
+					NS =							ST_ReadTurnaround;
 			ST_ReadTurnaround :
 				if (FECommandTransfer)
 					NS =							ST_WriteMI;
@@ -347,7 +340,7 @@ module IntegrityVerifier(
 	Mux	#(.Width(FEDWidth), .NPorts(MI_FEDChunks), .SelectCode(0)) SMI_mux(SMICount, StoreMACHeader_Wide, StoreMACHeader);	
 
 	//--------------------------------------------------------------------------
-	//	Load D into hash engine
+	//	Move Data from FE<->BE, load hash engine with data
 	//--------------------------------------------------------------------------
 	 
 	assign	CSPTransfer =							(CSWriteP && StoreTransfer) || 
@@ -380,9 +373,10 @@ module IntegrityVerifier(
 	//--------------------------------------------------------------------------
 	
 	assign	StoreSourceData =						(StoringLoadMode) ? FELoadData : FEStoreData;
+	assign	StoreSourceValid = 						FEStoreValid || StoringLoadMode;
 	
 	assign	BEStoreData =							(CSWriteP) ? StoreSourceData : FEStoreMAC;
-	assign	BEStoreValid =							(CSWriteP 	&& (FEStoreValid || StoringLoadMode) && HashDataInReady) ||
+	assign	BEStoreValid =							(CSWriteP 	&& StoreSourceValid && HashDataInReady) ||
 													(CSWriteMO 	&& HashOutValid);
 
 	assign	FEStoreReady =							 CSWriteP 	&& BEStoreReady && HashDataInReady && ~StoringLoadMode;
@@ -393,7 +387,7 @@ module IntegrityVerifier(
 	//	Load Path
 	//--------------------------------------------------------------------------
 
-	assign	FELoadValid	=							CSFERT_Delayed;
+	assign	FELoadValid	=							CSReadFETransfer;
 	assign	BELoadReady	=							(CSReadP  && HashDataInReady) ||
 													(CSReadMO && LoadMACInReady);
 	
@@ -418,7 +412,8 @@ module IntegrityVerifier(
 	assign	LDD_WE =								CSReadP && BELoadTransfer;
 	
 	RAM			#(			.DWidth(				FEDWidth),
-							.AWidth(				BFPWidth)
+							.AWidth(				BFPWidth),
+							.RLatency(				0)
 							`ifdef ASIC , .ASIC(1) `endif)
 				ld_d(		.Clock(					Clock),
 							.Reset(					1'b0),
@@ -437,7 +432,7 @@ module IntegrityVerifier(
 													(StoringLoadMode) ? FELoadData : // on writeback
 																		FEStoreData;
 	assign	HashDataInValid =						CSMI ||
-													(CSWriteP && FEStoreValid && BEStoreReady) ||
+													(CSWriteP && StoreSourceValid && BEStoreReady) ||
 													(CSReadP && BELoadValid);
 	
 	assign	HashTransfer =							HashDataInReady && HashDataInValid;

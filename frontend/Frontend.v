@@ -133,7 +133,7 @@ module Frontend
 							.FECurrentLeaf(			OldLeaf_Pre), 
 							.FERemappedLeaf(		NewLeaf_Pre), 
 							.FECurrentCounter(		64'hdeadbeef), // TODO 
-							.FERemappedCounter(		64'hba5eba11), // TODO
+							.FERemappedCounter(		64'hdeadbeef), // TODO
 							.FECommandValid(		CmdOutValid_Pre), 
 							.FECommandReady(		CmdOutReady_Pre),
 							
