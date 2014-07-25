@@ -1,4 +1,4 @@
-	
+
 	// TODO hash digest size should be factored into the header size
 
 	// Suffix meanings:
@@ -9,14 +9,14 @@
 
 	`ifdef SIMULATION
 	localparam				IVINITValue =			{32'hdeadbeef, {AESEntropy-32{1'b0}}}; 	// Encryption initialization vector init values (1'bx makes it a bit cheaper in HW)
-	
+
 	initial begin
-		if (ORAMB == PINIT || 
+		if (ORAMB == PINIT ||
 			ORAMU == PINIT ||
 			ORAML == PINIT ||
 			ORAMZ == PINIT ||
-			BEDWidth == PINIT ||
-			EnableIV == PINIT) begin
+			BEDWidth == PINIT) begin //||
+		    //EnableIV == PINIT) begin
 			$display("[%m] ERROR: parameter uninitialized.");
 			$finish;
 		end
@@ -27,8 +27,8 @@
 
 	//--------------------------------------------------------------------------
 	//	Raw bit fields
-	//--------------------------------------------------------------------------	
-	
+	//--------------------------------------------------------------------------
+
 	// Header flit
 	localparam				BigVWidth =				ORAMZ,
 							BigUWidth =				ORAMU * ORAMZ,
@@ -46,28 +46,28 @@
 	//	Quantities in terms of the Memory/DRAM width
 	//--------------------------------------------------------------------------
 
-	// Now, we align bitfields to DDR3 burst lengths.  This means (for BEDWidth 
-	// == DDRDWidth) that we won't need expensive re-alignment logic in ORAM.  
-	// For the BEDWidth < DDRDWidth case, we will lose bandwidth if ORAMB % 
+	// Now, we align bitfields to DDR3 burst lengths.  This means (for BEDWidth
+	// == DDRDWidth) that we won't need expensive re-alignment logic in ORAM.
+	// For the BEDWidth < DDRDWidth case, we will lose bandwidth if ORAMB %
 	// DDRDWidth != 0.
 
 	localparam				BlkSize_DRBursts =		`divceil(ORAMB, DDRDWidth),
 							BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
 							BktPSize_DRBursts =		ORAMZ * BlkSize_DRBursts,
 							BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth, // = 512 for all configs we care about
-							BktPSize_RndBits =		BktPSize_DRBursts * DDRDWidth;	
-							
+							BktPSize_RndBits =		BktPSize_DRBursts * DDRDWidth;
+
 	localparam				BktSize_DRBursts =		BktHSize_DRBursts + BktPSize_DRBursts,
 							BktSize_RndBits =		BktSize_DRBursts * DDRDWidth,
 							BktSize_DRWords =		BktSize_RndBits / DDRDQWidth; // = E.g., for Z = 5, BktSize_TotalRnd = 3072 and BktSize_DDRWords = 48
 
 	// ... and associated helper params
-	localparam				
+	localparam
 							PathSize_DRBursts =		(ORAML + 1) * BktSize_DRBursts,
 							PathPSize_DRBursts =	(ORAML + 1) * BktPSize_DRBursts,
 							BBSTWidth =				`log2(BktSize_DRBursts), // Block DRAM burst width
-							PBSTWidth =				`log2(PathSize_DRBursts); // Path DRAM burst width		
-	
+							PBSTWidth =				`log2(PathSize_DRBursts); // Path DRAM burst width
+
 	//--------------------------------------------------------------------------
 	//	Quantities in terms of BEDWidth
 	//--------------------------------------------------------------------------
@@ -81,4 +81,3 @@
 							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
 
 	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth;
-	

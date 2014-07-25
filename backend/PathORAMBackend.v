@@ -7,62 +7,62 @@
 
 //==============================================================================
 //	Module:		PathORAMBackend
-//	Desc:		The stash, AES, address generation, and throughput back-pressure 
+//	Desc:		The stash, AES, address generation, and throughput back-pressure
 //				logic (e.g., dummy access control, REW pattern control)
 //==============================================================================
 module PathORAMBackend(
 	Clock, AESClock, Reset,
 
-	Command, PAddr, CurrentLeaf, RemappedLeaf, 
+	Command, PAddr, CurrentLeaf, RemappedLeaf,
 	CommandValid, CommandReady,
 
-	LoadData, 
+	LoadData,
 	LoadValid, LoadReady,
 
 	StoreData,
 	StoreValid, StoreReady,
-	
+
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
 	);
-	
+
 	//--------------------------------------------------------------------------
 	//	Parameters & Constants
 	//--------------------------------------------------------------------------
 
 	`include "PathORAM.vh"
-	
+
 	`include "StashLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
-	
+
 	parameter				ORAMUValid =			21;
-	
+
 	parameter				DebugDRAMReadTiming =	0;
-	
+
 	localparam				ORAMLogL = 				`log2(ORAML+1);
-	
+
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
-		
+
 	input 					Clock, AESClock, Reset;
-	
+
 	//--------------------------------------------------------------------------
 	//	Frontend Interface
 	//--------------------------------------------------------------------------
 
 	input	[BECMDWidth-1:0] Command;
 	input	[ORAMU-1:0]		PAddr;
-	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX 
+	input	[ORAML-1:0]		CurrentLeaf; // If Command == Append, this is XX
 	input	[ORAML-1:0]		RemappedLeaf;
 	input					CommandValid;
 	output 					CommandReady;
 
 	// TODO set CommandReady = 0 if LoadDataReady = 0 (i.e., the front end can't take our result!)
-	
+
 	output	[FEDWidth-1:0]	LoadData;
 	output					LoadValid;
 	input 					LoadReady;
@@ -70,7 +70,7 @@ module PathORAMBackend(
 	input	[FEDWidth-1:0]	StoreData;
 	input 					StoreValid;
 	output 					StoreReady;
-	
+
 	//--------------------------------------------------------------------------
 	//	DRAM Interface
 	//--------------------------------------------------------------------------
@@ -79,10 +79,10 @@ module PathORAMBackend(
 	output	[DDRCWidth-1:0]	DRAMCommand;
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
-	
+
 	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
-	
+
 	output	[BEDWidth-1:0]	DRAMWriteData;
 	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
@@ -91,20 +91,20 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
-	
+
 	// Backend - AES
 
     (* mark_debug = "FALSE" *)	wire                    DRAMInitComplete;
-	
+
     (* mark_debug = "TRUE" *)	wire 	[BEDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
-	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;	
+	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
 
 	// PHY - DRAM
-	
+
 	wire	[BEDWidth-1:0]	PBF_DRAMReadData;
-	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;	
-	
+	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;
+
 	// REW
 
 	wire    [ORAMU-1:0]		ROPAddr;
@@ -117,7 +117,7 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
-	
+
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
 			if (DRAMReadDataValid && ~PathBuffer_InReady) begin
@@ -126,7 +126,7 @@ module PathORAMBackend(
 			end
 		end
 	`endif
-		
+
 	//--------------------------------------------------------------------------
 	//	Address generation & the stash
 	//--------------------------------------------------------------------------
@@ -137,23 +137,23 @@ module PathORAMBackend(
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
-							
+
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
-							
+
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
-							
+
 							.ORAMUValid(			ORAMUValid))
 			bend_core(		.Clock(					Clock),
 				`ifdef ASIC
 							.Reset(					Reset),
 				`else
 							.Reset(					1'b0),
-				`endif	
+				`endif
 							.Command(				Command),
 							.PAddr(					PAddr),
 							.CurrentLeaf(			CurrentLeaf),
@@ -166,31 +166,31 @@ module PathORAMBackend(
 							.StoreData(				StoreData),
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
-							
+
 							.DRAMCommandAddress(	DRAMCommandAddress),
 							.DRAMCommand(			DRAMCommand),
 							.DRAMCommandValid(		DRAMCommandValid),
-							.DRAMCommandReady(		DRAMCommandReady),			
+							.DRAMCommandReady(		DRAMCommandReady),
 
 							.DRAMReadData(			AES_DRAMReadData),
 							.DRAMReadDataValid(		AES_DRAMReadDataValid),
 							.DRAMReadDataReady(		AES_DRAMReadDataReady),
-							
+
 							.DRAMWriteData(			AES_DRAMWriteData),
 							.DRAMWriteDataValid(	AES_DRAMWriteDataValid),
 							.DRAMWriteDataReady(	AES_DRAMWriteDataReady),
-							
+
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
 							.REWRoundDummy(			REWRoundDummy),
-							
-							.ROStartCCValid(		ROStartCCValid), 
+
+							.ROStartCCValid(		ROStartCCValid),
 							.ROStartAESValid(		ROStartAESValid),
-							.ROStartCCReady(		ROStartCCReady), 
+							.ROStartCCReady(		ROStartCCReady),
 							.ROStartAESReady(		ROStartAESReady),
-							
+
 							.DRAMInitComplete(		DRAMInitComplete));
-	
+
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
 	//--------------------------------------------------------------------------
@@ -207,31 +207,31 @@ module PathORAMBackend(
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
 							.ORAMUValid(			ORAMUValid))
-			aes(			.Clock(					Clock), 
+			aes(			.Clock(					Clock),
 							.FastClock(				AESClock),
 			`ifdef ASIC
 							.Reset(					Reset),
-			`else	
+			`else
 							.Reset(					1'b0),
-			`endif	
+			`endif
 							.ROPAddr(				ROPAddr),
-							.ROLeaf(				ROLeaf), 
+							.ROLeaf(				ROLeaf),
 							.ROStartAESValid(		ROStartAESValid),
 							.ROStartAESReady(		ROStartAESReady),
-							
-							.BEDataOut(				AES_DRAMReadData), 
-							.BEDataOutValid(		AES_DRAMReadDataValid), 					
-	
-							.BEDataIn(				AES_DRAMWriteData), 
-							.BEDataInValid(			AES_DRAMWriteDataValid), 
-							.BEDataInReady(			AES_DRAMWriteDataReady),	
-							
-							.DRAMReadData(			PBF_DRAMReadData), 
-							.DRAMReadDataValid(		PBF_DRAMReadDataValid), 
+
+							.BEDataOut(				AES_DRAMReadData),
+							.BEDataOutValid(		AES_DRAMReadDataValid),
+
+							.BEDataIn(				AES_DRAMWriteData),
+							.BEDataInValid(			AES_DRAMWriteDataValid),
+							.BEDataInReady(			AES_DRAMWriteDataReady),
+
+							.DRAMReadData(			PBF_DRAMReadData),
+							.DRAMReadDataValid(		PBF_DRAMReadDataValid),
 							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
-							
-							.DRAMWriteData(			DRAMWriteData), 
-							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+
+							.DRAMWriteData(			DRAMWriteData),
+							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	end else if (EnableAES) begin:BASIC_AES
 		AESPathORAM #(		.ORAMB(					ORAMB), // TODO which of these params are really needed?
@@ -244,24 +244,28 @@ module PathORAMBackend(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 				aes(		.Clock(					Clock),
+				`ifdef ASIC
 							.Reset(					Reset),
-							
-							.DRAMReadData(			PBF_DRAMReadData), 
-							.DRAMReadDataValid(		PBF_DRAMReadDataValid), 
+				`else
+							.Reset(					1'b0),
+				`endif
+
+							.DRAMReadData(			PBF_DRAMReadData),
+							.DRAMReadDataValid(		PBF_DRAMReadDataValid),
 							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
-							
-							.DRAMWriteData(			DRAMWriteData), 
-							.DRAMWriteDataValid(	DRAMWriteDataValid), 
+
+							.DRAMWriteData(			DRAMWriteData),
+							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady),
-													
+
 							.BackendRData(			AES_DRAMReadData),
 							.BackendRValid(			AES_DRAMReadDataValid),
 							.BackendRReady(			AES_DRAMReadDataReady),
-							
+
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady),
-	
+
 							.DRAMInitDone(			DRAMInitComplete));
 	end else begin:NO_AES
 	`ifdef ASIC
@@ -269,16 +273,16 @@ module PathORAMBackend(
 	assign	AES_DRAMReadData =						PBF_DRAMReadData;
 	assign	AES_DRAMReadDataValid =					PBF_DRAMReadDataValid;
 	assign	DRAMReadDataReady =						AES_DRAMReadDataReady;
-	
+
 	assign	DRAMWriteData =							AES_DRAMWriteData;
 	assign	DRAMWriteDataValid =					AES_DRAMWriteDataValid;
 	assign	AES_DRAMWriteDataReady =				DRAMWriteDataReady;
 	`else
-	// These buffers are here so that we can model AES timing.  If you 
+	// These buffers are here so that we can model AES timing.  If you
 	// don't, comment them out ;-)
 
-	localparam				AESLatency =			21 + 8; // assuming tiny_aes		
-	
+	localparam				AESLatency =			21 + 8; // assuming tiny_aes
+
 	FIFORAM	#(				.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
@@ -290,7 +294,7 @@ module PathORAMBackend(
 							.OutData(				AES_DRAMReadData),
 							.OutSend(				AES_DRAMReadDataValid),
 							.OutReady(				AES_DRAMReadDataReady));
-							
+
 	FIFORAM	#(				.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts),
 							.FWLatency(				AESLatency))
@@ -304,19 +308,19 @@ module PathORAMBackend(
 							.OutReady(				DRAMWriteDataReady));
 	`endif
 	end endgenerate
-	//--------------------------------------------------------------------------						
-	
-	//--------------------------------------------------------------------------	
+	//--------------------------------------------------------------------------
+
+	//--------------------------------------------------------------------------
 	//	DRAM Read Interface
-	//--------------------------------------------------------------------------	
-	
+	//--------------------------------------------------------------------------
+
 	/*
 	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
-		
+
 		assign	ReadStopped =						ReadStarted & ~PBF_DRAMReadDataValid;
-		
+
 		Register #(			.Width(					1))
 				seen_first(	.Clock(					Clock),
 							.Reset(					Reset | ReadStopped),
@@ -332,15 +336,15 @@ module PathORAMBackend(
 							.Enable(				DRAMReadDataValid),
 							.In(					{PthBSTWidth{1'bx}}),
 							.Count(					PthCnt));
-								
+
 		assign	PathBuffer_OutValid =				PthCnt == PathSize_DRBursts & PBF_DRAMReadDataValid;
 		assign	PathBuffer_OutReady =				PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
 	end else begin:NORMAL_TIMING
 		assign	PathBuffer_OutValid =				PBF_DRAMReadDataValid;
-		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;	
+		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;
 	end endgenerate
 	*/
-		
+
 	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts)
 							`ifdef ASIC , .ASIC(1) `endif)
@@ -358,7 +362,7 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 
 	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
-	
+
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

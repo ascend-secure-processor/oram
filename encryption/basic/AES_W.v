@@ -64,7 +64,6 @@ module AES_W
     wire                        ValidOutValid;
 
     wire [W*AESWidth-1:0]       AESRes;
-    wire [W-1:0]                AESResValid[D-1:0];
 
     //carry the valid signal from input for D cycles
     FIFOLinear#(.Width(1),
@@ -72,6 +71,7 @@ module AES_W
     valid_fifo(.Clock(Clock),
                .Reset(Reset),
                .InData(DataInValid & KeyValid),
+               .InValid(DataInValid & KeyValid),
                .InAccept(ValidAccept),
                .OutData(ValidOut),
                .OutValid(ValidOutValid),

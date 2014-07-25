@@ -7,58 +7,58 @@
 
 //==============================================================================
 //	Module:		TinyORAMCore
-//	Desc:		The Top-level TinyORAM module.  
-//				Includes {Unified} x {Basic, REW} frontends/backends with 
+//	Desc:		The Top-level TinyORAM module.
+//				Includes {Unified} x {Basic, REW} frontends/backends with
 //				encryption, integrity verification, & a FIFO DRAM interface.
 //
-//				This module can be instantiated in a larger design or 
-//				synthesized directly as a top module (using the default 
+//				This module can be instantiated in a larger design or
+//				synthesized directly as a top module (using the default
 //				parameters specified below).
 //==============================================================================
 module TinyORAMCore(
   	Clock, Reset,
-	
-	Cmd, PAddr, 
-	CmdValid, CmdReady, 
-	
+
+	Cmd, PAddr,
+	CmdValid, CmdReady,
+
 	DataIn,
 	DataInValid, DataInReady,
 
 	DataOut,
 	DataOutValid, DataOutReady,
-	
+
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
 	);
-	
+
 	//--------------------------------------------------------------------------
 	//	Parameters
 	//--------------------------------------------------------------------------
-	
+
 	// Debugging
-	
-	/* 	
-		SlowAESClock:			AES should use the same clock as the rest of the 
-								design			
-		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the 
-								PathBuffer has received an entire path.  This 
-								eliminates differences in MIG vs. simulation 
-								read timing. 
+
+	/*
+		SlowAESClock:			AES should use the same clock as the rest of the
+								design
+		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the
+								PathBuffer has received an entire path.  This
+								eliminates differences in MIG vs. simulation
+								read timing.
 	*/
 	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 
 	// Frontend-backend
-	
+
 	// TODO: for ASIC, re-enable AES.
 	// TODO: for ASIC, re-enable IV.
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				`ifdef ASIC 0 `else 0 `endif,
-							EnableAES =				`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				`ifdef ASIC 1 `else 1 `endif;
-	
+							EnableAES =				1,//`ifdef ASIC 0 `else 0 `endif,
+   							EnableIV =				0;//`ifdef ASIC 1 `else 1 `endif;
+
 	// ORAM
 
 	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion). but use 13 for simulation
@@ -80,27 +80,27 @@ module TinyORAMCore(
 	// Hardware
 
 	parameter				Overclock =				1;
-	
+
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
-		
+
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
-	
+
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
 
 	// No scheme currently needs DWB
-	// [Note] there is some logic in BackendControllerCore that implicitly 
-	// assumes REW==DWB.  Careful when enabling it.	
-	localparam				DelayedWB =				0; 
-		
+	// [Note] there is some logic in BackendControllerCore that implicitly
+	// assumes REW==DWB.  Careful when enabling it.
+	localparam				DelayedWB =				0;
+
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
-		
+
   	input 					Clock, Reset;
-	
+
 	//--------------------------------------------------------------------------
 	//	User interface
 	//--------------------------------------------------------------------------
@@ -109,7 +109,7 @@ module TinyORAMCore(
 	input	[ORAMU-1:0]		PAddr;
 	input					CmdValid;
 	output 					CmdReady;
-	
+
 	input	[FEDWidth-1:0]	DataIn;
 	input					DataInValid;
 	output 					DataInReady;
@@ -117,7 +117,7 @@ module TinyORAMCore(
 	output	[FEDWidth-1:0]	DataOut;
 	output 					DataOutValid;
 	input 					DataOutReady;
-	
+
 	//--------------------------------------------------------------------------
 	//	DRAM interface
 	//--------------------------------------------------------------------------
@@ -126,23 +126,23 @@ module TinyORAMCore(
 	output	[DDRCWidth-1:0]	DRAMCommand;
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
-	
+
 	input	[BEDWidth-1:0]	DRAMReadData;
 	input					DRAMReadDataValid;
-	
+
 	output	[BEDWidth-1:0]	DRAMWriteData;
 	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
-	input					DRAMWriteDataReady;	
-	
+	input					DRAMWriteDataReady;
+
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
-	//-------------------------------------------------------------------------- 
+	//--------------------------------------------------------------------------
 
 	wire					AESClock;
-	
+
 	// Frontend - Backend
-	
+
 	(* mark_debug = "TRUE" *)	wire					BEnd_CmdReady, BEnd_CmdValid;
 	(* mark_debug = "TRUE" *)	wire	[BECMDWidth-1:0] BEnd_Cmd;
 	(* mark_debug = "TRUE" *)	wire	[ORAMU-1:0]		BEnd_PAddr;
@@ -153,33 +153,33 @@ module TinyORAMCore(
 
 	//--------------------------------------------------------------------------
 	//	Simulation checks
-	//-------------------------------------------------------------------------- 		
-	
+	//--------------------------------------------------------------------------
+
 	`ifdef SIMULATION
-		initial begin	
+		initial begin
 			if (ORAML + 1 > 32) begin
 				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
 			end
-			
-			if (DDRDWidth < BEDWidth || 
+
+			if (DDRDWidth < BEDWidth ||
 				DebugDRAMReadTiming || // TODO this is commented out in backend right now ...
 				DDRDWidth % BEDWidth != 0 ||
 				DelayedWB && !EnableREW) begin
 				$display("[%m] ERROR: Illegal parameter setting."); // See BucketLocal.vh for more information.
 				$finish;
 			end
-			
+
 			if (EnableAES && DDRDWidth != BEDWidth) begin
 				$display("[%m] ERROR: Has AES been verified with the new BEDWidth funnels?");
-				$finish;			
+			        //$finish;
 			end
 		end
 	`endif
-	
+
 	//--------------------------------------------------------------------------
 	//	Clocking
-	//-------------------------------------------------------------------------- 	
-	
+	//--------------------------------------------------------------------------
+
 	generate if (SlowAESClock || `ifdef ASIC 1 `else 0 `endif) begin:SLOW_AES
 		assign	AESClock =							Clock;
 	end else begin:FAST_AES
@@ -189,62 +189,62 @@ module TinyORAMCore(
 							.reset(					Reset),
 							.locked(				));
 	end endgenerate
-	
+
 	//--------------------------------------------------------------------------
 	//	Core modules
-	//-------------------------------------------------------------------------- 	
-	
-	Frontend #(  			.ORAMU(         		ORAMU), 
-							.ORAML(         		ORAML), 
-							.ORAMB(         		ORAMB), 
+	//--------------------------------------------------------------------------
+
+	Frontend #(  			.ORAMU(         		ORAMU),
+							.ORAML(         		ORAML),
+							.ORAMB(         		ORAMB),
 							.FEDWidth(				FEDWidth),
 							.EnableIV(				EnableIV),
-							.NumValidBlock( 		NumValidBlock), 
+							.NumValidBlock( 		NumValidBlock),
 							.Recursion(     		Recursion),
 							.EnablePLB(				EnablePLB),
 							.PLBCapacity(   		PLBCapacity),
-							.PRFPosMap(				PRFPosMap)) 
-							
-				front_end(	.Clock(             	Clock), 
-							.Reset(					Reset), 
-							
-							.CmdInReady(			CmdReady), 
-							.CmdInValid(			CmdValid), 
-							.CmdIn(					Cmd), 
+							.PRFPosMap(				PRFPosMap))
+
+				front_end(	.Clock(             	Clock),
+							.Reset(					Reset),
+
+							.CmdInReady(			CmdReady),
+							.CmdInValid(			CmdValid),
+							.CmdIn(					Cmd),
 							.ProgAddrIn(			PAddr),
-							.DataInReady(			DataInReady), 
-							.DataInValid(			DataInValid), 
-							.DataIn(				DataIn),                                    
-							.ReturnDataReady(		DataOutReady), 
-							.ReturnDataValid(		DataOutValid), 
+							.DataInReady(			DataInReady),
+							.DataInValid(			DataInValid),
+							.DataIn(				DataIn),
+							.ReturnDataReady(		DataOutReady),
+							.ReturnDataValid(		DataOutValid),
 							.ReturnData(			DataOut),
-		                        
-							.CmdOutReady(			BEnd_CmdReady), 
-							.CmdOutValid(			BEnd_CmdValid), 
-							.CmdOut(				BEnd_Cmd), 
-							.AddrOut(				BEnd_PAddr), 
-							.OldLeaf(				CurrentLeaf), 
-							.NewLeaf(				RemappedLeaf), 
-							.StoreDataReady(		StoreReady), 
-							.StoreDataValid(		StoreValid), 
+
+							.CmdOutReady(			BEnd_CmdReady),
+							.CmdOutValid(			BEnd_CmdValid),
+							.CmdOut(				BEnd_Cmd),
+							.AddrOut(				BEnd_PAddr),
+							.OldLeaf(				CurrentLeaf),
+							.NewLeaf(				RemappedLeaf),
+							.StoreDataReady(		StoreReady),
+							.StoreDataValid(		StoreValid),
 							.StoreData(				StoreData),
-							.LoadDataReady(			LoadReady), 
-							.LoadDataValid(			LoadValid), 
+							.LoadDataReady(			LoadReady),
+							.LoadDataValid(			LoadValid),
 							.LoadData(				LoadData));
-	
+
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
 							.ORAMC(					ORAMC),
 							.ORAME(					ORAME),
-							
+
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
 							.DelayedWB(				DelayedWB),
-							
+
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
 							.ORAMUValid(			ORAMUValid),
@@ -252,7 +252,7 @@ module TinyORAMCore(
 				back_end (	.Clock(					Clock),
 			                .AESClock(				AESClock),
 							.Reset(					Reset),
-							
+
 							.Command(				BEnd_Cmd),
 							.PAddr(					BEnd_PAddr),
 							.CurrentLeaf(			CurrentLeaf),
@@ -265,20 +265,20 @@ module TinyORAMCore(
 							.StoreData(				StoreData),
 							.StoreValid(			StoreValid),
 							.StoreReady(			StoreReady),
-							
+
 							.DRAMCommandAddress(	DRAMAddress),
 							.DRAMCommand(			DRAMCommand),
 							.DRAMCommandValid(		DRAMCommandValid),
-							.DRAMCommandReady(		DRAMCommandReady),			
+							.DRAMCommandReady(		DRAMCommandReady),
 
 							.DRAMReadData(			DRAMReadData),
 							.DRAMReadDataValid(		DRAMReadDataValid),
-							
+
 							.DRAMWriteData(			DRAMWriteData),
 							.DRAMWriteMask(			DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
-	
+
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------
