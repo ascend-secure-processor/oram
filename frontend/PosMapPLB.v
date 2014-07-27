@@ -61,7 +61,7 @@ module PosMapPLB
 							.Out(	Busy)
 						);
 						
-    wire CmdIsWrite, mdIsRefill, CmdIsInitRefill;
+    wire CmdIsWrite, CmdIsRefill, CmdIsInitRefill;
 	assign CmdIsWrite = Cmd == CacheWrite;
 	assign CmdIsRefill = Cmd == CacheRefill;
 	assign CmdIsInitRefill = Cmd == CacheInitRefill;

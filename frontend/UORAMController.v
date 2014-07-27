@@ -288,7 +288,8 @@ module UORAMController
 
     // =================== data interface with network and backend ====================
     UORAMDataPath #(    .FEDWidth(          FEDWidth),
-                        .ORAMB(             ORAMB))
+						.ORAMB(             ORAMB),
+						.PRFPosMap(			PRFPosMap))
     DataScheduler (     .Clock(             Clock),
                         .Reset(             Reset),
                         .SwitchReq(         SwitchReq),

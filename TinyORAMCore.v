@@ -76,7 +76,7 @@ module TinyORAMCore(
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
-							PRFPosMap =         	0;
+							PRFPosMap =         	1;
 	// Hardware
 
 	parameter				Overclock =				1;
