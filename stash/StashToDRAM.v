@@ -167,7 +167,8 @@ module StashToDRAM(
 	// PERFORMANCE/FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer 
 	// whole bucket so that we can write back to DRAM in {Header, Payload} order
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				BktPSize_BEDChunks))
+							.Buffering(				BktPSize_BEDChunks)
+							`ifdef ASIC , .ASIC(1) `endif)
 				out_D_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				StashData),

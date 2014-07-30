@@ -405,7 +405,8 @@ module AESPathORAM(
     assign IVDupOutReady = IsAESIV & DataOutValid & DataOutReady;
 
     FIFORAM#(.Width(AESEntropy),
-             .Buffering(FIFO_D))
+             .Buffering(FIFO_D)
+			`ifdef ASIC , .ASIC(1) `endif)
     iv_fifo (.Clock(Clock),
              .Reset(Reset),
              .InData(IVDataIn),
@@ -417,7 +418,8 @@ module AESPathORAM(
              );
 
     FIFORAM#(.Width(AESEntropy),
-             .Buffering(FIFO_D))
+             .Buffering(FIFO_D)
+			`ifdef ASIC , .ASIC(1) `endif)
     ivdup_fifo (.Clock(Clock),
                 .Reset(Reset),
                 .InData(IVDupIn),
@@ -429,7 +431,8 @@ module AESPathORAM(
                 );
 
     FIFORAM#(.Width(IDWidth),
-             .Buffering(FIFO_D)) //what depth?
+             .Buffering(FIFO_D)
+			 `ifdef ASIC , .ASIC(1) `endif) //what depth?
     data_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(AESDataIn),
@@ -490,7 +493,8 @@ module AESPathORAM(
            );
 
     FIFORAM#(.Width(W*AESWidth),
-             .Buffering(D+1))
+             .Buffering(D+1)
+			 `ifdef ASIC , .ASIC(1) `endif)
     aesres_fifo (.Clock(Clock),
                  .Reset(Reset),
                  .InData(AESResDataIn),

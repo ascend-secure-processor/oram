@@ -75,7 +75,7 @@ module AES_W
                .InAccept(ValidAccept),
                .OutData(ValidOut),
                .OutValid(ValidOutValid),
-               .OutReady(1));
+               .OutReady(1'b1));
 
     genvar k;
     generate

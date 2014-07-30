@@ -51,13 +51,10 @@ module TinyORAMCore(
 
 	// Frontend-backend
 
-	// TODO: for ASIC, re-enable AES.
-	// TODO: for ASIC, re-enable IV.
-
 	parameter				EnablePLB = 			1,
-							EnableREW =				`ifdef ASIC 0 `else 0 `endif,
+							EnableREW =				0,
 							EnableAES =				1,//`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				0;//`ifdef ASIC 1 `else 1 `endif;
+   							EnableIV =				1;//`ifdef ASIC 1 `else 1 `endif;
 
 	// ORAM
 
@@ -70,13 +67,13 @@ module TinyORAMCore(
 							ORAMC =					10,
 							ORAME =					5;  // TODO change REW E to 4
 
-	parameter				FEDWidth =				`ifdef ASIC 64 `else 64 `endif,
-							BEDWidth =				`ifdef ASIC 64 `else 64 `endif;
+	parameter				FEDWidth =				64,
+							BEDWidth =				64;
 
     parameter				NumValidBlock = 		1 << ORAML,
 							Recursion = 			3,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
-							PRFPosMap =         	1;
+							PRFPosMap =         	0;
 	// Hardware
 
 	parameter				Overclock =				1;
