@@ -457,7 +457,7 @@ module AESPathORAM(
                   .Set(1'b0),
                   .Load(1'b0),
                   .Enable(AESDWDataInValid & AESDWDataInAccept),
-                  .In({BBSTWidth{1'bx}}),
+                  .In({BktSizeAESWidth{1'bx}}),
                   .Count(DWBucketReadCtr)
                   );
 
