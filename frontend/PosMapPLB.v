@@ -68,7 +68,7 @@ module PosMapPLB
 	
 	// PRNG to generate new leaf
 	(* mark_debug = "TRUE" *) wire [LeafWidth-1:0] NewLeafIn_Pre;
-    (* mark_debug = "TRUE" *) wire [ORAML-1:0] NewLeafIn;
+    (* mark_debug = "TRUE" *) wire [LeafOutWidth-1:0] NewLeafIn;
 	
     // ============================== onchip PosMap ====================================
     (* mark_debug = "TRUE" *) wire PosMapEnable, PosMapWrite;
@@ -116,7 +116,8 @@ module PosMapPLB
 				.LogLineSize(	LogLeafInBlock), 
                 .Capacity(		EnablePLB ? PLBCapacity : ORAMB), 
 				.AddrWidth(		ORAMU), 
-				.ExtraTagWidth(	ORAML)) 
+				.ExtraTagWidth(	ORAML),
+				.WriteLate(     PRFPosMap)) 
         PLB (   .Clock(         Clock), 
                 .Reset(         Reset), 
                 .Ready(         PLBReady), 

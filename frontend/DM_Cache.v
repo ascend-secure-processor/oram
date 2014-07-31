@@ -19,6 +19,7 @@ module DM_Cache
 				Capacity = 64, 
 				AddrWidth = 2, 
 				ExtraTagWidth = 32;
+	parameter   WriteLate = 0;
  
     `include "CacheLocal.vh"
     `include "CacheCmdLocal.vh"
@@ -113,7 +114,7 @@ module DM_Cache
     wire [TagWidth+ExtraTagWidth:0] TagIn, TagOut;
     
     assign TagIn = TagInit ? {1'b0, {TagWidth+ExtraTagWidth{1'bx}}} : {1'b1, LastExtraTag, Addr[AddrWidth-1:LogLineSize]};
-    assign DataIn = IsLastWrite ? LastDIn : DIn;
+    assign DataIn = (IsLastWrite && !WriteLate) ? LastDIn : DIn;
 
     // data and tag array
     RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)  `ifdef ASIC , .ASIC(1) `endif ) 

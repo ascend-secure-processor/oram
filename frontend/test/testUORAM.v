@@ -12,6 +12,7 @@ module testUORAM;
 	parameter                   Recursion = 		3;
     parameter                   PLBCapacity = 		8192 << 3;
     parameter                   PRFPosMap =         1;
+    parameter                   AESEntropy =        64;
 
 	localparam  NN = 200;
 	localparam	nn = 73;
