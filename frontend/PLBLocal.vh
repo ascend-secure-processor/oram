@@ -10,9 +10,8 @@ function [31:0] GeoSum;
     end
 endfunction  
 
-localparam PRFCtrWidth = 64;	// in bits
-localparam LeafWidth = PRFPosMap ? PRFCtrWidth : 32;	
-localparam LeafOutWidth = PRFPosMap ? PRFCtrWidth : ORAML;
+localparam LeafWidth = PRFPosMap ? AESEntropy : 32;	
+localparam LeafOutWidth = PRFPosMap ? AESEntropy : ORAML;
 
 localparam LeafInBlock = ORAMB / LeafWidth;
 localparam LogLeafInBlock = `log2f(LeafInBlock);

@@ -12,7 +12,7 @@
 module IntegrityVerifier(
 	Clock, Reset,
 
-	FECommand, FEPAddr, FECurrentLeaf, FERemappedLeaf, FECurrentCounter, FERemappedCounter,
+	FECommand, FEPAddr, FECurrentCounter, FERemappedCounter,
 	FECommandValid, FECommandReady,
 	FELoadData, 
 	FELoadValid, FELoadReady,
@@ -43,16 +43,26 @@ module IntegrityVerifier(
 							ST_WriteMI =			4'd1,
 							ST_WriteP =				4'd2,
 							ST_WriteMO =			4'd3,
-							ST_WriteCommand =		4'd4,
-							ST_ReadCommand =		4'd5,
-							ST_ReadMI =				4'd6,
-							ST_ReadP =				4'd7,
-							ST_ReadMO =				4'd8,
-							ST_ReadCheck =			4'd9,
-							ST_ReadFETransfer =		4'd10,
-							ST_ReadTurnaround =		4'd11,
-							ST_Error =				4'd12;
-													
+							ST_WriteLWait =			4'd4,
+							ST_WriteCommand =		4'd5,
+							ST_ReadLWait =			4'd6,
+							ST_ReadCommand =		4'd7,
+							ST_ReadMI =				4'd8,
+							ST_ReadP =				4'd9,
+							ST_ReadMO =				4'd10,
+							ST_ReadCheck =			4'd11,
+							ST_ReadFETransfer =		4'd12,
+							ST_ReadTurnaround =		4'd13,
+							ST_Error =				4'd14;
+			
+	localparam				STAESWidth =			3,
+							ST_AES_Idle =			3'd0,
+							ST_AES_Start1 =			3'd1,
+							ST_AES_Wait1 =			3'd2,
+							ST_AES_Start2 =			3'd3,
+							ST_AES_Wait2 =			3'd4,
+							ST_AES_Done =			3'd5;
+			
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -65,8 +75,6 @@ module IntegrityVerifier(
 
 	input	[BECMDWidth-1:0] FECommand;
 	input	[ORAMU-1:0]		FEPAddr;
-	input	[ORAML-1:0]		FECurrentLeaf;
-	input	[ORAML-1:0]		FERemappedLeaf;
 	input	[AESEntropy-1:0] FECurrentCounter;
 	input	[AESEntropy-1:0] FERemappedCounter;
 	input					FECommandValid;
@@ -117,7 +125,6 @@ module IntegrityVerifier(
 
 	wire	[BECMDWidth-1:0] FECommand_Final;
 	wire	[ORAMU-1:0]		FEPAddr_Final, FEShadowPAddr;
-	wire	[ORAML-1:0]		FECurrentLeaf_Final, FERemappedLeaf_Final, FEShadowLeaf;
 	
 	wire	[AESEntropy-1:0] FECurrentCounter_Int, FERemappedCounter_Int;
 	wire					Command_IntValid, Command_IntReady;
@@ -128,6 +135,17 @@ module IntegrityVerifier(
 	wire					SMI_Terminal, SP_Terminal, SMO_Terminal;
 	
 	wire					CommandTransfer, FECommandTransfer, BELoadTransfer, FELoadTransfer;
+	
+	// PRF logic
+	
+	reg		[STAESWidth-1:0] NS_AES, CS_AES;
+	
+	wire					AESStart, AESDone;
+	
+	wire	[AESWidth-1:0]	AESDataIn, AESDataOut;
+	wire	[ORAML-1:0]		AESLeafOut;
+	
+	wire					CSAESDone, CSAESStart1, CSAESWait1, CSAESWait2;
 	
 	// Store Path	
 		
@@ -178,6 +196,11 @@ module IntegrityVerifier(
 				$finish;
 			end
 			
+			if (HashDataInValid && ^HashDataIn === 1'bx) begin
+				$display("ERROR: X bits in hash");
+				$finish;
+			end
+			
 			if (HashDataInValid && HashDataInReady) begin
 				$display("[IV] Hash in: %x", HashDataIn);
 			end
@@ -212,29 +235,25 @@ module IntegrityVerifier(
 																				FECommand;
 	assign	FEPAddr_Final =							(CSReadTurnaround) ? 		FEShadowPAddr :
 																				FEPAddr;
-	assign	FECurrentLeaf_Final =					(CSReadTurnaround) ? 		{ORAML{1'bx}} :
-																				FECurrentLeaf;
-	assign	FERemappedLeaf_Final =					(CSReadTurnaround) ? 		FEShadowLeaf : 
-																				FERemappedLeaf;
-		
-	FIFORegister #(			.Width(					BECMDWidth + ORAMU + ORAML*2),
+																				
+	FIFORegister #(			.Width(					BECMDWidth + ORAMU),
 							.BWLatency(				1))
 				cmd_reg(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{FECommand_Final,	FEPAddr_Final, 	FECurrentLeaf_Final, 	FERemappedLeaf_Final}),
+							.InData(				{FECommand_Final,	FEPAddr_Final}),
 							.InValid(				FECommandValid_Final),
 							.InAccept(				FECommandReady_Final),
-							.OutData(				{Command_Int,		PAddr_Int,		CurrentLeaf_Int,		RemappedLeaf_Int}),
+							.OutData(				{Command_Int,		PAddr_Int}),
 							.OutSend(				Command_IntValid),
 							.OutReady(				Command_IntReady));
 
-	Register #(				.Width(					ORAMU + ORAML + AESEntropy*2))
+	Register #(				.Width(					ORAMU + AESEntropy*2))
 				shdw_reg(	.Clock(					Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),
-							.Enable(				FECommandValid_Final && FECommandReady_Final),
-							.In(					{FEPAddr,		FERemappedLeaf,	FECurrentCounter,		FERemappedCounter}),
-							.Out(					{FEShadowPAddr, FEShadowLeaf, 	FECurrentCounter_Int, 	FERemappedCounter_Int}));		
+							.Enable(				CSIdle && FECommandValid_Final && FECommandReady_Final),
+							.In(					{FEPAddr,		FECurrentCounter,		FERemappedCounter}),
+							.Out(					{FEShadowPAddr, FECurrentCounter_Int, 	FERemappedCounter_Int}));		
 	
 	assign	BECommand =								Command_Int;
 	assign	BEPAddr =								PAddr_Int;
@@ -288,6 +307,9 @@ module IntegrityVerifier(
 					NS =							ST_WriteMO;
 			ST_WriteMO :
 				if (SMO_Terminal)
+					NS =							ST_WriteLWait;
+			ST_WriteLWait :
+				if (CSAESDone)
 					NS =							ST_WriteCommand;
 			ST_WriteCommand :
 				if (CommandTransfer)
@@ -297,7 +319,10 @@ module IntegrityVerifier(
 			//
 			ST_ReadMI :
 				if (SMI_Terminal)
-					NS =							ST_ReadCommand;
+					NS =							ST_ReadLWait;
+			ST_ReadLWait :
+				if (CSAESDone)
+					NS =							ST_ReadCommand;		
 			ST_ReadCommand :
 				if (CommandTransfer)
 					NS =							ST_ReadP;
@@ -322,13 +347,87 @@ module IntegrityVerifier(
 	end
 	
 	//--------------------------------------------------------------------------
+	//	l = PRF_K(a || c)
+	//--------------------------------------------------------------------------	
+
+	// Do the simple thing ... two AES ops back to back.  Adds 2x12 cycles to 
+	// critical path.  NOTE: some of this latency will be hidden by writing the 
+	// payload/generating any hashes
+	
+	assign	CSAESDone =								CS_AES == ST_AES_Done;
+
+	assign	CSAESStart1 =							CS_AES == ST_AES_Start1;
+	assign	CSAESWait1 =							CS_AES == ST_AES_Wait1;
+	assign	CSAESWait2 =							CS_AES == ST_AES_Wait2;
+
+	assign	AESStart =								CSAESStart1 || CS_AES == ST_AES_Start2;
+		
+	always @(posedge Clock) begin
+		if (Reset) CS_AES <= 						ST_AES_Idle;
+		else CS_AES <= 								NS_AES;
+	end
+	
+	always @( * ) begin
+		NS_AES = 									CS_AES;
+		case (CS_AES)
+			ST_AES_Idle :
+				if (Command_IntValid) 
+					NS_AES = 						ST_AES_Start1;
+			ST_AES_Start1 : 
+				NS_AES = 							ST_AES_Wait1; 
+			ST_AES_Wait1 : 
+				if (AESDone)
+					NS_AES = 						ST_AES_Start2;
+			ST_AES_Start2 :
+				NS_AES = 							ST_AES_Wait2;
+			ST_AES_Wait2 : 
+				if (AESDone)
+					NS_AES = 						ST_AES_Done;
+			ST_AES_Done : 
+				if (CSIdle)
+					NS_AES =						ST_AES_Idle;
+		endcase
+	end
+	
+	assign	AESDataIn =								{
+														{AESWidth-ORAMU-AESEntropy{1'b0}},
+														PAddr_Int,
+														(CSAESStart1) ? FECurrentCounter_Int : FERemappedCounter_Int
+													};
+	
+	aes_cipher_top	aes(	.clk(					Clock),
+							.rst(					~Reset),
+							.ld(					AESStart),
+							.done(					AESDone),
+							.key(					128'h5e_7a_2a_9d_43_35_74_5b_85_ce_e5_b3_c0_c1_23_a6),
+							.text_in(				AESDataIn),
+							.text_out(				AESDataOut));
+	assign	AESLeafOut =							AESDataOut[ORAML-1:0];
+	
+	Register #(				.Width(					ORAML))
+				cleaf(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				AESDone && CSAESWait1),
+							.In(					AESLeafOut),
+							.Out(					CurrentLeaf_Int));
+							
+	Register #(				.Width(					ORAML))
+				rleaf(		.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				AESDone && CSAESWait2),
+							.In(					AESLeafOut),
+							.Out(					RemappedLeaf_Int));
+	
+	//--------------------------------------------------------------------------
 	//	Load U,C into hash engine
 	//--------------------------------------------------------------------------
 
 	assign	StoreMACHeader_Wide =					{
 														{MIPADWidth - MIWidth{1'b0}}, 
 														PAddr_Int, 
-														(StoringLoadMode) ? FERemappedCounter_Int : FECurrentCounter_Int
+														(StoringLoadMode) ? FECurrentCounter_Int : FERemappedCounter_Int
 													};
 	
 	CountAlarm  #(  		.Threshold(             MI_FEDChunks))
@@ -440,7 +539,7 @@ module IntegrityVerifier(
 	Keccak_WF #(			.IWidth(				FEDWidth),
 							.HashByteCount(			HashByteCount),
 							.KeyLength(				HashKeyLength),
-							.Key(					128'h 5e_7a_2a_9d_43_35_74_5b_85_ce_e5_b3_c0_c1_23_a6),
+							.Key(					128'h5e_7a_2a_9d_43_35_74_5b_85_ce_e5_b3_c0_c1_23_a6),
 							.HashOutWidth(			FullDigestWidth))
 				sha3(		.Clock(					Clock), 
 							.Reset(					Reset), 

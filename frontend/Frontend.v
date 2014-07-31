@@ -130,10 +130,8 @@ module Frontend
 
 							.FECommand(				CmdOut_Pre), 
 							.FEPAddr(				AddrOut_Pre), 
-							.FECurrentLeaf(			OldLeaf_Pre), 
-							.FERemappedLeaf(		NewLeaf_Pre), 
-							.FECurrentCounter(		64'hdeadbeef), // TODO 
-							.FERemappedCounter(		64'hdeadbeef), // TODO
+							.FECurrentCounter(		OldLeaf_Pre),
+							.FERemappedCounter(		NewLeaf_Pre),
 							.FECommandValid(		CmdOutValid_Pre), 
 							.FECommandReady(		CmdOutReady_Pre),
 							
