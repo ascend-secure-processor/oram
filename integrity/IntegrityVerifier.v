@@ -129,7 +129,7 @@ module IntegrityVerifier(
 	wire	[AESEntropy-1:0] FECurrentCounter_Int, FERemappedCounter_Int;
 	wire					Command_IntValid, Command_IntReady;
 
-	wire					CSIdle, CSMI, CSWriteP, CSWriteMO, CSWriteCommand, 
+	wire					CSIdle, CSReadMI, CSMI, CSWriteP, CSWriteMO, CSWriteCommand, 
 							CSReadCommand, CSReadP, CSReadMO, CSReadCheck, CSReadFETransfer, CSReadTurnaround;	
 	
 	wire					SMI_Terminal, SP_Terminal, SMO_Terminal;
@@ -271,7 +271,8 @@ module IntegrityVerifier(
 	assign	FELoadTransfer =						FELoadValid && FELoadReady;
 	
 	assign	CSIdle =								CS == ST_Idle; 
-	assign	CSMI =									CS == ST_WriteMI || CS == ST_ReadMI;
+	assign	CSReadMI =								CS == ST_ReadMI;
+	assign	CSMI =									CS == ST_WriteMI || CSReadMI;
 	assign	CSWriteP =								CS == ST_WriteP;
 	assign	CSReadP =								CS == ST_ReadP;
 	assign	CSReadMO =								CS == ST_ReadMO;
@@ -427,7 +428,7 @@ module IntegrityVerifier(
 	assign	StoreMACHeader_Wide =					{
 														{MIPADWidth - MIWidth{1'b0}}, 
 														PAddr_Int, 
-														(StoringLoadMode) ? FECurrentCounter_Int : FERemappedCounter_Int
+														(CSReadMI) ? FECurrentCounter_Int : FERemappedCounter_Int
 													};
 	
 	CountAlarm  #(  		.Threshold(             MI_FEDChunks))
