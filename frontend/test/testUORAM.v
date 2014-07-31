@@ -15,7 +15,7 @@ module testUORAM;
     parameter                   AESEntropy =        64;
 
 	localparam  NN = 200;
-	localparam	nn = 73;
+	localparam	nn = 1;
 	localparam	nn2 = nn * 29;	
 
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;

@@ -202,7 +202,7 @@ module PosMapPLB
     always @(posedge Clock) begin      
         if ((PosMapValid || PLBValid) && !Valid) begin
             Hit <= PPPHit;
-            UnInit <= (PosMapValid && PosMapOut[ORAML] == 0) || (PLBValid && PLBHit && PLBDOut[ORAML] == 0);
+            UnInit <= (PosMapValid && PosMapOut == 0) || (PLBValid && PLBHit && PLBDOut == 0);
             OldLeafOut <= PosMapValid ? PosMapOut[ORAML-1:0] : PLBDOut[ORAML-1:0];
             Evict <= PLBValid && PLBEvict;
             AddrOut <= PLBAddrOut;         
