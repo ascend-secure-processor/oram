@@ -36,7 +36,8 @@ module IntegrityVerifier(
 	`include "IVLocal.vh"
 	
 	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, FEDWidth) * `divceil(FEDWidth, 8),
-							FullDigestWidth = 		224;
+							FullDigestWidth = 		224,
+							MFWidth =				`log2(MAC_FEDChunks);
 							
 	localparam				STWidth =				4,
 							ST_Idle =				4'd0,
@@ -156,6 +157,7 @@ module IntegrityVerifier(
 	wire	[BFHWidth-1:0]	SMICount;
 	
 	wire	[FEDWidth-1:0]	FEStoreMAC;
+	wire	[MFWidth-1:0]	SMOCount;
 	
 	wire					StoreTransfer, HashTransfer;
 
