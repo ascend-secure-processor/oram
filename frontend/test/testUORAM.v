@@ -6,11 +6,12 @@ module testUORAM;
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
 	parameter                   ORAML = 			10;
-	parameter                   FEDWidth = 			`ifdef ASIC 64 `else 64 `endif;
-	parameter					BEDWidth =			`ifdef ASIC 64 `else 64 `endif;
+	parameter                   FEDWidth = 			64;
+	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << ORAML;	
-	parameter                   Recursion = 		3;
+	parameter                   Recursion = 		6;
     parameter                   PLBCapacity = 		8192 << 3;
+	parameter					PRFPosMap =			1;
 
 	localparam  NN = 200;
 	localparam	nn = 73;
