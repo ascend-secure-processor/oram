@@ -11,14 +11,14 @@ module testUORAM;
 	parameter                   NumValidBlock = 	1 << ORAML;	
 	parameter                   Recursion = 		3;
     parameter                   PLBCapacity = 		8192 << 3;
-    parameter                   PRFPosMap =         1;
-    parameter                   AESEntropy =        64;
 
 	localparam  NN = 200;
-	localparam	nn = 1;
+	localparam	nn = 73;
 	localparam	nn2 = nn * 29;	
 
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
+	
+	localparam					AESEntropy = 64;
 	
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
