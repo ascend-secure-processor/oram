@@ -284,7 +284,7 @@ module PathORAMBackend(
 	localparam				AESLatency =			21 + 8; // assuming tiny_aes
 
 	FIFORAM	#(				.Width(					BEDWidth),
-							.Buffering(				PathSize_DRBursts),
+							.Buffering(				PathSize_BEDChunks),
 							.FWLatency(				AESLatency))
 		indelay(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -296,7 +296,7 @@ module PathORAMBackend(
 							.OutReady(				AES_DRAMReadDataReady));
 
 	FIFORAM	#(				.Width(					BEDWidth),
-							.Buffering(				PathSize_DRBursts),
+							.Buffering(				PathSize_BEDChunks),
 							.FWLatency(				AESLatency))
 		outdelay(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -346,7 +346,7 @@ module PathORAMBackend(
 	*/
 
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				PathSize_DRBursts)
+							.Buffering(				PathSize_DRBursts) // TODO BUG: this needs to be deeper
 							`ifdef ASIC , .ASIC(1) `endif)
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
