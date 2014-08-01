@@ -117,6 +117,8 @@ module IntegrityVerifier(
 	
 	wire					ERROR_IV;
 	
+	wire					RdRmv_Terminal, TrueReadRmv;
+	
 	wire					FECommandValid_Final, FECommandReady_Final;
 	
 	wire	[BECMDWidth-1:0] Command_Int;
@@ -210,7 +212,7 @@ module IntegrityVerifier(
 			end
 			
 			if (Command_IntValid && Command_IntReady) begin
-				$display("[IV] Command: %x %x %x %x", Command_Int, PAddr_Int, CurrentLeaf_Int, RemappedLeaf_Int);
+				$display("[IV] Command: %x (true readrmv? %b) addr=%x c=%d c'=%d", Command_Int, TrueReadRmv, PAddr_Int, FECurrentCounter_Int, FERemappedCounter_Int);
 			end
 
 			if (BEStoreValid && BEStoreReady) begin
@@ -235,7 +237,10 @@ module IntegrityVerifier(
 																				FECommand;
 	assign	FEPAddr_Final =							(CSReadTurnaround) ? 		FEShadowPAddr :
 																				FEPAddr;
-																				
+							
+	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && TrueReadRmv;
+	Register1b rdr_r(Clock, Reset || RdRmv_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_ReadRmv, TrueReadRmv);
+							
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU),
 							.BWLatency(				1))
 				cmd_reg(	.Clock(					Clock),
@@ -292,10 +297,10 @@ module IntegrityVerifier(
 		NS = 										CS;
 		case (CS)
 			ST_Idle :
-				if (Command_IntValid && (	Command_Int == BECMD_Update || 
-											Command_Int == BECMD_Append))
+				if (		Command_IntValid && (	Command_Int == BECMD_Update || 
+													Command_Int == BECMD_Append))
 					NS =							ST_WriteMI;
-				else if (Command_IntValid)
+				else if (	Command_IntValid)
 					NS =							ST_ReadMI;
 			//
 			// Write states
@@ -339,7 +344,9 @@ module IntegrityVerifier(
 				else if (MACCheckComplete)
 					NS =							ST_ReadFETransfer;
 			ST_ReadFETransfer :
-				if (SP_Terminal)
+				if (RdRmv_Terminal)
+					NS =							ST_Idle;
+				else if (SP_Terminal)
 					NS =							ST_ReadTurnaround;
 			ST_ReadTurnaround :
 				if (FECommandTransfer)
