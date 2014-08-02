@@ -195,7 +195,7 @@ module IntegrityVerifier(
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (ERROR_IV !== 1'b0) begin
+			if (!Reset && ERROR_IV !== 1'b0) begin
 				$display("ERROR: Integrity violation (expected,actual) : (%x:%x)", MACOut, LoadMAC);
 				$finish;
 			end

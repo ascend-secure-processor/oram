@@ -62,7 +62,7 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					10,
+							ORAML =					26,
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 3 `endif, // TODO change REW Z to 4
 							ORAMC =					10,
 							ORAME =					5;
@@ -70,8 +70,8 @@ module TinyORAMCore(
 	parameter				FEDWidth =				64,
 							BEDWidth =				64;
 
-    parameter				NumValidBlock = 		1 << ORAML,
-							Recursion = 			3,
+    parameter				NumValidBlock = 		1 << 19,//1 << ORAML,
+							Recursion = 			4,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
 							
@@ -165,11 +165,6 @@ module TinyORAMCore(
 				DelayedWB && !EnableREW) begin
 				$display("[%m] ERROR: Illegal parameter setting."); // See BucketLocal.vh for more information.
 				$finish;
-			end
-
-			if (EnableAES && DDRDWidth != BEDWidth) begin
-				$display("[%m] ERROR: Has AES been verified with the new BEDWidth funnels?");
-			        //$finish;
 			end
 		end
 	`endif
