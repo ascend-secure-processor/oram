@@ -43,7 +43,7 @@ module AESPathORAM(
 
     localparam IDWidth = W * AESWidth;
 
-    localparam IV_LOC = 4;
+    localparam IV_LOC = DDRDWidth / BEDWidth;
 
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
@@ -219,7 +219,8 @@ module AESPathORAM(
                   .OutReady(BackendWReady_Int));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth))
+                        .OWidth(BEDWidth),
+						.Reverse(1))
         dramout_fifo(.Clock(Clock),
                      .Reset(Reset),
                      .InData(DRAMWriteData_Int),
@@ -230,7 +231,8 @@ module AESPathORAM(
                      .OutReady(DRAMWriteDataReady));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth))
+                        .OWidth(BEDWidth),
+						.Reverse(1))
         beout_fifo(.Clock(Clock),
                    .Reset(Reset),
                    .InData(BackendRData_Int),
@@ -348,9 +350,11 @@ module AESPathORAM(
                .TerminalCount(BucketReadCtr_Reset)
                );
 
-    assign ReadBucketTransition = ((BucketReadCtr_Reset & InitDone) |
-                                   ((BucketReadCtr == (IV_LOC-1)) & ~InitDone)) &
-                                  (ReadGood | WriteGood);
+    assign ReadBucketTransition = 	(		
+									(BucketReadCtr_Reset & InitDone) |
+									((BucketReadCtr == (IV_LOC-1)) & ~InitDone)
+									) &
+									(ReadGood | WriteGood);
 
     // Count number of already processed ivs
     Counter#(.Width(BktSizeAESWidth))
@@ -379,17 +383,17 @@ module AESPathORAM(
 
     assign DataIn = BackendWValid_Int ? BackendWData_Int : DRAMReadData_Int;
     //both should never be valid
-    assign DataInValid = (DRAMReadDataValid_Int  ^ BackendWValid_Int);
+    assign DataInValid = ((IsIV & IVDataInAccept) | ~IsIV) & (DRAMReadDataValid_Int ^ BackendWValid_Int);
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
-    assign IsIV = (BucketReadCtr == (IV_LOC-1));// & ~IVDone;
+    assign IsIV = (BucketReadCtr == (IV_LOC-1));
 
     assign IVDataIn = DataIn[AESEntropy-1:0];
-    assign IVDataInValid = IsIV & DataInValid;
+    assign IVDataInValid = IsIV & DataInValid & AESDataInAccept;
 
     assign IVDupIn = DataIn[AESEntropy-1:0];
-    assign IVDupInValid = IsIV & DataInValid;
+    assign IVDupInValid = IsIV & DataInValid & AESDataInAccept;
 
     assign AESDataIn = DataIn;
     assign AESDataInValid = DataInValid;
