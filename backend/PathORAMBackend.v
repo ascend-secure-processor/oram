@@ -272,7 +272,7 @@ module PathORAMBackend(
 	// TODO this is a hack: just because we don't care about "modeling" AES latency in ASIC
 	assign	AES_DRAMReadData =						PBF_DRAMReadData;
 	assign	AES_DRAMReadDataValid =					PBF_DRAMReadDataValid;
-	assign	DRAMReadDataReady =						AES_DRAMReadDataReady;
+	assign	PBF_DRAMReadDataReady =					AES_DRAMReadDataReady;
 
 	assign	DRAMWriteData =							AES_DRAMWriteData;
 	assign	DRAMWriteDataValid =					AES_DRAMWriteDataValid;
