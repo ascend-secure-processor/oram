@@ -522,8 +522,7 @@ module IntegrityVerifier(
 	
 	RAM			#(			.DWidth(				FEDWidth),
 							.AWidth(				BFPWidth),
-							.RLatency(				0)
-							`ifdef ASIC , .ASIC(1) `endif)
+							.RLatency(				0))
 				ld_d(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
