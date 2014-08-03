@@ -70,8 +70,8 @@ module TinyORAMCore(
 	parameter				FEDWidth =				64,
 							BEDWidth =				64;
 
-    parameter				NumValidBlock = 		1 << ORAML,
-							Recursion = 			6,
+    parameter				NumValidBlock = 		1 << 10,//1 << ORAML,
+							Recursion = 			3,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
 							

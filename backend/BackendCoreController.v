@@ -438,7 +438,7 @@ module BackendCoreController(
 							.RO_W_DoneAlarm(		Addr_RO_W_DoneAlarm));
 
 	assign	AddrGenLeaf =							StashCurrentLeaf;
-	assign	AddrGenRead =							Addr_PathRead;
+	assign	AddrGenRead =							CSAddrGenRead;//Addr_PathRead;
 	assign	AddrGenHeader =							Addr_ROAccess & Addr_PathWriteback;
 	assign	AddrGenInValid = 						(CSAddrGenRead | CSAddrGenWrite);
 
