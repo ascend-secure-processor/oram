@@ -347,6 +347,7 @@ module PathORAMBackend(
 
 	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				PathSize_DRBursts) // TODO BUG: this needs to be deeper
+							//.Buffering(PathSize_BEDChunks)
 							`ifdef ASIC , .ASIC(1) `endif)
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),

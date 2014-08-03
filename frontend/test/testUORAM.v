@@ -5,9 +5,9 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			13;
+	parameter                   ORAML = 			10;
 	parameter                   FEDWidth = 			64;
-	parameter					BEDWidth =			64;
+	parameter					BEDWidth =			128;
 	parameter                   NumValidBlock = 	1 << ORAML;	
 	parameter                   Recursion = 		2;
     parameter                   PLBCapacity = 		8192 << 3;

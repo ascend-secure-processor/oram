@@ -43,7 +43,7 @@ module AESPathORAM(
 
     localparam IDWidth = W * AESWidth;
 
-    localparam IV_LOC = DDRDWidth / BEDWidth;
+    localparam IV_LOC = DDRDWidth / IDWidth;
 
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
@@ -179,21 +179,21 @@ module AESPathORAM(
     //  Input and Output buffers
     //------------------------------------------------------------------------------
     //internal signals to buffer to AESchunks
-    wire [AESWidth*W-1:0]       DRAMReadData_Int;
-    wire                        DRAMReadDataValid_Int;
-    wire                        DRAMReadDataReady_Int;
+    wire [IDWidth-1:0]       DRAMReadData_Int;
+    wire                           DRAMReadDataValid_Int;
+    wire                           DRAMReadDataReady_Int;
 
-    wire [AESWidth*W-1:0]       BackendWData_Int;
-    wire                        BackendWValid_Int;
-    wire                        BackendWReady_Int;
+    wire [IDWidth-1:0]       BackendWData_Int;
+    wire                           BackendWValid_Int;
+    wire                           BackendWReady_Int;
 
-    wire [AESWidth*W-1:0]       DRAMWriteData_Int;
-    wire                        DRAMWriteDataValid_Int;
-    wire                        DRAMWriteDataReady_Int;
+    wire [IDWidth-1:0]       DRAMWriteData_Int;
+    wire                           DRAMWriteDataValid_Int;
+    wire                           DRAMWriteDataReady_Int;
 
-    wire [AESWidth*W-1:0]       BackendRData_Int;
-    wire                        BackendRValid_Int;
-    wire                        BackendRReady_Int;
+    wire [IDWidth-1:0]       BackendRData_Int;
+    wire                           BackendRValid_Int;
+    wire                           BackendRReady_Int;
 
     generate if (BEDWidth < AESWidth) begin: IOBuffer
         FIFOShiftRound#(.IWidth(BEDWidth),
@@ -219,8 +219,8 @@ module AESPathORAM(
                   .OutReady(BackendWReady_Int));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth),
-						.Reverse(1))
+                        .OWidth(BEDWidth))
+						//.Reverse(1))
         dramout_fifo(.Clock(Clock),
                      .Reset(Reset),
                      .InData(DRAMWriteData_Int),
@@ -231,8 +231,8 @@ module AESPathORAM(
                      .OutReady(DRAMWriteDataReady));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth),
-						.Reverse(1))
+                        .OWidth(BEDWidth))
+						//.Reverse(1))
         beout_fifo(.Clock(Clock),
                    .Reset(Reset),
                    .InData(BackendRData_Int),
@@ -307,29 +307,21 @@ module AESPathORAM(
         end
     end
 
-    // //here for synchronization purposes
-    // always @( posedge Clock ) begin
-    //     if (Reset)
-    //       IVDone <= 0;
-    //     else if (~InitDone | ReadBucketTransition)
-    //       IVDone <= 0;
-    //     else if (IsIV & IVDataInValid & IVDataInAccept)
-    //       IVDone <= 1;
-    // end
-
-    // always @( posedge Clock ) begin
-    //     if (Reset)
-    //       AESIVDone <= 0;
-    //     else if (~InitDone | AESReadBucketTransition)
-    //       AESIVDone <= 0;
-    //     else if (IsAESIV & DataOutValid & DataOutReady)
-    //       AESIVDone <= 1;
-    // end
-
     //------------------------------------------------------------------------------
     //  Check bucket
     //------------------------------------------------------------------------------
 
+	reg [AESEntropy-1:0] DebugCounter = 0;
+	
+	always @( posedge Clock ) begin
+	    if (Reset) begin
+		    DebugCounter <= 0;
+		end
+		else if (ReadBucketTransition) begin
+		    DebugCounter <= DebugCounter + 1;
+		end
+	end
+	
     wire ReadGood = DRAMReadDataValid_Int & DRAMReadDataReady_Int;
     wire WriteGood = BackendWValid_Int & AESDataInAccept;
 
@@ -383,7 +375,7 @@ module AESPathORAM(
 
     assign DataIn = BackendWValid_Int ? BackendWData_Int : DRAMReadData_Int;
     //both should never be valid
-    assign DataInValid = ((IsIV & IVDataInAccept) | ~IsIV) & (DRAMReadDataValid_Int ^ BackendWValid_Int);
+    assign DataInValid = (DRAMReadDataValid_Int ^ BackendWValid_Int);
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
