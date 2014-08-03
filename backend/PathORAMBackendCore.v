@@ -581,7 +581,7 @@ module PathORAMBackendCore(
 	// REW ORAM uses gentry bucket version #s to determine whether a bucket is
 	// valid; thus no initialization is necessary.
 
-	generate if (EnableREW) begin:AUTO_INIT
+	generate if (EnableREW || 1) begin:AUTO_INIT // TODO FIX RE-ENABLE DRAM INIT
 		assign	DRAMInitComplete =					1'b1;
 		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
 		assign	DRAMInit_DRAMCommand =				DDR3CMD_Write;

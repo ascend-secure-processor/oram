@@ -476,7 +476,7 @@ module AESPathORAM(
     aes_w (.Clock(Clock),
            .Reset(Reset),
 
-           .DataIn(AESDWDataIn + (DWBucketReadCtr << `log2(W))),
+           .DataIn(AESDWDataIn + (DWBucketReadCtr << `log2(W))), // TODO: add BucketID to seed or move to global counter scheme
            .DataInValid(AESDWDataInValid),
            .DataInReady(AESDWDataInAccept),
 
