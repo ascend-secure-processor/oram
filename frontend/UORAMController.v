@@ -130,7 +130,7 @@ module UORAMController
     (* mark_debug = "TRUE" *) wire PPPRefill;
     (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPRefillData;
     (* mark_debug = "TRUE" *) wire PPPOutReady, PPPValid, PPPHit, PPPUnInit, PPPEvict;
-    (* mark_debug = "TRUE" *) wire PPPEvictDataValid, PPPRefillDataValid, PPPRefillDataReady;
+    (* mark_debug = "TRUE" *) wire PPPEvictDataValid, PPPEvictDataEmpty, PPPRefillDataValid, PPPRefillDataReady;
     (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPEvictData;
 
     PosMapPLB #(.ORAMU(             ORAMU),
@@ -237,7 +237,7 @@ module UORAMController
                         .Reset(     Reset || (Accessing && SwitchReq)),
                         .Set(       CmdInValid && CmdInReady),          // this sets up PLB lookup for the first access
                         .Enable(    1'b1),
-                        .In(        Preparing ? PPPMiss : RefillStarted && PPPCmdReady),
+                        .In(        Preparing ? PPPMiss : RefillStarted && PPPCmdReady && PPPEvictDataEmpty),
                                                                         // make the next query only after receiving the previous one
                         .Out(       PPPLookup));
 
@@ -307,7 +307,7 @@ module UORAMController
                         .ReturnData(            ReturnData),
 
                         // IO interface with PPP
-                        .PPPEvictDataReady(     ),
+                        .PPPEvictDataEmpty(     PPPEvictDataEmpty),	// is actually IsEvictBufferEmpty
                         .PPPEvictDataValid(     PPPEvictDataValid),
                         .PPPEvictData(          PPPEvictData),
                         .PPPRefillDataReady(    PPPRefillDataReady),

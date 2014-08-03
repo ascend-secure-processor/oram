@@ -13,7 +13,7 @@ module UORAMDataPath
 (	Clock, Reset, SwitchReq, DataBlockReq, Cmd, ExpectingProgramData,
 	DataInReady, DataInValid, DataIn,
 	ReturnDataReady, ReturnDataValid, ReturnData,
-    PPPEvictDataReady, PPPEvictDataValid, PPPEvictData,
+    PPPEvictDataEmpty, PPPEvictDataValid, PPPEvictData,
     PPPRefillDataReady, PPPRefillDataValid, PPPRefillData,
     StoreDataReady, StoreDataValid, StoreData,
     LoadDataReady, LoadDataValid, LoadData,
@@ -51,7 +51,7 @@ module UORAMDataPath
     output [FEDWidth-1:0] ReturnData;
 
     // receive data from PLB
-    output PPPEvictDataReady;
+    output PPPEvictDataEmpty;
     input  PPPEvictDataValid;
     input  [LeafWidth-1:0] PPPEvictData;
 
@@ -73,7 +73,7 @@ module UORAMDataPath
     input   DumbRequest;
 
     // PPPEvictBuffer
-	(* mark_debug = "TRUE" *) wire PPPEvictDataValid_Reg;
+	(* mark_debug = "TRUE" *) wire PPPEvictDataValid_Reg, PPPEvictDataReady;
 	(* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPEvictData_Reg;
 
     (* mark_debug = "TRUE" *) wire EvictBufferOutReady, EvictBufferOutValid;
@@ -82,6 +82,7 @@ module UORAMDataPath
 	Pipeline 	#(	.Width(LeafWidth+1), .Stages(1))
 		EvictReg	(	Clock,	 1'b0,	{PPPEvictDataValid, PPPEvictData}, {PPPEvictDataValid_Reg, PPPEvictData_Reg});
 
+	assign PPPEvictDataEmpty = EvictBuffer.OutFullCount == 0;	
     FIFORAM #(.Width(LeafWidth), .Buffering(LeafInBlock))
         EvictBuffer (   .Clock(Clock),
                         .Reset(Reset),
@@ -93,6 +94,14 @@ module UORAMDataPath
                         .OutData(EvictBufferDOut)
                     );
 
+`ifdef SIMULATION
+    always @(posedge Clock) begin
+        if (PPPEvictDataValid_Reg && !PPPEvictDataReady) begin
+            $display("Error: lost eviction data");
+            $finish;
+        end
+    end
+`endif
 
     // Funnel for PPPEvictBuffer --> BackEnd
     (* mark_debug = "TRUE" *) wire EvictFunnelOutValid;
