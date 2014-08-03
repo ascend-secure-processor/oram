@@ -7,7 +7,7 @@ module testUORAM;
 	parameter				    ORAMU =				32;
 	parameter                   ORAML = 			20;
 	parameter                   FEDWidth = 			64;
-	parameter					BEDWidth =			64;
+	parameter					BEDWidth =			256;
 	parameter                   NumValidBlock = 	1 << 10;//1 << ORAML;	
 	parameter                   Recursion = 		3;
     parameter                   PLBCapacity = 		8192 << 3;
@@ -193,7 +193,7 @@ module testUORAM;
         CycleCount = CycleCount + 1;
     end
 
-    assign Reset = CycleCount < 30;
+    assign Reset = CycleCount < 5;
   
     localparam  Freq =	200_000_000,
 				FastFreq = 300_000_000;
