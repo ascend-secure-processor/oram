@@ -440,6 +440,14 @@ module AESPathORAM(
                .OutReady(AESDataOutReady)
                );
 
+
+			always @(posedge Clock) begin
+				if (AESDataInValid && AESDataInAccept) $display("FIFO write %x", AESDataIn);
+				if (AESDataOutValid && AESDataOutReady) $display("FIFO read %x", AESDataOut);
+				if (AESDataOutValid) $display("FIFO pass %x", AESDataOut);
+			end
+
+
     //------------------------------------------------------------------------------
     //  AES_W and result FIFO
     //------------------------------------------------------------------------------
