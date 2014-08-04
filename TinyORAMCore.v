@@ -53,12 +53,10 @@ module TinyORAMCore(
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				0,
-							EnableAES =				1,//`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				1;//`ifdef ASIC 1 `else 1 `endif;
+							EnableAES =				0,//`ifdef ASIC 0 `else 0 `endif,
+   							EnableIV =				0;//`ifdef ASIC 1 `else 1 `endif;
 
 	// ORAM
-
-	// TODO: for ASIC, we want ORAML up to 31 (dynamically change recursion). but use 13 for simulation
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
@@ -70,8 +68,8 @@ module TinyORAMCore(
 	parameter				FEDWidth =				64,
 							BEDWidth =				64;
 
-    parameter				NumValidBlock = 		1 << 10,//1 << ORAML,
-							Recursion = 			3,
+    parameter				NumValidBlock = 		1 << 13,//1 << ORAML,
+							Recursion = 			2,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
 							

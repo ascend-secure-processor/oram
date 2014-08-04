@@ -346,8 +346,8 @@ module PathORAMBackend(
 	*/
 
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				PathSize_BEDChunks))
-							//`ifdef ASIC , .ASIC(1) `endif)
+							.Buffering(				PathSize_BEDChunks)
+							`ifdef ASIC , .ASIC(1) `endif)
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMReadData),

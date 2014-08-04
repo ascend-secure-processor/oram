@@ -92,7 +92,8 @@ module UORAMDataPath
                         .InData(PPPEvictData_Reg),
                         .OutReady(EvictBufferOutReady),
                         .OutSend(EvictBufferOutValid),
-                        .OutData(EvictBufferDOut)
+                        .OutData(EvictBufferDOut),
+						.OutFullCount(EvictBufferEntryCount)
                     );
 
 `ifdef SIMULATION

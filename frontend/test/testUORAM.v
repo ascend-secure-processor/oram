@@ -8,8 +8,8 @@ module testUORAM;
 	parameter                   ORAML = 			20;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
-	parameter                   NumValidBlock = 	1 << 10;//1 << ORAML;	
-	parameter                   Recursion = 		3;
+	parameter                   NumValidBlock = 	1 << 13;//1 << ORAML,
+	parameter                   Recursion = 		2;
     parameter                   PLBCapacity = 		8192 << 3;
 	parameter					PRFPosMap =			1;
 
