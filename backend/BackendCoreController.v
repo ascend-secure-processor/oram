@@ -296,8 +296,8 @@ module BackendCoreController(
 	REWStatCtr	#(			.USE_REW(				EnableREW),
 							.ORAME(					ORAME),
 							.Overlap(				0),
-							.RW_R_Chunk(			PathSize_DRBursts),
-							.RW_W_Chunk(			PathSize_DRBursts),
+							.RW_R_Chunk(			PathSize_BEDChunks),
+							.RW_W_Chunk(			PathSize_BEDChunks),
 							.RO_R_Chunk(			BktSize_DRBursts),
 							.RO_W_Chunk(			0))
 
