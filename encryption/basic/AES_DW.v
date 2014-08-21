@@ -31,9 +31,9 @@ module AES_DW
 
 	parameter W = 4;
 	parameter D = 12;
-	
+
 	`include "PathORAM.vh"
-	
+
      //--------------------------------------------------------------------------
      //	System I/O
      //--------------------------------------------------------------------------
@@ -44,7 +44,7 @@ module AES_DW
      //	Interface 1
      //--------------------------------------------------------------------------
 
-     input  [AESEntropy-1:0] 	DataIn;
+     input  [AESEntropy-1:0] 	 DataIn;
      input                       DataInValid;
      output                      DataInReady;
 
@@ -72,6 +72,8 @@ module AES_DW
     wire     [W-1:0]             AESResValid[D-1:0];
 
 	`ifndef ASIC
+    integer                      i;
+
 		initial begin
 			Count = 0;
 			InTurn = 0;
@@ -79,8 +81,8 @@ module AES_DW
 			for (i = 0; i < D; i = i + 1)
 				AESWorking[i] = 0;
 		end
-	`endif	
-	
+	`endif
+
     assign DInReady = Count < D;
     assign DOut = AESRes[OutTurn];
     assign DOutValid = &(AESResValid[OutTurn]);
@@ -115,8 +117,6 @@ module AES_DW
                 OutTurn <= OutTurn + 1;
         end
     end
-
-    integer i;
 
     always @( posedge Clock ) begin
         if (Reset) begin
