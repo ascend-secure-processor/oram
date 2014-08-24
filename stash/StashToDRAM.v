@@ -147,8 +147,7 @@ module StashToDRAM(
 														IVINITValue	
 													};
 	
-	generate if (BEDWidth < BktHSize_RawBits) begin:NARROW_BEDWIDTH
-		FIFOShiftRound #(	.IWidth(				RHWidth),
+	FIFOShiftRound #(		.IWidth(				RHWidth),
 							.OWidth(				BEDWidth))
 				out_DR_shft(.Clock(					Clock),
 							.Reset(					Reset),
@@ -158,11 +157,6 @@ module StashToDRAM(
 							.OutData(				HeaderOut),
 							.OutValid(				HeaderOutValid),
 							.OutReady(				HeaderOutReady));
-	end else begin:WIDE_BEDWIDTH
-		assign	HeaderOut = 						HeaderUp;
-		assign	HeaderOutValid = 					HeaderUp_OutValid;
-		assign	HeaderUp_OutReady = 				HeaderOutReady;
-	end endgenerate
 	
 	// PERFORMANCE/FUNCTIONALITY: We output (U, L, D) tuples; we need to buffer 
 	// whole bucket so that we can write back to DRAM in {Header, Payload} order

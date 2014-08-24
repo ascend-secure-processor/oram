@@ -82,7 +82,7 @@ module UORAMDataPath
 	Pipeline 	#(	.Width(LeafWidth+1), .Stages(1))
 		EvictReg	(	Clock,	 1'b0,	{PPPEvictDataValid, PPPEvictData}, {PPPEvictDataValid_Reg, PPPEvictData_Reg});
 
-	wire [`log2(LeafInBlock+1):0] EvictBufferEntryCount;
+	wire [`log2(LeafInBlock+1)-1:0] EvictBufferEntryCount;
 	assign PPPEvictDataEmpty = EvictBufferEntryCount == 0;	
     FIFORAM #(.Width(LeafWidth), .Buffering(LeafInBlock))
         EvictBuffer (   .Clock(Clock),

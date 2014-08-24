@@ -71,16 +71,16 @@ module AES_DW
     wire     [W*AESWidth-1:0]    AESRes[D-1:0];
     wire     [W-1:0]             AESResValid[D-1:0];
 
-	`ifndef ASIC
     integer                      i;
 
-		initial begin
-			Count = 0;
-			InTurn = 0;
-			OutTurn = 0;
-			for (i = 0; i < D; i = i + 1)
-				AESWorking[i] = 0;
-		end
+	`ifndef ASIC
+	initial begin
+		Count = 0;
+		InTurn = 0;
+		OutTurn = 0;
+		for (i = 0; i < D; i = i + 1)
+			AESWorking[i] = 0;
+	end
 	`endif
 
     assign DInReady = Count < D;
