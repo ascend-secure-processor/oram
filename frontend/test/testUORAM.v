@@ -85,12 +85,13 @@ module testUORAM;
 	//--------------------------------------------------------------------------
 	//	DDR -> BRAM (to make simulation faster)
 	//--------------------------------------------------------------------------
-    parameter   InBufDepth = 6,
-                OutInitLat = 30,
-                OutBandWidth = 57;
-		
+	
+	// These FIFOs must be reversed; the stash assumes this.
+	// It is cleaner and also makes more sense since IV/seed comes first now
+   
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
-							.OWidth(				BEDWidth))
+							.OWidth(				BEDWidth),
+							.Reverse(				1))
 				in_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DDR3SDRAM_ReadData_Wide),
@@ -101,7 +102,8 @@ module testUORAM;
 							.OutReady(				1'b1));
 							
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
-							.OWidth(				DDRDWidth))
+							.OWidth(				DDRDWidth),
+							.Reverse(				1))
 				out_shft(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DDR3SDRAM_WriteData),
@@ -155,6 +157,9 @@ module testUORAM;
 		end
 	end
 	
+	localparam   InBufDepth = 6,
+                OutInitLat = 30,
+                OutBandWidth = 57;
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),

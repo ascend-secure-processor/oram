@@ -43,8 +43,10 @@ module AESPathORAM(
 
     localparam IDWidth = W * AESWidth;
 
-    localparam IV_LOC = DDRDWidth / IDWidth;
-
+	localparam BktEnd_LOC = DDRDWidth / IDWidth - 1;
+    localparam IV_LOC = 0;	// or BktEnd_LOC, depending on whether FIFOShiftRound is reversed or not
+	
+	
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
 
@@ -197,7 +199,8 @@ module AESPathORAM(
 
     generate if (BEDWidth < AESWidth) begin: IOBuffer
         FIFOShiftRound#(.IWidth(BEDWidth),
-                        .OWidth(IDWidth))
+                        .OWidth(IDWidth),
+						.Reverse(1))
         dramin_fifo(.Clock(Clock),
                     .Reset(Reset),
                     .InData(DRAMReadData),
@@ -208,7 +211,8 @@ module AESPathORAM(
                     .OutReady(DRAMReadDataReady_Int));
 
         FIFOShiftRound#(.IWidth(BEDWidth),
-                        .OWidth(IDWidth))
+                        .OWidth(IDWidth),
+						.Reverse(1))
         bein_fifo(.Clock(Clock),
                   .Reset(Reset),
                   .InData(BackendWData),
@@ -219,8 +223,8 @@ module AESPathORAM(
                   .OutReady(BackendWReady_Int));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth))
-						//.Reverse(1))
+                        .OWidth(BEDWidth),
+						.Reverse(1))
         dramout_fifo(.Clock(Clock),
                      .Reset(Reset),
                      .InData(DRAMWriteData_Int),
@@ -231,8 +235,8 @@ module AESPathORAM(
                      .OutReady(DRAMWriteDataReady));
 
         FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth))
-						//.Reverse(1))
+                        .OWidth(BEDWidth),
+						.Reverse(1))
         beout_fifo(.Clock(Clock),
                    .Reset(Reset),
                    .InData(BackendRData_Int),
@@ -344,7 +348,7 @@ module AESPathORAM(
 
     assign ReadBucketTransition = 	(		
 									(BucketReadCtr_Reset & InitDone) |
-									((BucketReadCtr == (IV_LOC-1)) & ~InitDone)
+									((BucketReadCtr == BktEnd_LOC) & ~InitDone)
 									) &
 									(ReadGood | WriteGood);
 
@@ -379,7 +383,7 @@ module AESPathORAM(
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
-    assign IsIV = (BucketReadCtr == (IV_LOC-1));
+    assign IsIV = (BucketReadCtr == IV_LOC);
 
     assign IVDataIn = DataIn[AESEntropy-1:0];
     assign IVDataInValid = IsIV & DataInValid & AESDataInAccept;
@@ -427,8 +431,9 @@ module AESPathORAM(
                 );
 
     FIFORAM#(.Width(IDWidth),
-             .Buffering(FIFO_D)
-			 `ifdef ASIC , .ASIC(1) `endif) //what depth?
+             .Buffering(FIFO_D + BktHSize_BEDChunks)	
+					//what depth? Good question, should be D (21) + Stash delay (# Headers in BEDChunks + plus something)
+			 `ifdef ASIC , .ASIC(1) `endif) 
     data_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(AESDataIn),
@@ -440,6 +445,21 @@ module AESPathORAM(
                .OutReady(AESDataOutReady)
                );
 
+	always @ (posedge Clock) begin
+		if (AESDataInValid && !AESDataInAccept) begin
+			$display("Lose ciphertexts!");
+			$finish;
+		end
+		if ((IVDataInValid && !IVDataInAccept) || (IVDupInValid && !IVDupInAccept)) begin
+			$display("Lose ciphertexts!");
+			$finish;
+		end
+		if (AESDataInValid && !AESDataInAccept) begin
+			$display("Lose initial vectors!");
+			$finish;
+		end		
+	end	
+			   
     //------------------------------------------------------------------------------
     //  AES_W and result FIFO
     //------------------------------------------------------------------------------
@@ -523,10 +543,10 @@ module AESPathORAM(
                    );
 
     assign AESReadBucketTransition = (AESBucketReadCtr_Reset |
-                                      ((AESBucketReadCtr == (IV_LOC-1)) & ~InitDone)) &
+                                      ((AESBucketReadCtr == BktEnd_LOC) & ~InitDone)) &
                                      DataOutValid & DataOutReady;
 
-    assign IsAESIV = (AESBucketReadCtr == (IV_LOC-1));// & ~AESIVDone;
+    assign IsAESIV = (AESBucketReadCtr == IV_LOC);// & ~AESIVDone;
     assign XorRes = AESDataOut ^ AESResDataOut;
 
     //replace the IV portion with actual IV

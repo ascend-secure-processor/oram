@@ -260,10 +260,13 @@ module	SynthesizedDRAM(
 		AddrDelay <= RAMAddress;
 	end*/
 	
-	assign	RAMDataOut =		(RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : //(ReadBefore[AddrDelay]) ? RAMDataOut_Pre : 
-								//512'h00deadbeef00000000;
-								512'ha3deadbeef00000000;
-	
+	assign	RAMDataOut =		(RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : 
+								512'h0000000000000000deadbeef00000000;
+								//512'hfce3208280d867a3deadbeef00000000;
+								//512'h155c2cea70084a47deadbeef00000000;
+		
+		
+		
 	generate for (i = 0; i < UCount; i = i + 1) begin:RAM_BLOCK
 		RAM			#(			.DWidth(			UWidth),
 								.AWidth(			RAWidth),
