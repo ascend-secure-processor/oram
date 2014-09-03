@@ -29,7 +29,7 @@
 							EnableREW =				PINIT, 	// Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 							EnableIV =          	PINIT; 	// Integrity verification
 							
-	parameter				DelayedWB = 			PINIT;		// delayed write back to save SHA engines for integrity
+	parameter				DelayedWB = 			1'b0;		// No reason for delayed WB any more
 
 	//--------------------------------------------------------------------------
 	//	Per-design security settings

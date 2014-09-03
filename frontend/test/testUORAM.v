@@ -9,17 +9,19 @@ module testUORAM;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << 13;//1 << ORAML,
-	parameter                   Recursion = 		2;
-    parameter                   PLBCapacity = 		8192 << 3;
-	parameter					PRFPosMap =			1;
-
-	localparam  NN = 200;
-	localparam	nn = 73;
-	localparam	nn2 = nn * 29;
-
+	
+	// ------- these parameters are used in some header files -------
+	parameter                   Recursion = 		2;				
+	parameter					PRFPosMap =			1;	
+	parameter					AESEntropy = 64;
+	// -------------------------------------------------------------------
+	
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
 	
-	localparam					AESEntropy = 64;
+	localparam  				NN = 200;
+	localparam					nn = 73;
+	localparam					nn2 = nn * 29;
+
 	
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
@@ -86,11 +88,7 @@ module testUORAM;
     parameter   InBufDepth = 6,
                 OutInitLat = 30,
                 OutBandWidth = 57;
-	
-	//always @(posedge Clock) begin
-	//	if (DDR3SDRAM_ReadValid) $display("DRAM read data: %x", DDR3SDRAM_ReadData);
-	//end
-	
+		
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
 							.OWidth(				BEDWidth))
 				in_shft(	.Clock(					Clock),
