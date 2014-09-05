@@ -41,8 +41,9 @@ module testUORAM;
 	wire	[BEDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 
-	wire	[DDRDWidth-1:0]		DDR3SDRAM_ReadData_Wide;
-	wire						DDR3SDRAM_ReadValid_Wide, DDR3SDRAM_ReadReady_Wide;
+	wire	[DDRDWidth-1:0]		DDR3SDRAM_ReadData_Wide,	DDR3SDRAM_ReadData_Wide_Pre;
+	wire						DDR3SDRAM_ReadValid_Wide, 	DDR3SDRAM_ReadReady_Wide;
+	wire						DDR3SDRAM_ReadValid_Wide_Pre, DDR3SDRAM_ReadReady_Wide_Pre;
 	
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData_Wide;
 	wire						DDR3SDRAM_WriteValid_Wide, DDR3SDRAM_WriteReady_Wide;
@@ -144,16 +145,15 @@ module testUORAM;
 	
 		if (DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide) begin
 			$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
-			/*if (!DRAMWriteAddrValid) begin
-				$finish;
-			end*/
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide & DDR3SDRAM_ReadReady_Wide) begin
 			$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
-			if (!DRAMReadAddrValid) begin
-				$finish;
-			end
+		end
+		
+		if (DDR3SDRAM_ReadValid_Wide_Pre && !DDR3SDRAM_ReadReady_Wide_Pre) begin
+			$display("Lose DRAM read data");
+			$finish;
 		end
 	end
 	
@@ -180,14 +180,26 @@ module testUORAM;
                             .CommandReady(			DDR3SDRAM_CommandReady),
                             
                             .DataIn(				DDR3SDRAM_WriteData_Wide),
-                            .DataInMask(			DDR3SDRAM_WriteMask), // this may get mis-aligned because of the shifters, but we won't change it anyway
+                            .DataInMask(			DDR3SDRAM_WriteMask), // TODO: this may get mis-aligned because of the shifters, but we won't change it anyway
                             .DataInValid(			DDR3SDRAM_WriteValid_Wide),
                             .DataInReady(			DDR3SDRAM_WriteReady_Wide),
                             
-                            .DataOut(				DDR3SDRAM_ReadData_Wide),
-                            .DataOutValid(			DDR3SDRAM_ReadValid_Wide),
-                            .DataOutReady(			DDR3SDRAM_ReadReady_Wide));
+                            .DataOut(				DDR3SDRAM_ReadData_Wide_Pre),
+                            .DataOutValid(			DDR3SDRAM_ReadValid_Wide_Pre),
+                            .DataOutReady(			DDR3SDRAM_ReadReady_Wide_Pre));
 
+	FIFORAM	#(				.Width(					DDRDWidth),
+							.Buffering(				1023))
+		rd_data(			.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DDR3SDRAM_ReadData_Wide_Pre),
+							.InValid(				DDR3SDRAM_ReadValid_Wide_Pre),
+							.InAccept(				DDR3SDRAM_ReadReady_Wide_Pre),
+							.OutData(				DDR3SDRAM_ReadData_Wide),
+							.OutSend(				DDR3SDRAM_ReadValid_Wide),
+							.OutReady(				DDR3SDRAM_ReadReady_Wide));
+								
+							
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;
