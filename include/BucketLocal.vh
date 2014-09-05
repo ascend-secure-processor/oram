@@ -34,12 +34,12 @@
 							BigUWidth =				ORAMU * ORAMZ,
 							BigLWidth =				ORAML * ORAMZ,
 							BigHWidth =				ORAMH * ORAMZ;
-	localparam				BktHSize_ValidBits =	`divceil(ORAMZ, 8) * 8, // = 8 bits for Z <= 8
+	localparam				BktHSize_ValidBits =	`divceil(ORAMZ, 8) * 8, 
 							BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ,
 							BktHVStart =			AESEntropy,
 							BktHUStart =			BktHVStart + BktHSize_ValidBits, // at what position do the U's start?
 							BktHLStart =			BktHUStart + BigUWidth, // at what position do the L's start?
-							BktHHStart =			BktHLStart + BigLWidth,
+							BktHHStart =			BktHLStart + BigLWidth,	// at what position do the Hashes start?
 							BktHSize_RawBits = 		BktHHStart + ((EnableIV) ? BigHWidth : 0);
 
 	//--------------------------------------------------------------------------

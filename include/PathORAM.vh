@@ -47,6 +47,6 @@
 	// Integrity verification
 	
 	// Given ORAMH (the HashPreimage width), the ORAM core will ensure that resistance against preimage attacks is >= 2^HashPreimage.  Resistance against collisions is correspondingly >= 2^(HashPreimage/2).
-	localparam				ORAMH =					80; // The minimum recommended preimage resistance according to the HMAC spec
+	localparam				ORAMH =					128; // The minimum recommended preimage resistance according to the HMAC spec
 	localparam				HashKeyLength = 		128;
 	
