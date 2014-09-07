@@ -205,7 +205,7 @@ module BackendCoreController(
 							.Set(       			RW_W_DoneAlarm),
 							.Out(       			DataRWDone));
 
-	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | ( (DelayedWB == 1 | AddrRWDone) & DataRWDone);
+	assign	OperationComplete = 					Addr_RO_W_DoneAlarm | (AddrRWDone & DataRWDone);
 	assign	CommandDone =							(CSAppendWait & StashCommandReady) | (OperationComplete & ~AccessIsDummy);
 
 	assign	Stash_AppendCmdValid =					DummyLeaf_Valid & CommandRequest & (Command == BECMD_Append);
@@ -223,9 +223,7 @@ module BackendCoreController(
 		NS = 										CS;
 		case (CS)
 			ST_Idle :
-				if (		DelayedWB & Addr_RWAccess & Addr_PathWriteback)
-					NS =							ST_AddrGenWrite;
-				else if (	StashCommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
+				if (	StashCommandReady & Stash_DummyCmdValid) // stash capacity check gets higher priority than append
 					if (ROAccess)
 						NS =						ST_CCROStart;
 					else
@@ -264,14 +262,10 @@ module BackendCoreController(
 				if (StashCommandReady)
 					NS =							ST_Read;
 			ST_Read :
-				if (		(RW_R_DoneAlarm | RO_R_DoneAlarm) & DelayedWB & RWAccess)
-					NS =							ST_StashWrite;
-				else if (	 RW_R_DoneAlarm | RO_R_DoneAlarm)
+				if (	 RW_R_DoneAlarm | RO_R_DoneAlarm)
 					NS =							ST_AddrGenWrite;
 			ST_AddrGenWrite :
-				if (		AddrGenInReady & DelayedWB & Addr_RWAccess & Addr_PathWriteback)
-					NS =							ST_AddrGenWrite_DWB;
-				else if (	AddrGenInReady)
+				if (	AddrGenInReady)
 					NS =							ST_StashWrite;
 			ST_StashWrite :
 				if (StashCommandReady)

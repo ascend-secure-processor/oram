@@ -29,7 +29,7 @@
 							EnableREW =				PINIT, 	// Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 							EnableIV =          	PINIT; 	// Integrity verification
 							
-	parameter				DelayedWB = 			PINIT;		// delayed write back to save SHA engines for integrity
+	parameter				DelayedWB = 			1'b0;		// No reason for delayed WB any more
 
 	//--------------------------------------------------------------------------
 	//	Per-design security settings
@@ -47,6 +47,6 @@
 	// Integrity verification
 	
 	// Given ORAMH (the HashPreimage width), the ORAM core will ensure that resistance against preimage attacks is >= 2^HashPreimage.  Resistance against collisions is correspondingly >= 2^(HashPreimage/2).
-	localparam				ORAMH =					80; // The minimum recommended preimage resistance according to the HMAC spec
+	localparam				ORAMH =					128; // The minimum recommended preimage resistance according to the HMAC spec
 	localparam				HashKeyLength = 		128;
 	

@@ -238,9 +238,9 @@ module PathORAMBackend(
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
 							.Overclock(				Overclock),
 							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 				aes(		.Clock(					Clock),

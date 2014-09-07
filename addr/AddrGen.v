@@ -50,7 +50,7 @@ module AddrGen
 	// control logic for AddrGenBktHead
 	wire Enable, SwitchLevel;
 	reg RW, BH;
-	reg [ORAMLogL-1:0] BktCounter;
+	reg [BBSTWidth-1:0] BktCounter;
     
 	AddrGenBktHead #( 	.ORAML(	ORAML), 
 						.DDRROWWidth( DDRROWWidth),
@@ -98,13 +98,18 @@ module AddrGen
 					.BktIdx(	BktIdx)			
 				);
 	
-`ifdef SIMULATION	// Check that AddrGen is not mapping two different buckets to the same physical address
+	always @(posedge Clock) begin
+		if (CmdValid && CmdReady && BktCounter == 0)
+			$display("Accessing DRAM address [%x], Bucket %x, ST = %x, Bkt=%d", Addr, BktIdx_Padded, STIdx, BktIdxInST);
+	end
+	
+	// Check that AddrGen is not mapping two different buckets to the same physical address
 	localparam 	CheckAddrGen = 1;
 	integer bkt_i;
 	generate if (CheckAddrGen) begin:Check_Addr
 		localparam	NumBuckets = 1 << (ORAML+1);
 		
-		reg [DDRAWidth-1:0]	AddrMap [0:NumBuckets-1];
+		reg [ORAML+1:0]	AddrMap [0:NumBuckets-1];
 		reg AddrMapValid [0:NumBuckets-1];
 		
 		always @(posedge Clock) begin
@@ -114,18 +119,19 @@ module AddrGen
 			end
 			
 			else if (!BktCounter && CmdValid) begin
-				if (AddrMapValid[BktIdx])
-					if (AddrMap[BktIdx] != Addr) begin
+				if (AddrMapValid[Addr/DDRBstLen/BktSize_DRBursts])
+					if (AddrMap[Addr/DDRBstLen/BktSize_DRBursts] != BktIdx_Padded) begin
 						$display("Wrong mapping for bucket %d, %x != %x", BktIdx, AddrMap[BktIdx], Addr);
 					end
 				else begin
-					AddrMap[BktIdx] <= Addr;
-					AddrMapValid[BktIdx] <= 1'b1;
+					AddrMap[Addr/DDRBstLen/BktSize_DRBursts] <= BktIdx_Padded;
+					AddrMapValid[Addr/DDRBstLen/BktSize_DRBursts] <= 1'b1;
 				end
 			end		
 		end
 		
 	end endgenerate
+`ifdef SIMULATION
 `endif
 
 endmodule

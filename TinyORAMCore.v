@@ -60,8 +60,8 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					26,
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 3 `endif,
+							ORAML =					20,
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 12 `endif,
 							ORAMC =					10,
 							ORAME =					5;
 
@@ -74,8 +74,7 @@ module TinyORAMCore(
 							PRFPosMap =         	EnableIV;
 							
 	// Hardware
-
-	parameter				Overclock =				1;
+	parameter				Overclock =				0;
 
 	//--------------------------------------------------------------------------
 	//	Constants
@@ -89,7 +88,7 @@ module TinyORAMCore(
 	// No scheme currently needs DWB
 	// [Note] there is some logic in BackendControllerCore that implicitly
 	// assumes REW==DWB.  Careful when enabling it.
-	localparam				DelayedWB =				0;
+	// localparam				DelayedWB =				0;
 
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -159,8 +158,7 @@ module TinyORAMCore(
 
 			if (DDRDWidth < BEDWidth ||
 				DebugDRAMReadTiming || // TODO this is commented out in backend right now ...
-				DDRDWidth % BEDWidth != 0 ||
-				DelayedWB && !EnableREW) begin
+				DDRDWidth % BEDWidth != 0) 	begin
 				$display("[%m] ERROR: Illegal parameter setting."); // See BucketLocal.vh for more information.
 				$finish;
 			end
@@ -234,7 +232,7 @@ module TinyORAMCore(
 							.EnableAES(				EnableAES),
 							.EnableREW(				EnableREW),
 							.EnableIV(				EnableIV),
-							.DelayedWB(				DelayedWB),
+							.DelayedWB(				1'b0),
 
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),

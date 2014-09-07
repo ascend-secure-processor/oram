@@ -15,8 +15,8 @@
 			ORAMU == PINIT ||
 			ORAML == PINIT ||
 			ORAMZ == PINIT ||
-			BEDWidth == PINIT) begin //||
-		    //EnableIV == PINIT) begin
+			BEDWidth == PINIT ||
+		    EnableIV == PINIT) begin
 			$display("[%m] ERROR: parameter uninitialized.");
 			$finish;
 		end
@@ -34,12 +34,12 @@
 							BigUWidth =				ORAMU * ORAMZ,
 							BigLWidth =				ORAML * ORAMZ,
 							BigHWidth =				ORAMH * ORAMZ;
-	localparam				BktHSize_ValidBits =	`divceil(ORAMZ, 8) * 8, // = 8 bits for Z < 9
+	localparam				BktHSize_ValidBits =	`divceil(ORAMZ, 8) * 8, 
 							BktHWaste_ValidBits =	BktHSize_ValidBits - ORAMZ,
 							BktHVStart =			AESEntropy,
 							BktHUStart =			BktHVStart + BktHSize_ValidBits, // at what position do the U's start?
-							BktHLStart =			BktHUStart + BigUWidth, // at what position do the U's start?
-							BktHHStart =			BktHLStart + BigLWidth,
+							BktHLStart =			BktHUStart + BigUWidth, // at what position do the L's start?
+							BktHHStart =			BktHLStart + BigLWidth,	// at what position do the Hashes start?
 							BktHSize_RawBits = 		BktHHStart + ((EnableIV) ? BigHWidth : 0);
 
 	//--------------------------------------------------------------------------
@@ -48,8 +48,7 @@
 
 	// Now, we align bitfields to DDR3 burst lengths.  This means (for BEDWidth
 	// == DDRDWidth) that we won't need expensive re-alignment logic in ORAM.
-	// For the BEDWidth < DDRDWidth case, we will lose bandwidth if ORAMB %
-	// DDRDWidth != 0.
+	// For the BEDWidth < DDRDWidth case, we will lose bandwidth if ORAMB % DDRDWidth != 0.
 
 	localparam				BlkSize_DRBursts =		`divceil(ORAMB, DDRDWidth),
 							BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
@@ -65,7 +64,7 @@
 	localparam
 							PathSize_DRBursts =		(ORAML + 1) * BktSize_DRBursts,
 							PathPSize_DRBursts =	(ORAML + 1) * BktPSize_DRBursts,
-							BBSTWidth =				`log2(BktSize_DRBursts), // Block DRAM burst width
+							BBSTWidth =				`log2(BktSize_DRBursts), // Bucket DRAM burst width
 							PBSTWidth =				`log2(PathSize_DRBursts); // Path DRAM burst width
 
 	//--------------------------------------------------------------------------

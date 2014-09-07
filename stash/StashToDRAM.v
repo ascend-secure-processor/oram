@@ -148,7 +148,8 @@ module StashToDRAM(
 													};
 	
 	FIFOShiftRound #(		.IWidth(				RHWidth),
-							.OWidth(				BEDWidth))
+							.OWidth(				BEDWidth),
+							.Reverse(				1))
 				out_DR_shft(.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				HeaderUp),

@@ -141,7 +141,8 @@ module DRAMToStash(
 
 	FIFOShiftRound #(		.IWidth(				BEDWidth),
 							.OWidth(				RHWidth),
-							.Register(				1))
+							.Register(				1),
+							.Reverse(				1))
 				in_H_SP(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMData),
