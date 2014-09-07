@@ -845,8 +845,7 @@ module Stash(
 	assign	BlockReadCommit = 						BlockReadComplete & ReadOutValid & ReadOutReady;
 	
 	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				BlkSize_BEDChunks * StashOutBuffering)
-							`ifdef ASIC , .ASIC(1) `endif)
+							.Buffering(				BlkSize_BEDChunks * StashOutBuffering))
 				out_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				Core_OutData),
