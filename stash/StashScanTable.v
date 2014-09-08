@@ -376,8 +376,7 @@ module StashScanTable(
 		order.
 	*/
 	SDPRAM		#(			.DWidth(				SEAWidth),
-							.AWidth(				STAWidth)
-							`ifdef ASIC , .ASIC(1) `endif)
+							.AWidth(				STAWidth))
 				st_ram(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Write(					ScanTable_WE),								

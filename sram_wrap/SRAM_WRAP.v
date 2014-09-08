@@ -32,7 +32,7 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 						//	DWidth <= 128 ?		128 :
 						//						64 ) :
 						NWORDS == 256 ? (
-							DWidth <= 64 ? 		64 : 
+						//	DWidth <= 64 ? 		64 : FIXME get the lef file from mike for RF1DFCMN00256X064D02C064
 							DWidth <= 256 ?		256 :
 												128 ): 
 						0;
