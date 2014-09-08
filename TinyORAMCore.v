@@ -53,14 +53,14 @@ module TinyORAMCore(
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				0,
-							EnableAES =				0,//`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				1;//`ifdef ASIC 1 `else 1 `endif;
+							EnableAES =				1,//`ifdef ASIC 0 `else 0 `endif,
+   							EnableIV =				0;//`ifdef ASIC 1 `else 1 `endif;
 
 	// ORAM
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					20,
+							ORAML =					8,
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 12 `endif,
 							ORAMC =					10,
 							ORAME =					5;
@@ -72,7 +72,7 @@ module TinyORAMCore(
 							Recursion = 			2,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
-							
+
 	// Hardware
 	parameter				Overclock =				0;
 
