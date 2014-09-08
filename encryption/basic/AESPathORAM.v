@@ -44,7 +44,7 @@ module AESPathORAM(
     localparam BktHSize_AESChunks = (BktHSize_BEDChunks * BEDWidth) / IDWidth;
     localparam BktSizeAESWidth = `log2(BktSize_AESChunks);
 
-    localparam AESDataDepth = (IV_Delay * D) + 1;
+    localparam AESDataDepth = IV_Delay + 3;
 
     localparam BktHEnd_LOC = DDRDWidth/BEDWidth;
     localparam BktHEnd_LOC_AES = DDRDWidth/IDWidth;
@@ -96,6 +96,7 @@ module AESPathORAM(
 
     reg                          RW = PATH_WRITE; //0: ORAM->MIG, 1: MIG->ORAM
     wire [AESEntropy-1:0]        GlobalCounter;
+    wire [AESEntropy-1:0]        GlobalCounter_Int;
 
     wire [AESEntropy-1:0]        IVDataIn;
     wire                         IVDataInValid;
@@ -214,8 +215,9 @@ module AESPathORAM(
              .Enable((RW == PATH_WRITE) &
                      IVDataInValid & IVDataInAccept),
              .In({AESEntropy{1'bx}}),
-             .Count(GlobalCounter)
+             .Count(GlobalCounter_Int)
              );
+    assign GlobalCounter = GlobalCounter_Int + 1; //0 indicates invalid block now
 
     //------------------------------------------------------------------------------
     //  Check bucket
@@ -304,11 +306,12 @@ module AESPathORAM(
     assign IVDataInValid = IsIV & DataInValid & AESDataInAccept;
 
     generate if (BEDWidth > AESEntropy) begin: BED_LARGER_AES
-        assign AESDataIn[AESEntropy-1:0] = IsIV ? GlobalCounter :
+        assign AESDataIn[AESEntropy-1:0] = IsIV & (RW == PATH_WRITE) ?
+                                           GlobalCounter :
                                            DataIn[AESEntropy-1:0];
         assign AESDataIn[BEDWidth-1:AESEntropy] = DataIn[BEDWidth-1:AESEntropy];
     end else if (BEDWidth == AESEntropy) begin: BED_LESS_AES
-        assign AESDataIn = IsIV ? GlobalCounter : DataIn;
+        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? GlobalCounter : DataIn;
     end
     endgenerate
     assign AESDataInValid = DataInValid;
@@ -465,15 +468,16 @@ module AESPathORAM(
     assign IsAESIV = (AESBucketReadCtr == IV_LOC);// & ~AESIVDone;
     assign XorRes = AESDataOut ^ AESMaskOut;
 
-    //on read: IV doesn't matter anymore
+    //on read: IV passthrough
     //on write: replace with the global counter
     assign DataOut[IDWidth-1:AESEntropy] = XorRes[IDWidth-1:AESEntropy];
-    assign DataOut[AESEntropy-1:0] = IsAESIV & (RW == PATH_READ) ? -1 :
-                                     IsAESIV & (RW == PATH_WRITE) ? AESDataOut[AESEntropy-1:0] :
+    assign DataOut[AESEntropy-1:0] = IsAESIV & (RW == PATH_WRITE) ?
+                                     AESDataOut[AESEntropy-1:0] : //iv stored in aesdata
                                      XorRes[AESEntropy-1:0];
 
     assign DataOutValid = AESDataOutValid & AESMaskOutValid;
-    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) | ((RW == PATH_WRITE) & DRAMWriteDataReady);
+    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) |
+                          ((RW == PATH_WRITE) & DRAMWriteDataReady);
 
     //------------------------------------------------------------------------------
     //  Path Counter
