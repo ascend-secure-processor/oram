@@ -5,24 +5,25 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			20;
+	parameter                   ORAML = 			21;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
-	parameter                   NumValidBlock = 	1 << 13;//1 << ORAML,
-	
+	parameter                   NumValidBlock = 	1 << 13;
+
+	parameter					DDRAWidth =			31;
+
 	// ------- these parameters are used in some header files -------
 	parameter                   Recursion = 		2;				
 	parameter					PRFPosMap =			1;	
-	parameter					AESEntropy = 64;
-	// -------------------------------------------------------------------
+	parameter					AESEntropy = 		64;
+	// --------------------------------------------------------------
 	
-	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
-	
+	localparam					FEORAMBChunks =		ORAMB / FEDWidth;	
+
 	localparam  				NN = 200;
 	localparam					nn = 73;
 	localparam					nn2 = nn * 29;
 
-	
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "PLBLocal.vh" 

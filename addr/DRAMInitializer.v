@@ -31,15 +31,11 @@ module DRAMInitializer(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
-	`include "SubTreeLocal.vh"
 	
 	parameter					IV =				IVINITValue;
 	
 	localparam					Space = 			BktHSize_RndBits - AESEntropy - BktHSize_ValidBits;
 	
-    localparam					NumBuckets =  		(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
-    localparam					LastBuckerAddr =  	NumBuckets * BktSize_DRWords; // DRAM burst address for last bucket               
-
 	localparam					NumBSTHFlits =		NumBuckets,
 								NumBEDHFlits =		NumBuckets * `divceil(DDRDWidth, BEDWidth), // num header flits in tree in BEDWidth chunks
 								BANWidth =			`log2(NumBSTHFlits),

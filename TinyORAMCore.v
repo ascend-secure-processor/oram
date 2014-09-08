@@ -53,22 +53,22 @@ module TinyORAMCore(
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				0,
-							EnableAES =				0,//`ifdef ASIC 0 `else 0 `endif,
-   							EnableIV =				1;//`ifdef ASIC 1 `else 1 `endif;
+							EnableAES =				0,
+   							EnableIV =				1;
 
 	// ORAM
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					20,
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 12 `endif,
+							ORAML =					21,
+							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;
 
 	parameter				FEDWidth =				64,
 							BEDWidth =				64;
 
-    parameter				NumValidBlock = 		1 << 13,// FIXME 1 << ORAML, [the real chip should have like N==2^26; we use 1 << 13 for now since 1 << 13 + IV + PRFPosMap = 8 KB PosMap]
+    parameter				NumValidBlock = 		1 << 13,
 							Recursion = 			2,
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
@@ -80,7 +80,12 @@ module TinyORAMCore(
 	//	Constants
 	//--------------------------------------------------------------------------
 
+	`define PARAMS_H
+	
+	`include "PathORAM.vh" 
+`undef PARAMS_H
 	`include "DDR3SDRAMLocal.vh"
+	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 
 	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
