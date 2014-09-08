@@ -123,13 +123,12 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 	// instantiate SRAM
 	genvar dw;
 	generate for (dw = 0; dw < DWidth_Pad; dw = dw + NBITS) begin:SRAM_MAT
-
+		/*
 		if (NWORDS == 1024) begin
 			wire	[NBITS-1:0] _DOutB;
 			SRAM2SFCMN01024X064D04C064_WRAP SRAM (Clock, Read, 1'b0, Write, Write, _RAddr, {NBITS{1'bx}}, _DOut[dw+NBITS-1:dw],	_WAddr, _DIn[dw+NBITS-1:dw], _DOutB);
 		end
 
-		/*
 		if (NWORDS == 512) begin
 			wire	[NBITS-1:0] _DOutB;
 			SRAM2SFCMN00512X064D04C064_WRAP SRAM (Clock, Read, 1'b0, Write, Write, _RAddr, {NBITS{1'bx}}, _DOut[dw+NBITS-1:dw],	_WAddr, _DIn[dw+NBITS-1:dw], _DOutB);
