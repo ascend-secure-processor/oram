@@ -28,9 +28,11 @@ module AES_W
    DataOutValid
    );
 
-    parameter W = 4;
 
 `include "PathORAM.vh"
+
+    parameter W = 4;
+    parameter AESWIn_Width = AESEntropy;
 
     //--------------------------------------------------------------------------
     //	System I/O
@@ -42,7 +44,7 @@ module AES_W
     //	Interface 1
     //--------------------------------------------------------------------------
 
-    input [AESEntropy-1:0]      DataIn;
+    input [AESWIn_Width-1:0]    DataIn;
     input                       DataInValid;
     output                      DataInReady;
 
@@ -81,7 +83,7 @@ module AES_W
     generate
         for (k = 0; k < W; k = k + 1) begin: AES
             aes_128 aes(.clk(Clock),
-                        .state({{(AESWidth-AESEntropy){1'b0}}, DataIn + k}),
+                        .state({{(AESWidth-AESWIn_Width){k}}, DataIn}),
                         .key(Key),
                         .out(AESRes[(k+1)*AESWidth - 1:k*AESWidth]));
         end
@@ -96,4 +98,3 @@ module AES_W
 
 endmodule
 //--------------------------------------------------------------------------
-

@@ -35,18 +35,23 @@ module AESPathORAM(
 
     localparam FIFO_D = D;
 
-    localparam BktSize_AESChunks = (BktSize_BEDChunks * BEDWidth) / AESWidth;
-    localparam BktHSize_AESChunks = (BktHSize_BEDChunks * BEDWidth) / AESWidth;
-    localparam BktSizeAESWidth = `log2(BktSize_AESChunks/W);
-    localparam PathSize_AESChunks = (PathSize_BEDChunks * BEDWidth) / AESWidth;
-    localparam PathSizeAESWidth = `log2(PathSize_AESChunks/W);
+    localparam BktSizeBED_Width = `log2(BktSize_BEDChunks);
+    localparam PathSizeBED_Width = `log2(PathSize_BEDChunks);
 
     localparam IDWidth = W * AESWidth;
 
-	localparam BktEnd_LOC = DDRDWidth / IDWidth - 1;
+    localparam BktSize_AESChunks = (BktSize_BEDChunks * BEDWidth) / IDWidth;
+    localparam BktHSize_AESChunks = (BktHSize_BEDChunks * BEDWidth) / IDWidth;
+    localparam BktSizeAESWidth = `log2(BktSize_AESChunks);
+
+    localparam AESDataDepth = IV_Delay + 3;
+
+    localparam BktHEnd_LOC = DDRDWidth/BEDWidth;
+    localparam BktHEnd_LOC_AES = DDRDWidth/IDWidth;
     localparam IV_LOC = 0;	// or BktEnd_LOC, depending on whether FIFOShiftRound is reversed or not
-	
-	
+
+    localparam IV_Delay = IDWidth/BEDWidth;
+
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
 
@@ -90,6 +95,8 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
 
     reg                          RW = PATH_WRITE; //0: ORAM->MIG, 1: MIG->ORAM
+    wire [AESEntropy-1:0]        GlobalCounter;
+    wire [AESEntropy-1:0]        GlobalCounter_Int;
 
     wire [AESEntropy-1:0]        IVDataIn;
     wire                         IVDataInValid;
@@ -98,21 +105,14 @@ module AESPathORAM(
     wire                         IVDataOutValid;
     wire                         IVDataOutReady;
 
-    wire [AESEntropy-1:0]        IVDupIn;
-    wire                         IVDupInValid;
-    wire                         IVDupInAccept;
-    wire [AESEntropy-1:0]        IVDupOut;
-    wire                         IVDupOutValid;
-    wire                         IVDupOutReady;
-
     wire [AESWidth-1:0]          Key;
     wire                         KeyValid;
     wire                         KeyReady;
 
-    wire [IDWidth-1:0]           AESDataIn;
+    wire [BEDWidth-1:0]          AESDataIn;
     wire                         AESDataInValid;
     wire                         AESDataInAccept;
-    wire [IDWidth-1:0]           AESDataOut;
+    wire [BEDWidth-1:0]          AESDataOut;
     wire                         AESDataOutValid;
     wire                         AESDataOutReady;
 
@@ -120,12 +120,16 @@ module AESPathORAM(
     wire                         AESDWDataInValid;
     wire                         AESDWDataInAccept;
 
-    wire [IDWidth-1:0]           AESResDataIn;
-    wire                         AESResDataInValid;
-    wire                         AESResDataInAccept;
-    wire [IDWidth-1:0]           AESResDataOut;
-    wire                         AESResDataOutValid;
-    wire                         AESResDataOutReady;
+    wire [IDWidth-1:0]           AESMaskIn;
+    wire                         AESMaskInValid;
+    wire                         AESMaskInAccept;
+    wire [BEDWidth-1:0]          AESMaskOut;
+    wire                         AESMaskOutValid;
+    wire                         AESMaskOutReady;
+
+    wire [BEDWidth-1:0]          AESMaskIn_BED;
+    wire                         AESMaskInValid_BED;
+    wire                         AESMaskInAccept_BED;
 
     wire                         IsIV;
     reg                          IVDone = 0;
@@ -134,7 +138,18 @@ module AESPathORAM(
     wire                         DataInValid;
     wire                         DataInReady;
 
-    wire [BktSizeAESWidth-1:0]   BucketReadCtr;
+    wire [BktSizeBED_Width-1:0]  IVDeqCtr;
+    wire                         IVDeqCtr_Reset;
+    wire                         IVDeqTransition;
+
+    wire [BktSizeBED_Width-1:0]  IVDelayCtr;
+    wire                         IVDelayCtr_Reset;
+    wire                         IVDelayTransition;
+    // indicates when to load;
+    // for bed<128, need to load every 128/bed cycles
+    wire                         IVDelay_En;
+
+    wire [BktSizeBED_Width-1:0]  BucketReadCtr;
     wire                         BucketReadCtr_Reset;
     wire                         ReadBucketTransition;
 
@@ -142,18 +157,13 @@ module AESPathORAM(
     wire                         DWBucketReadCtr_Reset;
     wire                         DWBucketTransition;
 
-    wire [BktSizeAESWidth-1:0]   IVDeqCtr;
-    wire                         IVDeqCtr_Reset;
-    wire                         IVDeqTransition;
-
-    wire [BktSizeAESWidth-1:0]   AESBucketReadCtr;
+    wire [BktSizeBED_Width-1:0]  AESBucketReadCtr;
     wire                         AESBucketReadCtr_Reset;
     wire                         AESReadBucketTransition;
 
-    wire [PathSizeAESWidth-1:0]  PathReadCtr;
+    wire [PathSizeBED_Width-1:0] PathReadCtr;
     wire                         PathReadCtr_Reset;
     wire                         PathTransition;
-
 
     wire [IDWidth-1:0]           DataOut;
     wire                         DataOutValid;
@@ -168,125 +178,8 @@ module AESPathORAM(
     wire                         PassThroughW;
     wire                         PassThroughR;
 
-    wire [`log2(FIFO_D)-1:0]     AESDataEmptyCount;
+    wire [`log2(AESDataDepth)-1:0] AESDataEmptyCount;
     reg                          InitDone = 0;
-
-    reg [31:0]                   numinp;
-    reg [31:0]                   numencdata;
-    reg [31:0]                   numdata;
-    reg [31:0]                   numaesin;
-    reg [31:0]                   numaesout;
-
-    //------------------------------------------------------------------------------
-    //  Input and Output buffers
-    //------------------------------------------------------------------------------
-    //internal signals to buffer to AESchunks
-    wire [IDWidth-1:0]       DRAMReadData_Int;
-    wire                           DRAMReadDataValid_Int;
-    wire                           DRAMReadDataReady_Int;
-
-    wire [IDWidth-1:0]       BackendWData_Int;
-    wire                           BackendWValid_Int;
-    wire                           BackendWReady_Int;
-
-    wire [IDWidth-1:0]       DRAMWriteData_Int;
-    wire                           DRAMWriteDataValid_Int;
-    wire                           DRAMWriteDataReady_Int;
-
-    wire [IDWidth-1:0]       BackendRData_Int;
-    wire                           BackendRValid_Int;
-    wire                           BackendRReady_Int;
-
-    generate if (BEDWidth < AESWidth) begin: IOBuffer
-        FIFOShiftRound#(.IWidth(BEDWidth),
-                        .OWidth(IDWidth),
-						.Reverse(1))
-        dramin_fifo(.Clock(Clock),
-                    .Reset(Reset),
-                    .InData(DRAMReadData),
-                    .InValid(DRAMReadDataValid),
-                    .InAccept(DRAMReadDataReady),
-                    .OutData(DRAMReadData_Int),
-                    .OutValid(DRAMReadDataValid_Int),
-                    .OutReady(DRAMReadDataReady_Int));
-
-        FIFOShiftRound#(.IWidth(BEDWidth),
-                        .OWidth(IDWidth),
-						.Reverse(1))
-        bein_fifo(.Clock(Clock),
-                  .Reset(Reset),
-                  .InData(BackendWData),
-                  .InValid(BackendWValid),
-                  .InAccept(BackendWReady),
-                  .OutData(BackendWData_Int),
-                  .OutValid(BackendWValid_Int),
-                  .OutReady(BackendWReady_Int));
-
-        FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth),
-						.Reverse(1))
-        dramout_fifo(.Clock(Clock),
-                     .Reset(Reset),
-                     .InData(DRAMWriteData_Int),
-                     .InValid(DRAMWriteDataValid_Int),
-                     .InAccept(DRAMWriteDataReady_Int),
-                     .OutData(DRAMWriteData),
-                     .OutValid(DRAMWriteDataValid),
-                     .OutReady(DRAMWriteDataReady));
-
-        FIFOShiftRound#(.IWidth(IDWidth),
-                        .OWidth(BEDWidth),
-						.Reverse(1))
-        beout_fifo(.Clock(Clock),
-                   .Reset(Reset),
-                   .InData(BackendRData_Int),
-                   .InValid(BackendRValid_Int),
-                   .InAccept(BackendRReady_Int),
-                   .OutData(BackendRData),
-                   .OutValid(BackendRValid),
-                   .OutReady(BackendRReady));
-    end else begin: Passthrough
-        assign DRAMReadData_Int = DRAMReadData;
-        assign DRAMReadDataValid_Int = DRAMReadDataValid;
-        assign DRAMReadDataReady = DRAMReadDataReady_Int;
-
-        assign BackendWData_Int = BackendWData;
-        assign BackendWValid_Int = BackendWValid;
-        assign BackendWReady = BackendWReady_Int;
-
-        assign DRAMWriteData = DRAMWriteData_Int;
-        assign DRAMWriteDataValid = DRAMWriteDataValid_Int;
-        assign DRAMWriteDataReady_Int = DRAMWriteDataReady;
-
-        assign BackendRData = BackendRData_Int;
-        assign BackendRValid = BackendRValid_Int;
-        assign BackendRReady_Int = BackendRReady;
-    end
-    endgenerate
-
-
-    //------------------------------------------------------------------------------
-    //  Debug
-    //------------------------------------------------------------------------------
-
-    always @( posedge Clock ) begin
-        if (Reset) begin
-            numinp <= 0;
-            numdata <= 0;
-            numencdata <= 0;
-            numaesin <= 0;
-            numaesout <= 0;
-        end else begin
-            if (BackendWValid_Int & BackendWReady_Int)
-              numinp <= numinp + 1;
-            if (DataOutValid)
-              numencdata <= numencdata + 1;
-            if (DRAMReadDataValid_Int & DRAMReadDataReady_Int)
-              numdata <= numdata + 1;
-            if (AESResDataOutValid & AESResDataOutReady)
-              numaesout <= numaesout + 1;
-        end
-    end
 
     //------------------------------------------------------------------------------
     //  Control logic
@@ -305,108 +198,134 @@ module AESPathORAM(
         end
         else if (PathTransition)
           RW <= ~RW;
-        else if (DRAMInitDone & (AESDataEmptyCount == FIFO_D) & ~InitDone) begin
+        else if (DRAMInitDone & (AESDataEmptyCount == AESDataDepth) & ~InitDone) begin
             RW <= PATH_READ;
             InitDone <= 1;
         end
     end
+    //------------------------------------------------------------------------------
+    //  Keep global counter for AES
+    //------------------------------------------------------------------------------
+    Counter#(.Width(AESEntropy))
+    glob_cnt(.Clock(Clock),
+             .Reset(Reset),
+             .Set(1'b0),
+             .Load(1'b0),
+             //update immediately after enq
+             .Enable((RW == PATH_WRITE) &
+                     IVDataInValid & IVDataInAccept),
+             .In({AESEntropy{1'bx}}),
+             .Count(GlobalCounter_Int)
+             );
+    assign GlobalCounter = GlobalCounter_Int + 1; //0 indicates invalid block now
 
     //------------------------------------------------------------------------------
     //  Check bucket
     //------------------------------------------------------------------------------
 
-	reg [AESEntropy-1:0] DebugCounter = 0;
-	
-	always @( posedge Clock ) begin
-	    if (Reset) begin
-		    DebugCounter <= 0;
-		end
-		else if (ReadBucketTransition) begin
-		    DebugCounter <= DebugCounter + 1;
-		end
-	end
-	
-    wire ReadGood = DRAMReadDataValid_Int & DRAMReadDataReady_Int;
-    wire WriteGood = BackendWValid_Int & AESDataInAccept;
+    wire ReadGood = DRAMReadDataValid & DRAMReadDataReady;
+    wire WriteGood = BackendWValid & AESDataInAccept;
 
     // Count where we are in a bucket (so we can determine when we are at a header)
-    Counter#(.Width(BktSizeAESWidth))
+    Counter#(.Width(BktSizeBED_Width))
     in_bkt_cnt(.Clock(Clock),
                .Reset(Reset | ReadBucketTransition),
                .Set(1'b0),
                .Load(1'b0),
                .Enable(ReadGood | WriteGood), //read | write
-               .In({BktSizeAESWidth{1'bx}}),
+               .In({BktSizeBED_Width{1'bx}}),
                .Count(BucketReadCtr)
                );
 
-    CountCompare#(.Width(BktSizeAESWidth),
-                  .Compare((BktSize_AESChunks/W) - 1))
+    CountCompare#(.Width(BktSizeBED_Width),
+                  .Compare(BktSize_BEDChunks - 1))
     in_bkt_cmp(.Count(BucketReadCtr),
                .TerminalCount(BucketReadCtr_Reset)
                );
 
-    assign ReadBucketTransition = 	(		
-									(BucketReadCtr_Reset & InitDone) |
-									((BucketReadCtr == BktEnd_LOC) & ~InitDone)
-									) &
-									(ReadGood | WriteGood);
+    assign ReadBucketTransition = ((BucketReadCtr_Reset & InitDone) |
+				   ((BucketReadCtr == (BktHEnd_LOC - 1)) & ~InitDone)) &
+				  (ReadGood | WriteGood);
 
     // Count number of already processed ivs
-    Counter#(.Width(BktSizeAESWidth))
+    Counter#(.Width(BktSizeBED_Width))
+    ivdelay_cnt(.Clock(Clock),
+                .Reset(Reset | IVDelayTransition),
+                .Set(1'b0),
+                .Load(1'b0),
+                .Enable(IVDataOutValid & AESDWDataInAccept),
+                .In({BktSizeBED_Width{1'bx}}),
+                .Count(IVDelayCtr)
+                );
+
+    CountCompare#(.Width(BktSizeBED_Width),
+                  .Compare(IV_Delay - 1))
+    ivdelay_cmp(.Count(IVDelayCtr),
+                .TerminalCount(IVDelayCtr_Reset)
+                );
+
+    assign IVDelayTransition = IVDelayCtr_Reset;
+    assign IVDelay_En = IVDelayCtr == 0;
+
+    // Count number of already processed ivs
+    Counter#(.Width(BktSizeBED_Width))
     ivdeq_cnt(.Clock(Clock),
               .Reset(Reset | IVDeqTransition),
               .Set(1'b0),
               .Load(1'b0),
               .Enable(IVDataOutValid & AESDWDataInAccept),
-              .In({BktSizeAESWidth{1'bx}}),
+              .In({BktSizeBED_Width{1'bx}}),
               .Count(IVDeqCtr)
               );
 
-    CountCompare#(.Width(BktSizeAESWidth),
-                  .Compare((BktSize_AESChunks/W) - 1))
+    CountCompare#(.Width(BktSizeBED_Width),
+                  .Compare((BktSize_BEDChunks/IV_Delay) - 1))
     ivdeq_cmp(.Count(IVDeqCtr),
               .TerminalCount(IVDeqCtr_Reset)
               );
 
+    //TODO: set this bkthend_loc to right number
     assign IVDeqTransition = (IVDeqCtr_Reset |
-                              (~InitDone & (IVDeqCtr == (BktHSize_AESChunks/W-1)))) & //only header
+                              ((IVDeqCtr == (BktHEnd_LOC/IV_Delay-1)) & ~InitDone)) & //only header
                              IVDataOutValid & AESDWDataInAccept;
 
     //------------------------------------------------------------------------------
     //  IV and Data FIFO
     //------------------------------------------------------------------------------
 
-    assign DataIn = BackendWValid_Int ? BackendWData_Int : DRAMReadData_Int;
+    assign DataIn = BackendWValid ? BackendWData : DRAMReadData;
     //both should never be valid
-    assign DataInValid = (DRAMReadDataValid_Int ^ BackendWValid_Int);
+    assign DataInValid = (DRAMReadDataValid ^ BackendWValid);
     //same for path read/write
     assign DataInReady = ((IsIV & IVDataInAccept) | ~IsIV) & AESDataInAccept;
 
     assign IsIV = (BucketReadCtr == IV_LOC);
 
-    assign IVDataIn = DataIn[AESEntropy-1:0];
+    assign IVDataIn = (RW == PATH_READ) ? DataIn[AESEntropy-1:0] :
+                      GlobalCounter;
     assign IVDataInValid = IsIV & DataInValid & AESDataInAccept;
 
-    assign IVDupIn = DataIn[AESEntropy-1:0];
-    assign IVDupInValid = IsIV & DataInValid & AESDataInAccept;
-
-    assign AESDataIn = DataIn;
+    generate if (BEDWidth > AESEntropy) begin: BED_LARGER_AES
+        assign AESDataIn[AESEntropy-1:0] = IsIV & (RW == PATH_WRITE) ?
+                                           GlobalCounter :
+                                           DataIn[AESEntropy-1:0];
+        assign AESDataIn[BEDWidth-1:AESEntropy] = DataIn[BEDWidth-1:AESEntropy];
+    end else if (BEDWidth == AESEntropy) begin: BED_LESS_AES
+        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? GlobalCounter : DataIn;
+    end
+    endgenerate
     assign AESDataInValid = DataInValid;
 
-    assign DRAMReadDataReady_Int = DataInReady & InitDone;
+    assign DRAMReadDataReady = DataInReady & InitDone;
 
     //only remove IV when we are done with the bucket
     assign IVDataOutReady = IVDeqTransition;
 
-    assign AESDataOutReady = AESResDataOutValid & DataOutReady;
+    assign AESDataOutReady = AESMaskOutValid & DataOutReady;
 
-    //only remove the duplicate IV when we output to MIG/Stash
-    assign IVDupOutReady = IsAESIV & DataOutValid & DataOutReady;
-
-    FIFORAM#(.Width(AESEntropy),
-             .Buffering(FIFO_D)
-			`ifdef ASIC , .ASIC(1) `endif)
+    FIFORegister#(.Width(AESEntropy),
+                  .Buffering(1+1)
+                  `ifdef ASIC , .ASIC(1) `endif)
     iv_fifo (.Clock(Clock),
              .Reset(Reset),
              .InData(IVDataIn),
@@ -417,23 +336,9 @@ module AESPathORAM(
              .OutReady(IVDataOutReady)
              );
 
-    FIFORAM#(.Width(AESEntropy),
-             .Buffering(FIFO_D)
-			`ifdef ASIC , .ASIC(1) `endif)
-    ivdup_fifo (.Clock(Clock),
-                .Reset(Reset),
-                .InData(IVDupIn),
-                .InValid(IVDupInValid),
-                .InAccept(IVDupInAccept),
-                .OutData(IVDupOut),
-                .OutSend(IVDupOutValid),
-                .OutReady(IVDupOutReady)
-                );
-
-    FIFORAM#(.Width(IDWidth),
-             .Buffering(FIFO_D + BktHSize_BEDChunks)	
-					//what depth? Good question, should be D (21) + Stash delay (# Headers in BEDChunks + plus something)
-			 `ifdef ASIC , .ASIC(1) `endif) 
+    FIFORAM#(.Width(BEDWidth),
+             .Buffering(AESDataDepth)
+	     `ifdef ASIC , .ASIC(1) `endif)
     data_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(AESDataIn),
@@ -445,21 +350,21 @@ module AESPathORAM(
                .OutReady(AESDataOutReady)
                );
 
-	always @ (posedge Clock) begin
-		if (AESDataInValid && !AESDataInAccept) begin
-			$display("Lose ciphertexts!");
-			$finish;
-		end
-		if ((IVDataInValid && !IVDataInAccept) || (IVDupInValid && !IVDupInAccept)) begin
-			$display("Lose ciphertexts!");
-			$finish;
-		end
-		if (AESDataInValid && !AESDataInAccept) begin
-			$display("Lose initial vectors!");
-			$finish;
-		end		
-	end	
-			   
+    always @ (posedge Clock) begin
+	if (AESDataInValid && !AESDataInAccept) begin
+	    $display("Lose ciphertexts!");
+	    $finish;
+	end
+	if ((IVDataInValid && !IVDataInAccept)) begin
+	    $display("Lose ciphertexts!");
+	    $finish;
+	end
+	if (AESDataInValid && !AESDataInAccept) begin
+	    $display("Lose initial vectors!");
+	    $finish;
+	end
+    end
+
     //------------------------------------------------------------------------------
     //  AES_W and result FIFO
     //------------------------------------------------------------------------------
@@ -472,30 +377,31 @@ module AESPathORAM(
                   .Set(1'b0),
                   .Load(1'b0),
                   .Enable(AESDWDataInValid & AESDWDataInAccept),
-                  .In({BktSizeAESWidth{1'bx}}),
+                  .In({BktSizeBED_Width{1'bx}}),
                   .Count(DWBucketReadCtr)
                   );
 
     CountCompare#(.Width(BktSizeAESWidth),
-                  .Compare((BktSize_AESChunks/W) - 1))
+                  .Compare(BktSize_AESChunks - 1))
     dw_in_bkt_cmp(.Count(DWBucketReadCtr),
                   .TerminalCount(DWBucketReadCtr_Reset)
                   );
 
     assign DWBucketTransition = (DWBucketReadCtr_Reset |
-                                 ((DWBucketReadCtr == (BktHSize_AESChunks/W-1)) & ~InitDone)) &
+                                 ((DWBucketReadCtr == (BktHEnd_LOC_AES-1)) & ~InitDone)) &
                                 AESDWDataInValid & AESDWDataInAccept;
 
     assign AESDWDataIn = IVDataOut;
-    assign AESDWDataInValid = IVDataOutValid;
+    assign AESDWDataInValid = IVDataOutValid & IVDelay_En;
 
-    assign AESResDataOutReady = AESDataOutValid & DataOutReady;
+    assign AESMaskOutReady = AESDataOutValid & DataOutReady;
 
-    AES_W #(.W(W))
+    AES_W #(.W(W),
+            .AESWIn_Width(AESEntropy + BktSizeAESWidth))
     aes_w (.Clock(Clock),
            .Reset(Reset),
 
-           .DataIn(AESDWDataIn + (DWBucketReadCtr << `log2(W))), // TODO: add BucketID to seed or move to global counter scheme
+           .DataIn({AESDWDataIn, DWBucketReadCtr}),
            .DataInValid(AESDWDataInValid),
            .DataInReady(AESDWDataInAccept),
 
@@ -503,22 +409,35 @@ module AESPathORAM(
            .KeyValid(KeyValid),
            .KeyReady(KeyReady),
 
-           .DataOut(AESResDataIn),
-           .DataOutValid(AESResDataInValid)
+           .DataOut(AESMaskIn),
+           .DataOutValid(AESMaskInValid)
            );
 
-    FIFORAM#(.Width(W*AESWidth),
-             .Buffering(D+1)
-			 `ifdef ASIC , .ASIC(1) `endif)
-    aesres_fifo (.Clock(Clock),
-                 .Reset(Reset),
-                 .InData(AESResDataIn),
-                 .InValid(AESResDataInValid),
-                 .InAccept(AESResDataInAccept),
-                 .OutData(AESResDataOut),
-                 .OutSend(AESResDataOutValid),
-                 .OutReady(AESResDataOutReady)
-                 );
+    FIFOShiftRound#(.IWidth(IDWidth),
+                    .OWidth(BEDWidth),
+		    .Reverse(1))
+    widemask_fifo(.Clock(Clock),
+                  .Reset(Reset),
+                  .InData(AESMaskIn),
+                  .InValid(AESMaskInValid),
+                  .InAccept(AESMaskInAccept),
+                  .OutData(AESMaskIn_BED),
+                  .OutValid(AESMaskInValid_BED),
+                  .OutReady(AESMaskInAccept_BED)
+                  );
+
+    FIFORAM#(.Width(BEDWidth),
+             .Buffering(BktSize_BEDChunks+1)
+	     `ifdef ASIC , .ASIC(1) `endif)
+    aesmask_fifo (.Clock(Clock),
+                  .Reset(Reset),
+                  .InData(AESMaskIn_BED),
+                  .InValid(AESMaskInValid_BED),
+                  .InAccept(AESMaskInAccept_BED),
+                  .OutData(AESMaskOut),
+                  .OutSend(AESMaskOutValid),
+                  .OutReady(AESMaskOutReady)
+                  );
 
 
     //------------------------------------------------------------------------------
@@ -526,7 +445,7 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
 
     //counts how many things we've encrypted
-    Counter #(.Width(BktSizeAESWidth))
+    Counter #(.Width(BktSizeBED_Width))
     in_bkt_aes_cnt(.Clock(Clock),
                    .Reset(Reset | AESReadBucketTransition),
                    .Set(1'b0),
@@ -536,45 +455,47 @@ module AESPathORAM(
                    .Count(AESBucketReadCtr)
                    );
 
-    CountCompare #(.Width(BktSizeAESWidth),
-                   .Compare((BktSize_AESChunks/W) - 1))
+    CountCompare #(.Width(BktSizeBED_Width),
+                   .Compare(BktSize_BEDChunks - 1))
     in_bkt_aes_cmp(.Count(AESBucketReadCtr),
                    .TerminalCount(AESBucketReadCtr_Reset)
                    );
 
     assign AESReadBucketTransition = (AESBucketReadCtr_Reset |
-                                      ((AESBucketReadCtr == BktEnd_LOC) & ~InitDone)) &
+                                      ((AESBucketReadCtr == (BktHEnd_LOC_AES - 1)) & ~InitDone)) &
                                      DataOutValid & DataOutReady;
 
     assign IsAESIV = (AESBucketReadCtr == IV_LOC);// & ~AESIVDone;
-    assign XorRes = AESDataOut ^ AESResDataOut;
+    assign XorRes = AESDataOut ^ AESMaskOut;
 
-    //replace the IV portion with actual IV
-    //don't need to worry about IVDupOutValid, since it gets enq same time as IV
+    //on read: IV passthrough
+    //on write: replace with the global counter
     assign DataOut[IDWidth-1:AESEntropy] = XorRes[IDWidth-1:AESEntropy];
-    assign DataOut[AESEntropy-1:0] = IsAESIV & IVDupOutValid ? IVDupOut :
+    assign DataOut[AESEntropy-1:0] = IsAESIV & (RW == PATH_WRITE) ?
+                                     AESDataOut[AESEntropy-1:0] : //iv stored in aesdata
                                      XorRes[AESEntropy-1:0];
 
-    assign DataOutValid = AESDataOutValid & AESResDataOutValid;
-    assign DataOutReady = ((RW == PATH_READ) & BackendRReady_Int) | ((RW == PATH_WRITE) & DRAMWriteDataReady_Int);
+    assign DataOutValid = AESDataOutValid & AESMaskOutValid;
+    assign DataOutReady = ((RW == PATH_READ) & BackendRReady) |
+                          ((RW == PATH_WRITE) & DRAMWriteDataReady);
 
     //------------------------------------------------------------------------------
     //  Path Counter
     //------------------------------------------------------------------------------
 
     //only count path after we are done init
-    Counter#(.Width(PathSizeAESWidth))
+    Counter#(.Width(PathSizeBED_Width))
     path_cnt(.Clock(Clock),
              .Reset(Reset | PathTransition),
              .Set(1'b0),
              .Load(1'b0),
              .Enable(InitDone & DataOutValid & DataOutReady),
-             .In({`log2(PathSize_AESChunks/W){1'bx}}),
+             .In({PathSizeBED_Width{1'bx}}),
              .Count(PathReadCtr)
              );
 
-    CountCompare#(.Width(PathSizeAESWidth),
-                  .Compare((PathSize_AESChunks/W) - 1))
+    CountCompare#(.Width(PathSizeBED_Width),
+                  .Compare(PathSize_BEDChunks - 1))
     path_cmp(.Count(PathReadCtr),
              .TerminalCount(PathReadCtr_Reset)
              );
@@ -583,13 +504,13 @@ module AESPathORAM(
 
 
     //BackendW related
-    assign DRAMWriteData_Int = PassThroughW ? BackendWData : DataOut ;
-    assign DRAMWriteDataValid_Int = PassThroughW ? BackendWValid_Int : (RW == PATH_WRITE) & DataOutValid;
-    assign BackendWReady_Int = PassThroughW ? DRAMWriteDataReady_Int : DataInReady;
+    assign DRAMWriteData = PassThroughW ? BackendWData : DataOut ;
+    assign DRAMWriteDataValid = PassThroughW ? BackendWValid : (RW == PATH_WRITE) & DataOutValid;
+    assign BackendWReady = PassThroughW ? DRAMWriteDataReady : DataInReady;
 
     //BackendR related
-    assign BackendRData_Int = PassThroughR ? DRAMReadData_Int : DataOut;
-    assign BackendRValid_Int = PassThroughR ? DRAMReadDataValid_Int :
+    assign BackendRData = PassThroughR ? DRAMReadData : DataOut;
+    assign BackendRValid = PassThroughR ? DRAMReadDataValid :
                                (RW == PATH_READ) & DataOutValid;
 
 endmodule
