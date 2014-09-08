@@ -60,7 +60,7 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					22,
+							ORAML =					20,
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;

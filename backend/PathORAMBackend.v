@@ -100,6 +100,7 @@ module PathORAMBackend(
 
 	// PHY - DRAM
 
+	// @DEPRECATED Path buffer
 	wire	[BEDWidth-1:0]	PBF_DRAMReadData;
 	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;
 
@@ -261,46 +262,26 @@ module PathORAMBackend(
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady));
+
+
+	FIFORAM		#(			.Width(					BEDWidth),
+							.Buffering(				PathSize_BEDChunks)
+							`ifdef ASIC , .ASIC(0) `endif)
+				in_P_buf(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				PathBuffer_InReady),
+							.OutData(				PBF_DRAMReadData),
+							.OutSend(				PBF_DRAMReadDataValid),
+							.OutReady(				PBF_DRAMReadDataReady));
 	end else begin:NO_AES
-	`ifdef ASIC
-	// TODO this is a hack: just because we don't care about "modeling" AES latency in ASIC
-	assign	AES_DRAMReadData =						PBF_DRAMReadData;
-	assign	AES_DRAMReadDataValid =					PBF_DRAMReadDataValid;
-	assign	PBF_DRAMReadDataReady =					AES_DRAMReadDataReady;
+		assign	AES_DRAMReadData =					DRAMReadData;
+		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
 
-	assign	DRAMWriteData =							AES_DRAMWriteData;
-	assign	DRAMWriteDataValid =					AES_DRAMWriteDataValid;
-	assign	AES_DRAMWriteDataReady =				DRAMWriteDataReady;
-	`else
-	// These buffers are here so that we can model AES timing.  If you
-	// don't, comment them out ;-)
-
-	localparam				AESLatency =			21 + 8; // assuming tiny_aes
-
-	FIFORAM	#(				.Width(					BEDWidth),
-							.Buffering(				PathSize_BEDChunks),
-							.FWLatency(				AESLatency))
-		indelay(			.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				PBF_DRAMReadData),
-							.InValid(				PBF_DRAMReadDataValid),
-							.InAccept(				PBF_DRAMReadDataReady),
-							.OutData(				AES_DRAMReadData),
-							.OutSend(				AES_DRAMReadDataValid),
-							.OutReady(				AES_DRAMReadDataReady));
-
-	FIFORAM	#(				.Width(					BEDWidth),
-							.Buffering(				PathSize_BEDChunks),
-							.FWLatency(				AESLatency))
-		outdelay(			.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				AES_DRAMWriteData),
-							.InValid(				AES_DRAMWriteDataValid),
-							.InAccept(				AES_DRAMWriteDataReady),
-							.OutData(				DRAMWriteData),
-							.OutSend(				DRAMWriteDataValid),
-							.OutReady(				DRAMWriteDataReady));
-	`endif
+		assign	DRAMWriteData =						AES_DRAMWriteData;
+		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
+		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
 	end endgenerate
 	//--------------------------------------------------------------------------
 
@@ -309,6 +290,8 @@ module PathORAMBackend(
 	//--------------------------------------------------------------------------
 
 	/*
+	This code was used to create predictable timing on the read path for debugging.
+
 	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
 		wire	[PthBSTWidth-1:0] PthCnt;
 		wire				ReadStarted, ReadStopped;
@@ -338,18 +321,6 @@ module PathORAMBackend(
 		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;
 	end endgenerate
 	*/
-
-	FIFORAM		#(			.Width(					BEDWidth),
-							.Buffering(				PathSize_BEDChunks)
-							`ifdef ASIC , .ASIC(0) `endif)
-				in_P_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady),
-							.OutData(				PBF_DRAMReadData),
-							.OutSend(				PBF_DRAMReadDataValid),
-							.OutReady(				PBF_DRAMReadDataReady));
 
 	//--------------------------------------------------------------------------
 	//	DRAM Write Interface
