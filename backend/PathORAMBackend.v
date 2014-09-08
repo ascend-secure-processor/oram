@@ -94,8 +94,6 @@ module PathORAMBackend(
 
 	// Backend - AES
 
-    (* mark_debug = "FALSE" *)	wire                    DRAMInitComplete;
-
     (* mark_debug = "TRUE" *)	wire 	[BEDWidth-1:0]	AES_DRAMWriteData, AES_DRAMReadData;
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
@@ -187,9 +185,7 @@ module PathORAMBackend(
 							.ROStartCCValid(		ROStartCCValid),
 							.ROStartAESValid(		ROStartAESValid),
 							.ROStartCCReady(		ROStartCCReady),
-							.ROStartAESReady(		ROStartAESReady),
-
-							.DRAMInitComplete(		DRAMInitComplete));
+							.ROStartAESReady(		ROStartAESReady));
 
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
@@ -234,7 +230,7 @@ module PathORAMBackend(
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	end else if (EnableAES) begin:BASIC_AES
-		AESPathORAM #(		.ORAMB(					ORAMB), // TODO which of these params are really needed?
+		AESPathORAM #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
 							.ORAMZ(					ORAMZ),
@@ -264,9 +260,7 @@ module PathORAMBackend(
 
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWValid(			AES_DRAMWriteDataValid),
-							.BackendWReady(			AES_DRAMWriteDataReady),
-
-							.DRAMInitDone(			DRAMInitComplete));
+							.BackendWReady(			AES_DRAMWriteDataReady));
 	end else begin:NO_AES
 	`ifdef ASIC
 	// TODO this is a hack: just because we don't care about "modeling" AES latency in ASIC
@@ -347,7 +341,7 @@ module PathORAMBackend(
 
 	FIFORAM		#(			.Width(					BEDWidth),
 							.Buffering(				PathSize_BEDChunks)
-							`ifdef ASIC , .ASIC(1) `endif)
+							`ifdef ASIC , .ASIC(0) `endif)
 				in_P_buf(	.Clock(					Clock),
 							.Reset(					Reset),
 							.InData(				DRAMReadData),

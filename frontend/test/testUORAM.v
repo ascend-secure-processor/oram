@@ -5,12 +5,12 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			21;
+	parameter                   ORAML = 			22;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << 13;
 
-	parameter					DDRAWidth =			31;
+	parameter					BEAWidth =			29; // NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
 
 	// ------- these parameters are used in some header files -------
 	parameter                   Recursion = 		2;				
@@ -38,7 +38,7 @@ module testUORAM;
 	reg  [FEDWidth-1:0] 		DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
+	wire	[BEAWidth-1:0]		DDR3SDRAM_Address;
 	wire	[BEDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 
@@ -115,9 +115,9 @@ module testUORAM;
 							.OutValid(				DDR3SDRAM_WriteValid_Wide),
 							.OutReady(				DDR3SDRAM_WriteReady_Wide));
 	
-	wire	[DDRAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
+	wire	[BEAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
 	wire					DRAMReadAddrValid, DRAMWriteAddrValid;
-	FIFORAM	#(				.Width(					DDRAWidth),
+	FIFORAM	#(				.Width(					BEAWidth),
 							.Buffering(				500))
 		rd_addr(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -128,7 +128,7 @@ module testUORAM;
 							.OutSend(				DRAMReadAddrValid),
 							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
 	/*
-	FIFORAM	#(				.Width(					DDRAWidth),
+	FIFORAM	#(				.Width(					BEAWidth),
 							.Buffering(				500))
 		wr_addr(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -165,7 +165,7 @@ module testUORAM;
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
                             .UWidth(				64),
-                            .AWidth(				DDRAWidth),
+                            .AWidth(				BEAWidth),
                             .DWidth(				DDRDWidth),
                             .BurstLen(				1),
                             .EnableMask(			1),

@@ -80,3 +80,19 @@
 							PathSize_BEDChunks =	(ORAML + 1) * BktSize_BEDChunks;
 
 	localparam				RHWidth =				BktHSize_BEDChunks * BEDWidth;
+
+	//--------------------------------------------------------------------------
+	//	DRAM Addressing
+	//--------------------------------------------------------------------------
+
+	localparam 				L_st = 					`log2f(DDRROWWidth / BktSize_DRWords + 1);
+	localparam 				numST = 				(ORAML + 1 + L_st - 1) / L_st; // the number of subtrees on a path
+
+	localparam 				numTallST = 			((1 << ((numST-1)*L_st)) - 1) / ((1 << L_st) - 1); // the number of not-short subtreess 
+	localparam 				numTotalST = 			((1 << (numST*L_st)) - 1) / ((1 << L_st) - 1); // the number of total subtreess 
+
+    localparam				NumBuckets =  			(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
+    localparam				LastBuckerAddr =  		NumBuckets * BktSize_DRWords; // DRAM burst address for last bucket               
+
+	localparam				DDRAWidth =				`log2(LastBuckerAddr + BktSize_DRWords);
+

@@ -16,9 +16,7 @@ module AESPathORAM(
 
 	           BackendRData,	BackendRValid,	BackendRReady,
 
-	           BackendWData,	BackendWValid,	BackendWReady,
-
-	           DRAMInitDone
+	           BackendWData,	BackendWValid,	BackendWReady
 	           );
 
     //------------------------------------------------------------------------------
@@ -44,13 +42,14 @@ module AESPathORAM(
     localparam BktHSize_AESChunks = (BktHSize_BEDChunks * BEDWidth) / IDWidth;
     localparam BktSizeAESWidth = `log2(BktSize_AESChunks);
 
+
+    localparam IV_Delay = IDWidth/BEDWidth;
+
     localparam AESDataDepth = IV_Delay + 3;
 
     localparam BktHEnd_LOC = DDRDWidth/BEDWidth;
     localparam BktHEnd_LOC_AES = DDRDWidth/IDWidth;
     localparam IV_LOC = 0;	// or BktEnd_LOC, depending on whether FIFOShiftRound is reversed or not
-
-    localparam IV_Delay = IDWidth/BEDWidth;
 
     localparam PATH_READ = 1;
     localparam PATH_WRITE = 0;
@@ -87,8 +86,6 @@ module AESPathORAM(
     input [BEDWidth-1:0]         BackendWData;
     input                        BackendWValid;
     output                       BackendWReady;
-
-    input                        DRAMInitDone;
 
     //------------------------------------------------------------------------------
     //	Wires & Regs
@@ -188,8 +185,8 @@ module AESPathORAM(
     assign Key = {(AESWidth){1'b1}};
     assign KeyValid = 1;
 
-    assign PassThroughW = 0; //~DRAMInitDone;
-    assign PassThroughR = 0; //~DRAMInitDone;
+    assign PassThroughW = 0;
+    assign PassThroughR = 0;
 
     always @( posedge Clock ) begin
         if (Reset) begin
@@ -198,7 +195,7 @@ module AESPathORAM(
         end
         else if (PathTransition)
           RW <= ~RW;
-        else if (DRAMInitDone & (AESDataEmptyCount == AESDataDepth) & ~InitDone) begin
+        else if ((AESDataEmptyCount == AESDataDepth) & ~InitDone) begin
             RW <= PATH_READ;
             InitDone <= 1;
         end

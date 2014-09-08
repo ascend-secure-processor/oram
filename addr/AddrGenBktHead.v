@@ -16,10 +16,15 @@ module AddrGenBktHead
 	STIdx, BktIdxInST  // output for debugging
 );
 
-	parameter ORAML = 10, DDRROWWidth = 1024, BktSize_DRWords = 8;
+	`include "PathORAM.vh"
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketLocal.vh"
+
 	localparam ORAMLogL = `log2(ORAML) + 1;
-	`include "SubTreeLocal.vh"
-		
+
+	localparam LogSTSize = L_st;    // subtree size (in buckets), it could be (1 << numST) - 1; this is optimal for Z=3 
+	localparam LogSTSizeBottom = (ORAML+1) % L_st;            // short trees' size (in buckets) at the bottom
+
 	input Clock, Reset, Start, Enable;
 	input [ORAML-1:0] leaf;                     // the input leaf label
 	output reg [ORAMLogL-1:0]  currentLevel; 

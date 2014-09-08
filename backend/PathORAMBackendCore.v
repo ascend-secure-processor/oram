@@ -28,9 +28,7 @@ module PathORAMBackendCore(
 
 	ROPAddr, ROLeaf, REWRoundDummy,
 	ROStartCCValid, ROStartAESValid,
-	ROStartCCReady, ROStartAESReady,
-
-	DRAMInitComplete
+	ROStartCCReady, ROStartAESReady
 	);
 
 	//--------------------------------------------------------------------------
@@ -47,10 +45,9 @@ module PathORAMBackendCore(
 	parameter				ORAMUValid =			21;
 
 	localparam				STWidth =				2,
-							ST_Initialize =			2'd0,
-							ST_Idle =				2'd1,
-							ST_Append =				2'd2,
-							ST_Access =				2'd3;
+							ST_Idle =				2'd0,
+							ST_Append =				2'd1,
+							ST_Access =				2'd2;
 
 	localparam				BBEDWidth =				`max(`log2(BlkSize_BEDChunks + 1), 1); // Block BED width
 
@@ -110,19 +107,13 @@ module PathORAMBackendCore(
 	input					ROStartCCReady, ROStartAESReady;
 
 	//--------------------------------------------------------------------------
-	//	Status Interface
-	//--------------------------------------------------------------------------
-
-	output					DRAMInitComplete;
-
-	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
 	// Control logic
 
 	(* mark_debug = "TRUE" *)	reg		[STWidth-1:0]	CS, NS;
-	wire					CSInitialize, CSIdle, CSAppend, CSAccess;
+	wire					CSIdle, CSAppend, CSAccess;
 
 	(* mark_debug = "FALSE" *)	wire					Stash_AppendCmdValid, Stash_RdRmvCmdValid, Stash_UpdateCmdValid;
 
@@ -162,17 +153,6 @@ module PathORAMBackendCore(
 	(* mark_debug = "FALSE" *)	wire					Stash_DRAMWriteDataValid, Stash_DRAMWriteDataReady;
 
 	(* mark_debug = "FALSE" *)	wire					StashAlmostFull;
-
-	// ORAM initialization
-
-	(* mark_debug = "FALSE" *)	wire	[DDRAWidth-1:0]	DRAMInit_DRAMCommandAddress;
-	(* mark_debug = "FALSE" *)	wire	[DDRCWidth-1:0]	DRAMInit_DRAMCommand;
-	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMCommandValid, DRAMInit_DRAMCommandReady;
-
-	(* mark_debug = "FALSE" *)	wire	[BEDWidth-1:0]	DRAMInit_DRAMWriteData;
-	(* mark_debug = "FALSE" *)	wire					DRAMInit_DRAMWriteDataValid, DRAMInit_DRAMWriteDataReady;
-
-	(* mark_debug = "FALSE" *)	wire					DRAMInitializing;
 
 	// Address generator
 
@@ -248,7 +228,7 @@ module PathORAMBackendCore(
 
 			if (CSAccess) StartedFirstAccess <= 1'b1;
 
-			if (~CSInitialize & DRAMWriteDataValid & DRAMWriteDataReady)
+			if (DRAMWriteDataValid & DRAMWriteDataReady)
 				WriteCount_Sim = WriteCount_Sim + 1;
 
 			if (StartedFirstAccess & DRAMReadDataValid & DRAMReadDataReady & (WriteCount_Sim % PathSize_DRBursts)) begin
@@ -299,7 +279,6 @@ module PathORAMBackendCore(
 	//	Control logic
 	//--------------------------------------------------------------------------
 
-	assign	CSInitialize =							CS == ST_Initialize;
 	assign	CSIdle =								CS == ST_Idle;
 	assign	CSAppend =								CS == ST_Append;
 	assign	CSAccess =								CS == ST_Access;
@@ -319,16 +298,13 @@ module PathORAMBackendCore(
 	assign	Command_InternalReady =					Control_CommandDone & (CSAppend | CSAccess);
 
 	always @(posedge Clock) begin
-		if (Reset) CS <= 							ST_Initialize;
+		if (Reset) CS <= 							ST_Idle;
 		else CS <= 									NS;
 	end
 
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
-			ST_Initialize :
-				if (DRAMInitComplete)
-					NS =						 	ST_Idle;
 			ST_Idle :
 				if (~ERROR_BEndInner)
 					if (Stash_AppendCmdValid) // do appends first ("greedily") because they are cheap
@@ -574,44 +550,6 @@ module PathORAMBackendCore(
 	end endgenerate
 
 	//--------------------------------------------------------------------------
-	//	DRAM Initialization
-	//--------------------------------------------------------------------------
-
-	// Basic path ORAM needs to zero/encrypt valid bits in a bucket.
-	// REW ORAM uses gentry bucket version #s to determine whether a bucket is
-	// valid; thus no initialization is necessary.
-
-//	generate if (EnableREW || 1) begin:AUTO_INIT // TODO FIX RE-ENABLE DRAM INIT
-        generate if (EnableREW) begin:AUTO_INIT // TODO FIX RE-ENABLE DRAM INIT
-		assign	DRAMInitComplete =					1'b1;
-		assign	DRAMInit_DRAMCommandAddress =		{DDRAWidth{1'bx}};
-		assign	DRAMInit_DRAMCommand =				DDR3CMD_Write;
-		assign	DRAMInit_DRAMCommandValid =			1'b0;
-
-		assign	DRAMInit_DRAMWriteData =			{BEDWidth{1'bx}};
-		assign	DRAMInit_DRAMWriteDataValid =		1'b0;
-	end else begin:DRAM_INIT
-		DRAMInitializer #(	.ORAMB(					ORAMB),
-							.ORAMU(					ORAMU),
-							.ORAML(					ORAML),
-							.ORAMZ(					ORAMZ),
-							.BEDWidth(				BEDWidth),
-							.EnableIV(				EnableIV))
-				dram_init(	.Clock(					Clock),
-							.Reset(					Reset),
-							.DRAMCommandAddress(	DRAMInit_DRAMCommandAddress),
-							.DRAMCommand(			DRAMInit_DRAMCommand),
-							.DRAMCommandValid(		DRAMInit_DRAMCommandValid),
-							.DRAMCommandReady(		DRAMInit_DRAMCommandReady),
-							.DRAMWriteData(			DRAMInit_DRAMWriteData),
-							.DRAMWriteDataValid(	DRAMInit_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	DRAMInit_DRAMWriteDataReady),
-							.Done(					DRAMInitComplete));
-	end endgenerate
-
-	assign	DRAMInitializing =						~DRAMInitComplete;
-
-	//--------------------------------------------------------------------------
 	//	StashTop
 	//--------------------------------------------------------------------------
 
@@ -664,17 +602,18 @@ module PathORAMBackendCore(
 	//	DRAM interface multiplexing
 	//--------------------------------------------------------------------------
 
-	assign	DRAMCommandAddress =					(DRAMInitializing) ? 	DRAMInit_DRAMCommandAddress : 	AddrGen_DRAMCommandAddress;
-	assign	DRAMCommand =							(DRAMInitializing) ? 	DRAMInit_DRAMCommand : 			AddrGen_DRAMCommand;
-	assign	DRAMCommandValid =						(DRAMInitializing) ? 	DRAMInit_DRAMCommandValid : 	AddrGen_DRAMCommandValid;
-	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady &	   ~DRAMInitializing;
-	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady & 		DRAMInitializing;
+	// Note: this is redundant now that we got rid of DRAMInit
 
-	assign	DRAMWriteData =							(DRAMInitializing) ? 	DRAMInit_DRAMWriteData : 		Stash_DRAMWriteData;
-	assign	DRAMWriteDataValid =					(DRAMInitializing) ? 	DRAMInit_DRAMWriteDataValid : 	Stash_DRAMWriteDataValid;
+	assign	DRAMCommandAddress =					AddrGen_DRAMCommandAddress;
+	assign	DRAMCommand =							AddrGen_DRAMCommand;
+	assign	DRAMCommandValid =						AddrGen_DRAMCommandValid;
+	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady;
+	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady;
 
-	assign	DRAMInit_DRAMWriteDataReady =			DRAMWriteDataReady &	DRAMInitializing;
-	assign	Stash_DRAMWriteDataReady =				DRAMWriteDataReady &	~DRAMInitializing;
+	assign	DRAMWriteData =							Stash_DRAMWriteData;
+	assign	DRAMWriteDataValid =					Stash_DRAMWriteDataValid;
+
+	assign	Stash_DRAMWriteDataReady =				DRAMWriteDataReady;
 
 	//--------------------------------------------------------------------------
 endmodule

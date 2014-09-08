@@ -246,26 +246,7 @@ module	SynthesizedDRAM(
 	// TODO FIXME
 	wire	[DWidth-1:0]	RAMDataOut_Pre;
 
-	// SUPER HACKY --- Vivado doesn't let us initialize large memories :(
-	/*
-
-	reg						ReadBefore[0:1 << RAWidth-1];
-	reg	[RAWidth-1:0] AddrDelay;
-
-	initial $readmemh("M0.mif", ReadBefore);
-
-	always @(posedge Clock) begin
-		if (|RAMWrite) ReadBefore[RAMAddress] <= 1'b1;
-
-		AddrDelay <= RAMAddress;
-	end*/
-
-        assign	RAMDataOut = RAMDataOut_Pre;		// (RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre :
-							// 	512'h0000000000000000deadbeef00000000;
-								//512'hfce3208280d867a3deadbeef00000000;
-								//512'h155c2cea70084a47deadbeef00000000;
-
-
+    assign	RAMDataOut =  (RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : 512'h0;
 
 	generate for (i = 0; i < UCount; i = i + 1) begin:RAM_BLOCK
 		RAM			#(			.DWidth(			UWidth),

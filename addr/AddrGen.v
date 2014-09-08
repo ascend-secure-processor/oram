@@ -52,9 +52,12 @@ module AddrGen
 	reg RW, BH;
 	reg [BBSTWidth-1:0] BktCounter;
     
-	AddrGenBktHead #( 	.ORAML(	ORAML), 
-						.DDRROWWidth( DDRROWWidth),
-						.BktSize_DRWords( BktSize_DRWords)
+	AddrGenBktHead #( 	.ORAMB(					ORAMB),
+						.ORAMU(					ORAMU),
+						.ORAML(					ORAML),
+						.ORAMZ(					ORAMZ),
+						.BEDWidth(				BEDWidth),
+						.EnableIV(				EnableIV)
 					) 
 	addGenBktHead 	(  	.Clock(		Clock),
 						.Reset(		Reset),

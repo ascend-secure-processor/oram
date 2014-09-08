@@ -60,10 +60,8 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					21,
+							ORAML =					22,
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
-							ORAML =					8,
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 12 `endif,
 							ORAMC =					10,
 							ORAME =					5;
 
@@ -83,7 +81,9 @@ module TinyORAMCore(
 	//	Constants
 	//--------------------------------------------------------------------------
 
-	`define PARAMS_H `include "PathORAM.vh" `undef PARAMS_H
+	`define PARAMS_H 
+	`include "PathORAM.vh" 
+	`undef PARAMS_H
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"

@@ -5,6 +5,8 @@
 	//	Per-ORAM instance parameters
 	//--------------------------------------------------------------------------
 	
+`ifndef PARAMS_H
+
 	/* 	Main design/user-specific parameters.  We put the parameter definitions 
 		here.  To set each parameter, instantiate TinyORAMCore and use defparam/
 		parameter override syntax to set the parameter.
@@ -30,6 +32,8 @@
 							EnableIV =          	PINIT; 	// Integrity verification
 							
 	parameter				DelayedWB = 			1'b0;		// No reason for delayed WB any more
+
+`endif
 
 	//--------------------------------------------------------------------------
 	//	Per-design security settings

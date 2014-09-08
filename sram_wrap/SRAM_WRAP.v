@@ -98,8 +98,7 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 	localparam NWORDS = AWidth <= 7 ? 128 :
 						AWidth <= 8 ? 256 :
 						AWidth <= 9 ? 512 :
-						AWidth <= 10 ? 1024 :		
-											0;		// not supported
+						AWidth <= 10 ? 1024 : 0;		// not supported
 
 	localparam AWidth_Pad = `log2(NWORDS);
 
@@ -130,6 +129,7 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 			SRAM2SFCMN01024X064D04C064_WRAP SRAM (Clock, Read, 1'b0, Write, Write, _RAddr, {NBITS{1'bx}}, _DOut[dw+NBITS-1:dw],	_WAddr, _DIn[dw+NBITS-1:dw], _DOutB);
 		end
 
+		/*
 		if (NWORDS == 512) begin
 			wire	[NBITS-1:0] _DOutB;
 			SRAM2SFCMN00512X064D04C064_WRAP SRAM (Clock, Read, 1'b0, Write, Write, _RAddr, {NBITS{1'bx}}, _DOut[dw+NBITS-1:dw],	_WAddr, _DIn[dw+NBITS-1:dw], _DOutB);
@@ -145,7 +145,7 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 		else if (NWORDS == 128) begin
 			wire	[NBITS-1:0] _DOutB;
 			SRAM2SFCMN00128X032D04C064_WRAP SRAM (Clock, Read, 1'b0, Write, Write, _RAddr, {NBITS{1'bx}}, _DOut[dw+NBITS-1:dw],	_WAddr, _DIn[dw+NBITS-1:dw], _DOutB);
-		end
+		end*/
 	end endgenerate
 
 	initial begin
