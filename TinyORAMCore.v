@@ -53,14 +53,14 @@ module TinyORAMCore(
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				0,
-							EnableAES =				0,
+							EnableAES =				1,
    							EnableIV =				1;
 
 	// ORAM
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					20,
+							ORAML =					13,
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;

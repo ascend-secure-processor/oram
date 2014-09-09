@@ -307,6 +307,7 @@ module StashTop(
 							.ORAMZ(					ORAMZ),
 							.ORAME(					ORAME),
 							.BEDWidth(				BEDWidth),
+							.EnableAES(				EnableAES),
 							.EnableIV(				EnableIV),
 							.EnableREW(				EnableREW))
 				in_convert(	.Clock(					Clock), 

@@ -105,7 +105,10 @@ module DRAMToStash(
 	wire					BucketTransition, BlockTransition;
 	wire	[BCWidth-1:0] 	CurrentBlock;
 	wire	[RHWidth-1:0]	Header_Wide;
-	
+
+	wire	[AESEntropy-1:0] HeaderDown_EncryptionIV;
+	wire					BucketValid_Pre, BucketValid;
+
 	wire	[ORAMZ-1:0] 	HeaderDown_ValidBits;
 	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
 	wire	[BigLWidth-1:0]	HeaderDown_Leaves;
@@ -123,10 +126,21 @@ module DRAMToStash(
 	//--------------------------------------------------------------------------	
 	
 	`ifdef SIMULATION
+		initial begin
+			if (EnableAES == PINIT) begin
+				$display("[%m] ERROR: AES uninit");
+				$finish;
+			end
+		end
+
 		always @(posedge Clock) begin
 			if (PayloadValid && HeaderDown_ValidBit === 1'bx) begin
 				$display("[%m] ERROR: control signal is X");
 				$finish;
+			end
+
+			if (DRAMValid && DRAMReady) begin
+				//$display("[%m] DRAM -> stash reading %x", DRAMData);
 			end	
 		end
 	`endif
@@ -152,10 +166,14 @@ module DRAMToStash(
 							.OutValid(				HeaderValid),
 							.OutReady(				BucketTransition));
 
+	assign	HeaderDown_EncryptionIV =				Header_Wide[AESEntropy-1:0];
 	assign	HeaderDown_ValidBits =					Header_Wide[BktHVStart+BigVWidth-1:BktHVStart];
 	assign	HeaderDown_PAddrs =						Header_Wide[BktHUStart+BigUWidth-1:BktHUStart];
 	assign	HeaderDown_Leaves =						Header_Wide[BktHLStart+BigLWidth-1:BktHLStart];
 	
+	assign	BucketValid_Pre =						(EnableAES) ? HeaderValid && !BucketTransition && HeaderDown_EncryptionIV != IVINITValue : 1'b1;
+	Register1b invld_bkt(Clock, Reset || BucketTransition, BucketValid_Pre, BucketValid);
+
 	assign	DMSelect =								ORAMZ - 1 - CurrentBlock;
 	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(DMSelect, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
 	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(DMSelect, HeaderDown_PAddrs, 		HeaderDown_PAddr);
@@ -209,7 +227,7 @@ module DRAMToStash(
 	//--------------------------------------------------------------------------
 		
 	assign	StashData =								DRAMData;
-	assign	StashValid =							PayloadValid && HeaderDown_ValidBit;
+	assign	StashValid =							PayloadValid && HeaderDown_ValidBit && BucketValid;
 	
 	assign	StashPAddr =							HeaderDown_PAddr;
 	assign	StashLeaf =								HeaderDown_Leaf;

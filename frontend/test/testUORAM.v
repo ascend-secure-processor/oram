@@ -5,7 +5,7 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			20;
+	parameter                   ORAML = 			13;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << 13;
@@ -21,7 +21,7 @@ module testUORAM;
 	localparam					FEORAMBChunks =		ORAMB / FEDWidth;	
 
 	localparam  				NN = 200;
-	localparam					nn = 73;
+	localparam					nn = 5;
 	localparam					nn2 = nn * 29;
 
 	`include "DDR3SDRAMLocal.vh"

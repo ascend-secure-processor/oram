@@ -1,15 +1,11 @@
 
-	// TODO hash digest size should be factored into the header size
-
 	// Suffix meanings:
 	// 	RawBits = what it sounds like ...
 	// 	RndBits = bits rounded to some value (usually a DDR3 burst)
 	// 	DRBursts = in terms of DDR3 bursts
 	// 	DRWords = in terms of DDR3 DQ bus width (typically 64b)
 
-	`ifdef SIMULATION
-	localparam				IVINITValue =			{32'hdeadbeef, {AESEntropy-32{1'b0}}}; 	// Encryption initialization vector init values (1'bx makes it a bit cheaper in HW)
-
+`ifdef SIMULATION
 	initial begin
 		if (ORAMB == PINIT ||
 			ORAMU == PINIT ||
@@ -21,9 +17,9 @@
 			$finish;
 		end
 	end
-	`else
-	localparam				IVINITValue =			{AESEntropy{1'bx}};
-	`endif
+`endif
+
+	localparam				IVINITValue =			{AESEntropy{1'b0}};
 
 	//--------------------------------------------------------------------------
 	//	Raw bit fields

@@ -45,7 +45,7 @@ module AESPathORAM(
 
     localparam IV_Delay = IDWidth/BEDWidth;
 
-    localparam AESDataDepth = D + 3;
+    localparam AESDataDepth = D + 5; // Note: ideally, D + 3 should work but there are a few extra cycles lost do to funnels/etc
 
     localparam BktHEnd_LOC = DDRDWidth/BEDWidth;
     localparam BktHEnd_LOC_AES = DDRDWidth/IDWidth;
@@ -212,7 +212,7 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
     //  Keep global counter for AES
     //------------------------------------------------------------------------------
-    Counter#(.Width(AESEntropy))
+    Counter#(.Width(AESEntropy), .ResetValue(IVINITValue))
     glob_cnt(.Clock(Clock),
              .Reset(Reset),
              .Set(1'b0),
@@ -472,7 +472,7 @@ module AESPathORAM(
     //on read: IV passthrough
     //on write: replace with the global counter
     assign DataOut[IDWidth-1:AESEntropy] = XorRes[IDWidth-1:AESEntropy];
-    assign DataOut[AESEntropy-1:0] = IsAESIV & (RW == PATH_WRITE) ?
+    assign DataOut[AESEntropy-1:0] = IsAESIV ?
                                      AESDataOut[AESEntropy-1:0] : //iv stored in aesdata
                                      XorRes[AESEntropy-1:0];
 

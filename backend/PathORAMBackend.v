@@ -98,11 +98,7 @@ module PathORAMBackend(
     (* mark_debug = "TRUE" *)	wire					AES_DRAMWriteDataValid, AES_DRAMWriteDataReady;
 	(* mark_debug = "TRUE" *)	wire					AES_DRAMReadDataValid, AES_DRAMReadDataReady;
 
-	// PHY - DRAM
-
-	// @DEPRECATED Path buffer
-	wire	[BEDWidth-1:0]	PBF_DRAMReadData;
-	wire					PBF_DRAMReadDataValid, PBF_DRAMReadDataReady, PathBuffer_InReady;
+	wire					PBF_DRAMReadDataReady;
 
 	// REW
 
@@ -119,7 +115,7 @@ module PathORAMBackend(
 
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (DRAMReadDataValid && ~PathBuffer_InReady) begin
+			if (DRAMReadDataValid && ~PBF_DRAMReadDataReady) begin
 				$display("[%m @ %t] ERROR: Path buffer overflow", $time);
 				$finish;
 			end
@@ -223,7 +219,7 @@ module PathORAMBackend(
 							.BEDataInValid(			AES_DRAMWriteDataValid),
 							.BEDataInReady(			AES_DRAMWriteDataReady),
 
-							.DRAMReadData(			PBF_DRAMReadData),
+							.DRAMReadData(			PBF_DRAMReadData), // TODO this design shouldn't use path buffer either; this won't work right now
 							.DRAMReadDataValid(		PBF_DRAMReadDataValid),
 							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
 
@@ -246,9 +242,8 @@ module PathORAMBackend(
 				`else
 							.Reset(					1'b0),
 				`endif
-
-							.DRAMReadData(			PBF_DRAMReadData),
-							.DRAMReadDataValid(		PBF_DRAMReadDataValid),
+							.DRAMReadData(			DRAMReadData),
+							.DRAMReadDataValid(		DRAMReadDataValid),
 							.DRAMReadDataReady(		PBF_DRAMReadDataReady),
 
 							.DRAMWriteData(			DRAMWriteData),
@@ -262,22 +257,10 @@ module PathORAMBackend(
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWValid(			AES_DRAMWriteDataValid),
 							.BackendWReady(			AES_DRAMWriteDataReady));
-
-
-	FIFORAM		#(			.Width(					BEDWidth), // TODO remove path buffer
-							.Buffering(				PathSize_BEDChunks)
-							`ifdef ASIC , .ASIC(0) `endif)
-				in_P_buf(	.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DRAMReadData),
-							.InValid(				DRAMReadDataValid),
-							.InAccept(				PathBuffer_InReady),
-							.OutData(				PBF_DRAMReadData),
-							.OutSend(				PBF_DRAMReadDataValid),
-							.OutReady(				PBF_DRAMReadDataReady));
 	end else begin:NO_AES
 		assign	AES_DRAMReadData =					DRAMReadData;
 		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
+		assign	PBF_DRAMReadDataReady =				AES_DRAMReadDataReady;
 
 		assign	DRAMWriteData =						AES_DRAMWriteData;
 		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;

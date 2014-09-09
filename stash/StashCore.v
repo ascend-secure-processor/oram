@@ -215,6 +215,7 @@ module StashCore(
 	
 	// Stash memories
 	
+	wire	[ORAMH-1:0]		OutMAC_Pre;
 	wire	[ORAMU-1:0]		OutPAddr_Pre;
 	wire	[ORAML-1:0]		OutLeaf_Pre;
 
@@ -741,13 +742,15 @@ module StashCore(
 							.Address(				StashE_Address),
 							.DIn(					StashHDataIn),
 							.DOut(					StashHDataOut));
-							
+			
 	generate if (EnableIV) begin:MAC_BUFFEROUT
-		assign	{OutMAC, OutPAddr_Pre, OutLeaf_Pre} = StashHDataOut;
+		assign	{OutMAC_Pre, OutPAddr_Pre, OutLeaf_Pre} = StashHDataOut;
 	end else begin:MAC_NOBUFFEROUT
 		assign	{OutPAddr_Pre, OutLeaf_Pre} =		StashHDataOut;
+		assign	OutMAC_Pre =						DummyHash;
 	end endgenerate						
 							
+	assign	OutMAC =								(StashE_Address_Delayed == SNULL) ? DummyHash 			: OutMAC_Pre;
 	assign	OutPAddr =								(StashE_Address_Delayed == SNULL) ? DummyBlockAddress 	: OutPAddr_Pre;
 	assign	OutLeaf =								(StashE_Address_Delayed == SNULL) ? DummyLeafLabel 		: OutLeaf_Pre;
 	

@@ -561,6 +561,7 @@ module PathORAMBackendCore(
 							.ORAMC(					ORAMC),
 							.BEDWidth(				BEDWidth),
 							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
 							.EnableIV(				EnableIV),
 							.EnableREW(             EnableREW),
 							.ORAMUValid(			ORAMUValid))

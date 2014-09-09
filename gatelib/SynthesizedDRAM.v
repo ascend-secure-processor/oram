@@ -243,9 +243,9 @@ module	SynthesizedDRAM(
 	//	RAM
 	//--------------------------------------------------------------------------
 
-	// TODO FIXME
 	wire	[DWidth-1:0]	RAMDataOut_Pre;
 
+	// if a bucket hasn't been read before, its header IV == 0
     assign	RAMDataOut =  (RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : 512'h0;
 
 	generate for (i = 0; i < UCount; i = i + 1) begin:RAM_BLOCK
