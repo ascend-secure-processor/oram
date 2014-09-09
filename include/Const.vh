@@ -49,23 +49,25 @@
 //
 //	YOU SHOULD DEFINE THE "MODELSIM" FLAG FOR SIMULATION!!!!
 //------------------------------------------------------------------------------
-`ifdef SYNTHESIS                // if Synplify
-	`define SYNPLIFY
-	`define MACROSAFE
-`else                           // if not Synplify
-	`ifdef MODELSIM
-		`define SIMULATION
+`ifndef ASIC // TODO clean this up
+	`ifdef SYNTHESIS                // if Synplify
+		`define SYNPLIFY
 		`define MACROSAFE
-	`else
-		`define XST
-		// synthesis translate_off    // if XST then stop compiling
-		`undef XST
-		`define SIMULATION
-		`define MODELSIM
-		// synthesis translate_on     // if XST then resume compiling
-		`ifdef XST
-			`define SYNTHESIS
+	`else                           // if not Synplify
+		`ifdef MODELSIM
+			`define SIMULATION
 			`define MACROSAFE
+		`else
+			`define XST
+			// synthesis translate_off    // if XST then stop compiling
+			`undef XST
+			`define SIMULATION
+			`define MODELSIM
+			// synthesis translate_on     // if XST then resume compiling
+			`ifdef XST
+				`define SYNTHESIS
+				`define MACROSAFE
+			`endif
 		`endif
 	`endif
 `endif

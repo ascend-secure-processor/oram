@@ -23,10 +23,10 @@ module AESPathORAM(
     //  Parameters & Constants
     //------------------------------------------------------------------------------
 
-`include "PathORAM.vh";
+	`include "PathORAM.vh";
 
-`include "DDR3SDRAMLocal.vh"
-`include "BucketLocal.vh"
+	`include "DDR3SDRAMLocal.vh"
+	`include "BucketLocal.vh"
 
     localparam W = (BEDWidth / AESWidth) == 0 ? 1 : BEDWidth / AESWidth;
     localparam D = 21;
@@ -45,7 +45,7 @@ module AESPathORAM(
 
     localparam IV_Delay = IDWidth/BEDWidth;
 
-    localparam AESDataDepth = IV_Delay + 3;
+    localparam AESDataDepth = D + 3;
 
     localparam BktHEnd_LOC = DDRDWidth/BEDWidth;
     localparam BktHEnd_LOC_AES = DDRDWidth/IDWidth;
@@ -91,7 +91,7 @@ module AESPathORAM(
     //	Wires & Regs
     //------------------------------------------------------------------------------
 
-    reg                          RW = PATH_WRITE; //0: ORAM->MIG, 1: MIG->ORAM
+    reg                          RW;
     wire [AESEntropy-1:0]        GlobalCounter;
     wire [AESEntropy-1:0]        GlobalCounter_Int;
 
@@ -129,7 +129,7 @@ module AESPathORAM(
     wire                         AESMaskInAccept_BED;
 
     wire                         IsIV;
-    reg                          IVDone = 0;
+    reg                          IVDone;
 
     wire [IDWidth-1:0]           DataIn;
     wire                         DataInValid;
@@ -168,7 +168,7 @@ module AESPathORAM(
 
     //used for enc/dec
     wire                         IsAESIV;
-    reg                          AESIVDone = 0;
+    reg                          AESIVDone;
 
     wire [IDWidth-1:0]           XorRes;
 
@@ -176,7 +176,16 @@ module AESPathORAM(
     wire                         PassThroughR;
 
     wire [`log2(AESDataDepth)-1:0] AESDataEmptyCount;
-    reg                          InitDone = 0;
+    reg                          InitDone;
+
+`ifndef ASIC
+	initial begin
+		RW = PATH_WRITE; //0: ORAM->MIG, 1: MIG->ORAM
+		AESIVDone = 0;
+		InitDone = 0;
+		IVDone = 0;
+	end
+`endif
 
     //------------------------------------------------------------------------------
     //  Control logic
@@ -321,8 +330,7 @@ module AESPathORAM(
     assign AESDataOutReady = AESMaskOutValid & DataOutReady;
 
     FIFORegister#(.Width(AESEntropy),
-                  .Buffering(1+1)
-                  `ifdef ASIC , .ASIC(1) `endif)
+                  .Buffering(1+1))
     iv_fifo (.Clock(Clock),
              .Reset(Reset),
              .InData(IVDataIn),
@@ -334,8 +342,7 @@ module AESPathORAM(
              );
 
     FIFORAM#(.Width(BEDWidth),
-             .Buffering(AESDataDepth)
-	     `ifdef ASIC , .ASIC(1) `endif)
+             .Buffering(AESDataDepth))
     data_fifo (.Clock(Clock),
                .Reset(Reset),
                .InData(AESDataIn),
@@ -347,20 +354,18 @@ module AESPathORAM(
                .OutReady(AESDataOutReady)
                );
 
+`ifdef SIMULATION
     always @ (posedge Clock) begin
-	if (AESDataInValid && !AESDataInAccept) begin
-	    $display("Lose ciphertexts!");
-	    $finish;
-	end
-	if ((IVDataInValid && !IVDataInAccept)) begin
-	    $display("Lose ciphertexts!");
-	    $finish;
-	end
-	if (AESDataInValid && !AESDataInAccept) begin
-	    $display("Lose initial vectors!");
-	    $finish;
-	end
+		if (AESDataInValid && !AESDataInAccept) begin
+			$display("Lose ciphertexts!");
+			$finish;
+		end
+		if ((IVDataInValid && !IVDataInAccept)) begin
+			$display("Lose IVs!");
+			$finish;
+		end
     end
+`endif
 
     //------------------------------------------------------------------------------
     //  AES_W and result FIFO
@@ -424,8 +429,7 @@ module AESPathORAM(
                   );
 
     FIFORAM#(.Width(BEDWidth),
-             .Buffering(BktSize_BEDChunks+1)
-	     `ifdef ASIC , .ASIC(1) `endif)
+             .Buffering(BktSize_BEDChunks+1))
     aesmask_fifo (.Clock(Clock),
                   .Reset(Reset),
                   .InData(AESMaskIn_BED),

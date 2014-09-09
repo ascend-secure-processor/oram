@@ -55,7 +55,7 @@ module Stash(
 	
 	`include "PathORAM.vh"
 	
-	`include "DDR3SDRAMLocal.vh" // TODO cleanup
+	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "StashLocal.vh"

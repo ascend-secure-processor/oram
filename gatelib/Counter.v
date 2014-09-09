@@ -60,11 +60,7 @@ module	Counter(Clock, Reset, Set, Load, Enable, In, Count);
 							Limited =				0,
 							Limit = 				{Width{1'b1}},
 							Down =					0,
-	`ifdef ASIC
-							Initial =				{Width{1'bx}},
-	`else
 							Initial =				{Width{1'b0}},
-	`endif
 							AsyncReset =			0,
 							AsyncSet =				0,
 							ResetValue =			{Width{1'b0}},

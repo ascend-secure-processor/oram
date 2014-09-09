@@ -337,13 +337,13 @@ module BackendCoreController(
 		assign	ROPAddr_Pre =						PAddr;
 		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
 		assign	REWRoundDummy_Pre =					AccessIsDummy;
-		if (Overclock) begin
+		if (Overclock) begin:OCLK
 			always @(posedge Clock) begin
 				ROPAddr <=							ROPAddr_Pre;
 				ROLeaf <=							ROLeaf_Pre;
 				REWRoundDummy <=					REWRoundDummy_Pre;
 			end
-		end else begin
+		end else begin:UCLK
 			always @( * ) begin
 				ROPAddr =							ROPAddr_Pre;
 				ROLeaf =							ROLeaf_Pre;
@@ -361,11 +361,13 @@ module BackendCoreController(
 		assign	ROStartCCValid =					1'b0;
 		assign	ROStartAESValid =					1'b0;
 		
+`ifndef ASIC
 		initial begin
 			ROPAddr =								{ORAMU{1'bx}};
 			ROLeaf =								{ORAML{1'bx}};
 			REWRoundDummy =							1'b0;
 		end
+`endif
 	end endgenerate
 
 	Register	#(			.Width(					1))

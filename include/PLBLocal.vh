@@ -1,11 +1,12 @@
 function [31:0] GeoSum;
     input [31:0] start, scale, num;
-    integer i;
+    integer i, tmp;
     begin
-        GeoSum = 0; 
+        GeoSum = 0;
+		tmp = start; 
         for (i = 0; i < num; i = i + 1) begin
-            GeoSum = GeoSum + start;
-            start = start / scale;
+            GeoSum = GeoSum + tmp;
+            tmp = tmp / scale;
         end
     end
 endfunction  

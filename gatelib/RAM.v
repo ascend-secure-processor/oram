@@ -108,18 +108,18 @@ module	RAM(Clock, Reset, Enable, Write, Address, DIn, DOut);
 							.DIn(					DIn),
 							.DOut(					DOut));
 	end else if (ASIC == 1 && NPorts == 2) begin:ASIC_SRAM2S
+`ifdef SIMULATION
 		initial begin
 			// Note: if you want a simple dual-ported RAM, instantiate SDPRAM
 			$display("TODO");
 			$finish;
 		end
+`endif
 	end else begin:BEHAVIORAL
 		//----------------------------------------------------------------------
 		//	Wires & Regs
 		//----------------------------------------------------------------------
 		reg		[DWidth-1:0]	Mem[0:MaxAddress-1];
-		// attribute ram_style of Mem is block
-		// TODO: remove this ... is it forcing FIFORAM to block ram?
 		
 		genvar					i, j, k;
 		wire					Write_DELAY[NPorts-1:0];
@@ -132,6 +132,7 @@ module	RAM(Clock, Reset, Enable, Write, Address, DIn, DOut);
 		//----------------------------------------------------------------------
 		//	Initialization
 		//----------------------------------------------------------------------
+`ifndef ASIC
 		if (EnableInitial) begin:ENINITVECTOR
 			for (k = 0; k < MaxAddress; k = k + 1) begin:INIT
 				initial	Mem[k] =						Initial[(k*DWidth)+DWidth-1:(k*DWidth)];
@@ -140,6 +141,7 @@ module	RAM(Clock, Reset, Enable, Write, Address, DIn, DOut);
 		if (EnableHexInitFile) begin:ENINITFILE
 			initial $readmemh(HexInitFile, Mem);
 		end 
+`endif
 		//----------------------------------------------------------------------
 
 		//----------------------------------------------------------------------
@@ -188,7 +190,7 @@ module	RAM(Clock, Reset, Enable, Write, Address, DIn, DOut);
 						//------------------------------------------------------
 					end
 				end
-				if (WLatency && RLatency) begin
+				if (WLatency && RLatency) begin:SDP_SYNC
 					always @ (posedge Clock[i]) begin
 						if (Enable[i]) begin
 							DOut_DELAY[i] <= Mem[Address[(AWidth*i)+AWidth-1:(AWidth*i)]];

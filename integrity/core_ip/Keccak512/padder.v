@@ -73,12 +73,12 @@ module padder(clk, reset, in, in_ready, is_last, byte_num, buffer_full, out, out
 			done <= 1;
 
 	localparam	USE_10Pad = 0;
-	generate if (USE_10Pad)		
+	generate if (USE_10Pad)	begin:TENP
 		padder1 #(IW) 
 			p0 (in, byte_num, v0);
-    else
+    end else begin:TENPASS
 		assign	v0 = {IW{1'b0}};
-	endgenerate
+	end endgenerate
 	
 	
     always @ (*)  

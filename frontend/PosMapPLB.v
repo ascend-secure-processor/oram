@@ -172,12 +172,12 @@ module PosMapPLB
 
 	// =================================== PRNG or PRF =============================	
 	wire NewLeafValid, NewLeafAccept;
-	generate if (PRFPosMap) begin
+	generate if (PRFPosMap) begin:PRFPM
 		assign NewLeafValid = 1'b1;
 		assign NewLeafAccept = 1'bx;
 		assign NewLeafIn = (PosMapValid ? PosMapOut : PLBDOut) + 1;
 		
-	end else begin		
+	end else begin:REGPM
 		PRNG #(	.RandWidth(	LeafWidth))
 			LeafGen (   .Clock(Clock), 
 						.Reset(Reset),

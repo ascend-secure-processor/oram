@@ -137,10 +137,11 @@ module round2in1(in, round_const_1, round_const_2, out);
     generate
       for(x=0; x<64; x=x+1)
         begin : L60
-          if(x==0 || x==1 || x==3 || x==7 || x==15 || x==31 || x==63)
+          if(x==0 || x==1 || x==3 || x==7 || x==15 || x==31 || x==63) begin:CASE1
             assign g[0][0][x] = f[0][0][x] ^ round_const_1[x];
-          else
+          end else begin:CASE2
             assign g[0][0][x] = f[0][0][x];
+		  end
         end
     endgenerate
     
@@ -149,8 +150,9 @@ module round2in1(in, round_const_1, round_const_2, out);
         begin : L7
           for(x=0; x<5; x=x+1)
             begin : L8
-              if(x!=0 || y!=0)
+              if(x!=0 || y!=0) begin:CASE3
                 assign g[x][y] = f[x][y];
+			  end
             end
         end
     endgenerate
@@ -245,10 +247,11 @@ module round2in1(in, round_const_1, round_const_2, out);
     generate
       for(x=0; x<64; x=x+1)
         begin : L160
-          if(x==0 || x==1 || x==3 || x==7 || x==15 || x==31 || x==63)
+          if(x==0 || x==1 || x==3 || x==7 || x==15 || x==31 || x==63) begin:CASE4
             assign gg[0][0][x] = ff[0][0][x] ^ round_const_2[x];
-          else
+          end else begin:CASE5
             assign gg[0][0][x] = ff[0][0][x];
+		  end
         end
     endgenerate
     
@@ -257,8 +260,9 @@ module round2in1(in, round_const_1, round_const_2, out);
         begin : L17
           for(x=0; x<5; x=x+1)
             begin : L18
-              if(x!=0 || y!=0)
+              if(x!=0 || y!=0) begin:CASE6
                 assign gg[x][y] = ff[x][y];
+			  end
             end
         end
     endgenerate

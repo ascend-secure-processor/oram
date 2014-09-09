@@ -80,7 +80,7 @@ module	FIFORegister(
 	parameter				Width =					32,
 							FWLatency =				1,
 							BWLatency =				0,
-							Initial =				{Width{1'bx}},
+							Initial =				{Width{1'b0}},
 							InitialValid =			1'b0,
 							ResetValue =			{Width{1'b0}},
 							ResetValid =			1'b0,

@@ -48,11 +48,7 @@ module	Register(Clock, Reset, Set, Enable, In, Out);
 	//	Parameters
 	//--------------------------------------------------------------------------
 	parameter				Width = 				32,
-	`ifdef ASIC
-							Initial =				{Width{1'bx}},
-	`else
 							Initial =				{Width{1'b0}},
-	`endif
 							AsyncReset =			0,
 							AsyncSet =				0,
 							ResetValue =			{Width{1'b0}},
@@ -72,7 +68,7 @@ module	Register(Clock, Reset, Set, Enable, In, Out);
 	//--------------------------------------------------------------------------
 	`ifndef ASIC
 		initial begin
-			Out = Initial; // WARNING: DO NOT CHANGE THIS BACK TO 'output reg Out = Initial'; Vivado 2013.4 silently ignores this syntax.
+			Out = Initial; // WARNING: DO NOT CHANGE THIS BACK TO 'output reg Out = Initial'; Vivado 2013.4 silently ignores this syntax for synthesis.
 		end
 	`endif
 	//--------------------------------------------------------------------------
@@ -115,9 +111,8 @@ endmodule
 
 // a more compact abstraction of 1-bit register, which we use everywhere
 module Register1b(Clock, Reset, Set, Out);
-	parameter 	Initial = `ifdef ASIC 1'bx `else 1'b0 `endif;
     input Clock, Reset, Set;
 	output Out;
-	Register #(.Width(1), .Initial(Initial))
+	Register #(.Width(1), .Initial(1'b0))
 		reg1b (Clock, Reset, Set, 1'b0, 1'bx, Out);
 endmodule

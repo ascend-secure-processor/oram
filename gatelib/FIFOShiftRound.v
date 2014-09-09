@@ -194,8 +194,11 @@ module	FIFOShiftRound(
 		assign	RepeatCountReset =					InValid & InAccept;
 		assign	RepeatCountEnable =					OutValid & OutReady;
 		
-		if (IWidth < PWidth) assign	Parallel =		Bottom ? {{(PWidth-IWidth){1'bx}}, InData} : {InData, {(PWidth-IWidth){1'bx}}};
-		else assign	Parallel =						InData;
+		if (IWidth < PWidth) begin:PAR_C
+			assign	Parallel =						Bottom ? {{(PWidth-IWidth){1'bx}}, InData} : {InData, {(PWidth-IWidth){1'bx}}};
+		end else begin:PAR_S
+			assign	Parallel =						InData;
+		end
 	
 		ShiftRegister #(		.PWidth(			PWidth),
 								.SWidth(			SWidth),
@@ -224,8 +227,11 @@ module	FIFOShiftRound(
 		assign	RepeatCountReset =					OutValid & OutReady;
 		assign	RepeatCountEnable =					InValid & InAccept;
 		
-		if (OWidth < PWidth) assign	OutData =		Bottom ? Parallel[OWidth-1:0] : Parallel[PWidth-1:PWidth-OWidth];
-		else assign	OutData =						Parallel;
+		if (OWidth < PWidth) begin:PAR_C
+			assign	OutData =						Bottom ? Parallel[OWidth-1:0] : Parallel[PWidth-1:PWidth-OWidth];
+		end else begin:PAR_S
+			assign	OutData =						Parallel;
+		end
 	
 		ShiftRegister #(		.PWidth(			PWidth),
 								.SWidth(			SWidth),

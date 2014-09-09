@@ -87,26 +87,26 @@ module REWStatCtr(
 						.Done(					RO_R_Done)
 			);
 			
-	generate if (ROWWidth > 0) begin
+	generate if (ROWWidth > 0) begin:CNT_RO
 		CountAlarm #(	.Threshold(				RO_W_Chunk))
 			ro_w_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				RO_W_Enable),
 						.Count(					RO_W_Ctr),
 						.Done(					RO_W_Done));		
-	end else begin
+	end else begin:PASS_RO
 		assign	RO_W_Ctr =						0;
 		assign	RO_W_Done =						1'b1;
 	end endgenerate
 	
-	generate if (RWWWidth > 0) begin
+	generate if (RWWWidth > 0) begin:CNT_RW
 		CountAlarm #(	.Threshold(				RW_W_Chunk))
 			rw_w_ctr (	.Clock(					Clock), 
 						.Reset(					Reset), 
 						.Enable(				RW_W_Enable),
 						.Count(					RW_W_Ctr),
 						.Done(					RW_W_Done));		
-	end else begin
+	end else begin:PASS_RW
 		assign	RW_W_Ctr =						0;
 		assign	RW_W_Done =						1'b1;
 	end endgenerate	

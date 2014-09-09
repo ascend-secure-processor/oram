@@ -51,38 +51,23 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 	// instantiate SRAM
 	genvar dw;
 	generate for (dw = 0; dw < DWidth_Pad; dw = dw + NBITS) begin:SRAM_MAT
-		if (NWORDS == 2048) begin
-        	if (NBITS == 32) 
-				SRAM1DFCMN02048X032D08C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-		end
-	
-		else if (NWORDS == 1024) begin
-			if (NBITS == 64) 
-				SRAM1DFCMN01024X064D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-			if (NBITS == 128) 
-				SRAM1DFCMN01024X128D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
+		if (NWORDS == 1024 && NBITS == 64) begin:SRAM1
+			SRAM1DFCMN01024X064D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
 		end
 
-		else if (NWORDS == 512) begin
-			RF1DFCMN00512X128D04C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-		end
-
-		else if (NWORDS == 256) begin
-			if (NBITS == 256)
-				RF1DFCMN00256X256D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-			if (NBITS == 128) 
-				RF1DFCMN00256X128D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-			if (NBITS == 64) 
-				RF1DFCMN00256X064D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
+		else if (NWORDS == 256 && NBITS == 256) begin:SRAM2
+			RF1DFCMN00256X256D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
 		end
 	end endgenerate
 
+`ifdef SIMULATION
 	initial begin
 		if (NWORDS == 0 || NBITS == 0) begin
 			$display("SRAM1D AWidth not supported");
 			$finish;
 		end
 	end
+`endif
 
 endmodule
 
@@ -147,12 +132,14 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 		end*/
 	end endgenerate
 
+`ifdef SIMULATION
 	initial begin
 		if (NWORDS == 0 || NBITS == 0) begin
 			$display("SRAM2D AWidth not supported");
 			$finish;
 		end
 	end
+`endif
 
 endmodule
 

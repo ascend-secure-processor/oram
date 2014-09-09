@@ -849,7 +849,7 @@ module StashCore(
 
 	// This is a 2-read 1-write register file
 	// On FPGA, this should become a LUTRAM
-	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM)
+	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM) with manual reset
 
 	`ifdef ASIC
 	genvar	j;
@@ -893,8 +893,7 @@ module StashCore(
 	assign	RemoveBlock =							(~InScanAdd & InScanValid & InScanAccepted) |
 													(CSHUpdate & InHeaderRemove);
 	
-	UDCounter	#(			.Width(					SEAWidth),
-							.Initial(				{SEAWidth{1'b0}}))
+	UDCounter	#(			.Width(					SEAWidth))
 				ElementCount(.Clock(				Clock),
 							.Reset(					Reset),
 							.Set(					1'b0),

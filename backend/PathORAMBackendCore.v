@@ -608,7 +608,6 @@ module PathORAMBackendCore(
 	assign	DRAMCommand =							AddrGen_DRAMCommand;
 	assign	DRAMCommandValid =						AddrGen_DRAMCommandValid;
 	assign	AddrGen_DRAMCommandReady =				DRAMCommandReady;
-	assign	DRAMInit_DRAMCommandReady =				DRAMCommandReady;
 
 	assign	DRAMWriteData =							Stash_DRAMWriteData;
 	assign	DRAMWriteDataValid =					Stash_DRAMWriteDataValid;

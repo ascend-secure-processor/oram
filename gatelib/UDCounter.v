@@ -55,7 +55,7 @@ module	UDCounter(Clock, Reset, Set, Load, Up, Down, In, Count);
 	//--------------------------------------------------------------------------
 	parameter				Width = 				32,
 							Limited =				0,
-							Initial =				{Width{1'bx}},
+							Initial =				{Width{1'b0}},
 							AsyncReset =			0,
 							AsyncSet =				0,
 							ResetValue =			{Width{1'b0}},
@@ -97,7 +97,7 @@ module	UDCounter(Clock, Reset, Set, Load, Up, Down, In, Count);
 					Register(	.Clock(				Clock),
 								.Reset(				Reset),
 								.Set(				Set),
-								.Enable(			Load | ((Up ^ Down) & (Up ? (NoLimit | ~&Count) : (NoLimit | |Count)))),
+								.Enable(			Load | ((Up ^ Down) & (Up ? (NoLimit | ~&Count) : (NoLimit | (|Count))))),
 								.In(				Load ? In : NextCount),
 								.Out(				Count));
 	//--------------------------------------------------------------------------

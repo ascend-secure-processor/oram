@@ -21,7 +21,7 @@ module padder1(in, byte_num, out);
     input      [3:0]  byte_num;
     output reg [IW-1:0] out;
     
-	generate if (IW == 64) begin
+	generate if (IW == 64) begin:IW64
 	
 		always @ (*)
 		  case (byte_num)
@@ -35,7 +35,7 @@ module padder1(in, byte_num, out);
 			7: 		out = {in[IW-1:IW-8*7], 	8'h01, 	{(IW-8*8){1'b0}}};
 		  endcase
 		  
-	end else if (IW == 128) begin
+	end else if (IW == 128) begin:IW128
 	
 		always @ (*)
 		  case (byte_num)
@@ -57,10 +57,12 @@ module padder1(in, byte_num, out);
 			15: 	out = {in[IW-1:IW-8*15], 	8'h01, 	{(IW-8*16){1'b0}}};		
 		  endcase
 		  
-	end else begin
+	end else begin:PASS
+`ifdef SIMULATION
 		initial begin
 			$display("IW not 64 or 128, not supported");
 			$finish;
 		end
+`endif
 	end endgenerate	  
 endmodule

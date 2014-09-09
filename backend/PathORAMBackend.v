@@ -264,7 +264,7 @@ module PathORAMBackend(
 							.BackendWReady(			AES_DRAMWriteDataReady));
 
 
-	FIFORAM		#(			.Width(					BEDWidth),
+	FIFORAM		#(			.Width(					BEDWidth), // TODO remove path buffer
 							.Buffering(				PathSize_BEDChunks)
 							`ifdef ASIC , .ASIC(0) `endif)
 				in_P_buf(	.Clock(					Clock),

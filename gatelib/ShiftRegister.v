@@ -61,11 +61,7 @@ module	ShiftRegister(Clock, Reset, Load, Enable, PIn, SIn, POut, SOut);
 	parameter				PWidth =				32,		// The parallel width
 							SWidth =				1,		// The serial width
 							Reverse =				0,
-	`ifdef ASIC
-							Initial =				{PWidth{1'bx}},
-	`else
 							Initial =				{PWidth{1'b0}},
-	`endif
 							AsyncReset =			0,
 							AsyncSet =				0,
 							ResetValue =			{PWidth{1'b0}},

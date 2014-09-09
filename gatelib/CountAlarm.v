@@ -59,11 +59,7 @@ module	CountAlarm(Clock, Reset, Enable, Intermediate, Done, Count);
 
 	parameter				Threshold =				16,
 							IThreshold =			0,
-	`ifdef ASIC
-							Initial =				1'bx;
-	`else
 							Initial =				1'b0;
-	`endif;
 	
 	//--------------------------------------------------------------------------
 	//	Constants
