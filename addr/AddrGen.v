@@ -101,6 +101,8 @@ module AddrGen
 					.BktIdx(	BktIdx)			
 				);
 	
+`ifdef SIMULATION
+
 	always @(posedge Clock) begin
 		if (CmdValid && CmdReady && BktCounter == 0)
 			$display("Accessing DRAM address [%x], Bucket %x, ST = %x, Bkt=%d", Addr, BktIdx_Padded, STIdx, BktIdxInST);
@@ -134,7 +136,7 @@ module AddrGen
 		end
 		
 	end endgenerate
-`ifdef SIMULATION
+
 `endif
 
 endmodule
