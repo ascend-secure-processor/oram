@@ -451,7 +451,7 @@ module AESPathORAM(
                    .Set(1'b0),
                    .Load(1'b0),
                    .Enable(DataOutValid & DataOutReady),
-                   .In({`log2(BktSize_AESChunks/W){1'bx}}),
+                   .In({BktSizeBED_Width{1'bx}}),
                    .Count(AESBucketReadCtr)
                    );
 
