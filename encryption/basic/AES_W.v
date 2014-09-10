@@ -83,7 +83,7 @@ module AES_W
     generate
         for (k = 0; k < W; k = k + 1) begin: AES
             aes_128 aes(.clk(Clock),
-                        .state({{(AESWidth-AESWIn_Width){k}}, DataIn}),
+                        .state({{(AESWidth-AESWIn_Width){1'b0}}, DataIn}), // TODO: 1'b0, the padding, should really be unique for each k
                         .key(Key),
                         .out(AESRes[(k+1)*AESWidth - 1:k*AESWidth]));
         end

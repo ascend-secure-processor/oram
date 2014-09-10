@@ -60,7 +60,7 @@ module TinyORAMCore(
 
 	parameter				ORAMB =					512,
 							ORAMU =					32,
-							ORAML =					13,
+							ORAML =					22, // TODO: make 24 (NOTE: we need to tweek SynthesizedDRAM to get DDRAWidth = 31 to work)
 							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
 							ORAMC =					10,
 							ORAME =					5;
@@ -68,8 +68,8 @@ module TinyORAMCore(
 	parameter				FEDWidth =				64,
 							BEDWidth =				64;
 
-    parameter				NumValidBlock = 		1 << 13,
-							Recursion = 			2,
+    parameter				NumValidBlock = 		1 << 13, // TODO: make 1 << 25
+							Recursion = 			2, // TODO: make 6
 							PLBCapacity = 			8192 << 3, // 8KB PLB
 							PRFPosMap =         	EnableIV;
 
@@ -157,6 +157,8 @@ module TinyORAMCore(
 
 	`ifdef SIMULATION
 		initial begin
+			$display("[%m] DDRAWidth = %d", DDRAWidth);
+
 			if (ORAML + 1 > 32) begin
 				$display("[%m] WARNING: Designs with more than 32 levels will be slightly more expensive resource-wise, because path-deep FIFOs won't pack as efficiently into LUTRAM.");
 			end

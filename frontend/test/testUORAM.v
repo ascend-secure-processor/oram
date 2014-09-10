@@ -5,12 +5,14 @@ module testUORAM;
 	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
     parameter					ORAMB =				512;
 	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			13;
+	parameter                   ORAML = 			22;
 	parameter                   FEDWidth = 			64;
 	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << 13;
 
-	parameter					BEAWidth =			20; // NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
+	// NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
+	// 29 is the largest value VCS supports
+	parameter					BEAWidth =			29;
 
 	// ------- these parameters are used in some header files -------
 	parameter                   Recursion = 		2;				
