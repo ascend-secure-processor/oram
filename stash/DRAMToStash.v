@@ -107,7 +107,7 @@ module DRAMToStash(
 	wire	[RHWidth-1:0]	Header_Wide;
 
 	wire	[AESEntropy-1:0] HeaderDown_EncryptionIV;
-	wire					BucketValid_Pre, BucketValid;
+	wire					BucketValid;
 
 	wire	[ORAMZ-1:0] 	HeaderDown_ValidBits;
 	wire	[BigUWidth-1:0]	HeaderDown_PAddrs;
@@ -171,9 +171,8 @@ module DRAMToStash(
 	assign	HeaderDown_PAddrs =						Header_Wide[BktHUStart+BigUWidth-1:BktHUStart];
 	assign	HeaderDown_Leaves =						Header_Wide[BktHLStart+BigLWidth-1:BktHLStart];
 	
-	assign	BucketValid_Pre =						(EnableAES) ? HeaderValid && !BucketTransition && HeaderDown_EncryptionIV != IVINITValue : 1'b1;
-	Register1b invld_bkt(Clock, Reset || BucketTransition, BucketValid_Pre, BucketValid);
-
+	assign	BucketValid =							(EnableAES) ? HeaderValid && HeaderDown_EncryptionIV != IVINITValue : 1'b1;
+	
 	assign	DMSelect =								ORAMZ - 1 - CurrentBlock;
 	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(DMSelect, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
 	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(DMSelect, HeaderDown_PAddrs, 		HeaderDown_PAddr);

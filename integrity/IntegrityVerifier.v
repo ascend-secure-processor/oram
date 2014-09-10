@@ -7,7 +7,7 @@
 
 //==============================================================================
 //	Module:		IntegrityVerifier
-//	Desc:		The O(1) integrity verification scheme.
+//	Desc:		The O(1) integrity verification / PMMAC scheme.
 //==============================================================================
 module IntegrityVerifier(
 	Clock, Reset,

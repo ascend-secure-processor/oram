@@ -196,7 +196,7 @@ module PathORAMBackendCore(
 
 	`ifndef ASIC
 		initial begin
-			CS = ST_Initialize;
+			CS = ST_Idle;
 		end
 	`endif
 

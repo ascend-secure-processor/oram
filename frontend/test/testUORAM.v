@@ -10,7 +10,7 @@ module testUORAM;
 	parameter					BEDWidth =			64;
 	parameter                   NumValidBlock = 	1 << 13;
 
-	parameter					BEAWidth =			28; // NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
+	parameter					BEAWidth =			20; // NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
 
 	// ------- these parameters are used in some header files -------
 	parameter                   Recursion = 		2;				
