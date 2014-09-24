@@ -12,29 +12,16 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 	output [DWidth-1:0] DOut;
 
 	// select SRAM parameters
-	localparam NWORDS = AWidth <= 8 ? 256 :	
-						AWidth <= 9 ? 512 :	
-						AWidth <= 10 ? 1024	:
-						AWidth <= 11 ? 2048	: 
-										0;		// not supported
+	localparam NWORDS = AWidth <= 7 ? 128 :	
+						AWidth <= 10 ? 1024	: 0;
 
 
 	localparam AWidth_Pad = `log2(NWORDS);
 
-	localparam 	NBITS = NWORDS == 2048 ? (		32  ) :
-						NWORDS == 1024 ? (
-							DWidth <= 64 ? 		64 :
-							DWidth <= 128 ? 	128 :
-							DWidth <= 256 ? 	256 : 
-												256 ) :
-						NWORDS == 512 ? ( 128 ) :
-						//	DWidth <= 64 ? 		64 :
-						//	DWidth <= 128 ?		128 :
-						//						64 ) :
-						NWORDS == 256 ? (
-						//	DWidth <= 64 ? 		64 : FIXME get the lef file from mike for RF1DFCMN00256X064D02C064
-							DWidth <= 256 ?		256 :
-												128 ): 
+	localparam 	NBITS = NWORDS == 128 ? (		
+							DWidth <= 78 ? 		78 :
+							DWidth <= 192 ? 	192 : 0 ) :
+						NWORDS == 1024 ? (		64) :
 						0;
 
 	// pad to a multiple of NBITS
@@ -55,8 +42,12 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 			SRAM1DFCMN01024X064D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
 		end
 
-		else if (NWORDS == 256 && NBITS == 256) begin:SRAM2
-			RF1DFCMN00256X256D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
+		else if (NWORDS == 128 && NBITS == 78) begin:SRAM2
+			RF1DFCMN00128X078D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
+		end
+
+		else if (NWORDS == 128 && NBITS == 192) begin:SRAM3
+			RF1DFCMN00128X192D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
 		end
 	end endgenerate
 

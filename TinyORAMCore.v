@@ -53,7 +53,7 @@ module TinyORAMCore(
 
 	parameter				EnablePLB = 			1,
 							EnableREW =				0,
-							EnableAES =				1,
+							EnableAES =				0,
    							EnableIV =				1;
 
 	// ORAM
@@ -75,7 +75,7 @@ module TinyORAMCore(
 
 	// Hardware
 
-	parameter				Overclock =				0;
+	parameter				Overclock =				1;
 
 	//--------------------------------------------------------------------------
 	//	Constants
