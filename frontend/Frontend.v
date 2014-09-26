@@ -87,7 +87,6 @@ module Frontend
 							.ORAML(         		ORAML), 
 							.ORAMB(         		ORAMB), 
 							.FEDWidth(				FEDWidth),
-							.NumValidBlock( 		NumValidBlock), 
 							.Recursion(     		Recursion),
 							.EnablePLB(				EnablePLB),
 							.PLBCapacity(   		PLBCapacity),

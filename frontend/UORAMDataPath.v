@@ -27,9 +27,6 @@ module UORAMDataPath
     `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
-
-	localparam					FEORAMBChunks =		ORAMB / FEDWidth;
-	localparam                  LogFEORAMBChunks = 	`log2(FEORAMBChunks);
 		
     input Clock, Reset;
 

@@ -39,61 +39,29 @@ module TinyORAMCore(
 	// Debugging
 
 	/*
-		SlowAESClock:			AES should use the same clock as the rest of the
-								design
-		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the
-								PathBuffer has received an entire path.  This
-								eliminates differences in MIG vs. simulation
-								read timing.
+		SlowAESClock:			AES should use the same clock as the rest of the design
+		DebugDRAMReadTiming: 	Don't send PathBuffer data to AES until the PathBuffer has received an entire path.  
+								This eliminates differences in MIG vs. simulation read timing.
 	*/
 	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 
-	// Frontend-backend
-
-	parameter				EnablePLB = 			1,
-							EnableREW =				0,
-							EnableAES =				0,
-   							EnableIV =				1;
-
-	// ORAM
-
-	parameter				ORAMB =					512,
-							ORAMU =					32,
-							ORAML =					22, // TODO: make 24 (NOTE: we need to tweek SynthesizedDRAM to get DDRAWidth = 31 to work)
-							ORAMZ =					`ifdef ORAMZ `ORAMZ `else (EnableREW) ? 5 : 4 `endif,
-							ORAMC =					10,
-							ORAME =					5;
-
-	parameter				FEDWidth =				64,
-							BEDWidth =				64;
-
-    parameter				NumValidBlock = 		1 << 13, // TODO: make 1 << 25
-							Recursion = 			2, // TODO: make 6
-							PLBCapacity = 			8192 << 3, // 8KB PLB
-							PRFPosMap =         	EnableIV;
-
-	// Hardware
-
-	parameter				Overclock =				1;
 
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
-
-	`define PARAMS_H 
+	
 	`include "PathORAM.vh" 
-	`undef PARAMS_H
+	`include "UORAM.vh" 
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 
-	localparam				ORAMUValid =			`log2(NumValidBlock) + 1;
+	localparam				ORAMUValid = ORAML + 1;
 
-	// No scheme currently needs DWB
-	// [Note] there is some logic in BackendControllerCore that implicitly
-	// assumes REW==DWB.  Careful when enabling it.
-	// localparam				DelayedWB =				0;
+							// TODO: remove 	localparam	DelayedWB =	0; 
+							// there is some logic in BackendControllerCore that implicitly
+							// assumes REW==DWB.  Careful when enabling it.
 
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -195,7 +163,6 @@ module TinyORAMCore(
 							.ORAMB(         		ORAMB),
 							.FEDWidth(				FEDWidth),
 							.EnableIV(				EnableIV),
-							.NumValidBlock( 		NumValidBlock),
 							.Recursion(     		Recursion),
 							.EnablePLB(				EnablePLB),
 							.PLBCapacity(   		PLBCapacity),

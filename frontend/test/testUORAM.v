@@ -1,33 +1,12 @@
 `include "Const.vh"
 
 module testUORAM;
-	// *** NOTE *** DON'T CHANGE THESE PARAMETERS WITHOUT MAKING THE SAME CHANGE IN TinyORAMCore
-	// *** NOTE *** DON'T CHANGE TO ORAM.PARAM SYNTAX!  THE ASIC TOOLS DON'T ALLOW IT
-    parameter					ORAMB =				512;
-	parameter				    ORAMU =				32;
-	parameter                   ORAML = 			22;
-	parameter                   FEDWidth = 			64;
-	parameter					BEDWidth =			64;
-	parameter                   NumValidBlock = 	1 << 13;
-
-	// NOTE: this must be >= DDRAWidth (derived inside ORAM); we can't do the check out here because VCS has limited syntax ...
-	// 29 is the largest value VCS supports
-	parameter					BEAWidth =			29;
-
-	// ------- these parameters are used in some header files -------
-	parameter                   Recursion = 		2;				
-	parameter					PRFPosMap =			1;	
-	parameter					AESEntropy = 		64;
-	// --------------------------------------------------------------
 	
-	localparam					FEORAMBChunks =		ORAMB / FEDWidth;	
-
-	localparam  				NN = 200;
-	localparam					nn = 5;
-	localparam					nn2 = nn * 29;
-
+	`include "PathORAM.vh"
+	`include "UORAM.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
+	`include "BucketLocal.vh" 
 	`include "PLBLocal.vh" 
 	
     wire 						Clock, AESClock; 
@@ -40,7 +19,7 @@ module testUORAM;
 	reg  [FEDWidth-1:0] 		DataIn;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
-	wire	[BEAWidth-1:0]		DDR3SDRAM_Address;
+	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
 	wire	[BEDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
 
@@ -57,7 +36,30 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore ORAM(		.Clock(					Clock),
+   TinyORAMCore #	(		.ORAMU(         		ORAMU),
+							.ORAML(         		ORAML),
+							.ORAMB(         		ORAMB),
+							.FEDWidth(				FEDWidth),
+							.EnableIV(				EnableIV),
+							.Recursion(     		Recursion),
+							.EnablePLB(				EnablePLB),
+							.PLBCapacity(   		PLBCapacity),
+							.PRFPosMap(				PRFPosMap),
+							
+							.ORAMZ(					ORAMZ),
+							.ORAMC(					ORAMC),
+							.ORAME(					ORAME),
+
+							.Overclock(				Overclock),
+							.EnableAES(				EnableAES),
+							.EnableREW(				EnableREW),
+							.EnableIV(				EnableIV),
+							.DelayedWB(				1'b0),
+							
+							.FEDWidth(				FEDWidth),
+							.BEDWidth(				BEDWidth))
+							
+				ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			
@@ -117,9 +119,9 @@ module testUORAM;
 							.OutValid(				DDR3SDRAM_WriteValid_Wide),
 							.OutReady(				DDR3SDRAM_WriteReady_Wide));
 	
-	wire	[BEAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
+	wire	[DDRAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
 	wire					DRAMReadAddrValid, DRAMWriteAddrValid;
-	FIFORAM	#(				.Width(					BEAWidth),
+	FIFORAM	#(				.Width(					DDRAWidth),
 							.Buffering(				500))
 		rd_addr(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -130,7 +132,7 @@ module testUORAM;
 							.OutSend(				DRAMReadAddrValid),
 							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
 	/*
-	FIFORAM	#(				.Width(					BEAWidth),
+	FIFORAM	#(				.Width(					DDRAWidth),
 							.Buffering(				500))
 		wr_addr(			.Clock(					Clock),
 							.Reset(					Reset),
@@ -167,7 +169,7 @@ module testUORAM;
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
                             .UWidth(				64),
-                            .AWidth(				BEAWidth),
+                            .AWidth(				DDRAWidth),
                             .DWidth(				DDRDWidth),
                             .BurstLen(				1),
                             .EnableMask(			1),
@@ -202,7 +204,11 @@ module testUORAM;
 							.OutSend(				DDR3SDRAM_ReadValid_Wide),
 							.OutReady(				DDR3SDRAM_ReadReady_Wide));
 								
-							
+	
+	localparam  				NN = 200;
+	localparam					nn = 5;
+	localparam					nn2 = nn * 29;	
+	
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;

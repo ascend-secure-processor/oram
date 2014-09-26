@@ -11,14 +11,19 @@ function [31:0] GeoSum;
     end
 endfunction  
 
-localparam LeafWidth = PRFPosMap ? AESEntropy : 32;	
-localparam LeafOutWidth = PRFPosMap ? AESEntropy : ORAML;
+localparam 	NumValidBlock = 1 << ORAML;
 
-localparam LeafInBlock = ORAMB / LeafWidth;
-localparam LogLeafInBlock = `log2f(LeafInBlock);
+localparam 	FEORAMBChunks =	ORAMB / FEDWidth;
+localparam 	LogFEORAMBChunks = `log2(FEORAMBChunks);
 
-localparam TotalNumBlock = GeoSum(NumValidBlock, LeafInBlock, Recursion);
-localparam FinalPosMapStart = GeoSum(NumValidBlock, LeafInBlock, Recursion-1);
+localparam 	LeafWidth = PRFPosMap ? AESEntropy : 32;	
+localparam 	LeafOutWidth = PRFPosMap ? AESEntropy : ORAML;
+
+localparam 	LeafInBlock = ORAMB / LeafWidth;
+localparam 	LogLeafInBlock = `log2f(LeafInBlock);
+
+localparam 	TotalNumBlock = GeoSum(NumValidBlock, LeafInBlock, Recursion);
+localparam 	FinalPosMapStart = GeoSum(NumValidBlock, LeafInBlock, Recursion-1);
     
 localparam  FinalPosMapEntry = TotalNumBlock - FinalPosMapStart;
 localparam  LogFinalPosMapEntry = `log2(FinalPosMapEntry);

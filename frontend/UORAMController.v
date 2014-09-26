@@ -136,7 +136,6 @@ module UORAMController
     PosMapPLB #(.ORAMU(             ORAMU),
                 .ORAML(             ORAML),
                 .ORAMB(             ORAMB),
-                .NumValidBlock(     NumValidBlock),
                 .Recursion(         Recursion),
                 .EnablePLB(			EnablePLB),
 				.PLBCapacity(       PLBCapacity),
