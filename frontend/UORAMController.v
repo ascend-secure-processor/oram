@@ -164,7 +164,8 @@ module UORAMController
     (* mark_debug = "TRUE" *) wire PPPLookup, PPPInitRefill;
 
 	(* mark_debug = "TRUE" *) wire FakePLBMiss;	// hack to mimic recursive ORAM
-	assign FakePLBMiss = !EnablePLB && Preparing && PPPValid && QDepth < Recursion - 1;
+	localparam RecursionMinus1 = Recursion - 32'b1;
+	assign FakePLBMiss = !EnablePLB && Preparing && PPPValid && QDepth < RecursionMinus1;
 
     assign PPPMiss = PPPValid && (!PPPHit || FakePLBMiss);
     assign PPPUnInitialized = PPPValid && PPPHit && PPPUnInit;
@@ -172,7 +173,7 @@ module UORAMController
     assign PPPRefill = Accessing && (PPPRefillDataValid || PPPInitRefill);
     assign PPPCmdValid = PPPLookup || (PPPRefill && !RefillStarted);
     assign PPPCmd = PPPRefill ? (PPPInitRefill ? CacheInitRefill : CacheRefill)
-						: (Preparing && !EnablePLB && QDepth < Recursion-1) ? CacheRead : CacheWrite;
+						: (Preparing && !EnablePLB && QDepth < RecursionMinus1) ? CacheRead : CacheWrite;
 						// The PosMap entry that hits needs a CacheWrite; When PLB enabled, every lookup can hit, so need to use CacheWrite
 						// Ideally, PosMap entries that miss do not care about CacheRead vs. CacheWrite
 						// But the hack we add to disable PLB require CacheRead to entries that should've missed but in fact hit

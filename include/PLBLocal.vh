@@ -1,6 +1,6 @@
 function [31:0] GeoSum;
     input [31:0] start, scale, num;
-    integer i, tmp;
+    reg [31:0] i, tmp;
     begin
         GeoSum = 0;
 		tmp = start; 

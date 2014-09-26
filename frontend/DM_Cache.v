@@ -5,8 +5,6 @@
 //				Currently support Read/Write/Refill.
 //==============================================================================
 
-// TODO: How do we support counter tricks in PosMap?
-
 `include "Const.vh"
 
 module DM_Cache
@@ -69,7 +67,7 @@ module DM_Cache
         RefillCounter (Clock, Reset, 1'b0, 1'b0, Refilling, {(LogLineSize+1){1'bx}}, RefillOffset); // load = set = 0, in= x  
 
     assign RefillStart = CmdTransfer && (Cmd == CacheRefill);
-    assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset == (1 << LogLineSize) - 1);
+    assign RefillFinish = (LastCmd == CacheRefill) && (RefillOffset + 32'd1 == 32'd1 << LogLineSize);
     assign Refilling = RefillStart || (LastCmd == CacheRefill && RefillOffset > 0);
     assign RefillWriting = Refilling && RefillOffset[0];
     
