@@ -28,7 +28,7 @@ module table_lookup (clk, state, p0, p1, p2, p3);
         t3 (clk, b3, p3);
 endmodule
 
-/* substitue four bytes in a word */
+/* substitute four bytes in a word */
 module S4 (clk, in, out);
     input clk;
     input [31:0] in;
