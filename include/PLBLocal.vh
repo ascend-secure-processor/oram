@@ -27,3 +27,9 @@ localparam 	FinalPosMapStart = GeoSum(NumValidBlock, LeafInBlock, Recursion-1);
     
 localparam  FinalPosMapEntry = TotalNumBlock - FinalPosMapStart;
 localparam  LogFinalPosMapEntry = `log2(FinalPosMapEntry);
+
+`ifdef SIMULATION
+initial begin
+	$display("Final PMAP width %d %d %d", LogFinalPosMapEntry, Recursion, NumValidBlock);
+end
+`endif

@@ -38,10 +38,10 @@ localparam				PINIT =					-1;
 							ORAME = 				5; 		// E parameter for REW ORAM (don't care if EnableREW == 0)
 	
 	// the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
-	`ifdef SIMULATION
-		parameter 				ORAML =				20;		// cannot simulate too large an ORAM
+	`ifdef SIMULATION_VIVADO
+		parameter 			ORAML =					20;		// cannot simulate too large an ORAM
 	`else
-		parameter 				ORAML =				22; 
+		parameter 			ORAML =					22; 
 	`endif
 	
 	parameter				FEDWidth =				64, 	// data width of frontend busses (reading/writing from/to stash, LLC network interface width)
