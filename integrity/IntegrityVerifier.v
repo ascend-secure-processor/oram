@@ -559,8 +559,12 @@ module IntegrityVerifier(
 							.HashOutValid(			HashOutValid),
 							.HashOut(				HashOut));
 	assign	MACOut =								HashOut[ORAMH-1:0];
-	assign	MACOut_Padded =							{{MACPADWidth-ORAMH{1'b0}} , MACOut};
-	
+	generate if (MACPADWidth != ORAMH) begin:MWIDE
+		assign	MACOut_Padded =						{{MACPADWidth-ORAMH{1'b0}}, MACOut};
+	end else begin:MNARROW
+		assign	MACOut_Padded =						MACOut;
+	end endgenerate
+
 	assign	HashOutReady =							(CSWriteMO && SMO_Terminal) || MACCheckComplete;
 	
 	//--------------------------------------------------------------------------

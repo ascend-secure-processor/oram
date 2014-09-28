@@ -386,6 +386,7 @@ module PathORAMBackendCore(
 	//--------------------------------------------------------------------------
 
 	generate if (EnableIV) begin:LOAD_MAC
+		wire	[MACPADWidth-1:0] LoadMACData_Pre;
 		wire	[FEDWidth-1:0] LoadMACData;
 		wire				LoadMACValid, LoadMACReady;
 		wire				BlockLoaded, LoadingMAC, LoadComplete;
@@ -400,12 +401,18 @@ module PathORAMBackendCore(
 
 		Register1b ldm_m(Clock, Reset || LoadComplete, BlockLoaded, LoadingMAC);
 
+		if (MACPADWidth != ORAMH) begin:LMACWIDE
+			assign	LoadMACData_Pre =				{{MACPADWidth-ORAMH{1'bx}}, Stash_ReturnMAC};
+		end else begin:LMACNARROW
+			assign	LoadMACData_Pre =				Stash_ReturnMAC;
+		end
+		
 		FIFOShiftRound #(	.IWidth(				MACPADWidth),
 							.OWidth(				FEDWidth),
 							.Reverse(				1))
 				st_m_shift(	.Clock(					Clock),
 							.Reset(					Reset),
-							.InData(				{{MACPADWidth-ORAMH{1'bx}}, Stash_ReturnMAC}),
+							.InData(				LoadMACData_Pre),
 							.InValid(				Stash_ReturnComplete),
 							.InAccept(				),
 							.OutData(				LoadMACData),

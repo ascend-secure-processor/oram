@@ -71,8 +71,8 @@ module AddrGen
 						.STIdx(		STIdx),
 						.BktIdxInST(BktIdxInST)
 					);  
-			  
-	assign SwitchLevel = BktCounter + 32'd1 >= BH ? BktHSize_DRBursts : BktSize_DRBursts;
+					
+	assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 32'd1; // TODO this may still result in signed-unsigned warning, but careful to test things if you change it
 	assign Enable = !Ready && CmdReady && SwitchLevel;
 
 	// output 
