@@ -72,7 +72,7 @@ module AddrGen
 						.BktIdxInST(BktIdxInST)
 					);  
 			  
-	assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 1;
+	assign SwitchLevel = BktCounter + 32'd1 >= BH ? BktHSize_DRBursts : BktSize_DRBursts;
 	assign Enable = !Ready && CmdReady && SwitchLevel;
 
 	// output 

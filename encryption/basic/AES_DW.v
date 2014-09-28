@@ -71,7 +71,7 @@ module AES_DW
     wire     [W*AESWidth-1:0]    AESRes[D-1:0];
     wire     [W-1:0]             AESResValid[D-1:0];
 
-    integer                      i;
+    reg	     [31:0]              i;
 
 	`ifndef ASIC
 	initial begin
@@ -100,7 +100,7 @@ module AES_DW
         if (Reset)
             InTurn <= 0;
         else if (DataInValid && DInReady) begin
-            if (InTurn >= D-1)
+            if (InTurn >= D-32'd1)
                 InTurn <= 0;
             else
                 InTurn <= InTurn + 1;
@@ -111,7 +111,7 @@ module AES_DW
         if (Reset)
             OutTurn <= 0;
         else if (DOutValid) begin
-            if (OutTurn >= D-1)
+            if (OutTurn >= D-32'd1)
                 OutTurn <= 0;
             else
                 OutTurn <= OutTurn + 1;

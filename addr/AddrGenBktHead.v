@@ -48,10 +48,10 @@ module AddrGenBktHead
 
 	// control logic for STGen and BktGen
 	reg [ORAMLogL-1:0] currentLvlinST;
-	assign switchST = currentLvlinST >= L_st - 1;
+	assign switchST = currentLvlinST >= L_st - 32'd1;
 	always@(posedge Clock) begin
 		if (Reset) begin
-			currentLevel <= ORAML+1;
+			currentLevel <= ORAML + 32'd1;
 		end
 		else if (Start) begin
 			currentLevel <= 0;
@@ -66,8 +66,9 @@ module AddrGenBktHead
 	end
   
 	// adjust for the (possibly) shorter subtrees at the bottom 
+	localparam L_Padded = numST * L_st;
 	wire shortTreeAtBottom;
-	assign shortTreeAtBottom = (numST * L_st != ORAML+1) && currentLevel >= (numST-1) * L_st;
+	assign shortTreeAtBottom = L_Padded != ORAML+32'd1 && currentLevel + L_st >= L_Padded;
 	// short tree exists, iff ORAML+1 != multiple of numST * L_st 
 
 	assign BktIdx = BktIdxInST + 

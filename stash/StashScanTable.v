@@ -299,8 +299,7 @@ module StashScanTable(
 	
 	genvar	i;
 	generate for(i = 0; i < ORAMLP1; i = i + 1) begin:FANOUT
-		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts_Pre[BCWidth*(i+1)-1:BCWidth*i] + 
-															((HighestLevel_Bin_Pre == i) ? 1 : 0);
+		assign 	BCounts_New[BCWidth*(i+1)-1:BCWidth*i] = 	BCounts_Pre[BCWidth*(i+1)-1:BCWidth*i] + (HighestLevel_Bin_Pre == i);
 	end endgenerate
 
 	/*

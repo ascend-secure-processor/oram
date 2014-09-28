@@ -659,7 +659,7 @@ module StashCore(
 							.Enable(				~ResetDone),
 							.In(					{SEAWidth{1'bx}}),
 							.Count(					ResetCount));
-	assign	ResetDone =								ResetCount == (StashCapacity - 1);
+	assign	ResetDone =								ResetCount == (StashCapacity - 32'd1);
 
 	//--------------------------------------------------------------------------
 	//	Core memories
@@ -907,7 +907,7 @@ module StashCore(
 							.Count(					StashOccupancy_Internal));
 
 	assign	StashOccupancy =						StashOccupancy_Internal;
-	assign	StashAlmostFull_Internal =				(StashOccupancy + BlocksOnPath) >= StashCapacity - 1; // - 1 because we reserve last spot for SNULL
+	assign	StashAlmostFull_Internal =				(StashOccupancy + BlocksOnPath) >= StashCapacity - 32'd1; // - 1 because we reserve last spot for SNULL
 	assign	StashOverflow_Internal =				AddBlock & StashOccupancy == StashCapacity;
 	
 	assign	StashAlmostFull =						StashAlmostFull_Internal;
@@ -1036,7 +1036,7 @@ module StashCore(
 							.Enable(				CSSyncing_PreLatch),
 							.In(					{SEAWidth{1'bx}}),
 							.Count(					SyncCount_PreLatch));
-	assign	Sync_Terminator = 						SyncCount_PreLatch == (StashCapacity - 1);
+	assign	Sync_Terminator = 						SyncCount_PreLatch == (StashCapacity - 32'd1);
 	
 	assign	Sync_StashPUpdateSrc =					((CSSyncing_CapUL | StashC_DataOut == EN_Used) & ~CSSyncing_CapFL) ? LastULE : LastFLE;
 	assign	Sync_StashPWE =							(CSSyncing_Main & ~Sync_SettingULH & ~Sync_SettingFLH) |

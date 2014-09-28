@@ -836,7 +836,7 @@ module Stash(
 	//--------------------------------------------------------------------------
 	
 	// *2 = this is the largest number of blocks StashCore might still give us even after we tell it to stop
-	assign	OutSpaceGate =							OutBufferSpace > (BlkSize_BEDChunks * 2);	
+	assign	OutSpaceGate =							OutBufferSpace > (BlkSize_BEDChunks << 1);	
 	
 	assign	OutBufferInValid =						CSPathWriteback & Core_OutValid;
 	assign	OutHBufferInValid =						OutBufferInValid & BlockReadComplete_Internal;

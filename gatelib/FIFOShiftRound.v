@@ -266,13 +266,13 @@ module	FIFOShiftRound(
 	end else begin:DIFFLIMITS
 		if (Variable) begin:VARIABLE
 			assign	RepeatMax =						RepeatCount == RepeatLimit;
-			assign	RepeatPreMax =					RepeatCount == (RepeatLimit - 1);
+			assign	RepeatPreMax =					RepeatCount == (RepeatLimit - 32'd1);
 		end else begin:FIXED
 			CountCompare #(		.Width(				CWidth),
 								.Compare(			Max))
 					Cmp(		.Count(				RepeatCount),
 								.TerminalCount(		RepeatMax));
-			assign	RepeatPreMax =					RepeatCount == (Max - 1);
+			assign	RepeatPreMax =					RepeatCount == (Max - 32'd1);
 		end
 		
 		assign	RepeatMin =							~|RepeatCount;

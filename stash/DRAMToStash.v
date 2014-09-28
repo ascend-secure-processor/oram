@@ -173,7 +173,7 @@ module DRAMToStash(
 	
 	assign	BucketValid =							(EnableAES) ? HeaderValid && HeaderDown_EncryptionIV != IVINITValue : 1'b1;
 	
-	assign	DMSelect =								ORAMZ - 1 - CurrentBlock;
+	assign	DMSelect =								ORAMZ - 32'd1 - CurrentBlock;
 	Mux	#(.Width(1), 		.NPorts(ORAMZ), .SelectCode(0)) V_mux(DMSelect, HeaderDown_ValidBits, 	HeaderDown_ValidBit);
 	Mux	#(.Width(ORAMU), 	.NPorts(ORAMZ), .SelectCode(0)) U_mux(DMSelect, HeaderDown_PAddrs, 		HeaderDown_PAddr);
 	Mux	#(.Width(ORAML), 	.NPorts(ORAMZ), .SelectCode(0)) L_mux(DMSelect, HeaderDown_Leaves, 		HeaderDown_Leaf);
