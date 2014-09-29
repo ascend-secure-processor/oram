@@ -51,15 +51,10 @@ module AddrGen
 	wire Enable, SwitchLevel;
 	reg RW, BH;
 	reg [BBSTWidth-1:0] BktCounter;
-    
-	AddrGenBktHead #( 	.ORAMB(					ORAMB),
-						.ORAMU(					ORAMU),
-						.ORAML(					ORAML),
-						.ORAMZ(					ORAMZ),
-						.BEDWidth(				BEDWidth),
-						.EnableIV(				EnableIV)
-					) 
-	addGenBktHead 	(  	.Clock(		Clock),
+
+`ifdef ASIC
+	AddrGenBktHead
+	abt 	(  	.Clock(		Clock),
 						.Reset(		Reset),
 						.Start(		Start && Ready),
 						.Enable(	Enable),
@@ -71,6 +66,28 @@ module AddrGen
 						.STIdx(		STIdx),
 						.BktIdxInST(BktIdxInST)
 					);  
+`else
+    
+	AddrGenBktHead #( 	.ORAMB(					ORAMB),
+						.ORAMU(					ORAMU),
+						.ORAML(					ORAML),
+						.ORAMZ(					ORAMZ),
+						.BEDWidth(				BEDWidth),
+						.EnableIV(				EnableIV)
+					) 
+	abt 	(  	.Clock(		Clock),
+						.Reset(		Reset),
+						.Start(		Start && Ready),
+						.Enable(	Enable),
+						.leaf(		leaf),
+						.currentLevel(	currentLevel),
+						.BktIdx(	BktIdx_Padded),
+						
+						// output for debugging
+						.STIdx(		STIdx),
+						.BktIdxInST(BktIdxInST)
+					);  
+`endif
 					
 	assign SwitchLevel = BktCounter >= (BH ? BktHSize_DRBursts : BktSize_DRBursts) - 32'd1; // TODO this may still result in signed-unsigned warning, but careful to test things if you change it
 	assign Enable = !Ready && CmdReady && SwitchLevel;
