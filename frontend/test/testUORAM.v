@@ -119,8 +119,8 @@ module testUORAM;
 							.OutValid(				DDR3SDRAM_WriteValid_Wide),
 							.OutReady(				DDR3SDRAM_WriteReady_Wide));
 	
-	wire	[DDRAWidth-1:0]	DRAMReadAddr, DRAMWriteAddr;
-	wire					DRAMReadAddrValid, DRAMWriteAddrValid;
+	wire	[DDRAWidth-1:0]	DRAMReadAddr;
+	wire					DRAMReadAddrValid;
 	FIFORAM	#(				.Width(					DDRAWidth),
 							.Buffering(				500))
 		rd_addr(			.Clock(					Clock),
@@ -227,7 +227,7 @@ module testUORAM;
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
-    reg [ORAMU-1:0] AddrRand, AddrPrev;
+    reg [ORAMU-1:0] AddrRand;
 	
     task Task_StartORAMAccess;
         input [1:0] cmd;
@@ -270,19 +270,14 @@ module testUORAM;
        end 
     endtask    
 
-	reg [ORAMB-1:0] GlobalData [0:NumValidBlock-1];
-	
-	
 	integer i; 
 	task Handle_ProgStore;
 		begin
 			#(Cycle);
 			#(Cycle / 2.0) DataInValid <= 1;
-			GlobalData[AddrIn] = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = AddrIn + i;//512 + ($random % 512);
-				GlobalData[AddrIn] <= (GlobalData[AddrIn] << FEDWidth) + DataIn;
-				while (!DataInReady)  #(Cycle);   
+				DataIn = AddrIn + i;
+				while (!DataInReady)  #(Cycle);
 				#(Cycle);
 			end
 			DataInValid <= 0;
@@ -291,18 +286,25 @@ module testUORAM;
     
 	reg Checking_ProgData;
 	reg [ORAMB-1:0] ReceivedData;
+	wire [ORAMB-1:0] ExpectedReadData;
+
+    genvar g;
+	generate for (g = 0; g < FEORAMBChunks; g = g + 1) begin
+		assign	ExpectedReadData[(g+1)*FEDWidth-1:g*FEDWidth] = AddrIn + g;
+	end endgenerate
+
 	task Check_ProgData;
 		begin
 			Checking_ProgData <= 1;
 			ReceivedData = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				while (!ReturnDataReady || !ReturnDataValid)  #(Cycle);
-				ReceivedData <= (ReceivedData << FEDWidth) + ReturnData;
+				ReceivedData <= {ReturnData, ReceivedData[ORAMB-1:FEDWidth]};
 				#(Cycle);
 			end
 
-			if (GlobalData[AddrPrev] != ReceivedData) begin
-				$display("Received data does not match for Block %d, %x != %x", AddrPrev, ReceivedData, GlobalData[AddrPrev]);
+			if (ExpectedReadData != ReceivedData) begin
+				$display("Received data does not match for Block %d, %x != %x", AddrIn, ReceivedData, ExpectedReadData);
 				$finish;
 			end
 			Checking_ProgData <= 0;
@@ -327,10 +329,6 @@ module testUORAM;
 		for (i = 0; i < TotalNumBlock; i=i+1) begin
 			GlobalPosMap[i][ORAML] <= 0;
 		end
-		
-		for (i = 0; i < NumValidBlock; i=i+1) begin
-			GlobalData[i] <= 0;
-		end 
 	end
 
     always @(posedge Clock) begin
@@ -338,8 +336,7 @@ module testUORAM;
             if (TestCount < 2 * NN) begin
                 #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
-                #(Cycle); 
-				AddrPrev <= AddrRand;				
+                #(Cycle);		
 				TestCount <= TestCount + 1;
 				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	   
                 	   
