@@ -11,7 +11,7 @@ function [31:0] GeoSum;
     end
 endfunction  
 
-localparam 	NumValidBlock = 1 << ORAML;
+localparam 	NumValidBlock = (1 << ORAML) << 2; // shift by 2 -> 50% capacity when Z = 4
 
 localparam 	FEORAMBChunks =	ORAMB / FEDWidth;
 localparam 	LogFEORAMBChunks = `log2(FEORAMBChunks);
@@ -31,5 +31,9 @@ localparam  LogFinalPosMapEntry = `log2(FinalPosMapEntry);
 `ifdef SIMULATION
 initial begin
 	$display("Final PMAP width %d %d %d", LogFinalPosMapEntry, Recursion, NumValidBlock);
+	if (ORAMZ != 4) begin
+		$display("ERROR: NumValidBlock relies on Z=4");
+		$finish;	
+	end
 end
 `endif

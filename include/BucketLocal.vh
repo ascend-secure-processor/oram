@@ -93,7 +93,7 @@
 
 `ifdef SIMULATION
 initial begin
-	$display("DDRAWidth = %d %d %d %d %d %d", L_st, numST, numTallST, numTotalST, NumBuckets, DDRAWidth);
+	$display("DDRAWidth = %d %d %d %d %d %d %d", L_st, numST, numTallST, numTotalST, NumBuckets, BktSize_DRWords, DDRAWidth);
 end
 `endif
 

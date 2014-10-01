@@ -57,11 +57,11 @@ module TinyORAMCore(
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 
-	localparam				ORAMUValid = ORAML + 1;
+	localparam				ORAMUValid = ORAML + 3; // Note: +3 assumes 50% utilization at Z=4
 
-							// TODO: remove 	localparam	DelayedWB =	0; 
-							// there is some logic in BackendControllerCore that implicitly
-							// assumes REW==DWB.  Careful when enabling it.
+	// TODO: remove 	localparam	DelayedWB =	0; 
+	// there is some logic in BackendControllerCore that implicitly
+	// assumes REW==DWB.  Careful when enabling it.
 
 	//--------------------------------------------------------------------------
 	//	System I/O

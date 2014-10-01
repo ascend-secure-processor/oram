@@ -41,7 +41,7 @@ localparam				PINIT =					-1;
 	`ifdef SIMULATION_VIVADO
 		parameter 			ORAML =					20;		// cannot simulate too large an ORAM
 	`else
-		parameter 			ORAML =					25; 
+		parameter 			ORAML =					23; 
 	`endif
 	
 	parameter				FEDWidth =				64, 	// data width of frontend busses (reading/writing from/to stash, LLC network interface width)
