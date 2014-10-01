@@ -36,7 +36,7 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore #	(		.ORAMU(         		ORAMU),
+   TinyORAMCore /*#	(		.ORAMU(         		ORAMU),
 							.ORAML(         		ORAML),
 							.ORAMB(         		ORAMB),
 							.FEDWidth(				FEDWidth),
@@ -57,7 +57,7 @@ module testUORAM;
 							.DelayedWB(				1'b0),
 							
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth))
+							.BEDWidth(				BEDWidth))*/
 							
 				ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
@@ -289,7 +289,7 @@ module testUORAM;
 	wire [ORAMB-1:0] ExpectedReadData;
 
     genvar g;
-	generate for (g = 0; g < FEORAMBChunks; g = g + 1) begin
+	generate for (g = 0; g < FEORAMBChunks; g = g + 1) begin:foo
 		assign	ExpectedReadData[(g+1)*FEDWidth-1:g*FEDWidth] = AddrIn + g;
 	end endgenerate
 

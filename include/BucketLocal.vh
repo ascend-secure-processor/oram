@@ -88,7 +88,12 @@
 	localparam 				numTotalST = 			((1 << (numST*L_st)) - 1) / ((1 << L_st) - 1); // the number of total subtreess 
 
     localparam				NumBuckets =  			(1 << (ORAML + 1)) + numTotalST; // Last addr of the ORAM tree (in buckets). We waste one bucket per subtree.
-    localparam				LastBuckerAddr =  		NumBuckets * BktSize_DRWords; // DRAM burst address for last bucket               
 
-	localparam				DDRAWidth =				`log2(LastBuckerAddr + BktSize_DRWords);
+	localparam				DDRAWidth =				`log2(NumBuckets + 1) + `log2(BktSize_DRWords); // DRAM burst address for last bucket
+
+`ifdef SIMULATION
+initial begin
+	$display("DDRAWidth = %d %d %d %d %d %d", L_st, numST, numTallST, numTotalST, NumBuckets, DDRAWidth);
+end
+`endif
 
