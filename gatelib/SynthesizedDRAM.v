@@ -246,11 +246,28 @@ module	SynthesizedDRAM(
 	wire	[DWidth-1:0]	RAMDataOut_Pre;
 
 	// if a bucket hasn't been read before, its header IV == 0
-    assign	RAMDataOut =  (RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : 512'h0;
+    assign	RAMDataOut =  	(RAMDataOut_Pre !== 512'hx) ? RAMDataOut_Pre : 512'h0;
 
+	// Partition the RAM by making the data width smaller
+	parameter 	UCountI = 	8,
+			 	UWidthI =	UWidth / UCountI;
+
+	// Partition the RAM by making the address width per RAM smaller
+	parameter	ACountI =	2,
+				ASelI =		`log2(ACountI),
+				RAWidthI =	RAWidth - ASelI;
+
+	// NOTE: we have UWidthI and AWidthI because
+	//	1.) sim tools (VCS...) but caps on a single RAM's W and D
+	//	2.) We don't want to change the SynthesizedDRAM interface
+
+	genvar j, k;
 	generate for (i = 0; i < UCount; i = i + 1) begin:RAM_BLOCK
-		RAM			#(			.DWidth(			UWidth),
-								.AWidth(			RAWidth),
+		for (j = 0; j < UCountI; j = j + 1) begin:RAM_BLOCK_DW_INNER
+			wire	[UWidthI*ACountI-1:0] ACDataOut;
+			for (k = 0; k < ACountI; k = k + 1) begin:RAM_BLOCK_AW_INNER
+				RAM	#(		 	.DWidth(			UWidthI),
+								.AWidth(			RAWidthI),
 								.RLatency(			RLatency),
 								.WLatency(			WLatency),
 								.NPorts(			1),
@@ -258,11 +275,18 @@ module	SynthesizedDRAM(
 					RAM(		.Clock(				Clock),
 								.Reset(				Reset),
 								.Enable(			RAMEnable[i]),
-								.Write(				RAMWrite[i]),
-								.Address(			RAMAddress),
-								.DIn(				RAMDataIn[(UWidth*i)+UWidth-1:UWidth*i]),
-								.DOut(				RAMDataOut_Pre[(UWidth*i)+UWidth-1:UWidth*i]));
+								.Write(				RAMWrite[i] && RAMAddress[RAWidth-1:RAWidthI] == k),
+								.Address(			RAMAddress[RAWidthI-1:0]),
+								.DIn(				RAMDataIn[UWidth*i+UWidthI*(j+1)-1:UWidth*i+UWidthI*j]),
+								.DOut(				ACDataOut[UWidthI*(k+1)-1:UWidthI*k]));
+			end
+				Mux	#(.Width(UWidthI), .NPorts(ACountI), .SelectCode(0)) amux(	RAMAddress[RAWidth-1:RAWidthI], 
+																				ACDataOut, 
+																				RAMDataOut_Pre[UWidth*i+UWidthI*j+UWidthI-1:UWidth*i+UWidthI*j]);
+		end
+
 	end endgenerate
+
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------
