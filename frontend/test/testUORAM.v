@@ -36,30 +36,7 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore /*#	(		.ORAMU(         		ORAMU),
-							.ORAML(         		ORAML),
-							.ORAMB(         		ORAMB),
-							.FEDWidth(				FEDWidth),
-							.EnableIV(				EnableIV),
-							.Recursion(     		Recursion),
-							.EnablePLB(				EnablePLB),
-							.PLBCapacity(   		PLBCapacity),
-							.PRFPosMap(				PRFPosMap),
-							
-							.ORAMZ(					ORAMZ),
-							.ORAMC(					ORAMC),
-							.ORAME(					ORAME),
-
-							.Overclock(				Overclock),
-							.EnableAES(				EnableAES),
-							.EnableREW(				EnableREW),
-							.EnableIV(				EnableIV),
-							.DelayedWB(				1'b0),
-							
-							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth))*/
-							
-				ORAM(		.Clock(					Clock),
+   TinyORAMCore ORAM(		.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			
@@ -209,6 +186,8 @@ module testUORAM;
 	localparam					nn = 5;
 	localparam					nn2 = nn * 29;	
 	
+	localparam					INITIAL_DELAY = 1050; // must be > than the deepest SRAM, so that the princeton wrappers have time to initialize
+
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;
@@ -332,7 +311,7 @@ module testUORAM;
 	end
 
     always @(posedge Clock) begin
-        if (!Reset && CmdInReady) begin
+        if (!Reset && CmdInReady && CycleCount > INITIAL_DELAY) begin
             if (TestCount < 2 * NN) begin
                 #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
