@@ -106,9 +106,6 @@ module PathORAMBackend(
 	wire	[ORAML-1:0]		ROLeaf;
 	wire                    REWRoundDummy;
 
-	(* mark_debug = "TRUE" *)	wire					ROStartCCValid, ROStartAESValid;
-	(* mark_debug = "TRUE" *)	wire					ROStartCCReady, ROStartAESReady;
-
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
@@ -177,12 +174,7 @@ module PathORAMBackend(
 
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.REWRoundDummy(			REWRoundDummy),
-
-							.ROStartCCValid(		ROStartCCValid),
-							.ROStartAESValid(		ROStartAESValid),
-							.ROStartCCReady(		ROStartCCReady),
-							.ROStartAESReady(		ROStartAESReady));
+							.REWRoundDummy(			REWRoundDummy));
 
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption

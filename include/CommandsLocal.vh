@@ -6,7 +6,7 @@
 							BECMD_Read = 			2'd2, // Read existing block, but leave in place (Read)
 							BECMD_ReadRmv =			2'd3; // Read existing block and remove (Read); we need this even with inclusive ORAM for PosMap blocks (i.e., they won't go poof)
 							
-	// Sent by BackendCore, understood  by StashTop
+	// Sent by BackendCore, understood by StashTop
 	localparam				STCMDWidth =			2,
 							STCMD_StartRead =		2'd0,
 							STCMD_StartWrite =		2'd1,

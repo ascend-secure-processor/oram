@@ -26,9 +26,7 @@ module PathORAMBackendCore(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, REWRoundDummy,
-	ROStartCCValid, ROStartAESValid,
-	ROStartCCReady, ROStartAESReady
+	ROPAddr, ROLeaf, REWRoundDummy
 	);
 
 	//--------------------------------------------------------------------------
@@ -102,9 +100,6 @@ module PathORAMBackendCore(
 	output  [ORAMU-1:0]		ROPAddr;
 	output  [ORAML-1:0]		ROLeaf;
 	output 					REWRoundDummy;
-
-	output					ROStartCCValid, ROStartAESValid;
-	input					ROStartCCReady, ROStartAESReady;
 
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -511,12 +506,7 @@ module PathORAMBackendCore(
 
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.REWRoundDummy(			REWRoundDummy),
-
-							.ROStartCCValid(		ROStartCCValid),
-							.ROStartAESValid(		ROStartAESValid),
-							.ROStartCCReady(		ROStartCCReady),
-							.ROStartAESReady(		ROStartAESReady));
+							.REWRoundDummy(			REWRoundDummy));
 
 	//--------------------------------------------------------------------------
 	//	AddrGen

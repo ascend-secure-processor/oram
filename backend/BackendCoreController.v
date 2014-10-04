@@ -41,9 +41,7 @@ module BackendCoreController(
 
 	StashAlmostFull,
 
-	ROPAddr, ROLeaf, REWRoundDummy,
-	ROStartCCValid, ROStartAESValid,
-	ROStartCCReady, ROStartAESReady
+	ROPAddr, ROLeaf, REWRoundDummy
 	);
 
 	//--------------------------------------------------------------------------
@@ -124,8 +122,6 @@ module BackendCoreController(
 
 	output reg [ORAMU-1:0]	ROPAddr;
 	output reg [ORAML-1:0]	ROLeaf;
-	output					ROStartCCValid, ROStartAESValid;
-	input					ROStartCCReady, ROStartAESReady;
 	output reg				REWRoundDummy;
 
 	//--------------------------------------------------------------------------
@@ -247,13 +243,12 @@ module BackendCoreController(
 			//
 			// Main access states
 			//
-			ST_CCROStart : 
-				if (ROStartCCReady && EnableAES == 1)
+			ST_CCROStart : // TODO: we can remove this state now that ROStart...Ready is gone
+				if (EnableAES)
 					NS =							ST_AESROStart;
-				else if (ROStartCCReady)
+				else 
 					NS =							ST_AddrGenRead;
-			ST_AESROStart : 
-				if (ROStartAESReady)
+			ST_AESROStart : // TODO: we can remove this state now that ROStart...Ready is gone
 					NS =							ST_AddrGenRead;
 			ST_AddrGenRead :
 				if (AddrGenInReady)
@@ -330,9 +325,6 @@ module BackendCoreController(
 		assign	SetDummy =							CSIdle & (StashAlmostFull | (RWAccess & OneAccessHasOccurred));
 
 		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
-
-		assign	ROStartCCValid =					CS == ST_CCROStart;
-		assign	ROStartAESValid =					CS == ST_AESROStart;
 	
 		assign	ROPAddr_Pre =						PAddr;
 		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
@@ -358,8 +350,6 @@ module BackendCoreController(
 
 		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
 
-		assign	ROStartCCValid =					1'b0;
-		assign	ROStartAESValid =					1'b0;
 		
 `ifndef ASIC
 		initial begin

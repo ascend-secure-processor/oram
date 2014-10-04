@@ -29,8 +29,8 @@ module TrafficGenASIC(
 	`include "UORAM.vh"
 	`include "PLBLocal.vh"
 	
-	parameter				NumCommands =			3,
-							AccessCount =			32'd10;
+	parameter				NumCommands =			4,
+							AccessCount_Fixed =		32'd4;
 	
 	`include "CommandsLocal.vh"
 	`include "TrafficGenLocal.vh"
@@ -119,10 +119,10 @@ module TrafficGenASIC(
 	reg		[STWidth-1:0]	CS, NS;	
 	wire					CSAccess, CSSeed;
 	
-	wire	[TCMDWidth-1:0]	SlowCommand;
-	wire	[ORAMU-1:0]		SlowAddress; 
-	wire	[DBaseWidth-1:0] SlowDataBase;
-	wire	[TimeWidth-1:0]	SlowTime;
+	wire	[TCMDWidth-1:0]	AccessCommand;
+	wire	[ORAMU-1:0]		AccessEncSeed; 
+	wire	[DBaseWidth-1:0] AccessCount;
+	wire	[TimeWidth-1:0]	AccessAddrMask;
 	
 	wire	[TCMDWidth-1:0]	SeedCommand;
 	wire	[ORAMU-1:0]		SeedAddress;
@@ -211,11 +211,12 @@ module TrafficGenASIC(
 							.In(					{TimeWidth{1'bx}}),
 							.Count(					CmdCount));
 							
-													// Seed Format:			Cmd						Seed			AccessCount			Offset
-	assign	CrossBufIn_DataInPre =					(CmdCount == 0) ? 	{	TCMD_Fill,				32'd0,			AccessCount,		32'd0} :
-													(CmdCount == 1) ? 	{	TCMD_CmdRnd_AddrLin,	32'd0,			AccessCount,		32'd0} :
-													                    {	TCMD_CmdRnd_AddrRnd,	32'd0,			AccessCount,		32'd0} ;
-
+													// Seed Format:			Cmd						Seed			AccessCount			Mask
+	assign	CrossBufIn_DataInPre =					(CmdCount == 0) ? 	{	TCMD_Fill,				32'd0,			AccessCount_Fixed,	32'd0} : // Fill with some data
+													(CmdCount == 1) ? 	{	TCMD_CmdRnd_AddrLin,	32'd0,			AccessCount_Fixed,	32'd0} : // Sequential rd/wr to initialized region
+													(CmdCount == 2) ? 	{	TCMD_CmdRnd_AddrRnd,	32'dx,			AccessCount_Fixed,	AccessCount_Fixed - 32'd1} : // Random rd/wr to initialized region
+																		{	TCMD_CmdRnd_AddrRnd,	32'dx,			AccessCount_Fixed,	NumValidBlock - 32'd1} ; // Random rd/wr to anywhere
+																		
 	assign	CrossBufIn_DataInValidPre =				CmdCount < NumCommands;
 	
 	//------------------------------------------------------------------------------
@@ -231,9 +232,9 @@ module TrafficGenASIC(
 	
 	assign	ResetPRNG =								CS == ST_PrepSeed;
 	
-	assign	{SlowCommand, SlowAddress, SlowDataBase, SlowTime} = CrossBufIn_DataInPre;
+	assign	{AccessCommand, AccessEncSeed, AccessCount, AccessAddrMask} = CrossBufIn_DataInPre;
 		
-	assign	CrossBufIn_DataIn =						(CSAccess) ? 	{SlowCommand, SlowAddress, SlowDataBase, SlowTime} : 
+	assign	CrossBufIn_DataIn =						(CSAccess) ? 	{AccessCommand, AccessEncSeed, AccessCount, AccessAddrMask} : 
 																	{SeedCommand, SeedAddress, SeedDataBase, SeedTime};
 
 	assign	CSAccess =								CS == ST_Access;
@@ -248,17 +249,12 @@ module TrafficGenASIC(
 		NS = 										CS;
 		case (CS)
 			ST_Idle : 
-				if (CrossBufIn_DataInValidPre && (SlowCommand == TCMD_Update || SlowCommand == TCMD_Read || SlowCommand == TCMD_Start))
-					NS =							ST_Access;
-				else if (CrossBufIn_DataInValidPre)
+				if (CrossBufIn_DataInValidPre)
 					NS =							ST_PrepSeed;
 			ST_PrepSeed :
 				NS =								ST_Seed;
 			ST_Seed :
 				if (AccessThresholdReached)
-					NS =							ST_Idle;
-			ST_Access :
-				if (AccessTransfer)
 					NS =							ST_Idle;
 		endcase
 	end
@@ -271,8 +267,8 @@ module TrafficGenASIC(
 							.Enable(				CSSeed & AccessTransfer),
 							.In(					{DBaseWidth{1'bx}}),
 							.Count(					SeedAccessCount));					
-	assign	AccessHalfThresholdReached =			SeedAccessCount >= (SlowDataBase >> 1);
-	assign	AccessThresholdReached =				SeedAccessCount == SlowDataBase;
+	assign	AccessHalfThresholdReached =			SeedAccessCount >= (AccessCount >> 1);
+	assign	AccessThresholdReached =				SeedAccessCount == AccessCount;
 
 	PRNG 		#(			.RandWidth(				ORAMU))
 				addr_gen(	.Clock(					Clock),
@@ -280,21 +276,21 @@ module TrafficGenASIC(
 							.RandOutReady(			CSSeed & CrossBufIn_DataInReady),
 							.RandOutValid(			PRNGOutValid),
 							.RandOut(				PRNGOutData),
-							.SecretKey(				{ {AESWidth-TimeWidth{1'b0}}, SlowAddress} ));
+							.SecretKey(				{AESWidth{1'b0}}));
 
-	assign	RandomAddress =							PRNGOutData;
-	assign	ScanAddress =							((AccessHalfThresholdReached) ?  SeedAccessCount - (SlowDataBase >> 1) : SeedAccessCount) + SlowTime;
+	assign	RandomAddress =							PRNGOutData & AccessAddrMask;
+	assign	ScanAddress =							((AccessHalfThresholdReached) ?  SeedAccessCount - (AccessCount >> 1) : SeedAccessCount);
 	assign	FillAddress =							SeedAccessCount;
 	
 	assign	RandomCommand =							(PRNGOutData[ORAMU-1]) ? TCMD_Update : TCMD_Read;
 	assign	ScanCommand =							(AccessHalfThresholdReached) ? TCMD_Read : TCMD_Update;
 	assign	FillCommand =							TCMD_Update;
 	
-	assign	CMD_RND =								SlowCommand == TCMD_CmdRnd_AddrLin || SlowCommand == TCMD_CmdRnd_AddrRnd;
-	assign	CMD_FILL =								SlowCommand == TCMD_Fill;
+	assign	CMD_RND =								AccessCommand == TCMD_CmdRnd_AddrLin || AccessCommand == TCMD_CmdRnd_AddrRnd;
+	assign	CMD_FILL =								AccessCommand == TCMD_Fill;
 	
-	assign	ADDR_RND =								SlowCommand == TCMD_CmdLin_AddrRnd || SlowCommand == TCMD_CmdRnd_AddrRnd;
-	assign	ADDR_FILL =								SlowCommand == TCMD_Fill;
+	assign	ADDR_RND =								AccessCommand == TCMD_CmdLin_AddrRnd || AccessCommand == TCMD_CmdRnd_AddrRnd;
+	assign	ADDR_FILL =								AccessCommand == TCMD_Fill;
 	
 	assign	SeedCommand =							(CMD_RND) ? 	RandomCommand : 
 													(CMD_FILL) ? 	FillCommand :
@@ -307,7 +303,7 @@ module TrafficGenASIC(
 	assign	SeedDataBase =							{DBaseWidth{1'b0}};
 	assign	SeedTime =								{TimeWidth{1'b0}};
 	
-	assign	SWHistogramDump =						CSAccess && SlowCommand == TCMD_Start && CrossBufIn_DataInValid & CrossBufIn_DataInReady;
+	assign	SWHistogramDump =						CSAccess && AccessCommand == TCMD_Start && CrossBufIn_DataInValid & CrossBufIn_DataInReady;
 	
 	//------------------------------------------------------------------------------
 	// 	[Send path] Next command staging

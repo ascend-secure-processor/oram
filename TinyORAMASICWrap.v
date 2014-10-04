@@ -25,8 +25,8 @@ module TinyORAMASICWrap(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Mode_TrafficGen,
-	Mode_DummyGen
+	Mode_TrafficGen, // Are we using the traffic gen to test ORAM *functionality*
+	Mode_DummyGen // Are we doing dummy requests forever to test *backend power*
 	);
 
 	//--------------------------------------------------------------------------
