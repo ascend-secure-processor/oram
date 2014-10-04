@@ -36,7 +36,7 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-   TinyORAMCore ORAM(		.Clock(					Clock),
+   TinyORAMASICWrap ORAM(	.Clock(					Clock),
                             .Reset(					Reset),
                             
                             // interface with network			
@@ -61,7 +61,9 @@ module testUORAM;
                             .DRAMWriteData(			DDR3SDRAM_WriteData),
                             .DRAMWriteMask(			DDR3SDRAM_WriteMask),
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
-                            .DRAMWriteDataReady(	DDR3SDRAM_WriteReady));
+                            .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
+							
+							.Mode_TrafficGen(		1'b0));
 					
 	//--------------------------------------------------------------------------
 
@@ -185,8 +187,6 @@ module testUORAM;
 	localparam  				NN = 200;
 	localparam					nn = 5;
 	localparam					nn2 = nn * 29;	
-	
-	localparam					INITIAL_DELAY = 1050; // must be > than the deepest SRAM, so that the princeton wrappers have time to initialize
 
     reg [64-1:0] CycleCount;
     initial begin
@@ -227,25 +227,25 @@ module testUORAM;
        begin
            $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
 		   CycleCount, 
-                   ORAM.BEnd_Cmd == 0 ? "Update" : ORAM.BEnd_Cmd == 1 ? "Append" : ORAM.BEnd_Cmd == 2 ? "Read" : "ReadRmv",
-                   ORAM.BEnd_PAddr, ORAM.BEnd_Cmd == 1 ? -1 : ORAM.CurrentLeaf, ORAM.RemappedLeaf);
+                   ORAM.core.BEnd_Cmd == 0 ? "Update" : ORAM.core.BEnd_Cmd == 1 ? "Append" : ORAM.core.BEnd_Cmd == 2 ? "Read" : "ReadRmv",
+                   ORAM.core.BEnd_PAddr, ORAM.core.BEnd_Cmd == 1 ? -1 : ORAM.core.CurrentLeaf, ORAM.core.RemappedLeaf);
                
-           if (ORAM.BEnd_Cmd == BECMD_Append) begin
-               if (GlobalPosMap[ORAM.BEnd_PAddr][ORAML]) begin
-                   $display("Error: appending existing Block %d", ORAM.BEnd_PAddr);
+           if (ORAM.core.BEnd_Cmd == BECMD_Append) begin
+               if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML]) begin
+                   $display("Error: appending existing Block %d", ORAM.core.BEnd_PAddr);
                    $finish;
                end
            end
-           else if (GlobalPosMap[ORAM.BEnd_PAddr][ORAML] == 0) begin
-               $display("Error: requesting non-existing Block %d", ORAM.BEnd_PAddr);
+           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML] == 0) begin
+               $display("Error: requesting non-existing Block %d", ORAM.core.BEnd_PAddr);
                $finish;               
            end
-           else if (GlobalPosMap[ORAM.BEnd_PAddr][ORAML-1:0] != ORAM.CurrentLeaf) begin
-               $display("Error: leaf label does not match, should be %d, %d provided", GlobalPosMap[ORAM.BEnd_PAddr][ORAML-1:0], ORAM.CurrentLeaf);
+           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0] != ORAM.core.CurrentLeaf) begin
+               $display("Error: leaf label does not match, should be %d, %d provided", GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0], ORAM.core.CurrentLeaf);
                $finish;              
            end
               
-           GlobalPosMap[ORAM.BEnd_PAddr] <= ORAM.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.RemappedLeaf};
+           GlobalPosMap[ORAM.core.BEnd_PAddr] <= ORAM.core.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.core.RemappedLeaf};
        end 
     endtask    
 
@@ -311,7 +311,7 @@ module testUORAM;
 	end
 
     always @(posedge Clock) begin
-        if (!Reset && CmdInReady && CycleCount > INITIAL_DELAY) begin
+        if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
                 #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
@@ -345,7 +345,7 @@ module testUORAM;
 	end
 	
 	always @(posedge Clock) begin    
-		if (ORAM.BEnd_CmdValid && ORAM.BEnd_CmdReady) begin
+		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
 		   Check_Leaf;
 		end
 	end

@@ -694,7 +694,7 @@ begin
    if (!RESET_N)
    begin
       bist_index <= 0;
-      init_done <= 0;
+      init_done <= 1; // CF: disable initialization
       bist_state <= INIT_STATE;
    end
    else
