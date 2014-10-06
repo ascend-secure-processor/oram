@@ -41,12 +41,14 @@ module IntegrityVerifier(
 
 	`include "PathORAM.vh"
 	`include "CommandsLocal.vh"
+	`include "DMLocal.vh"
 	`include "IVLocal.vh"
 	
 	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, FEDWidth) * `divceil(FEDWidth, 8),
 							FullDigestWidth = 		224,
-							MFWidth =				`log2(MAC_FEDChunks);
-							
+							MFWidth =				`log2(MAC_FEDChunks),
+							DMSWidth = 				`divceil(FEDWidth, 8);
+		
 	localparam				STWidth =				4,
 							ST_Idle =				4'd0,
 							ST_WriteMI =			4'd1,
@@ -55,15 +57,16 @@ module IntegrityVerifier(
 							ST_WriteLWait =			4'd4,
 							ST_WriteCommand =		4'd5,
 							ST_ConvertLeafWait =	4'd6,
-							ST_ReadCommand =		4'd7,
-							ST_ReadMI =				4'd8,
-							ST_ReadP =				4'd9,
-							ST_ReadMO =				4'd10,
-							ST_ReadCheck =			4'd11,
-							ST_ReadFETransfer =		4'd12,
-							ST_ReadTurnaround =		4'd13,
-							ST_Error =				4'd14;
-			
+							ST_PreStoreWriteData =	4'd7,
+							ST_ReadCommand =		4'd8,
+							ST_ReadMI =				4'd9,
+							ST_ReadP =				4'd10,
+							ST_ReadMO =				4'd11,
+							ST_ReadCheck =			4'd12,
+							ST_ReadFETransfer =		4'd13,
+							ST_ReadTurnaround =		4'd14,
+							ST_Error =				4'd15;
+	
 	localparam				STAESWidth =			3,
 							ST_AES_Idle =			3'd0,
 							ST_AES_Start1 =			3'd1,
@@ -128,8 +131,12 @@ module IntegrityVerifier(
 	wire					ERROR_IV;
 	
 	wire					RdRmv_Terminal, CommandIsReadRmv;
+	wire					CommandIsUpdate, Update_Terminal;
 	
 	wire					FECommandValid_Final, FECommandReady_Final;
+	
+	wire	[DMSWidth-1:0]	FEWMask_Chunk;
+	wire	[FEDWidth-1:0]	FEWMask_ChunkWide;
 	
 	wire	[BECMDWidth-1:0] Command_Int;
 	wire	[ORAMU-1:0]		PAddr_Int;
@@ -141,12 +148,14 @@ module IntegrityVerifier(
 	wire	[AESEntropy-1:0] FECurrentCounter_Int, FERemappedCounter_Int;
 	wire					Command_IntValid, Command_IntReady;
 
-	wire					CSIdle, CSReadMI, CSMI, CSWriteP, CSWriteMO, CSWriteCommand, 
+	wire					CSIdle, CSReadMI, CSMI, CSWriteP, CSWriteMO, CSWriteCommand, CSPreStoreUpdate,
 							CSReadCommand, CSReadP, CSReadMO, CSReadCheck, CSReadFETransfer, CSReadTurnaround;	
 	
 	wire					SMI_Terminal, SP_Terminal, SMO_Terminal;
 	
 	wire					CommandTransfer, FECommandTransfer, BELoadTransfer, FELoadTransfer;
+	
+	wire					BEPayloadWriting, BEPayloadReading;
 	
 	// PRF logic
 	
@@ -168,7 +177,7 @@ module IntegrityVerifier(
 	wire	[FEDWidth-1:0]	FEStoreMAC;
 	wire	[MFWidth-1:0]	SMOCount;
 	
-	wire					BEStoreTransfer, HashTransfer;
+	wire					FEStoreTransfer, BEStoreTransfer, HashTransfer;
 
 	wire	[FEDWidth-1:0]	StoreSourceData;
 	wire					StoreSourceValid;
@@ -184,6 +193,8 @@ module IntegrityVerifier(
 	
 	wire					LDD_WE;
 	wire	[BFPWidth-1:0]	LDD_Addr;
+	
+	wire	[FEDWidth-1:0]	MaskedData, LDD_WData;
 	
 	wire					ReStoringLoadData;
 	
@@ -241,14 +252,15 @@ module IntegrityVerifier(
 	//--------------------------------------------------------------------------
 	
 	assign	FECommandValid_Final =					(CSIdle && FECommandValid) || CSReadTurnaround;
-	assign	FECommandReady =						CSIdle && FECommandReady_Final;
+	assign	FECommandReady =						 CSIdle && FECommandReady_Final;
 	
-	assign	FECommand_Final =						(	FECommand == BECMD_Read ||
-														FECommand == BECMD_Update) ? 	BECMD_ReadRmv : 
-													(	CSReadTurnaround) ? 			BECMD_Append : 
-																						FECommand;
-	assign	FEPAddr_Final =							(	CSReadTurnaround) ? 			FEShadowPAddr :
-																						FEPAddr;
+	assign	FECommand_Final =						(	CSIdle && 
+														(	FECommand == BECMD_Read ||
+															FECommand == BECMD_Update)) ? 	BECMD_ReadRmv : 
+													(	CSReadTurnaround) ? 				BECMD_Append : 
+																							FECommand; // Append -> Append, ReadRmv -> ReadRmv
+	assign	FEPAddr_Final =							(	CSReadTurnaround) ? 				FEShadowPAddr :
+																							FEPAddr;
 							
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU),
 							.BWLatency(				1))
@@ -260,12 +272,6 @@ module IntegrityVerifier(
 							.OutData(				{Command_Int,		PAddr_Int}),
 							.OutSend(				Command_IntValid),
 							.OutReady(				Command_IntReady));
-
-							// TODO move
-	localparam	DMSWidth = `divceil(FEDWidth, 8);
-	
-	wire	[DMSWidth-1:0]	FEWMask_Chunk;
-	wire	[FEDWidth-1:0]	FEWMask_ChunkWide;
 	
 	ShiftRegister #(		.PWidth(				DMWidth),
 							.Reverse(				1),
@@ -273,7 +279,7 @@ module IntegrityVerifier(
 				mask_shift(	.Clock(					Clock), 
 							.Reset(					1'b0), 
 							.Load(					CSIdle && FECommandValid_Final && FECommandReady_Final),
-							.Enable(				), 
+							.Enable(				CommandIsUpdate && BEPayloadReading), 
 							.PIn(					FEWMask),
 							.SIn(					{DMSWidth{1'bx}}),
 							.SOut(					FEWMask_Chunk));
@@ -282,15 +288,7 @@ module IntegrityVerifier(
 	genvar i;
 	generate for (i = 0; i < DMSWidth; i = i + 1) begin:MaskSplit
 		assign	FEWMask_ChunkWide[(i+1)*8-1:i*8] = (FEWMask_Chunk[i]) ? 8'hff : 8'h00;
-	end endgenerate
-	
-	Register #(				.Width(					DMWidth))
-				mask_reg(	.Clock(					Clock),
-							.Reset(					Reset),
-							.Set(					1'b0),
-							.Enable(				),
-							.In(					),
-							.Out(					FEWMask_Int));							
+	end endgenerate					
 							
 	Register #(				.Width(					ORAMU + AESEntropy*2))
 				shdw_reg(	.Clock(					Clock),
@@ -300,11 +298,8 @@ module IntegrityVerifier(
 							.In(					{FEPAddr,		FECurrentCounter,		FERemappedCounter}),
 							.Out(					{FEShadowPAddr, FECurrentCounter_Int, 	FERemappedCounter_Int}));		
 	
-	CommandIsUpdate
-	Update_Terminal
-	
 	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && CommandIsReadRmv;
-	assign	Update_Terminal =						CSReadFETransfer && SP_Terminal && CommandIsUpdate;
+	assign	Update_Terminal =						CSReadCheck && 		SP_Terminal && CommandIsUpdate;
 	Register1b rdr_r(	Clock, Reset || RdRmv_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_ReadRmv, CommandIsReadRmv);
 	Register1b u_r(		Clock, Reset || Update_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_Update, CommandIsUpdate);
 	
@@ -319,13 +314,14 @@ module IntegrityVerifier(
 	assign	FECommandTransfer =						FECommandValid_Final && FECommandReady_Final;
 	assign	CommandTransfer =						BECommandValid && BECommandReady;
 	
-	FEStoreTransfer
-	
 	assign	FEStoreTransfer =						FEStoreValid && FEStoreReady;
 	assign	BEStoreTransfer =						BEStoreValid && BEStoreReady;	
 	
 	assign	FELoadTransfer =						FELoadValid && FELoadReady;
 	assign	BELoadTransfer =						BELoadValid && BELoadReady;
+	
+	assign	BEPayloadWriting =						CSWriteP && BEStoreTransfer;
+	assign	BEPayloadReading =						CSReadP && BELoadTransfer;
 	
 	assign	CSIdle =								CS == ST_Idle; 
 	assign	CSReadMI =								CS == ST_ReadMI;
@@ -345,9 +341,6 @@ module IntegrityVerifier(
 		if (Reset) CS <= 							ST_Idle;
 		else CS <= 									NS;
 	end
-
-	CSPreStoreUpdate
-	ST_PreStoreWriteData // TODO
 	
 	always @( * ) begin
 		NS = 										CS;
@@ -511,10 +504,10 @@ module IntegrityVerifier(
 	//--------------------------------------------------------------------------
 	//	Move Data from FE<->BE, load hash engine with data
 	//--------------------------------------------------------------------------
-	 
+
 	assign	CSPTransfer =							(CSPreStoreUpdate && FEStoreTransfer) ||
-													(CSWriteP && BEStoreTransfer) || 
-													(CSReadP && BELoadTransfer) ||
+													BEPayloadWriting || 
+													BEPayloadReading ||
 													(CSReadFETransfer && FELoadTransfer);
 	
 	CountAlarm  #(  		.Threshold(             BlkSize_FEDChunks))
@@ -581,7 +574,7 @@ module IntegrityVerifier(
 	Register1b ld_m(Clock, Reset || CSIdle, CSReadP, ReStoringLoadData);
 	
 	assign	LDD_WE =								(CSPreStoreUpdate && FEStoreTransfer) || // update case
-													(CSReadP && BELoadTransfer); // read rmv case
+													BEPayloadReading; // read rmv case
 	
 	assign	MaskedData =							(~FEWMask_ChunkWide & BELoadData) | (FEWMask_ChunkWide & FELoadData); // a bunch of 1b muxxes for the mask
 	
@@ -589,8 +582,6 @@ module IntegrityVerifier(
 													(CommandIsUpdate)	?	MaskedData : // apply the mask
 																			BELoadData;
 
-	wire	[FEDWidth-1:0]	MaskedData, LDD_WData; // TODO move
-	
 	SDPRAM			 #(			.DWidth(			FEDWidth),
 								.AWidth(			BFPWidth),
 								.RLatency(			0))

@@ -4,12 +4,14 @@ module testUORAM;
 	
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
+	
+	`include "DMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "BucketLocal.vh" 
 	`include "PLBLocal.vh" 
 	
-    wire 						Clock, AESClock; 
+    wire 						Clock; 
     wire 						Reset; 
     reg  						CmdInValid, DataInValid, ReturnDataReady;
     wire 						CmdInReady, DataInReady, ReturnDataValid;
@@ -42,6 +44,7 @@ module testUORAM;
                             // interface with network			
                             .Cmd(				    CmdIn),
                             .PAddr(					AddrIn),
+							.WMask(					{DMWidth{1'b1}}), // TODO test more patterns
                             .CmdValid(			    CmdInValid),
                             .CmdReady(			    CmdInReady),
                             .DataInReady(           DataInReady), 
@@ -63,7 +66,7 @@ module testUORAM;
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
-							.Mode_TrafficGen(		1'b1));
+							.Mode_TrafficGen(		1'b0));
 					
 	//--------------------------------------------------------------------------
 
@@ -110,18 +113,7 @@ module testUORAM;
 							.OutData(				DRAMReadAddr),
 							.OutSend(				DRAMReadAddrValid),
 							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
-	/*
-	FIFORAM	#(				.Width(					DDRAWidth),
-							.Buffering(				500))
-		wr_addr(			.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DDR3SDRAM_Address),
-							.InValid(				DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady),
-							.InAccept(				),
-							.OutData(				DRAMWriteAddr),
-							.OutSend(				DRAMWriteAddrValid),
-							.OutReady(				DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide));
-	*/
+
 	always @(posedge Clock) begin
 		if (DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady) begin
 			$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
@@ -141,9 +133,9 @@ module testUORAM;
 		end
 	end
 	
-	localparam   InBufDepth = 6,
-                OutInitLat = 30,
-                OutBandWidth = 57;
+	localparam				InBufDepth = 6,
+							OutInitLat = 30,
+							OutBandWidth = 57;
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
@@ -164,7 +156,7 @@ module testUORAM;
                             .CommandReady(			DDR3SDRAM_CommandReady),
                             
                             .DataIn(				DDR3SDRAM_WriteData_Wide),
-                            .DataInMask(			DDR3SDRAM_WriteMask), // TODO: this may get mis-aligned because of the shifters, but we won't change it anyway
+                            .DataInMask(			8'h00), // TODO: this may get mis-aligned because of the shifters, but we won't change it anyway
                             .DataInValid(			DDR3SDRAM_WriteValid_Wide),
                             .DataInReady(			DDR3SDRAM_WriteReady_Wide),
                             
@@ -183,14 +175,19 @@ module testUORAM;
 							.OutSend(				DDR3SDRAM_ReadValid_Wide),
 							.OutReady(				DDR3SDRAM_ReadReady_Wide));
 								
-	
+	`ifdef GATE_SIM_POWER
+	localparam  				NN = 15; // so slow ... run for a few accesses only
+	`else
 	localparam  				NN = 200;
+	`endif
+	
 	localparam					nn = 5;
 	localparam					nn2 = nn * 29;	
 
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;
+		`ifdef GATE_SIM_POWER $vcdpluson; `endif		
     end
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
@@ -198,11 +195,9 @@ module testUORAM;
 
     assign Reset = CycleCount < 5;
   
-    localparam  Freq =	200_000_000,
-				FastFreq = 300_000_000;
-    localparam   Cycle = 1000000000/Freq;	
-    ClockSource #(Freq) ClockF200Gen(1'b1, Clock);
-	ClockSource #(FastFreq) ClockF300Gen(1'b1, AESClock);
+    localparam  real 	Freq =	950_000_000;
+    localparam  real 	Cycle = 1000000000/Freq;	
+    ClockSource #(Freq) ClockGen(1'b1, Clock);
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
@@ -219,10 +214,12 @@ module testUORAM;
                 CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
                 addr);
-            #(Cycle + Cycle / 2) CmdInValid <= 0;
+            #(Cycle) CmdInValid <= 0;
         end
     endtask
     
+	/*
+	
     task Check_Leaf;
        begin
            $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
@@ -248,12 +245,14 @@ module testUORAM;
            GlobalPosMap[ORAM.core.BEnd_PAddr] <= ORAM.core.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.core.RemappedLeaf};
        end 
     endtask    
+	
+	*/
 
 	integer i; 
 	task Handle_ProgStore;
 		begin
 			#(Cycle);
-			#(Cycle / 2.0) DataInValid <= 1;
+			DataInValid <= 1;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				DataIn = AddrIn + i;
 				while (!DataInReady)  #(Cycle);
@@ -295,7 +294,6 @@ module testUORAM;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
 	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-	//assign	Op = {TestCount[0], 1'b0};
 	
 	initial begin
 		TestCount <= 0;
@@ -310,21 +308,20 @@ module testUORAM;
 		end
 	end
 
-    always @(posedge Clock) begin
+    always @(negedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
-                #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);		
 				TestCount <= TestCount + 1;
-				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	   
-                	   
+				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	    
 				if (AddrRand > NumValidBlock)
 					$finish;   
             end
             else begin
                 $display("ALL TESTS PASSED!");
-                $finish;  
+                $finish;
+				`ifdef GATE_SIM_POWER $vcdplusclose; `endif
             end
         end
     end
@@ -344,10 +341,12 @@ module testUORAM;
 		end
 	end
 	
+	/*
 	always @(posedge Clock) begin    
 		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
 		   Check_Leaf;
 		end
 	end
-       
+	*/
+	
 endmodule

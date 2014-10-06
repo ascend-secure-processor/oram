@@ -52,6 +52,8 @@ module TinyORAMCore(
 	
 	`include "PathORAM.vh" 
 	`include "UORAM.vh" 
+	
+	`include "DMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"

@@ -27,7 +27,8 @@ module Frontend
 
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
-
+	
+	`include "DMLocal.vh"
     `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
@@ -41,6 +42,7 @@ module Frontend
     input CmdInValid;
     input [BECMDWidth-1:0] CmdIn;
     input [ORAMU-1:0] ProgAddrIn;
+	input [DMWidth-1:0] WMaskIn;
 
     // receive data from network
     output DataInReady;

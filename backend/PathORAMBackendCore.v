@@ -232,14 +232,13 @@ module PathORAMBackendCore(
 				$finish;
 			end
 
-	`ifdef SIMULATION_VERBOSE_BE
 			if (CS_Delayed != CS) begin
 				if (CSAccess)
-					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, AccessIsDummy, Command_Internal, AddrGen_Leaf);
+					$display("[%m @ %t] Backend: start access, dummy = %b, command = %x, leaf = %x", $time, Stash_AccessIsDummy, Command_Internal, AddrGen_Leaf);
 				if (CSAppend)
 					$display("[%m @ %t] Backend: start append", $time);
 			end
-
+	`ifdef SIMULATION_VERBOSE_BE
 			if (DRAMCommandValid & DRAMCommandReady) begin
 				$display("[%m @ %t] DRAM command write? = %b, addr = %d (hex = %x)", $time, DRAMCommand == DDR3CMD_Write, DRAMCommandAddress, DRAMCommandAddress);
 			end

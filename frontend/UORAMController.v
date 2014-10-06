@@ -27,7 +27,8 @@ module UORAMController
 
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
-
+	
+	`include "DMLocal.vh"
     `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
