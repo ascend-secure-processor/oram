@@ -18,7 +18,7 @@ module UORAMDataPath
     StoreDataReady, StoreDataValid, StoreData,
     LoadDataReady, LoadDataValid, LoadData,
 
-	DumbRequest // to satisfy microblaze
+	DumbRequest, FakeAccess // to satisfy microblaze
 );
 
 	`include "PathORAM.vh"
@@ -68,6 +68,7 @@ module UORAMDataPath
     input  [FEDWidth-1:0] LoadData;
 
     input   DumbRequest;
+	output	FakeAccess;
 
     // PPPEvictBuffer
 	(* mark_debug = "TRUE" *) wire PPPEvictDataValid_Reg, PPPEvictDataReady;
@@ -168,15 +169,17 @@ module UORAMDataPath
                                     .Out(       ExpectingProgStore));
 
 	// -------------- read non-existent block ----------------
-	(* mark_debug = "FALSE" *) wire	FakeAccess, FakeStoring, FakeLoading, FakeStoreEnd, FakeLoadEnd;
+	(* mark_debug = "FALSE" *) wire	FakeStoring, FakeLoading, FakeStoreEnd, FakeLoadEnd;
 	Register #(.Width(1))
         FakeAccessReg 	(   .Clock(     Clock),
-							.Reset(     Reset || (!FakeStoring && !FakeLoading)),
+							.Reset(     Reset || (!DumbRequest && !FakeStoring && !FakeLoading)),	
 							.Set(       1'b0),
 							.Enable(    SwitchReq),
 							.In(        DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
-							.Out(       FakeAccess));
-
+							.Out(       FakeAccess));		
+		// a fake access stores to backend and also returns data to the client
+		// reset after both are done (but exclude the start case)
+							
 	CountAlarm #(		.Threshold(				FEORAMBChunks))
 		FakeProgStCtr (	.Clock(					Clock),
 						.Reset(					Reset),
@@ -215,15 +218,15 @@ module UORAMDataPath
 
     // if ExpectingProgStore, LLC ==> backend; otherwise PLB ==> backend
     assign StoreDataValid = FakeStoring || (ExpectingProgStore ? DataInValid : EvictFunnelOutValid);
-    assign StoreData = FakeStoring ? FakeData :	// TODO: fake stuff
+    assign StoreData = FakeStoring ? FakeData :	// NOTE: fake stuff
 						ExpectingProgStore ? DataIn : EvictFunnelDOut;
     assign DataInReady = ExpectingProgStore && StoreDataReady;
 
     // if ExpectingDataBlock, backend ==> LLC; if ExpectingPosMapBlock, backend ==> PLB
-    assign LoadDataReady = ExpectingDataBlock ? ReturnDataReady : RefillFunnelReady;    // PLB refill is always ready
+    assign LoadDataReady = (ExpectingDataBlock && ReturnDataReady) || (ExpectingPosMapBlock && RefillFunnelReady);    // PLB refill is always ready
     assign RefillFunnelValid = ExpectingPosMapBlock && LoadDataValid;
     assign ReturnDataValid = FakeLoading || (ExpectingDataBlock && LoadDataValid);
-    assign ReturnData = FakeLoading ? FakeData :	// TODO: fake stuff
+    assign ReturnData = FakeLoading ? FakeData :	// NOTE: fake stuff
 							LoadData;
 
 `ifdef SIMULATION

@@ -121,7 +121,7 @@ module UORAMController
     (* mark_debug = "TRUE" *) reg [ORAMU-1:0] AddrQ [Recursion-1:0];
 
     (* mark_debug = "TRUE" *) wire Preparing, Accessing;
-    (* mark_debug = "TRUE" *) wire RefillStarted, ExpectingProgramData;
+    (* mark_debug = "TRUE" *) wire RefillStarted, ExpectingProgramData, FakeAccess;
 
     // ================================== PosMapPLB ============================
     (* mark_debug = "TRUE" *) wire PPPCmdReady, PPPCmdValid;
@@ -179,14 +179,15 @@ module UORAMController
 						// But the hack we add to disable PLB require CacheRead to entries that should've missed but in fact hit
     assign PPPAddrIn = PPPRefill ? AddrQ[QDepth] : AddrQ[QDepth];
 
-    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady;
+    assign CmdInReady = !Preparing && !Accessing && !ExpectingProgramData && PPPCmdReady && !FakeAccess;
+			// The first four are straight-forward. !FakeAccess has to be there because it is the counterpart of ExpectingProgramData
     assign PPPOutReady = Preparing ? PPPMiss :
                             ((PPPMiss && !PPPEvict) || (PPPUnInitialized && QDepth > 0) || CmdOutReady);
             // four cases:
             // (1) PLB miss in the prepare stage,
             // (2) refill but no evict, must have PPPMiss there, or it will misfire on Hit & UnInit
             // (3) uninitialized PosMap block
-            // (4) request send to backend
+            // (4) request sent to backend
     // =============================================================================
 
     // ============================== Cmd to Backend ==============================
@@ -297,6 +298,7 @@ module UORAMController
                         .Cmd(               LastCmd),
 						.DumbRequest(		InitRequest),		// stupid read before write
                         .ExpectingProgramData(  ExpectingProgramData),
+						.FakeAccess(		FakeAccess),
 
                         // IO interface with network
                         .DataInReady(           DataInReady_Internal),
