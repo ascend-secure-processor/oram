@@ -17,7 +17,7 @@
 module Frontend
 (
     Clock, Reset,
-    CmdInReady, CmdInValid, CmdIn, ProgAddrIn,
+    CmdInReady, CmdInValid, CmdIn, ProgAddrIn, WMaskIn,
     DataInReady, DataInValid, DataIn,
     ReturnDataReady, ReturnDataValid, ReturnData,
     CmdOutReady, CmdOutValid, CmdOut, AddrOut, OldLeaf, NewLeaf,
@@ -72,6 +72,7 @@ module Frontend
 	wire CmdOutReady_Pre;
     wire CmdOutValid_Pre;
     wire [BECMDWidth-1:0] CmdOut_Pre;
+	wire [DMWidth-1:0] WMask_Int;
     wire [ORAMU-1:0] AddrOut_Pre;
     wire [LeafOutWidth-1:0] OldLeaf_Pre, NewLeaf_Pre;
 
@@ -99,6 +100,7 @@ module Frontend
 							.CmdInValid(			CmdInValid), 
 							.CmdIn(					CmdIn), 
 							.ProgAddrIn(			ProgAddrIn),
+							.WMaskIn(				WMaskIn),
 							.DataInReady(			DataInReady), 
 							.DataInValid(			DataInValid), 
 							.DataIn(				DataIn),                                    
@@ -109,7 +111,8 @@ module Frontend
 							.CmdOutReady(			CmdOutReady_Pre), 
 							.CmdOutValid(			CmdOutValid_Pre), 
 							.CmdOut(				CmdOut_Pre), 
-							.AddrOut(				AddrOut_Pre), 
+							.AddrOut(				AddrOut_Pre),
+							.WMaskOut(				WMask_Int),
 							.OldLeaf(				OldLeaf_Pre), 
 							.NewLeaf(				NewLeaf_Pre), 
 							.StoreDataReady(		StoreDataReady_Pre), 
@@ -128,7 +131,8 @@ module Frontend
 							.Reset(					Reset),
 
 							.FECommand(				CmdOut_Pre), 
-							.FEPAddr(				AddrOut_Pre), 
+							.FEPAddr(				AddrOut_Pre),
+							.FEWMask(				WMask_Int),
 							.FECurrentCounter(		OldLeaf_Pre),
 							.FERemappedCounter(		NewLeaf_Pre),
 							.FECommandValid(		CmdOutValid_Pre), 

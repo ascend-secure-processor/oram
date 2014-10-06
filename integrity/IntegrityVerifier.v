@@ -7,12 +7,20 @@
 
 //==============================================================================
 //	Module:		IntegrityVerifier
-//	Desc:		The O(1) integrity verification / PMMAC scheme.
+//	Desc:		The O(1) integrity verification / PMMAC scheme.  This module 
+//				also implements write masks.  From UORAMController, this module 
+//				performs the following conversion for commands:
+//
+//				From UORAM:		To Backend:			Notes:
+//				Update			ReadRmv + Append	ReadRmv merges write data with mask
+//				Append			Append
+//				Read			ReadRmv + Append	ReadRmv checks & updates hash
+//				ReadRmv			ReadRmv
 //==============================================================================
 module IntegrityVerifier(
 	Clock, Reset,
 
-	FECommand, FEPAddr, FECurrentCounter, FERemappedCounter,
+	FECommand, FEPAddr, FEWMask, FECurrentCounter, FERemappedCounter,
 	FECommandValid, FECommandReady,
 	FELoadData, 
 	FELoadValid, FELoadReady,
@@ -46,7 +54,7 @@ module IntegrityVerifier(
 							ST_WriteMO =			4'd3,
 							ST_WriteLWait =			4'd4,
 							ST_WriteCommand =		4'd5,
-							ST_ReadLWait =			4'd6,
+							ST_ConvertLeafWait =	4'd6,
 							ST_ReadCommand =		4'd7,
 							ST_ReadMI =				4'd8,
 							ST_ReadP =				4'd9,
@@ -76,6 +84,7 @@ module IntegrityVerifier(
 
 	input	[BECMDWidth-1:0] FECommand;
 	input	[ORAMU-1:0]		FEPAddr;
+	input	[DMWidth-1:0]	FEWMask;
 	input	[AESEntropy-1:0] FECurrentCounter;
 	input	[AESEntropy-1:0] FERemappedCounter;
 	input					FECommandValid;
@@ -118,7 +127,7 @@ module IntegrityVerifier(
 	
 	wire					ERROR_IV;
 	
-	wire					RdRmv_Terminal, TrueReadRmv;
+	wire					RdRmv_Terminal, CommandIsReadRmv;
 	
 	wire					FECommandValid_Final, FECommandReady_Final;
 	
@@ -159,7 +168,7 @@ module IntegrityVerifier(
 	wire	[FEDWidth-1:0]	FEStoreMAC;
 	wire	[MFWidth-1:0]	SMOCount;
 	
-	wire					StoreTransfer, HashTransfer;
+	wire					BEStoreTransfer, HashTransfer;
 
 	wire	[FEDWidth-1:0]	StoreSourceData;
 	wire					StoreSourceValid;
@@ -176,7 +185,7 @@ module IntegrityVerifier(
 	wire					LDD_WE;
 	wire	[BFPWidth-1:0]	LDD_Addr;
 	
-	wire					StoringLoadMode;
+	wire					ReStoringLoadData;
 	
 	// Hash engine
 	
@@ -214,7 +223,7 @@ module IntegrityVerifier(
 			end
 			
 			if (Command_IntValid && Command_IntReady) begin
-				$display("[IV] Command: %x (true readrmv? %b) addr=%x c=%d c'=%d", Command_Int, TrueReadRmv, PAddr_Int, FECurrentCounter_Int, FERemappedCounter_Int);
+				$display("[IV] Command: %x (true readrmv? %b) addr=%x c=%d c'=%d", Command_Int, CommandIsReadRmv, PAddr_Int, FECurrentCounter_Int, FERemappedCounter_Int);
 			end
 
 			if (BEStoreValid && BEStoreReady) begin
@@ -234,14 +243,12 @@ module IntegrityVerifier(
 	assign	FECommandValid_Final =					(CSIdle && FECommandValid) || CSReadTurnaround;
 	assign	FECommandReady =						CSIdle && FECommandReady_Final;
 	
-	assign	FECommand_Final =						(FECommand == BECMD_Read) ? BECMD_ReadRmv : 
-													(CSReadTurnaround) ? 		BECMD_Append : 
-																				FECommand;
-	assign	FEPAddr_Final =							(CSReadTurnaround) ? 		FEShadowPAddr :
-																				FEPAddr;
-							
-	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && TrueReadRmv;
-	Register1b rdr_r(Clock, Reset || RdRmv_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_ReadRmv, TrueReadRmv);
+	assign	FECommand_Final =						(	FECommand == BECMD_Read ||
+														FECommand == BECMD_Update) ? 	BECMD_ReadRmv : 
+													(	CSReadTurnaround) ? 			BECMD_Append : 
+																						FECommand;
+	assign	FEPAddr_Final =							(	CSReadTurnaround) ? 			FEShadowPAddr :
+																						FEPAddr;
 							
 	FIFORegister #(			.Width(					BECMDWidth + ORAMU),
 							.BWLatency(				1))
@@ -254,6 +261,37 @@ module IntegrityVerifier(
 							.OutSend(				Command_IntValid),
 							.OutReady(				Command_IntReady));
 
+							// TODO move
+	localparam	DMSWidth = `divceil(FEDWidth, 8);
+	
+	wire	[DMSWidth-1:0]	FEWMask_Chunk;
+	wire	[FEDWidth-1:0]	FEWMask_ChunkWide;
+	
+	ShiftRegister #(		.PWidth(				DMWidth),
+							.Reverse(				1),
+							.SWidth(				DMSWidth))
+				mask_shift(	.Clock(					Clock), 
+							.Reset(					1'b0), 
+							.Load(					CSIdle && FECommandValid_Final && FECommandReady_Final),
+							.Enable(				), 
+							.PIn(					FEWMask),
+							.SIn(					{DMSWidth{1'bx}}),
+							.SOut(					FEWMask_Chunk));
+							
+	// We support byte write masks
+	genvar i;
+	generate for (i = 0; i < DMSWidth; i = i + 1) begin:MaskSplit
+		assign	FEWMask_ChunkWide[(i+1)*8-1:i*8] = (FEWMask_Chunk[i]) ? 8'hff : 8'h00;
+	end endgenerate
+	
+	Register #(				.Width(					DMWidth))
+				mask_reg(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				),
+							.In(					),
+							.Out(					FEWMask_Int));							
+							
 	Register #(				.Width(					ORAMU + AESEntropy*2))
 				shdw_reg(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -261,6 +299,14 @@ module IntegrityVerifier(
 							.Enable(				CSIdle && FECommandValid_Final && FECommandReady_Final),
 							.In(					{FEPAddr,		FECurrentCounter,		FERemappedCounter}),
 							.Out(					{FEShadowPAddr, FECurrentCounter_Int, 	FERemappedCounter_Int}));		
+	
+	CommandIsUpdate
+	Update_Terminal
+	
+	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && CommandIsReadRmv;
+	assign	Update_Terminal =						CSReadFETransfer && SP_Terminal && CommandIsUpdate;
+	Register1b rdr_r(	Clock, Reset || RdRmv_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_ReadRmv, CommandIsReadRmv);
+	Register1b u_r(		Clock, Reset || Update_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_Update, CommandIsUpdate);
 	
 	assign	BECommand =								Command_Int;
 	assign	BEPAddr =								PAddr_Int;
@@ -273,14 +319,19 @@ module IntegrityVerifier(
 	assign	FECommandTransfer =						FECommandValid_Final && FECommandReady_Final;
 	assign	CommandTransfer =						BECommandValid && BECommandReady;
 	
-	assign	StoreTransfer =							BEStoreValid && BEStoreReady;	
-	assign	BELoadTransfer =						BELoadValid && BELoadReady;
+	FEStoreTransfer
+	
+	assign	FEStoreTransfer =						FEStoreValid && FEStoreReady;
+	assign	BEStoreTransfer =						BEStoreValid && BEStoreReady;	
+	
 	assign	FELoadTransfer =						FELoadValid && FELoadReady;
+	assign	BELoadTransfer =						BELoadValid && BELoadReady;
 	
 	assign	CSIdle =								CS == ST_Idle; 
 	assign	CSReadMI =								CS == ST_ReadMI;
 	assign	CSMI =									CS == ST_WriteMI || CSReadMI;
 	assign	CSWriteP =								CS == ST_WriteP;
+	assign	CSPreStoreUpdate =						CS == ST_PreStoreWriteData;
 	assign	CSReadP =								CS == ST_ReadP;
 	assign	CSReadMO =								CS == ST_ReadMO;
 	assign	CSWriteMO =								CS == ST_WriteMO;
@@ -295,12 +346,14 @@ module IntegrityVerifier(
 		else CS <= 									NS;
 	end
 
+	CSPreStoreUpdate
+	ST_PreStoreWriteData // TODO
+	
 	always @( * ) begin
 		NS = 										CS;
 		case (CS)
 			ST_Idle :
-				if (		Command_IntValid && (	Command_Int == BECMD_Update || 
-													Command_Int == BECMD_Append))
+				if (		Command_IntValid && Command_Int == BECMD_Append)
 					NS =							ST_WriteMI;
 				else if (	Command_IntValid)
 					NS =							ST_ReadMI;
@@ -327,12 +380,17 @@ module IntegrityVerifier(
 			//
 			ST_ReadMI :
 				if (SMI_Terminal)
-					NS =							ST_ReadLWait;
-			ST_ReadLWait :
+					NS =							ST_ConvertLeafWait;
+			ST_ConvertLeafWait :
 				if (CSAESDone)
 					NS =							ST_ReadCommand;		
 			ST_ReadCommand :
-				if (CommandTransfer)
+				if (		CommandTransfer && CommandIsUpdate)
+					NS =							ST_PreStoreWriteData;
+				else if (	CommandTransfer)
+					NS =							ST_ReadP;
+			ST_PreStoreWriteData :
+				if (SP_Terminal)
 					NS =							ST_ReadP;
 			ST_ReadP :
 				if (SP_Terminal)
@@ -340,9 +398,11 @@ module IntegrityVerifier(
 			ST_ReadMO :
 				if (SMO_Terminal)
 					NS =							ST_ReadCheck;
-			ST_ReadCheck :
+			ST_ReadCheck : // check the MAC
 				if (ERROR_IV)
 					NS =							ST_Error;
+				else if (MACCheckComplete && CommandIsUpdate)
+					NS =							ST_ReadTurnaround;
 				else if (MACCheckComplete)
 					NS =							ST_ReadFETransfer;
 			ST_ReadFETransfer :
@@ -452,7 +512,8 @@ module IntegrityVerifier(
 	//	Move Data from FE<->BE, load hash engine with data
 	//--------------------------------------------------------------------------
 	 
-	assign	CSPTransfer =							(CSWriteP && StoreTransfer) || 
+	assign	CSPTransfer =							(CSPreStoreUpdate && FEStoreTransfer) ||
+													(CSWriteP && BEStoreTransfer) || 
 													(CSReadP && BELoadTransfer) ||
 													(CSReadFETransfer && FELoadTransfer);
 	
@@ -467,7 +528,7 @@ module IntegrityVerifier(
 	//	Rd/Wr hash from/to data stream
 	//--------------------------------------------------------------------------
 	
-	assign	CSMOTransfer =							(CSWriteMO && StoreTransfer) || 
+	assign	CSMOTransfer =							(CSWriteMO && BEStoreTransfer) || 
 													(CSReadMO && BELoadTransfer);	
 			
 	CountAlarm  #(  		.Threshold(             MAC_FEDChunks))
@@ -481,14 +542,15 @@ module IntegrityVerifier(
 	//	Store Path
 	//--------------------------------------------------------------------------
 	
-	assign	StoreSourceData =						(StoringLoadMode) ? FELoadData : FEStoreData;
-	assign	StoreSourceValid = 						FEStoreValid || StoringLoadMode;
+	assign	StoreSourceData =						(ReStoringLoadData) ? FELoadData : FEStoreData;
+	assign	StoreSourceValid = 						FEStoreValid || ReStoringLoadData;
 	
 	assign	BEStoreData =							(CSWriteP) ? StoreSourceData : FEStoreMAC;
 	assign	BEStoreValid =							(CSWriteP 	&& StoreSourceValid && HashDataInReady) ||
 													(CSWriteMO 	&& HashOutValid);
 
-	assign	FEStoreReady =							 CSWriteP 	&& BEStoreReady && HashDataInReady && ~StoringLoadMode;
+	assign	FEStoreReady =							 CSPreStoreUpdate || // update case
+													(CSWriteP && BEStoreReady && HashDataInReady && ~ReStoringLoadData); // append case
 	
 	Mux	#(.Width(FEDWidth), .NPorts(MAC_FEDChunks), .SelectCode(0)) SMO_mux(SMOCount, MACOut_Padded, FEStoreMAC);
 							
@@ -516,29 +578,39 @@ module IntegrityVerifier(
 	assign	MACCheckComplete =						CSReadCheck && LoadMACValid && HashOutValid;
 	assign	ERROR_IV =								MACCheckComplete && (LoadMAC != MACOut);
 	
-	Register1b ld_m(Clock, Reset || CSIdle, CSReadP, StoringLoadMode);
+	Register1b ld_m(Clock, Reset || CSIdle, CSReadP, ReStoringLoadData);
 	
-	assign	LDD_WE =								CSReadP && BELoadTransfer;
+	assign	LDD_WE =								(CSPreStoreUpdate && FEStoreTransfer) || // update case
+													(CSReadP && BELoadTransfer); // read rmv case
 	
-	RAM			#(			.DWidth(				FEDWidth),
-							.AWidth(				BFPWidth),
-							.RLatency(				0))
-				ld_d(		.Clock(					Clock),
-							.Reset(					1'b0),
-							.Enable(				1'b1),
-							.Write(					LDD_WE),
-							.Address(				LDD_Addr),
-							.DIn(					BELoadData),
-							.DOut(					FELoadData));
+	assign	MaskedData =							(~FEWMask_ChunkWide & BELoadData) | (FEWMask_ChunkWide & FELoadData); // a bunch of 1b muxxes for the mask
+	
+	assign	LDD_WData = 							(CSPreStoreUpdate) 	? 	FEStoreData : 
+													(CommandIsUpdate)	?	MaskedData : // apply the mask
+																			BELoadData;
+
+	wire	[FEDWidth-1:0]	MaskedData, LDD_WData; // TODO move
+	
+	SDPRAM			 #(			.DWidth(			FEDWidth),
+								.AWidth(			BFPWidth),
+								.RLatency(			0))
+					RAM(		.Clock(				Clock),
+								.Reset(				Reset),
+								.Write(				LDD_WE),								
+								.WriteAddress(		LDD_Addr),
+								.WriteData(			LDD_WData),
+								.Read(				1'b1),
+								.ReadAddress(		LDD_Addr), 
+								.ReadData(			FELoadData));
 	
 	//--------------------------------------------------------------------------
 	//	MAC core
 	//--------------------------------------------------------------------------
 	
-	assign	HashDataIn =							(CSMI) ? 			StoreMACHeader : 
-													(CSReadP) ? 		BELoadData : // on load
-													(StoringLoadMode) ? FELoadData : // on writeback
-																		FEStoreData;
+	assign	HashDataIn =							(CSMI) ? 				StoreMACHeader : 
+													(CSReadP) ? 			BELoadData : // on load
+													(ReStoringLoadData) ? 	FELoadData : // on writeback
+																			FEStoreData;
 	assign	HashDataInValid =						CSMI ||
 													(CSWriteP && StoreSourceValid && BEStoreReady) ||
 													(CSReadP && BELoadValid);

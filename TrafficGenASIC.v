@@ -29,8 +29,8 @@ module TrafficGenASIC(
 	`include "UORAM.vh"
 	`include "PLBLocal.vh"
 	
-	parameter				NumCommands =			4,
-							AccessCount_Fixed =		32'd4;
+	parameter				NumCommands =			4, 
+							AccessCount_Fixed =		32'd4; // TODO increase when the stall goes away
 	
 	`include "CommandsLocal.vh"
 	`include "TrafficGenLocal.vh"
