@@ -9,7 +9,7 @@ module testUORAM;
 	`include "BucketLocal.vh" 
 	`include "PLBLocal.vh" 
 	
-    wire 						Clock, AESClock; 
+    wire 						Clock; 
     wire 						Reset; 
     reg  						CmdInValid, DataInValid, ReturnDataReady;
     wire 						CmdInReady, DataInReady, ReturnDataValid;
@@ -63,7 +63,7 @@ module testUORAM;
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
-							.Mode_TrafficGen(		1'b1));
+							.Mode_TrafficGen(		1'b0));
 					
 	//--------------------------------------------------------------------------
 
@@ -198,11 +198,9 @@ module testUORAM;
 
     assign Reset = CycleCount < 5;
   
-    localparam  Freq =	200_000_000,
-				FastFreq = 300_000_000;
-    localparam   Cycle = 1000000000/Freq;	
+    localparam  real 	Freq =	950_000_000;
+    localparam  real 	Cycle = 1000000000/Freq;	
     ClockSource #(Freq) ClockF200Gen(1'b1, Clock);
-	ClockSource #(FastFreq) ClockF300Gen(1'b1, AESClock);
 
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
@@ -219,10 +217,12 @@ module testUORAM;
                 CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
                 addr);
-            #(Cycle + Cycle / 2) CmdInValid <= 0;
+            #(Cycle) CmdInValid <= 0;
         end
     endtask
     
+	/*
+	
     task Check_Leaf;
        begin
            $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
@@ -248,12 +248,14 @@ module testUORAM;
            GlobalPosMap[ORAM.core.BEnd_PAddr] <= ORAM.core.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.core.RemappedLeaf};
        end 
     endtask    
+	
+	*/
 
 	integer i; 
 	task Handle_ProgStore;
 		begin
 			#(Cycle);
-			#(Cycle / 2.0) DataInValid <= 1;
+			DataInValid <= 1;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				DataIn = AddrIn + i;
 				while (!DataInReady)  #(Cycle);
@@ -310,15 +312,13 @@ module testUORAM;
 		end
 	end
 
-    always @(posedge Clock) begin
+    always @(negedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
-                #(Cycle * 100);       
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);		
 				TestCount <= TestCount + 1;
-				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	   
-                	   
+				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	    
 				if (AddrRand > NumValidBlock)
 					$finish;   
             end
@@ -344,10 +344,12 @@ module testUORAM;
 		end
 	end
 	
+	/*
 	always @(posedge Clock) begin    
 		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
 		   Check_Leaf;
 		end
 	end
-       
+	*/
+	
 endmodule
