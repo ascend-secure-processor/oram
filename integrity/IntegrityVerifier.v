@@ -225,6 +225,7 @@ module IntegrityVerifier(
 				$finish;
 			end
 			
+			/*
 			if (HashDataInValid && HashDataInReady) begin
 				$display("[IV] Hash in: %x", HashDataIn);
 			end
@@ -244,6 +245,7 @@ module IntegrityVerifier(
 			if (BELoadValid && BELoadReady) begin
 				$display("[IV] Load data: %x", BELoadData);
 			end
+			*/
 		end
 	`endif
 
@@ -288,7 +290,7 @@ module IntegrityVerifier(
 	genvar i;
 	generate for (i = 0; i < DMSWidth; i = i + 1) begin:MaskSplit
 		assign	FEWMask_ChunkWide[(i+1)*8-1:i*8] = (FEWMask_Chunk[i]) ? 8'hff : 8'h00;
-	end endgenerate					
+	end endgenerate
 							
 	Register #(				.Width(					ORAMU + AESEntropy*2))
 				shdw_reg(	.Clock(					Clock),
