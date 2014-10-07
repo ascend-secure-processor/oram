@@ -298,8 +298,8 @@ module IntegrityVerifier(
 							.In(					{FEPAddr,		FECurrentCounter,		FERemappedCounter}),
 							.Out(					{FEShadowPAddr, FECurrentCounter_Int, 	FERemappedCounter_Int}));		
 	
-	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && CommandIsReadRmv;
-	assign	Update_Terminal =						CSReadCheck && 		SP_Terminal && CommandIsUpdate;
+	assign	RdRmv_Terminal =						CSReadFETransfer && SP_Terminal && 		CommandIsReadRmv;
+	assign	Update_Terminal =						CSReadCheck && 		MACCheckComplete && CommandIsUpdate;
 	Register1b rdr_r(	Clock, Reset || RdRmv_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_ReadRmv, CommandIsReadRmv);
 	Register1b u_r(		Clock, Reset || Update_Terminal, FECommandValid && FECommandReady && FECommand == BECMD_Update, CommandIsUpdate);
 	

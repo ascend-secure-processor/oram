@@ -31,8 +31,6 @@ module testUORAM;
 	
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData_Wide;
 	wire						DDR3SDRAM_WriteValid_Wide, DDR3SDRAM_WriteReady_Wide;
-
-	wire						DDR3SDRAM_ReadReady;
 	
 	wire						DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
@@ -195,11 +193,14 @@ module testUORAM;
 
     assign Reset = CycleCount < 5;
   
-    localparam  real 	Freq =	950_000_000;
+    localparam  real 	Freq =	1_000_000_000; // WARNING: even with localparam real, clock freqs like 950MHz will cause Cycle to not be precise
     localparam  real 	Cycle = 1000000000/Freq;	
     ClockSource #(Freq) ClockGen(1'b1, Clock);
 
+	localparam ChiWidth = 10;
+	
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
+	reg [ChiWidth:0] GlobalAccessCountTrack [TotalNumBlock-1:0];
     reg  [31:0] TestCount;
     reg [ORAMU-1:0] AddrRand;
 	
@@ -214,11 +215,13 @@ module testUORAM;
                 CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
                 addr);
-            #(Cycle) CmdInValid <= 0;
+            #(Cycle) 
+			CmdInValid <= 0;
+			if (CmdIn == BECMD_Append || CmdIn == BECMD_Update) Handle_ProgStore;
         end
     endtask
-    
-	/*
+	
+	`ifndef GATE_SIM_POWER
 	
     task Check_Leaf;
        begin
@@ -246,15 +249,25 @@ module testUORAM;
        end 
     endtask    
 	
-	*/
+	always @(posedge Clock) begin    
+		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
+		   Check_Leaf;
+		end
+	end	
+	
+	`endif
 
 	integer i; 
 	task Handle_ProgStore;
+		reg [FEDWidth/2 - 1:0] LowHalf, HighHalf;
 		begin
 			#(Cycle);
 			DataInValid <= 1;
+			GlobalAccessCountTrack[AddrIn] = GlobalAccessCountTrack[AddrIn] + 1;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = AddrIn + i;
+				LowHalf = AddrIn + i;
+				HighHalf = GlobalAccessCountTrack[AddrIn];
+				DataIn = {HighHalf, LowHalf};
 				while (!DataInReady)  #(Cycle);
 				#(Cycle);
 			end
@@ -263,27 +276,29 @@ module testUORAM;
 	endtask
     
 	reg Checking_ProgData;
-	reg [ORAMB-1:0] ReceivedData;
-	wire [ORAMB-1:0] ExpectedReadData;
-
-    genvar g;
-	generate for (g = 0; g < FEORAMBChunks; g = g + 1) begin:foo
-		assign	ExpectedReadData[(g+1)*FEDWidth-1:g*FEDWidth] = AddrIn + g;
-	end endgenerate
-
+	reg [FEDWidth-1:0] ActualReadData, ExpectedReadData;
+	
 	task Check_ProgData;
+		reg [FEDWidth/2 - 1:0] LowHalf, HighHalf, LowHalf_Expected, HighHalf_Expected;
+		
 		begin
 			Checking_ProgData <= 1;
-			ReceivedData = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				while (!ReturnDataReady || !ReturnDataValid)  #(Cycle);
-				ReceivedData <= {ReturnData, ReceivedData[ORAMB-1:FEDWidth]};
-				#(Cycle);
-			end
 
-			if (ExpectedReadData != ReceivedData) begin
-				$display("Received data does not match for Block %d, %x != %x", AddrIn, ReceivedData, ExpectedReadData);
-				$finish;
+				LowHalf = ReturnData[FEDWidth/2-1:0];
+				HighHalf = ReturnData[FEDWidth-1:FEDWidth/2];
+				ActualReadData = {HighHalf, LowHalf};
+
+				LowHalf_Expected = AddrIn + i;
+				HighHalf_Expected = GlobalAccessCountTrack[AddrIn];
+				ExpectedReadData = {HighHalf_Expected, LowHalf_Expected};
+				
+				if (ExpectedReadData != ActualReadData) begin
+					$display("Return data mismatch for addr %d, %x != %x (actual != expected)", AddrIn, ActualReadData, ExpectedReadData);
+					$finish;
+				end
+				#(Cycle);
 			end
 			Checking_ProgData <= 0;
 		end
@@ -305,6 +320,7 @@ module testUORAM;
 
 		for (i = 0; i < TotalNumBlock; i=i+1) begin
 			GlobalPosMap[i][ORAML] <= 0;
+			GlobalAccessCountTrack[i] <= 0;
 		end
 	end
 
@@ -325,28 +341,11 @@ module testUORAM;
             end
         end
     end
-   
-    wire WriteCmd;
-	assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
-   
-	always @(posedge Clock) begin
-		if (CmdInValid && CmdInReady && WriteCmd) begin
-		   Handle_ProgStore;
-		end
-	end
 
-	always @(posedge Clock) begin
+	always @(negedge Clock) begin
 		if (ReturnDataValid && ReturnDataReady && !Checking_ProgData) begin
 		   Check_ProgData;
 		end
 	end
-	
-	/*
-	always @(posedge Clock) begin    
-		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
-		   Check_Leaf;
-		end
-	end
-	*/
 	
 endmodule
