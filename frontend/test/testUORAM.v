@@ -119,15 +119,15 @@ module testUORAM;
 
 	always @(posedge Clock) begin
 		if (DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady) begin
-			//$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
+			$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
 		end
 	
 		if (DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide) begin
-			//$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
+			$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide & DDR3SDRAM_ReadReady_Wide) begin
-			//$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
+			$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide_Pre && !DDR3SDRAM_ReadReady_Wide_Pre) begin
