@@ -17,17 +17,18 @@
 module UORAMController
 (
     Clock, Reset,
-    CmdInReady, CmdInValid, CmdIn, ProgAddrIn,
+    CmdInReady, CmdInValid, CmdIn, ProgAddrIn, WMaskIn,
     DataInReady, DataInValid, DataIn,
     ReturnDataReady, ReturnDataValid, ReturnData,
-    CmdOutReady, CmdOutValid, CmdOut, AddrOut, OldLeaf, NewLeaf,
+    CmdOutReady, CmdOutValid, CmdOut, AddrOut, WMaskOut, OldLeaf, NewLeaf,
 	StoreDataReady, StoreDataValid, StoreData,
     LoadDataReady, LoadDataValid, LoadData
 );
 
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
-
+	
+	`include "DMLocal.vh"
     `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
@@ -41,6 +42,7 @@ module UORAMController
     input CmdInValid;
     input [BECMDWidth-1:0] CmdIn;
     input [ORAMU-1:0] ProgAddrIn;
+	input [DMWidth-1:0] WMaskIn;
 
     // receive data from network
     output DataInReady;
@@ -57,6 +59,7 @@ module UORAMController
     output CmdOutValid;
     output [BECMDWidth-1:0] CmdOut;
     output [ORAMU-1:0] AddrOut;
+	output [DMWidth-1:0] WMaskOut;
     output [LeafOutWidth-1:0] OldLeaf, NewLeaf;
 
     // send data to backend
@@ -114,8 +117,9 @@ module UORAMController
 	
     // FrontEnd state machines
     (* mark_debug = "TRUE" *) wire [BECMDWidth-1:0] LastCmd;
-    Register #(.Width(2))
-        CmdReg (Clock, Reset, 1'b0, CmdInReady && CmdInValid, CmdIn, LastCmd);
+	wire [DMWidth-1:0] LastMask;
+    Register #(.Width(BECMDWidth + DMWidth))
+        CmdReg (Clock, Reset, 1'b0, CmdInReady && CmdInValid, {CmdIn, WMaskIn}, {LastCmd, LastMask});
 
     (* mark_debug = "TRUE" *) reg [MaxLogRecursion-1:0] QDepth;
     (* mark_debug = "TRUE" *) reg [ORAMU-1:0] AddrQ [Recursion-1:0];
@@ -200,8 +204,10 @@ module UORAMController
     // if EvictionRequest, write back a PosMap block; otherwise serve the next access in the queue
     assign CmdOut = (EvictionRequest || InitRequest) ? BECMD_Append
 						: DataBlockReq ? LastCmd : BECMD_ReadRmv;
+	assign WMaskOut = (EvictionRequest || InitRequest) ? {DMWidth{1'bx}}
+						: DataBlockReq ? LastMask : {DMWidth{1'bx}};
     assign AddrOut = EvictionRequest ? NumValidBlock + PPPAddrOut / LeafInBlock : AddrQ[QDepth];
-
+	
     assign SwitchReq = (CmdOutReady && CmdOutValid && !EvictionRequest) || (!DataBlockReq && PPPUnInitialized);
                     // transition to next access, after sending out or initializing the current one
     // =============================================================================

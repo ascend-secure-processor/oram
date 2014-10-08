@@ -7,12 +7,13 @@
 
 //==============================================================================
 //	Module:		TinyORAMASICWrap
-//	Desc:		
+//	Desc:		TinyORAMCore augmented with modules to test functionality and 
+//				power for the chip tapeout.
 //==============================================================================
 module TinyORAMASICWrap(
   	Clock, Reset,
 
-	Cmd, PAddr,
+	Cmd, PAddr, WMask,
 	CmdValid, CmdReady,
 
 	DataIn,
@@ -28,16 +29,14 @@ module TinyORAMASICWrap(
 	Mode_TrafficGen, // Are we using the traffic gen to test ORAM *functionality*
 	Mode_DummyGen // Are we doing dummy requests forever to test *backend power*
 	);
-
-	//--------------------------------------------------------------------------
-	//	Parameters
-	//--------------------------------------------------------------------------
-
+	
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
 	
 	`include "PathORAM.vh"
+	
+	`include "DMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
@@ -54,6 +53,7 @@ module TinyORAMASICWrap(
 
 	input	[BECMDWidth-1:0] Cmd;
 	input	[ORAMU-1:0]		PAddr;
+	input	[DMWidth-1:0]	WMask;
 	input					CmdValid;
 	output 					CmdReady;
 
@@ -94,6 +94,7 @@ module TinyORAMASICWrap(
 
 	wire	[BECMDWidth-1:0] Cmd_ORAM;
 	wire	[ORAMU-1:0]		PAddr_ORAM;
+	wire	[DMWidth-1:0]	WMask_ORAM;
 	wire					CmdValid_ORAM, CmdReady_ORAM;
 	
 	wire	[FEDWidth-1:0]	DataIn_ORAM;
@@ -136,6 +137,7 @@ module TinyORAMASICWrap(
 
 	assign	Cmd_ORAM =								(Mode_TrafficGen) ? Cmd_TGen : 			Cmd;
 	assign	PAddr_ORAM = 							(Mode_TrafficGen) ? PAddr_TGen : 		PAddr;
+	assign	WMask_ORAM =							(Mode_TrafficGen) ? {DMWidth{1'b1}} :	WMask; 
 	assign	CmdValid_ORAM =							(Mode_TrafficGen) ? CmdValid_TGen : 	CmdValid;
 	assign	CmdReady_TGen =							(Mode_TrafficGen) ? CmdReady_ORAM : 	1'b0;
 	assign	CmdReady =								(Mode_TrafficGen) ? 1'b0 : 				CmdReady_ORAM;
@@ -156,6 +158,7 @@ module TinyORAMASICWrap(
 
 							.Cmd(					Cmd_ORAM), 
 							.PAddr(					PAddr_ORAM),
+							.WMask(					WMask_ORAM),
 							.CmdValid(				CmdValid_ORAM), 
 							.CmdReady(				CmdReady_ORAM),
                             

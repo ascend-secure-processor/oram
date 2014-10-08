@@ -18,7 +18,7 @@
 module TinyORAMCore(
   	Clock, Reset,
 
-	Cmd, PAddr,
+	Cmd, PAddr, WMask,
 	CmdValid, CmdReady,
 
 	DataIn,
@@ -46,13 +46,14 @@ module TinyORAMCore(
 	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
 	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
 
-
 	//--------------------------------------------------------------------------
 	//	Constants
 	//--------------------------------------------------------------------------
 	
 	`include "PathORAM.vh" 
 	`include "UORAM.vh" 
+	
+	`include "DMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
@@ -75,6 +76,7 @@ module TinyORAMCore(
 
 	input	[BECMDWidth-1:0] Cmd;
 	input	[ORAMU-1:0]		PAddr;
+	input	[DMWidth-1:0]	WMask;
 	input					CmdValid;
 	output 					CmdReady;
 
@@ -174,6 +176,7 @@ module TinyORAMCore(
 							.CmdInReady(			CmdReady),
 							.CmdInValid(			CmdValid),
 							.CmdIn(					Cmd),
+							.WMaskIn(				WMask),
 							.ProgAddrIn(			PAddr),
 							.DataInReady(			DataInReady),
 							.DataInValid(			DataInValid),

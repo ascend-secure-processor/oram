@@ -4,6 +4,8 @@ module testUORAM;
 	
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
+	
+	`include "DMLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "BucketLocal.vh" 
@@ -15,6 +17,7 @@ module testUORAM;
     wire 						CmdInReady, DataInReady, ReturnDataValid;
     reg [1:0] 					CmdIn;
     reg [ORAMU-1:0] 			AddrIn;
+	reg [DMWidth-1:0]			WMaskIn;
     wire [FEDWidth-1:0] 		ReturnData;
 	reg  [FEDWidth-1:0] 		DataIn;
 	
@@ -29,12 +32,14 @@ module testUORAM;
 	
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_WriteData_Wide;
 	wire						DDR3SDRAM_WriteValid_Wide, DDR3SDRAM_WriteReady_Wide;
-
-	wire						DDR3SDRAM_ReadReady;
 	
 	wire						DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
+
+	//--------------------------------------------------------------------------
+	//	CUT
+	//--------------------------------------------------------------------------
 	
    TinyORAMASICWrap ORAM(	.Clock(					Clock),
                             .Reset(					Reset),
@@ -42,6 +47,7 @@ module testUORAM;
                             // interface with network			
                             .Cmd(				    CmdIn),
                             .PAddr(					AddrIn),
+							.WMask(					WMaskIn),
                             .CmdValid(			    CmdInValid),
                             .CmdReady(			    CmdInReady),
                             .DataInReady(           DataInReady), 
@@ -110,29 +116,18 @@ module testUORAM;
 							.OutData(				DRAMReadAddr),
 							.OutSend(				DRAMReadAddrValid),
 							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
-	/*
-	FIFORAM	#(				.Width(					DDRAWidth),
-							.Buffering(				500))
-		wr_addr(			.Clock(					Clock),
-							.Reset(					Reset),
-							.InData(				DDR3SDRAM_Address),
-							.InValid(				DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady),
-							.InAccept(				),
-							.OutData(				DRAMWriteAddr),
-							.OutSend(				DRAMWriteAddrValid),
-							.OutReady(				DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide));
-	*/
+
 	always @(posedge Clock) begin
 		if (DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady) begin
-			$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
+			//$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
 		end
 	
 		if (DDR3SDRAM_WriteValid_Wide & DDR3SDRAM_WriteReady_Wide) begin
-			$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
+			//$display("[%m @ %t] Write DRAM:    		%x", $time, DDR3SDRAM_WriteData_Wide);
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide & DDR3SDRAM_ReadReady_Wide) begin
-			$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
+			//$display("[%m @ %t] Read DRAM[%x]:     %x", $time, DRAMReadAddr, DDR3SDRAM_ReadData_Wide);
 		end
 		
 		if (DDR3SDRAM_ReadValid_Wide_Pre && !DDR3SDRAM_ReadReady_Wide_Pre) begin
@@ -141,9 +136,9 @@ module testUORAM;
 		end
 	end
 	
-	localparam   InBufDepth = 6,
-                OutInitLat = 30,
-                OutBandWidth = 57;
+	localparam				InBufDepth = 6,
+							OutInitLat = 30,
+							OutBandWidth = 57;
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
@@ -164,7 +159,7 @@ module testUORAM;
                             .CommandReady(			DDR3SDRAM_CommandReady),
                             
                             .DataIn(				DDR3SDRAM_WriteData_Wide),
-                            .DataInMask(			DDR3SDRAM_WriteMask), // TODO: this may get mis-aligned because of the shifters, but we won't change it anyway
+                            .DataInMask(			8'h00), // TODO: this may get mis-aligned because of the shifters, but we won't change it anyway
                             .DataInValid(			DDR3SDRAM_WriteValid_Wide),
                             .DataInReady(			DDR3SDRAM_WriteReady_Wide),
                             
@@ -182,40 +177,117 @@ module testUORAM;
 							.OutData(				DDR3SDRAM_ReadData_Wide),
 							.OutSend(				DDR3SDRAM_ReadValid_Wide),
 							.OutReady(				DDR3SDRAM_ReadReady_Wide));
-								
-	
+							
+	//--------------------------------------------------------------------------
+	//	Stimulus
+	//--------------------------------------------------------------------------
+							
+	`ifdef GATE_SIM_POWER
+	localparam  				NN = 15; // so slow ... run for a few accesses only
+	`else
 	localparam  				NN = 200;
-	localparam					nn = 5;
-	localparam					nn2 = nn * 29;	
+	`endif
+	
+	localparam					nn = 10;
+	localparam					nn2 = nn * 50;
+	localparam 					TestsPerMaskRound = 3;
+	
+	`ifdef GATE_SIM_POWER
+
+	// WARNING: even with localparam real, clock freqs like 950MHz will cause Cycle to not be precise
+	// Note: we only care about this high freq to better estimate power
+	
+	localparam  real 	Freq = 950_000_000;  
+
+	`else 
+
+	// TODO: known issue; design doesn't work with Freq = 1 GHz (why?)
+	
+	localparam  real 	Freq = 200_000_000;
+
+	`endif
+  
+    localparam  real 	Cycle = 1000000000/Freq;
+    ClockSource #(Freq) ClockGen(1'b1, Clock);
+
+	localparam CWidth = 5;
 
     reg [64-1:0] CycleCount;
-    initial begin
-        CycleCount = 0;
-    end
+
+	
+	
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
     end
 
     assign Reset = CycleCount < 5;
+<<<<<<< HEAD
   
     localparam  real 	Freq =	950_000_000;
     localparam  real 	Cycle = 1000000000/Freq;	
     ClockSource #(Freq) ClockF200Gen(1'b1, Clock);
 
+=======
+  	
+>>>>>>> origin/writemask
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
+	reg [CWidth:0] GlobalAccessCountTrack [TotalNumBlock-1:0] [FEORAMBChunks:0]; // we use GlobalAccessCountTrack[...][FEORAMBChunks] to keep track of the access count for the block
+	
     reg  [31:0] TestCount;
     reg [ORAMU-1:0] AddrRand;
+		
+	integer i, j;
+
+	reg Checking_ProgData;
+	reg [FEDWidth-1:0] ActualReadData, ExpectedReadData;
+	
+	initial begin
+		TestCount = 0;
+		CmdInValid = 0;
+		DataInValid = 0;
+		ReturnDataReady = 1;   
+		AddrRand = 0;
+		Checking_ProgData = 0;
+        CycleCount = 0;
+		
+		`ifdef GATE_SIM_POWER $vcdpluson; `endif	
+		
+		for (i = 0; i < TotalNumBlock; i=i+1) begin
+			GlobalPosMap[i][ORAML] <= 0;
+			for (j = 0; j <= FEORAMBChunks; j=j+1) begin
+				GlobalAccessCountTrack[i][j] <= 0;
+			end
+		end
+	end	
 	
     task Task_StartORAMAccess;
         input [1:0] cmd;
         input [ORAMU-1:0] addr;
-        begin   
-            CmdInValid <= 1;
-            CmdIn <= cmd;
-            AddrIn <= addr;
-            $display("[t = %d] Start Access %d: %s Block %d",
+		integer MaskNo;
+        begin
+            CmdInValid = 1;
+            CmdIn = cmd;
+            AddrIn = addr;
+			
+			MaskNo = GlobalAccessCountTrack[AddrIn][FEORAMBChunks] / TestsPerMaskRound;
+			
+			// test some interesting cases
+			// note: to save time, we only test 0*1+0* patterns; further we only test FEDWidth chunks to save memory
+			case (MaskNo)
+				0 : WMaskIn = 64'hffffffffffffffff;
+				1 : WMaskIn = 64'h0000000000000000;
+				2 : WMaskIn = 64'h00000000000000ff;
+				3 : WMaskIn = 64'h000000000000ff00;
+				4 : WMaskIn = 64'h0000000000ffff00;
+				5 : WMaskIn = 64'hff00000000000000;
+				default : 
+					WMaskIn = 64'hffffffffffffffff;
+			endcase
+			
+            $display("[t = %d] UORAM Start Access %d: %s Block %d Mask 0x%x",
                 CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
+<<<<<<< HEAD
                 addr);
             #(Cycle) CmdInValid <= 0;
         end
@@ -250,44 +322,79 @@ module testUORAM;
     endtask    
 	
 	*/
+=======
+                addr, 
+				WMaskIn);
+            #(Cycle) 
+			CmdInValid = 0;
+			if (CmdIn == BECMD_Append || CmdIn == BECMD_Update) Handle_ProgStore;
+        end
+    endtask
+>>>>>>> origin/writemask
 
-	integer i; 
 	task Handle_ProgStore;
+		reg [FEDWidth/2 - 1:0] LowHalf, HighHalf;
+		reg ElseTaken;
+		reg [FEDWidth/8-1:0] MaskChunk;
+		reg [DMWidth-1:0] WMaskInTemp;
 		begin
 			#(Cycle);
+<<<<<<< HEAD
 			DataInValid <= 1;
+=======
+			DataInValid = 1;
+			WMaskInTemp = WMaskIn;
+>>>>>>> origin/writemask
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
-				DataIn = AddrIn + i;
+				LowHalf = AddrIn + i;
+				
+				MaskChunk = WMaskInTemp[FEDWidth/8-1:0];
+				WMaskInTemp = { {FEDWidth/8{1'bx}}, WMaskInTemp[DMWidth-1:FEDWidth/8] };
+				
+				if (&MaskChunk) begin
+					GlobalAccessCountTrack[AddrIn][i] = GlobalAccessCountTrack[AddrIn][i] + 1;
+					HighHalf = GlobalAccessCountTrack[AddrIn][i];
+					ElseTaken = 1'b0;
+				end else begin
+					ElseTaken = 1'b1;
+					HighHalf = $random; // put some bogus crap there
+				end
+				
+				DataIn = {HighHalf, LowHalf};
+				
+				$display("[t = %d] UORAM store data 0x%x", CycleCount, DataIn);
+				
 				while (!DataInReady)  #(Cycle);
 				#(Cycle);
 			end
-			DataInValid <= 0;
+			DataInValid = 0;
 		end
 	endtask
-    
-	reg Checking_ProgData;
-	reg [ORAMB-1:0] ReceivedData;
-	wire [ORAMB-1:0] ExpectedReadData;
-
-    genvar g;
-	generate for (g = 0; g < FEORAMBChunks; g = g + 1) begin:foo
-		assign	ExpectedReadData[(g+1)*FEDWidth-1:g*FEDWidth] = AddrIn + g;
-	end endgenerate
 
 	task Check_ProgData;
+		reg [FEDWidth/2 - 1:0] LowHalf_Actual, HighHalf_Actual, LowHalf_Expected, HighHalf_Expected;
+		
 		begin
 			Checking_ProgData <= 1;
-			ReceivedData = 0;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				while (!ReturnDataReady || !ReturnDataValid)  #(Cycle);
-				ReceivedData <= {ReturnData, ReceivedData[ORAMB-1:FEDWidth]};
+
+				LowHalf_Actual = ReturnData[FEDWidth/2-1:0];
+				HighHalf_Actual = ReturnData[FEDWidth-1:FEDWidth/2];
+				ActualReadData = {HighHalf_Actual, LowHalf_Actual};
+
+				LowHalf_Expected = AddrIn + i;
+				HighHalf_Expected = GlobalAccessCountTrack[AddrIn][i];
+				ExpectedReadData = {HighHalf_Expected, LowHalf_Expected};
+				
+				if (ExpectedReadData != ActualReadData) begin
+					$display("Return data mismatch for addr %d, %x != %x (actual != expected)", AddrIn, ActualReadData, ExpectedReadData);
+					$finish;
+				end
 				#(Cycle);
 			end
-
-			if (ExpectedReadData != ReceivedData) begin
-				$display("Received data does not match for Block %d, %x != %x", AddrIn, ReceivedData, ExpectedReadData);
-				$finish;
-			end
+			
+			GlobalAccessCountTrack[AddrIn][FEORAMBChunks] = GlobalAccessCountTrack[AddrIn][FEORAMBChunks] + 1;
 			Checking_ProgData <= 0;
 		end
 	endtask
@@ -297,26 +404,20 @@ module testUORAM;
 
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
 	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
-	//assign	Op = {TestCount[0], 1'b0};
-	
-	initial begin
-		TestCount <= 0;
-		CmdInValid <= 0;
-		DataInValid <= 0;
-		ReturnDataReady <= 1;   
-		AddrRand <= 0;
-		Checking_ProgData <= 0;
 
+<<<<<<< HEAD
 		for (i = 0; i < TotalNumBlock; i=i+1) begin
 			GlobalPosMap[i][ORAML] <= 0;
 		end
 	end
 
+=======
+>>>>>>> origin/writemask
     always @(negedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
                 Task_StartORAMAccess(Op, AddrRand);
-                #(Cycle);		
+                #(Cycle);
 				TestCount <= TestCount + 1;
 				AddrRand <=  ((TestCount+1) / nn2) * nn + (TestCount+1) % nn;	    
 				if (AddrRand > NumValidBlock)
@@ -324,32 +425,63 @@ module testUORAM;
             end
             else begin
                 $display("ALL TESTS PASSED!");
-                $finish;  
+                $finish;
+				`ifdef GATE_SIM_POWER $vcdplusclose; `endif
             end
         end
     end
-   
-    wire WriteCmd;
-	assign WriteCmd = CmdIn == BECMD_Append || CmdIn == BECMD_Update;
-   
-	always @(posedge Clock) begin
-		if (CmdInValid && CmdInReady && WriteCmd) begin
-		   Handle_ProgStore;
-		end
-	end
 
-	always @(posedge Clock) begin
+	always @(negedge Clock) begin
 		if (ReturnDataValid && ReturnDataReady && !Checking_ProgData) begin
 		   Check_ProgData;
 		end
 	end
 	
+<<<<<<< HEAD
 	/*
+=======
+`ifndef GATE_SIM_POWER
+	
+    task Check_Leaf;
+       begin
+           $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
+		   CycleCount, 
+                   ORAM.core.BEnd_Cmd == 0 ? "Update" : ORAM.core.BEnd_Cmd == 1 ? "Append" : ORAM.core.BEnd_Cmd == 2 ? "Read" : "ReadRmv",
+                   ORAM.core.BEnd_PAddr, ORAM.core.BEnd_Cmd == 1 ? -1 : ORAM.core.CurrentLeaf, ORAM.core.RemappedLeaf);
+               
+           if (ORAM.core.BEnd_Cmd == BECMD_Append) begin
+               if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML]) begin
+                   $display("Error: appending existing Block %d", ORAM.core.BEnd_PAddr);
+                   $finish;
+               end
+           end
+           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML] == 0) begin
+               $display("Error: requesting non-existing Block %d", ORAM.core.BEnd_PAddr);
+               $finish;               
+           end
+           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0] != ORAM.core.CurrentLeaf) begin
+               $display("Error: leaf label does not match, should be %d, %d provided", GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0], ORAM.core.CurrentLeaf);
+               $finish;              
+           end
+              
+           GlobalPosMap[ORAM.core.BEnd_PAddr] <= ORAM.core.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.core.RemappedLeaf};
+       end 
+    endtask    
+	
+>>>>>>> origin/writemask
 	always @(posedge Clock) begin    
 		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
 		   Check_Leaf;
 		end
+<<<<<<< HEAD
 	end
 	*/
 	
 endmodule
+=======
+	end	
+	
+	`endif
+		
+endmodule
+>>>>>>> origin/writemask
