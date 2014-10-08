@@ -221,15 +221,7 @@ module testUORAM;
     end
 
     assign Reset = CycleCount < 5;
-<<<<<<< HEAD
-  
-    localparam  real 	Freq =	950_000_000;
-    localparam  real 	Cycle = 1000000000/Freq;	
-    ClockSource #(Freq) ClockF200Gen(1'b1, Clock);
-
-=======
   	
->>>>>>> origin/writemask
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
 	reg [CWidth:0] GlobalAccessCountTrack [TotalNumBlock-1:0] [FEORAMBChunks:0]; // we use GlobalAccessCountTrack[...][FEORAMBChunks] to keep track of the access count for the block
 	
@@ -287,42 +279,6 @@ module testUORAM;
             $display("[t = %d] UORAM Start Access %d: %s Block %d Mask 0x%x",
                 CycleCount, TestCount,
                 cmd == 0 ? "Update" : cmd == 1 ? "Append" : cmd == 2 ? "Read" : "ReadRmv",
-<<<<<<< HEAD
-                addr);
-            #(Cycle) CmdInValid <= 0;
-        end
-    endtask
-    
-	/*
-	
-    task Check_Leaf;
-       begin
-           $display("\t[t = %d] %s Block %d, \tLeaf %d --> %d",
-		   CycleCount, 
-                   ORAM.core.BEnd_Cmd == 0 ? "Update" : ORAM.core.BEnd_Cmd == 1 ? "Append" : ORAM.core.BEnd_Cmd == 2 ? "Read" : "ReadRmv",
-                   ORAM.core.BEnd_PAddr, ORAM.core.BEnd_Cmd == 1 ? -1 : ORAM.core.CurrentLeaf, ORAM.core.RemappedLeaf);
-               
-           if (ORAM.core.BEnd_Cmd == BECMD_Append) begin
-               if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML]) begin
-                   $display("Error: appending existing Block %d", ORAM.core.BEnd_PAddr);
-                   $finish;
-               end
-           end
-           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML] == 0) begin
-               $display("Error: requesting non-existing Block %d", ORAM.core.BEnd_PAddr);
-               $finish;               
-           end
-           else if (GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0] != ORAM.core.CurrentLeaf) begin
-               $display("Error: leaf label does not match, should be %d, %d provided", GlobalPosMap[ORAM.core.BEnd_PAddr][ORAML-1:0], ORAM.core.CurrentLeaf);
-               $finish;              
-           end
-              
-           GlobalPosMap[ORAM.core.BEnd_PAddr] <= ORAM.core.BEnd_Cmd == BECMD_ReadRmv ? 0 : {1'b1, ORAM.core.RemappedLeaf};
-       end 
-    endtask    
-	
-	*/
-=======
                 addr, 
 				WMaskIn);
             #(Cycle) 
@@ -330,7 +286,6 @@ module testUORAM;
 			if (CmdIn == BECMD_Append || CmdIn == BECMD_Update) Handle_ProgStore;
         end
     endtask
->>>>>>> origin/writemask
 
 	task Handle_ProgStore;
 		reg [FEDWidth/2 - 1:0] LowHalf, HighHalf;
@@ -339,12 +294,8 @@ module testUORAM;
 		reg [DMWidth-1:0] WMaskInTemp;
 		begin
 			#(Cycle);
-<<<<<<< HEAD
-			DataInValid <= 1;
-=======
 			DataInValid = 1;
 			WMaskInTemp = WMaskIn;
->>>>>>> origin/writemask
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				LowHalf = AddrIn + i;
 				
@@ -405,14 +356,6 @@ module testUORAM;
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
 	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 
-<<<<<<< HEAD
-		for (i = 0; i < TotalNumBlock; i=i+1) begin
-			GlobalPosMap[i][ORAML] <= 0;
-		end
-	end
-
-=======
->>>>>>> origin/writemask
     always @(negedge Clock) begin
         if (!Reset && CmdInReady) begin
             if (TestCount < 2 * NN) begin
@@ -437,9 +380,6 @@ module testUORAM;
 		end
 	end
 	
-<<<<<<< HEAD
-	/*
-=======
 `ifndef GATE_SIM_POWER
 	
     task Check_Leaf;
@@ -468,20 +408,12 @@ module testUORAM;
        end 
     endtask    
 	
->>>>>>> origin/writemask
 	always @(posedge Clock) begin    
 		if (ORAM.core.BEnd_CmdValid && ORAM.core.BEnd_CmdReady) begin
 		   Check_Leaf;
 		end
-<<<<<<< HEAD
-	end
-	*/
-	
-endmodule
-=======
 	end	
 	
 	`endif
 		
 endmodule
->>>>>>> origin/writemask
