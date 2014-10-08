@@ -188,8 +188,9 @@ module testUORAM;
 	localparam  				NN = 200;
 	`endif
 	
-	localparam					nn = 5;
-	localparam					nn2 = nn * 29;
+	localparam					nn = 10;
+	localparam					nn2 = nn * 50;
+	localparam 					TestsPerMaskRound = 3;
 	
 	`ifdef GATE_SIM_POWER
 
@@ -213,7 +214,7 @@ module testUORAM;
 
     reg [64-1:0] CycleCount;
 
-	localparam TestsPerMaskRound = 6;
+	
 	
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
