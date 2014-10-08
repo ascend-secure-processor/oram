@@ -233,12 +233,12 @@ module testUORAM;
 	reg [FEDWidth-1:0] ActualReadData, ExpectedReadData;
 	
 	initial begin
-		TestCount <= 0;
-		CmdInValid <= 0;
-		DataInValid <= 0;
-		ReturnDataReady <= 1;   
-		AddrRand <= 0;
-		Checking_ProgData <= 0;
+		TestCount = 0;
+		CmdInValid = 0;
+		DataInValid = 0;
+		ReturnDataReady = 1;   
+		AddrRand = 0;
+		Checking_ProgData = 0;
         CycleCount = 0;
 		
 		`ifdef GATE_SIM_POWER $vcdpluson; `endif	
@@ -254,14 +254,17 @@ module testUORAM;
     task Task_StartORAMAccess;
         input [1:0] cmd;
         input [ORAMU-1:0] addr;
+		integer MaskNo;
         begin
-            CmdInValid <= 1;
-            CmdIn <= cmd;
-            AddrIn <= addr;
+            CmdInValid = 1;
+            CmdIn = cmd;
+            AddrIn = addr;
+			
+			MaskNo = GlobalAccessCountTrack[AddrIn][FEORAMBChunks] / TestsPerMaskRound;
 			
 			// test some interesting cases
 			// note: to save time, we only test 0*1+0* patterns; further we only test FEDWidth chunks to save memory
-			case (GlobalAccessCountTrack[AddrIn][FEORAMBChunks] / TestsPerMaskRound)
+			case (MaskNo)
 				0 : WMaskIn = 64'hffffffffffffffff;
 				1 : WMaskIn = 64'h0000000000000000;
 				2 : WMaskIn = 64'h00000000000000ff;
@@ -278,7 +281,7 @@ module testUORAM;
                 addr, 
 				WMaskIn);
             #(Cycle) 
-			CmdInValid <= 0;
+			CmdInValid = 0;
 			if (CmdIn == BECMD_Append || CmdIn == BECMD_Update) Handle_ProgStore;
         end
     endtask
@@ -290,7 +293,7 @@ module testUORAM;
 		reg [DMWidth-1:0] WMaskInTemp;
 		begin
 			#(Cycle);
-			DataInValid <= 1;
+			DataInValid = 1;
 			WMaskInTemp = WMaskIn;
 			for (i = 0; i < FEORAMBChunks; i = i + 1) begin
 				LowHalf = AddrIn + i;
@@ -314,7 +317,7 @@ module testUORAM;
 				while (!DataInReady)  #(Cycle);
 				#(Cycle);
 			end
-			DataInValid <= 0;
+			DataInValid = 0;
 		end
 	endtask
 
