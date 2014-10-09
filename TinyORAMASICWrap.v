@@ -9,6 +9,19 @@
 //	Module:		TinyORAMASICWrap
 //	Desc:		TinyORAMCore augmented with modules to test functionality and 
 //				power for the chip tapeout.
+//
+//				Modes explanation:
+//				Mode_TrafficGen: 	Are we using the traffic gen to test ORAM 
+//									*functionality*
+//				Mode_DummyGen:		Are we doing dummy requests forever to test 
+//									*backend power*
+//
+//				Modes encoding:
+//				Mode_TrafficGen	Mode_DummyGen
+//				0				0	Takes requests from L2 w/ normal DRAM backend
+//				0				1	Self-contained dummy gen test
+//				1				0	Traffic gen with normal DRAM backend
+//				1				1	Self-contained dummy gen test
 //==============================================================================
 module TinyORAMASICWrap(
   	Clock, Reset,
@@ -26,8 +39,8 @@ module TinyORAMASICWrap(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Mode_TrafficGen, // Are we using the traffic gen to test ORAM *functionality*
-	Mode_DummyGen // Are we doing dummy requests forever to test *backend power*
+	Mode_TrafficGen, 
+	Mode_DummyGen
 	);
 	
 	//--------------------------------------------------------------------------
@@ -112,7 +125,21 @@ module TinyORAMASICWrap(
 	
 	wire	[FEDWidth-1:0]	DataOut_TGen;
 	wire					DataOutValid_TGen, DataOutReady_TGen;
+	
+	wire	[DDRAWidth-1:0]	DRAMAddress_ORAM;
+	wire	[DDRCWidth-1:0]	DRAMCommand_ORAM;
+	wire					DRAMCommandValid_ORAM, DRAMCommandReady_ORAM;
 
+	wire	[BEDWidth-1:0]	DRAMReadData_ORAM;
+	wire					DRAMReadDataValid_ORAM;
+
+	wire	[BEDWidth-1:0]	DRAMWriteData_ORAM;
+	wire	[DDRMWidth-1:0]	DRAMWriteMask_ORAM;
+	wire					DRAMWriteDataValid_ORAM, DRAMWriteDataReady_ORAM;							
+
+	wire	[BEDWidth-1:0] 	DRAMReadData_DGen;
+	wire					DRAMCommandValid_DGen, DRAMReadDataValid_DGen;
+	
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//--------------------------------------------------------------------------
@@ -138,20 +165,20 @@ module TinyORAMASICWrap(
 	assign	Cmd_ORAM =								(Mode_TrafficGen) ? Cmd_TGen : 			Cmd;
 	assign	PAddr_ORAM = 							(Mode_TrafficGen) ? PAddr_TGen : 		PAddr;
 	assign	WMask_ORAM =							(Mode_TrafficGen) ? {DMWidth{1'b1}} :	WMask; 
-	assign	CmdValid_ORAM =							(Mode_TrafficGen) ? CmdValid_TGen : 	CmdValid;
-	assign	CmdReady_TGen =							(Mode_TrafficGen) ? CmdReady_ORAM : 	1'b0;
-	assign	CmdReady =								(Mode_TrafficGen) ? 1'b0 : 				CmdReady_ORAM;
+	assign	CmdValid_ORAM =						(	(Mode_TrafficGen) ? CmdValid_TGen : 	CmdValid		) 	&& ~Mode_DummyGen;
+	assign	CmdReady_TGen =						(	(Mode_TrafficGen) ? CmdReady_ORAM : 	1'b0			) 	&& ~Mode_DummyGen;
+	assign	CmdReady =							(	(Mode_TrafficGen) ? 1'b0 : 				CmdReady_ORAM	) 	&& ~Mode_DummyGen;
 	
 	assign	DataIn_ORAM =							(Mode_TrafficGen) ? DataIn_TGen : 		DataIn;
-	assign	DataInValid_ORAM =						(Mode_TrafficGen) ? DataInValid_TGen : 	DataInValid;
-	assign	DataInReady_TGen =						(Mode_TrafficGen) ? DataInReady_ORAM : 	1'b0;
-	assign	DataInReady =							(Mode_TrafficGen) ? 1'b0 : 				DataInReady_ORAM;
+	assign	DataInValid_ORAM =					(	(Mode_TrafficGen) ? DataInValid_TGen : 	DataInValid		) 	&& ~Mode_DummyGen;
+	assign	DataInReady_TGen =					(	(Mode_TrafficGen) ? DataInReady_ORAM : 	1'b0			) 	&& ~Mode_DummyGen;
+	assign	DataInReady =						(	(Mode_TrafficGen) ? 1'b0 : 				DataInReady_ORAM) 	&& ~Mode_DummyGen;
 	
 	assign	DataOut_TGen =							DataOut_ORAM;
 	assign	DataOut =								DataOut_ORAM;
-	assign	DataOutValid_TGen =						(Mode_TrafficGen) ? DataOutValid_ORAM :	1'b0;
-	assign	DataOutValid =							(Mode_TrafficGen) ? 1'b0 : 				DataOutValid_ORAM;	
-	assign	DataOutReady_ORAM =						(Mode_TrafficGen) ? DataOutReady_TGen : DataOutReady;
+	assign	DataOutValid_TGen =					(	(Mode_TrafficGen) ? DataOutValid_ORAM :	1'b0			) 	&& ~Mode_DummyGen;
+	assign	DataOutValid =						(	(Mode_TrafficGen) ? 1'b0 : 				DataOutValid_ORAM) 	&& ~Mode_DummyGen;	
+	assign	DataOutReady_ORAM =					(	(Mode_TrafficGen) ? DataOutReady_TGen : DataOutReady) 		&& ~Mode_DummyGen;
 
 	TinyORAMCore core(		.Clock(					Clock),
 							.Reset(					Reset),
@@ -170,18 +197,42 @@ module TinyORAMASICWrap(
 							.DataOutValid(			DataOutValid_ORAM), 
 							.DataOutReady(			DataOutReady_ORAM),
                             
-							.DRAMAddress(			DRAMAddress),
-							.DRAMCommand(			DRAMCommand), 
-							.DRAMCommandValid(		DRAMCommandValid), 
-							.DRAMCommandReady(		DRAMCommandReady),
+							.DRAMAddress(			DRAMAddress_ORAM),
+							.DRAMCommand(			DRAMCommand_ORAM), 
+							.DRAMCommandValid(		DRAMCommandValid_ORAM), 
+							.DRAMCommandReady(		DRAMCommandReady_ORAM),
 							
-							.DRAMReadData(			DRAMReadData), 
-							.DRAMReadDataValid(		DRAMReadDataValid),
+							.DRAMReadData(			DRAMReadData_ORAM), 
+							.DRAMReadDataValid(		DRAMReadDataValid_ORAM),
 							
-							.DRAMWriteData(			DRAMWriteData), 
-							.DRAMWriteMask(			DRAMWriteMask), 
-							.DRAMWriteDataValid(	DRAMWriteDataValid), 
-							.DRAMWriteDataReady(	DRAMWriteDataReady));
+							.DRAMWriteData(			DRAMWriteData_ORAM), 
+							.DRAMWriteMask(			DRAMWriteMask_ORAM), 
+							.DRAMWriteDataValid(	DRAMWriteDataValid_ORAM), 
+							.DRAMWriteDataReady(	DRAMWriteDataReady_ORAM),
+							
+							.Mode_DummyGen(			Mode_DummyGen));
+	
+	assign	DRAMAddress =							DRAMAddress_ORAM;
+	assign	DRAMCommand =							DRAMCommand_ORAM;
+	assign	DRAMCommandValid =						(Mode_DummyGen) ? 1'b0 : 					DRAMCommandValid_ORAM;
+	assign	DRAMCommandValid_DGen =					(Mode_DummyGen) ? DRAMCommandValid_ORAM && DRAMCommand_ORAM == DDR3CMD_Read : 1'b0;
+	assign	DRAMCommandReady_ORAM =					(Mode_DummyGen) ? 1'b1 : 					DRAMCommandReady;
+	
+	assign	DRAMReadData_ORAM =						(Mode_DummyGen) ? DRAMReadData_DGen : 		DRAMReadData;
+	assign	DRAMReadDataValid_ORAM =				(Mode_DummyGen) ? DRAMReadDataValid_DGen : 	DRAMReadDataValid;
+	
+	assign	DRAMWriteData =							DRAMWriteData_ORAM;
+	assign	DRAMWriteMask =							DRAMWriteMask_ORAM;
+	assign	DRAMWriteDataValid = 					(Mode_DummyGen) ? 1'b0 : 					DRAMWriteDataValid_ORAM;
+	assign	DRAMWriteDataReady_ORAM = 				(Mode_DummyGen) ? 1'b1 : 					DRAMWriteDataReady;	
+							
+	DummyGenASIC 	dgen(	.Clock(					Clock), 
+							.Reset(					Reset),
+
+							.DRAMCommandValid(		DRAMCommandValid_DGen), 
+							
+							.DRAMReadData(			DRAMReadData_DGen), 
+							.DRAMReadDataValid(		DRAMReadDataValid_DGen));							
 
 	//--------------------------------------------------------------------------
 endmodule

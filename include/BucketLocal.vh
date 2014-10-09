@@ -49,7 +49,7 @@
 	localparam				BlkSize_DRBursts =		`divceil(ORAMB, DDRDWidth),
 							BktHSize_DRBursts = 	`divceil(BktHSize_RawBits, DDRDWidth),
 							BktPSize_DRBursts =		ORAMZ * BlkSize_DRBursts,
-							BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth, // = 512 for all configs we care about
+							BktHSize_RndBits =		BktHSize_DRBursts * DDRDWidth, // = 512 or 1024 for all configs we care about
 							BktPSize_RndBits =		BktPSize_DRBursts * DDRDWidth;
 
 	localparam				BktSize_DRBursts =		BktHSize_DRBursts + BktPSize_DRBursts,
@@ -92,7 +92,7 @@
 	localparam				DDRAWidth =				`log2(NumBuckets + 1) + `log2(BktSize_DRWords); // DRAM burst address for last bucket
 
 `ifdef SIMULATION
-initial begin
-	$display("DDRAWidth = %d %d %d %d %d %d %d", L_st, numST, numTallST, numTotalST, NumBuckets, BktSize_DRWords, DDRAWidth);
-end
+	initial begin
+		$display("DDRAWidth = %d", DDRAWidth);
+	end
 `endif

@@ -41,7 +41,9 @@ module BackendCoreController(
 
 	StashAlmostFull,
 
-	ROPAddr, ROLeaf, REWRoundDummy
+	ROPAddr, ROLeaf, REWRoundDummy,
+	
+	Mode_DummyGen
 	);
 
 	//--------------------------------------------------------------------------
@@ -50,9 +52,10 @@ module BackendCoreController(
 
 	`include "PathORAM.vh"
 
+	`include "CommandsLocal.vh"
+	`include "TrafficGenLocal.vh"
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
-	`include "CommandsLocal.vh"
 
 	localparam				STWidth =				4,
 							ST_Idle =				4'd0,
@@ -125,6 +128,12 @@ module BackendCoreController(
 	output reg				REWRoundDummy;
 
 	//--------------------------------------------------------------------------
+	//	Utility Interface
+	//--------------------------------------------------------------------------
+	
+	input					Mode_DummyGen;
+
+	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
@@ -143,7 +152,7 @@ module BackendCoreController(
 	
 	(* mark_debug = "TRUE" *)	wire					SetDummy, ClearDummy, AccessIsDummy_Reg, AccessIsDummy;
 		
-	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		DummyLeaf;
+	(* mark_debug = "FALSE" *)	wire	[ORAML-1:0]		DummyLeaf_Pre, DummyLeaf;
 	(* mark_debug = "FALSE" *)	wire					DummyLeaf_Valid;
 	(* mark_debug = "FALSE" *)	wire	[PRNGLWidth-1:0] DummyLeaf_Wide;	
 	
@@ -324,7 +333,7 @@ module BackendCoreController(
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull & ~RWAccess;
 		assign	SetDummy =							CSIdle & (StashAlmostFull | (RWAccess & OneAccessHasOccurred));
 
-		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Wide[ORAML-1:0];
+		assign	DummyLeaf =							(Addr_RWAccess) ? GentryLeaf : DummyLeaf_Pre;
 	
 		assign	ROPAddr_Pre =						PAddr;
 		assign	ROLeaf_Pre =						(REWRoundDummy_Pre) ? DummyLeaf : CurrentLeaf;
@@ -348,8 +357,7 @@ module BackendCoreController(
 		assign	ClearDummy =						CSIdle & ~StashAlmostFull;
 		assign	SetDummy =							CSIdle & StashAlmostFull;
 
-		assign	DummyLeaf =							DummyLeaf_Wide[ORAML-1:0];
-
+		assign	DummyLeaf =							DummyLeaf_Pre;
 		
 `ifndef ASIC
 		initial begin
@@ -360,6 +368,10 @@ module BackendCoreController(
 `endif
 	end endgenerate
 
+	//--------------------------------------------------------------------------
+	//	Dummy access control
+	//--------------------------------------------------------------------------	
+	
 	Register	#(			.Width(					1))
 				dummy_reg(	.Clock(					Clock),
 							.Reset(					Reset | ClearDummy),
@@ -367,7 +379,7 @@ module BackendCoreController(
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					AccessIsDummy_Reg));
-	assign	AccessIsDummy =							AccessIsDummy_Reg & ~ClearDummy;
+	assign	AccessIsDummy =							(AccessIsDummy_Reg & ~ClearDummy) | Mode_DummyGen;
 
 	PRNG 		#(			.RandWidth(				PRNGLWidth)) 
 				leaf_gen(	.Clock(					Clock),
@@ -376,7 +388,8 @@ module BackendCoreController(
 							.RandOutValid(			DummyLeaf_Valid),
 							.RandOut(				DummyLeaf_Wide),
 							.SecretKey(				128'hd8_40_e1_a8_dc_ca_e7_ec_d9_1f_61_48_7a_f2_cb_73)); // TODO make dynamic
-
+	assign	DummyLeaf_Pre =							(Mode_DummyGen) ? DummyGenLeaf : DummyLeaf_Wide[ORAML-1:0];
+							
 	//--------------------------------------------------------------------------
 	//	Stash Interface
 	//--------------------------------------------------------------------------

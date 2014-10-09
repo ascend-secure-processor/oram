@@ -26,7 +26,9 @@ module PathORAMBackendCore(
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
-	ROPAddr, ROLeaf, REWRoundDummy
+	ROPAddr, ROLeaf, REWRoundDummy,
+	
+	Mode_DummyGen
 	);
 
 	//--------------------------------------------------------------------------
@@ -101,6 +103,12 @@ module PathORAMBackendCore(
 	output  [ORAML-1:0]		ROLeaf;
 	output 					REWRoundDummy;
 
+	//--------------------------------------------------------------------------
+	//	Utility Interface
+	//--------------------------------------------------------------------------
+	
+	input					Mode_DummyGen;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -505,7 +513,9 @@ module PathORAMBackendCore(
 
 							.ROPAddr(				ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.REWRoundDummy(			REWRoundDummy));
+							.REWRoundDummy(			REWRoundDummy),
+							
+							.Mode_DummyGen(			Mode_DummyGen));
 
 	//--------------------------------------------------------------------------
 	//	AddrGen

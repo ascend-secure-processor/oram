@@ -7,7 +7,8 @@
 
 //==============================================================================
 //	Module:		TrafficGenASIC
-//	Desc:		A simplified dumb traffic generator to test ORAM on the ASIC.
+//	Desc:		A simplified dumb traffic generator to test ORAM functionality on
+//				ASIC.
 //==============================================================================
 module TrafficGenASIC(
   	Clock, Reset,
@@ -30,12 +31,12 @@ module TrafficGenASIC(
 	`include "PLBLocal.vh"
 	
 	parameter				NumCommands =			4, 
-							AccessCount_Fixed =		32'd4; // TODO increase when the stall goes away
+							AccessCount_Fixed =		32'd100;
 	
 	`include "CommandsLocal.vh"
 	`include "TrafficGenLocal.vh"
 	
-	localparam				StallThreshold =		10000;
+	localparam				StallThreshold =		10000; // astronomical? maybe not for these slow ass pins ;-)
 
 	localparam				NVWidth =				`log2(NumValidBlock);	
 	localparam				OBUChunks = 			ORAMB / ORAMU;
@@ -48,7 +49,7 @@ module TrafficGenASIC(
 	input					Reset;
 
 	//--------------------------------------------------------------------------
-	//	CUT (ORAM) interface
+	//	CUT (ORAM frontend) interface
 	//--------------------------------------------------------------------------
 
 	output	[BECMDWidth-1:0] ORAMCommand;

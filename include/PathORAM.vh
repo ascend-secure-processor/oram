@@ -29,7 +29,7 @@ localparam				PINIT =					-1;
 							
 	parameter				DelayedWB = 			1'b0;
 
-`else	
+`else
 
 	parameter				ORAMB =					512, 	// block size in bits
 							ORAMU =					32, 	// program addr (at byte-addressable block granularity) width
@@ -39,7 +39,7 @@ localparam				PINIT =					-1;
 	
 	// the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
 	`ifdef SIMULATION_VIVADO
-		parameter 			ORAML =					13;		// cannot simulate too large an ORAM
+		parameter 			ORAML =					15;		// cannot simulate too large an ORAM
 	`else
 		parameter 			ORAML =					23; 
 	`endif

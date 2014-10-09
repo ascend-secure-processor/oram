@@ -1,4 +1,6 @@
 
+	// Traffic Gen
+
 	localparam				TCMDWidth =				8,
 							DBaseWidth = 			32,
 							TimeWidth =				32;
@@ -14,4 +16,8 @@
 							TCMD_CmdRnd_AddrLin =	8'hdf,
 							TCMD_CmdRnd_AddrRnd =	8'hef,
 							TCMD_Start =			8'hff;
+							
+	// Dummy Gen
+	
+	localparam				DummyGenLeaf =			{ORAML{1'b0}};
 	

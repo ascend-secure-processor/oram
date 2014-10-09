@@ -279,7 +279,7 @@ module IntegrityVerifier(
 							.Reverse(				1),
 							.SWidth(				DMSWidth))
 				mask_shift(	.Clock(					Clock), 
-							.Reset(					1'b0), 
+							.Reset(					Reset), 
 							.Load(					CSIdle && FECommandValid_Final && FECommandReady_Final),
 							.Enable(				CommandIsUpdate && BEPayloadReading), 
 							.PIn(					FEWMask),

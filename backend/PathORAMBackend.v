@@ -24,7 +24,9 @@ module PathORAMBackend(
 
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady
+	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
+	
+	Mode_DummyGen
 	);
 
 	//--------------------------------------------------------------------------
@@ -88,6 +90,12 @@ module PathORAMBackend(
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
+	//--------------------------------------------------------------------------
+	//	Utility interface
+	//--------------------------------------------------------------------------
+	
+	input					Mode_DummyGen;
+	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
@@ -174,7 +182,9 @@ module PathORAMBackend(
 
                             .ROPAddr(               ROPAddr),
 							.ROLeaf(				ROLeaf),
-							.REWRoundDummy(			REWRoundDummy));
+							.REWRoundDummy(			REWRoundDummy),
+							
+							.Mode_DummyGen(			Mode_DummyGen));
 
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption
@@ -259,43 +269,6 @@ module PathORAMBackend(
 		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
 	end endgenerate
 	//--------------------------------------------------------------------------
-
-	//--------------------------------------------------------------------------
-	//	DRAM Read Interface
-	//--------------------------------------------------------------------------
-
-	/*
-	This code was used to create predictable timing on the read path for debugging.
-
-	generate if (DebugDRAMReadTiming) begin:PRED_TIMING
-		wire	[PthBSTWidth-1:0] PthCnt;
-		wire				ReadStarted, ReadStopped;
-
-		assign	ReadStopped =						ReadStarted & ~PBF_DRAMReadDataValid;
-
-		Register #(			.Width(					1))
-				seen_first(	.Clock(					Clock),
-							.Reset(					Reset | ReadStopped),
-							.Set(					PBF_DRAMReadDataValid),
-							.Enable(				1'b0),
-							.In(					1'bx),
-							.Out(					ReadStarted));
-		Counter	 #(			.Width(					PthBSTWidth))
-				dbg_cnt(	.Clock(					Clock),
-							.Reset(					Reset | ReadStopped),
-							.Set(					1'b0),
-							.Load(					1'b0),
-							.Enable(				DRAMReadDataValid),
-							.In(					{PthBSTWidth{1'bx}}),
-							.Count(					PthCnt));
-
-		assign	PathBuffer_OutValid =				PthCnt == PathSize_DRBursts & PBF_DRAMReadDataValid;
-		assign	PathBuffer_OutReady =				PthCnt == PathSize_DRBursts & PathBuffer_OutReady_Pre;
-	end else begin:NORMAL_TIMING
-		assign	PathBuffer_OutValid =				PBF_DRAMReadDataValid;
-		assign	PathBuffer_OutReady =				PathBuffer_OutReady_Pre;
-	end endgenerate
-	*/
 
 	//--------------------------------------------------------------------------
 	//	DRAM Write Interface
