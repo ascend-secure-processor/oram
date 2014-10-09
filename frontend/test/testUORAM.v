@@ -215,8 +215,6 @@ module testUORAM;
 
     reg [64-1:0] CycleCount;
 
-	
-	
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
     end
@@ -251,6 +249,13 @@ module testUORAM;
 				GlobalAccessCountTrack[i][j] <= 0;
 			end
 		end
+
+		`ifdef GATE_SIM_POWER 
+		#(Cycle * 10000); // NOTE: this seems to be long enough to get accurate results on a 950 MHz clock
+		$display("Gatesim ran for its max time!");
+        $finish;
+		$vcdplusclose;
+		`endif
 	end	
 	
     task Task_StartORAMAccess;
@@ -415,6 +420,6 @@ module testUORAM;
 		end
 	end	
 	
-	`endif
+`endif
 		
 endmodule

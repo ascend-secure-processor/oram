@@ -23,7 +23,7 @@ module AESPathORAM(
     //  Parameters & Constants
     //------------------------------------------------------------------------------
 
-	`include "PathORAM.vh";
+	`include "PathORAM.vh"
 
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"

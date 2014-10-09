@@ -212,6 +212,13 @@ module TinyORAMASICWrap(
 							
 							.Mode_DummyGen(			Mode_DummyGen));
 	
+	always @(posedge Clock) begin
+		if (DRAMReadDataValid_ORAM)
+			$display("DummyGen giving data %x", DRAMReadData_ORAM);
+		if (DRAMWriteDataValid_ORAM)
+			$display("DummyGen getting data %x", DRAMWriteData_ORAM);
+	end
+	
 	assign	DRAMAddress =							DRAMAddress_ORAM;
 	assign	DRAMCommand =							DRAMCommand_ORAM;
 	assign	DRAMCommandValid =						(Mode_DummyGen) ? 1'b0 : 					DRAMCommandValid_ORAM;

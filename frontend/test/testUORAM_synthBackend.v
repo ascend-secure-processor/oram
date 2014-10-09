@@ -192,6 +192,7 @@ module testUORAM_synthBackend;
     reg [64-1:0] CycleCount;
     initial begin
         CycleCount = 0;
+		$vcdpluson;
     end
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
@@ -299,7 +300,8 @@ module testUORAM_synthBackend;
             end
             else begin
                 $display("ALL TESTS PASSED!");
-                $finish;  
+                $finish;
+				$vcdplusclose;
             end
         end
     end

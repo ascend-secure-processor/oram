@@ -72,6 +72,13 @@ module DummyGenASIC(
 			$finish;
 		end
 	end
+
+	/*
+	always @(posedge Clock) begin
+		if (DRAMReadDataValid)
+			$display("DummyGen giving data %x", DRAMReadData);
+	end
+	*/
 	`endif
 	
 	//--------------------------------------------------------------------------
