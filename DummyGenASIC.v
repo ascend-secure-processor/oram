@@ -7,13 +7,13 @@
 
 //==============================================================================
 //	Module:		DummyGenASIC
-//	Desc:		A simplified dumb traffic generator to test ORAM power consumption 
-//				on ASIC.
+//	Desc:		A simplified dumb traffic generator to test ORAM power 
+//				consumption on ASIC.
 //==============================================================================
 module DummyGenASIC(
   	Clock, Reset,
 
-	DRAMCommandValid,
+	DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid
 	);
 	//--------------------------------------------------------------------------
@@ -45,6 +45,7 @@ module DummyGenASIC(
 	//--------------------------------------------------------------------------
 	
 	input					DRAMCommandValid;
+	output					DRAMCommandReady;
 
 	output	[BEDWidth-1:0]	DRAMReadData;
 	output					DRAMReadDataValid;
@@ -56,7 +57,7 @@ module DummyGenASIC(
 	wire	[BktSize_RndBits-1:0] Bucket;
 	wire	[OWidth-1:0]	PAddrOffset;
 	wire	[BBWidth-1:0]	BucketCount;
-	wire					BucketDone;
+	wire					BurstDone, BucketDone;
 	wire					DRAMCommandValid_Delayed;
 	wire	[BEDWidth-1:0]	DRAMReadData_Pre, DataChunk_Pre, MaskChunk_Pre;
 
@@ -103,16 +104,24 @@ module DummyGenASIC(
 	//	Path gen
 	//--------------------------------------------------------------------------
 
-	ShiftRegister #(		.PWidth(				InitialReadLatency),
-							.SWidth(				1))
-				mask_shift(	.Clock(					Clock), 
-							.Reset(					Reset), 
-							.Load(					1'b0),
-							.Enable(				1'b1), 
-							.SIn(					DRAMCommandValid),
-							.SOut(					DRAMCommandValid_Delayed));
+	FIFOLinear	#(			.Width(					0),
+							.Depth(					InitialReadLatency))
+				cmd_v(		.Clock(					Clock),
+							.Reset(					Reset),
+
+							.InValid(				DRAMCommandValid),
+							.InAccept(				DRAMCommandReady),
+
+							.OutValid(				DRAMCommandValid_Delayed),
+							.OutReady(				BurstDone));
 	
-	CountAlarm 	#(			.Threshold(				BktSize_BEDChunks - 1))
+	CountAlarm 	#(			.Threshold(				BstSize_BEDChunks))
+				bst_cnt(	.Clock(					Clock),
+							.Reset(					Reset), 
+							.Enable(				DRAMCommandValid_Delayed),
+							.Done(					BurstDone));
+	
+	CountAlarm 	#(			.Threshold(				BktSize_BEDChunks))
 				bkt_cnt(	.Clock(					Clock),
 							.Reset(					Reset), 
 							.Enable(				DRAMCommandValid_Delayed),

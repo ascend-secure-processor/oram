@@ -68,7 +68,8 @@
 	//--------------------------------------------------------------------------
 
 	// BEDWidth/FEDWidth-related quantities
-	localparam				BlkSize_BEDChunks =		BlkSize_DRBursts * `divceil(DDRDWidth, BEDWidth),
+	localparam				BstSize_BEDChunks =		`divceil(DDRDWidth, BEDWidth),
+							BlkSize_BEDChunks =		BlkSize_DRBursts * BstSize_BEDChunks,
 							BktHSize_BEDChunks =	`divceil(BktHSize_RndBits, BEDWidth),
 							BktPSize_BEDChunks =	`divceil(BktPSize_RndBits, BEDWidth),
 							BktSize_BEDChunks =		BktHSize_BEDChunks + BktPSize_BEDChunks,

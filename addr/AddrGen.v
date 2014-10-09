@@ -120,10 +120,10 @@ module AddrGen
 	
 `ifdef SIMULATION
 
-	always @(posedge Clock) begin
+	/*always @(posedge Clock) begin
 		if (CmdValid && CmdReady && BktCounter == 0)
 			$display("Accessing DRAM address [%x], Bucket %x, ST = %x, Bkt=%d", Addr, BktIdx_Padded, STIdx, BktIdxInST);
-	end
+	end*/
 	
 	// Check that AddrGen is not mapping two different buckets to the same physical address
 	localparam 	CheckAddrGen = 1;

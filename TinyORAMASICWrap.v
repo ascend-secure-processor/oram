@@ -138,7 +138,7 @@ module TinyORAMASICWrap(
 	wire					DRAMWriteDataValid_ORAM, DRAMWriteDataReady_ORAM;							
 
 	wire	[BEDWidth-1:0] 	DRAMReadData_DGen;
-	wire					DRAMCommandValid_DGen, DRAMReadDataValid_DGen;
+	wire					DRAMCommandValid_DGen, DRAMCommandReady_DGen, DRAMReadDataValid_DGen;
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -216,7 +216,7 @@ module TinyORAMASICWrap(
 	assign	DRAMCommand =							DRAMCommand_ORAM;
 	assign	DRAMCommandValid =						(Mode_DummyGen) ? 1'b0 : 					DRAMCommandValid_ORAM;
 	assign	DRAMCommandValid_DGen =					(Mode_DummyGen) ? DRAMCommandValid_ORAM && DRAMCommand_ORAM == DDR3CMD_Read : 1'b0;
-	assign	DRAMCommandReady_ORAM =					(Mode_DummyGen) ? 1'b1 : 					DRAMCommandReady;
+	assign	DRAMCommandReady_ORAM =					(Mode_DummyGen) ? DRAMCommandReady_DGen : 	DRAMCommandReady;
 	
 	assign	DRAMReadData_ORAM =						(Mode_DummyGen) ? DRAMReadData_DGen : 		DRAMReadData;
 	assign	DRAMReadDataValid_ORAM =				(Mode_DummyGen) ? DRAMReadDataValid_DGen : 	DRAMReadDataValid;
@@ -230,6 +230,7 @@ module TinyORAMASICWrap(
 							.Reset(					Reset),
 
 							.DRAMCommandValid(		DRAMCommandValid_DGen), 
+							.DRAMCommandReady(		DRAMCommandReady_DGen),
 							
 							.DRAMReadData(			DRAMReadData_DGen), 
 							.DRAMReadDataValid(		DRAMReadDataValid_DGen));							
