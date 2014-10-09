@@ -244,6 +244,10 @@ module PathORAMBackend(
 				`else
 							.Reset(					1'b0),
 				`endif
+				
+							// Note: we tie this to constant here so that in ASIC, when we build AESPathORAM.v as a top module, logic doesn't get pruned.
+							.Key(					{AESWidth{1'b1}}),
+				
 							.DRAMReadData(			DRAMReadData),
 							.DRAMReadDataValid(		DRAMReadDataValid),
 							.DRAMReadDataReady(		PBF_DRAMReadDataReady),

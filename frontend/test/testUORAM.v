@@ -70,7 +70,7 @@ module testUORAM;
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
 							.Mode_TrafficGen(		1'b0),
-							.Mode_DummyGen(			1'b1));
+							.Mode_DummyGen(			1'b0));
 					
 	//--------------------------------------------------------------------------
 

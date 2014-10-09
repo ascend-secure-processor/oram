@@ -11,6 +11,8 @@
 module AESPathORAM(
 	           Clock, Reset,
 
+			   Key,
+			   
 	           DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
 	           DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 
@@ -42,7 +44,6 @@ module AESPathORAM(
     localparam BktHSize_AESChunks = (BktHSize_BEDChunks * BEDWidth) / IDWidth;
     localparam BktSizeAESWidth = `log2(BktSize_AESChunks);
 
-
     localparam IV_Delay = IDWidth/BEDWidth;
 
     localparam AESDataDepth = D + 5; // Note: ideally, D + 3 should work but there are a few extra cycles lost do to funnels/etc
@@ -58,7 +59,9 @@ module AESPathORAM(
     // System I/O
     //--------------------------------------------------------------------------
 
-    input                        Clock, Reset;
+    input					Clock, Reset;
+   
+	input [AESWidth-1:0]	Key;
 
     //--------------------------------------------------------------------------
     // MIG <-> AES
@@ -101,10 +104,6 @@ module AESPathORAM(
     wire [AESEntropy-1:0]        IVDataOut;
     wire                         IVDataOutValid;
     wire                         IVDataOutReady;
-
-    wire [AESWidth-1:0]          Key;
-    wire                         KeyValid;
-    wire                         KeyReady;
 
     wire [BEDWidth-1:0]          AESDataIn;
     wire                         AESDataInValid;
@@ -190,9 +189,6 @@ module AESPathORAM(
     //------------------------------------------------------------------------------
     //  Control logic
     //------------------------------------------------------------------------------
-
-    assign Key = {(AESWidth){1'b1}};
-    assign KeyValid = 1;
 
     assign PassThroughW = 0;
     assign PassThroughR = 0;
@@ -316,8 +312,8 @@ module AESPathORAM(
                                            GlobalCounter :
                                            DataIn[AESEntropy-1:0];
         assign AESDataIn[BEDWidth-1:AESEntropy] = DataIn[BEDWidth-1:AESEntropy];
-    end else if (BEDWidth == AESEntropy) begin: BED_LESS_AES
-        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? GlobalCounter : DataIn;
+    end else if (BEDWidth == AESEntropy) begin:BED_LESS_AES
+        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? {DataIn[BEDWidth-1:AESEntropy], GlobalCounter} : DataIn;
     end
     endgenerate
     assign AESDataInValid = DataInValid;
@@ -407,8 +403,6 @@ module AESPathORAM(
            .DataInReady(AESDWDataInAccept),
 
            .Key(Key),
-           .KeyValid(KeyValid),
-           .KeyReady(KeyReady),
 
            .DataOut(AESMaskIn),
            .DataOutValid(AESMaskInValid)

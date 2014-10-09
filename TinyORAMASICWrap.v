@@ -47,6 +47,8 @@ module TinyORAMASICWrap(
 	//	Constants
 	//--------------------------------------------------------------------------
 	
+	parameter				NetworkWidth =		64; // Princeton's network
+	
 	`include "PathORAM.vh"
 	
 	`include "DMLocal.vh"
@@ -213,9 +215,9 @@ module TinyORAMASICWrap(
 							.Mode_DummyGen(			Mode_DummyGen));
 	
 	always @(posedge Clock) begin
-		if (DRAMReadDataValid_ORAM)
+		if (DRAMReadDataValid_ORAM && Mode_DummyGen)
 			$display("DummyGen giving data %x", DRAMReadData_ORAM);
-		if (DRAMWriteDataValid_ORAM)
+		if (DRAMWriteDataValid_ORAM && Mode_DummyGen)
 			$display("DummyGen getting data %x", DRAMWriteData_ORAM);
 	end
 	
@@ -232,16 +234,21 @@ module TinyORAMASICWrap(
 	assign	DRAMWriteMask =							DRAMWriteMask_ORAM;
 	assign	DRAMWriteDataValid = 					(Mode_DummyGen) ? 1'b0 : 					DRAMWriteDataValid_ORAM;
 	assign	DRAMWriteDataReady_ORAM = 				(Mode_DummyGen) ? 1'b1 : 					DRAMWriteDataReady;	
-							
-	DummyGenASIC 	dgen(	.Clock(					Clock), 
+	
+	DummyGenASIC 	dgen(	.Clock(					Clock),
 							.Reset(					Reset),
 
 							.DRAMCommandValid(		DRAMCommandValid_DGen), 
 							.DRAMCommandReady(		DRAMCommandReady_DGen),
 							
-							.DRAMReadData(			DRAMReadData_DGen), 
-							.DRAMReadDataValid(		DRAMReadDataValid_DGen));							
+							.DRAMReadData(			DRAMReadData_DGen),
+							.DRAMReadDataValid(		DRAMReadDataValid_DGen));						
 
+	//--------------------------------------------------------------------------
+	//	Core modules
+	//--------------------------------------------------------------------------
+							
+							
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

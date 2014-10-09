@@ -21,8 +21,6 @@ module AES_W
    DataInReady,
 
    Key,
-   KeyValid,
-   KeyReady,
 
    DataOut,
    DataOutValid
@@ -49,8 +47,6 @@ module AES_W
     output                      DataInReady;
 
     input [AESWidth-1:0]        Key;
-    input                       KeyValid;
-    output                      KeyReady;
 
     output [W*AESWidth-1:0]     DataOut;
     output                      DataOutValid;
@@ -61,24 +57,20 @@ module AES_W
 
     localparam D = 21;
 
-    wire                        ValidAccept;
     wire                        ValidOut;
-    wire                        ValidOutValid;
 
     wire [W*AESWidth-1:0]       AESRes;
 
     //carry the valid signal from input for D cycles
-    FIFOLinear#(.Width(1),
-                .Depth(D))
-    valid_fifo(.Clock(Clock),
-               .Reset(Reset),
-               .InData(DataInValid & KeyValid),
-               .InValid(DataInValid & KeyValid),
-               .InAccept(ValidAccept),
-               .OutData(ValidOut),
-               .OutValid(ValidOutValid),
-               .OutReady(1'b1));
-
+	ShiftRegister #(		.PWidth(				D),
+							.SWidth(				1))
+				V_shift(	.Clock(					Clock), 
+							.Reset(					Reset), 
+							.Load(					1'b0), 
+							.Enable(				1'b1),
+							.SIn(					DataInValid),
+							.SOut(					ValidOut));					   
+			   
     genvar k;
     generate
         for (k = 0; k < W; k = k + 1) begin: AES
@@ -90,10 +82,9 @@ module AES_W
     endgenerate
 
     //IO assignment
-    assign DataInReady = ValidAccept & KeyValid;
-    assign KeyReady = ValidAccept & DataInValid;
+    assign DataInReady = 1'b1;
     assign DataOut = AESRes;
-    assign DataOutValid = ValidOut & ValidOutValid;
+    assign DataOutValid = ValidOut;
 
 
 endmodule

@@ -45,7 +45,7 @@ localparam				PINIT =					-1;
 	
 	parameter				FEDWidth =				64, 	// data width of frontend busses (reading/writing from/to stash, LLC network interface width)
 															// This is typically (but doesn't have to be) <= BEDWidth
-							BEDWidth =				64; 	// backend datapath width (access latency is \propto Path size / BEDWidth)
+							BEDWidth =				128; 	// backend datapath width (access latency is \propto Path size / BEDWidth)
 					
 	parameter				Overclock = 			1; 		// Pipeline various operations inside the stash (needed for 200 Mhz operation)
 						
