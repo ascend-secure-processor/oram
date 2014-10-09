@@ -204,7 +204,7 @@ module UORAMDataPath
 								.Set(       SwitchReq && DataBlockReq && DumbRequest && (Cmd == BECMD_Read || Cmd == BECMD_ReadRmv)),
 								.Out(       FakeLoading));
 
-	localparam		FakeData = {(FEDWidth/32){32'h00af1234}};						
+	localparam		FakeData = {(FEDWidth/32){FakePattern}};						
 								
 	// ---------------------------------------------------------
 

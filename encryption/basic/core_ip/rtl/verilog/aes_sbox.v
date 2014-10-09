@@ -54,8 +54,6 @@
 //
 //
 
-`include "timescale.v"
-
 module aes_sbox(a,d);
 input	[7:0]	a;
 output	[7:0]	d;

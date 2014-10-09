@@ -9,3 +9,5 @@
 	parameter				PRFPosMap = 			1;
 	parameter				Recursion = 			`divceil(ORAML + 2 - 10, 4 - PRFPosMap) + 1;	// recursive until < 1024 entries in PosMap
 `endif
+
+	localparam				FakePattern =			32'h00af1234;

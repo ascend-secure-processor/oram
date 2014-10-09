@@ -245,7 +245,7 @@ module TinyORAMASICWrap(
 							.DRAMReadDataValid(		DRAMReadDataValid_DGen));						
 
 	//--------------------------------------------------------------------------
-	//	Core modules
+	//	Funnels to Princeton network width
 	//--------------------------------------------------------------------------
 							
 							

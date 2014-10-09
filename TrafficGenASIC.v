@@ -159,10 +159,8 @@ module TrafficGenASIC(
 			StopGapPeriod = 0;
 			
 			if (ERROR_MismatchReceivePattern) begin
-				$display("[%m] WARNING: Traffic gen data mismatch (%x != %x)", DataOutExpected, DataOutActual);
-				if (DataOutActual != {(ORAMB/32){32'hdeaf1234}}) begin
-					$finish;
-				end
+				$display("[%m] ERROR: Traffic gen data mismatch (%x != %x)", DataOutExpected, DataOutActual);	
+				$finish;
 			end
 		end
 		
@@ -388,7 +386,7 @@ module TrafficGenASIC(
 							.OutSend(				DataOutExpectedValid),
 							.OutReady(				DataOutActualValid));								
 			
-	assign	ERROR_MismatchReceivePattern =			(DataOutActual != DataOutExpected) & DataOutActualValid; 		
+	assign	ERROR_MismatchReceivePattern =			(DataOutActual != {(ORAMB/32){FakePattern}}) && (DataOutActual != DataOutExpected) && DataOutActualValid; 		
 				
 	//------------------------------------------------------------------------------
 	//	Messages
