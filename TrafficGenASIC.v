@@ -132,6 +132,8 @@ module TrafficGenASIC(
 	
 	wire	[DBaseWidth-1:0] SeedAccessCount;
 	
+	wire					OutRandomBit, OutRandomBitValid, OutRandomBitReady;	
+	
 	wire					ResetPRNG, PRNGOutValid;
 	wire	[ORAMU-1:0]		PRNGOutData;
 	
@@ -269,13 +271,26 @@ module TrafficGenASIC(
 	assign	AccessHalfThresholdReached =			SeedAccessCount >= (AccessCount >> 1);
 	assign	AccessThresholdReached =				SeedAccessCount == AccessCount;
 
-	PRNG 		#(			.RandWidth(				ORAMU))
-				addr_gen(	.Clock(					Clock),
-							.Reset(					Reset | ResetPRNG),
-							.RandOutReady(			CSSeed & CrossBufIn_DataInReady),
-							.RandOutValid(			PRNGOutValid),
-							.RandOut(				PRNGOutData),
-							.SecretKey(				{AESWidth{1'b0}}));
+	LFSR			#(		.PWidth(				32),
+							.SWidth(				1),
+							.Poly(					32'h04C11DB7))
+					rnd_b(	.Clock(					Clock),
+							.Reset(					1'b0),
+							.Load(					Reset | ResetPRNG),
+							.Enable(				OutRandomBitReady),
+							.PIn(					32'hffffffff),
+							.SIn(					1'b0),
+							.SOut(					OutRandomBit));
+	FIFOShiftRound #(		.IWidth(				1),
+							.OWidth(				ORAMU))
+				addr_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				OutRandomBit),
+							.InValid(				1'b1),
+							.InAccept(				OutRandomBitReady),
+							.OutData(				PRNGOutData),
+							.OutValid(				PRNGOutValid),
+							.OutReady(				CSSeed & CrossBufIn_DataInReady));
 
 	assign	RandomAddress =							PRNGOutData & AccessAddrMask;
 	assign	ScanAddress =							((AccessHalfThresholdReached) ?  SeedAccessCount - (AccessCount >> 1) : SeedAccessCount);

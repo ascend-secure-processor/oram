@@ -40,7 +40,9 @@ module TinyORAMASICWrap(
 	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
 	
 	Mode_TrafficGen, 
-	Mode_DummyGen
+	Mode_DummyGen,
+	
+	
 	);
 	
 	//--------------------------------------------------------------------------
@@ -98,10 +100,14 @@ module TinyORAMASICWrap(
 	input					DRAMWriteDataReady;
 
 	//--------------------------------------------------------------------------
-	//	Status interface
+	//	Mode interface
 	//--------------------------------------------------------------------------
 
 	input					Mode_TrafficGen, Mode_DummyGen;	
+
+	//--------------------------------------------------------------------------
+	//	JTAG interface
+	//--------------------------------------------------------------------------
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
