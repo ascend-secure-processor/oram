@@ -37,7 +37,7 @@ module TinyORAMASICWrap(
 
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
 	Mode_TrafficGen, 
 	Mode_DummyGen,
@@ -49,7 +49,12 @@ module TinyORAMASICWrap(
 	//	Constants
 	//--------------------------------------------------------------------------
 	
+	`ifdef SIMULATION_VIVADO
 	parameter				NetworkWidth =		64; // Princeton's network
+	`else
+	`include "network_define.v"
+	parameter				NetworkWidth =		`DATA_WIDTH;
+	`endif
 	
 	`include "PathORAM.vh"
 	
@@ -91,11 +96,10 @@ module TinyORAMASICWrap(
 	output					DRAMCommandValid;
 	input					DRAMCommandReady;
 
-	input	[BEDWidth-1:0]	DRAMReadData;
+	input	[NetworkWidth-1:0] DRAMReadData;
 	input					DRAMReadDataValid;
 
-	output	[BEDWidth-1:0]	DRAMWriteData;
-	output	[DDRMWidth-1:0]	DRAMWriteMask;
+	output	[NetworkWidth-1:0] DRAMWriteData;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -142,11 +146,13 @@ module TinyORAMASICWrap(
 	wire					DRAMReadDataValid_ORAM;
 
 	wire	[BEDWidth-1:0]	DRAMWriteData_ORAM;
-	wire	[DDRMWidth-1:0]	DRAMWriteMask_ORAM;
 	wire					DRAMWriteDataValid_ORAM, DRAMWriteDataReady_ORAM;							
 
 	wire	[BEDWidth-1:0] 	DRAMReadData_DGen;
 	wire					DRAMCommandValid_DGen, DRAMCommandReady_DGen, DRAMReadDataValid_DGen;
+	
+	wire	[BEDWidth-1:0]	DRAMReadData_BED, DRAMWriteData_BED;
+	wire					DRAMReadDataValid_BED, DRAMWriteDataValid_BED, DRAMWriteDataReady_BED;	
 	
 	//--------------------------------------------------------------------------
 	//	Core modules
@@ -214,7 +220,6 @@ module TinyORAMASICWrap(
 							.DRAMReadDataValid(		DRAMReadDataValid_ORAM),
 							
 							.DRAMWriteData(			DRAMWriteData_ORAM), 
-							.DRAMWriteMask(			DRAMWriteMask_ORAM), 
 							.DRAMWriteDataValid(	DRAMWriteDataValid_ORAM), 
 							.DRAMWriteDataReady(	DRAMWriteDataReady_ORAM),
 							
@@ -233,13 +238,12 @@ module TinyORAMASICWrap(
 	assign	DRAMCommandValid_DGen =					(Mode_DummyGen) ? DRAMCommandValid_ORAM && DRAMCommand_ORAM == DDR3CMD_Read : 1'b0;
 	assign	DRAMCommandReady_ORAM =					(Mode_DummyGen) ? DRAMCommandReady_DGen : 	DRAMCommandReady;
 	
-	assign	DRAMReadData_ORAM =						(Mode_DummyGen) ? DRAMReadData_DGen : 		DRAMReadData;
-	assign	DRAMReadDataValid_ORAM =				(Mode_DummyGen) ? DRAMReadDataValid_DGen : 	DRAMReadDataValid;
+	assign	DRAMReadData_ORAM =						(Mode_DummyGen) ? DRAMReadData_DGen : 		DRAMReadData_BED;
+	assign	DRAMReadDataValid_ORAM =				(Mode_DummyGen) ? DRAMReadDataValid_DGen : 	DRAMReadDataValid_BED;
 	
-	assign	DRAMWriteData =							DRAMWriteData_ORAM;
-	assign	DRAMWriteMask =							DRAMWriteMask_ORAM;
-	assign	DRAMWriteDataValid = 					(Mode_DummyGen) ? 1'b0 : 					DRAMWriteDataValid_ORAM;
-	assign	DRAMWriteDataReady_ORAM = 				(Mode_DummyGen) ? 1'b1 : 					DRAMWriteDataReady;	
+	assign	DRAMWriteData_BED =						DRAMWriteData_ORAM;
+	assign	DRAMWriteDataValid_BED = 				(Mode_DummyGen) ? 1'b0 : 					DRAMWriteDataValid_ORAM;
+	assign	DRAMWriteDataReady_ORAM = 				(Mode_DummyGen) ? 1'b1 : 					DRAMWriteDataReady_BED;	
 	
 	DummyGenASIC 	dgen(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -253,8 +257,31 @@ module TinyORAMASICWrap(
 	//--------------------------------------------------------------------------
 	//	Funnels to Princeton network width
 	//--------------------------------------------------------------------------
+
+	FIFOShiftRound #(		.IWidth(				NetworkWidth),
+							.OWidth(				BEDWidth),
+							.Register(				1))
+				rd_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMReadData),
+							.InValid(				DRAMReadDataValid),
+							.InAccept(				),
+							.OutData(				DRAMReadData_BED),
+							.OutValid(				DRAMReadDataValid_BED),
+							.OutReady(				1'b1));
 							
-							
+	FIFOShiftRound #(		.IWidth(				BEDWidth),
+							.OWidth(				NetworkWidth),
+							.Register(				1))
+				wr_shft(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				DRAMWriteData_BED),
+							.InValid(				DRAMWriteDataValid_BED),
+							.InAccept(				DRAMWriteDataReady_BED),
+							.OutData(				DRAMWriteData),
+							.OutValid(				DRAMWriteDataValid),
+							.OutReady(				DRAMWriteDataReady));							
+	
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

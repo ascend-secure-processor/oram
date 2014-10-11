@@ -51,7 +51,8 @@ module	SynthesizedRandDRAM(
 						InDataBufDepth =		16,
 	                    OutInitLat =            30,    // model dram latency
 	                    OutBandWidth =          79,    // percent
-	                         
+	                    InBandWidth =			50,
+						
                         UWidth =				9, // 9b units matches XCV5 BRAM
                         AWidth =				12,	// 36Kb
                         DWidth =				UWidth, // 9b transfers
@@ -133,6 +134,7 @@ module	SynthesizedRandDRAM(
     //--------------------------------------------------------------------------
     //	Internal signals
     //--------------------------------------------------------------------------
+	
     wire	[AWidth-1:0]	CommandAddress_Internal;
     wire	[DRAMCMD_CWidth-1:0] Command_Internal;
     wire					CommandValid_Internal;
@@ -148,6 +150,8 @@ module	SynthesizedRandDRAM(
     wire	[ERWidth-1:0]	DataOutErrorCorrected_Internal;
     wire					DataOutValid_Internal;
     wire					DataOutReady_Internal;
+	
+	wire					DataInValid_Pre, DataInReady_Pre;
 		
     FIFORAM	#(				.Width(					DRAMCMD_CWidth + AWidth),
                             .Buffering(				InBufDepth))
@@ -165,13 +169,12 @@ module	SynthesizedRandDRAM(
                 din_buf(	.Clock(					Clock),
                             .Reset(					Reset),
                             .InData(				{DataIn, DataInMask}),
-                            .InValid(				DataInValid),
-                            .InAccept(				DataInReady),
+                            .InValid(				DataInValid_Pre),
+                            .InAccept(				DataInReady_Pre),
                             .OutData(				{DataIn_Internal, DataInMask_Internal}),
                             .OutSend(				DataInValid_Internal),
                             .OutReady(				DataInReady_Internal));	
 
-    			
     SynthesizedDRAM	#(		.UWidth(				UWidth),
                             .AWidth(				AWidth),
                             .DWidth(				DWidth),
@@ -203,8 +206,8 @@ module	SynthesizedRandDRAM(
                             .DataOutReady(			DataOutReady_Internal)
                 );
 	
-    wire        Stall, DataOutValid_Rand, DataOutReady_Rand;
-    reg  [7:0]  RandModulator;
+    wire        Stall, Stall2, DataOutValid_Rand, DataOutReady_Rand;
+    reg [6:0]   RandModulator, RandModulator2;
 	
     FIFORAM #(				.Width(					DWidth + EHWidth + ERWidth),
 							.FWLatency(				OutInitLat),
@@ -216,16 +219,24 @@ module	SynthesizedRandDRAM(
                 			.InAccept(				DataOutReady_Internal),
                 			.OutData(				{DataOut, 			DataOutErrorChecked, 			DataOutErrorCorrected}),
                 			.OutSend(				DataOutValid_Rand),
-                			.OutReady(				DataOutReady_Rand));	
-	
- 
+                			.OutReady(				DataOutReady_Rand));
     
-    always @ (posedge Clock)
-        RandModulator <= $random % 100;
+	reg [6:0] rand1, rand2; // convert random to unsigned
+	
+    always @ (posedge Clock) begin
+		rand1 = $random;
+		rand2 = $random;
+        RandModulator = rand1 % 100;
+		RandModulator2 = rand2 % 100;
+	end
 	
 	assign Stall = RandModulator > OutBandWidth;
 	assign DataOutValid = DataOutValid_Rand && !Stall;
 	assign DataOutReady_Rand = DataOutReady && !Stall;
+	
+	assign Stall2 = RandModulator2 > InBandWidth;
+	assign DataInValid_Pre = !Stall2 & DataInValid;
+	assign DataInReady = !Stall2 & DataInReady_Pre;
 	
 endmodule
 //------------------------------------------------------------------------------

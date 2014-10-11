@@ -29,7 +29,7 @@ module TinyORAMCore(
 
 	DRAMAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
 	Mode_DummyGen
 	);
@@ -103,7 +103,6 @@ module TinyORAMCore(
 	input					DRAMReadDataValid;
 
 	output	[BEDWidth-1:0]	DRAMWriteData;
-	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -249,7 +248,6 @@ module TinyORAMCore(
 							.DRAMReadDataValid(		DRAMReadDataValid),
 
 							.DRAMWriteData(			DRAMWriteData),
-							.DRAMWriteMask(			DRAMWriteMask),
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady),
 							

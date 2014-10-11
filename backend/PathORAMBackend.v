@@ -24,7 +24,7 @@ module PathORAMBackend(
 
 	DRAMCommandAddress, DRAMCommand, DRAMCommandValid, DRAMCommandReady,
 	DRAMReadData, DRAMReadDataValid,
-	DRAMWriteData, DRAMWriteMask, DRAMWriteDataValid, DRAMWriteDataReady,
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
 	Mode_DummyGen
 	);
@@ -86,7 +86,6 @@ module PathORAMBackend(
 	input					DRAMReadDataValid;
 
 	output	[BEDWidth-1:0]	DRAMWriteData;
-	output	[DDRMWidth-1:0]	DRAMWriteMask;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
 
@@ -272,14 +271,6 @@ module PathORAMBackend(
 		assign	DRAMWriteDataValid =				AES_DRAMWriteDataValid;
 		assign	AES_DRAMWriteDataReady =			DRAMWriteDataReady;
 	end endgenerate
-	//--------------------------------------------------------------------------
-
-	//--------------------------------------------------------------------------
-	//	DRAM Write Interface
-	//--------------------------------------------------------------------------
-
-	assign	DRAMWriteMask =							{DDRMWidth{1'b0}};
-
 	//--------------------------------------------------------------------------
 endmodule
 //------------------------------------------------------------------------------

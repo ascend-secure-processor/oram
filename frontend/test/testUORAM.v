@@ -11,6 +11,13 @@ module testUORAM;
 	`include "BucketLocal.vh" 
 	`include "PLBLocal.vh" 
 	
+	`ifdef SIMULATION_VIVADO
+	parameter				NetworkWidth =		64; // Princeton's network
+	`else
+	`include "network_define.v"
+	parameter				NetworkWidth =		`DATA_WIDTH;
+	`endif
+	
     wire 						Clock; 
     wire 						Reset; 
     reg  						CmdInValid, DataInValid, ReturnDataReady;
@@ -23,8 +30,7 @@ module testUORAM;
 	
 	wire	[DDRCWidth-1:0]		DDR3SDRAM_Command;
 	wire	[DDRAWidth-1:0]		DDR3SDRAM_Address;
-	wire	[BEDWidth-1:0]		DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
-	wire	[DDRMWidth-1:0]		DDR3SDRAM_WriteMask;
+	wire	[NetworkWidth-1:0]	DDR3SDRAM_WriteData, DDR3SDRAM_ReadData; 
 
 	wire	[DDRDWidth-1:0]		DDR3SDRAM_ReadData_Wide,	DDR3SDRAM_ReadData_Wide_Pre;
 	wire						DDR3SDRAM_ReadValid_Wide, 	DDR3SDRAM_ReadReady_Wide;
@@ -36,6 +42,8 @@ module testUORAM;
 	wire						DDR3SDRAM_CommandValid, DDR3SDRAM_CommandReady;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
+	
+	reg							TGEN;
 
 	//--------------------------------------------------------------------------
 	//	CUT
@@ -65,11 +73,10 @@ module testUORAM;
                             .DRAMReadData(			DDR3SDRAM_ReadData),
                             .DRAMReadDataValid(		DDR3SDRAM_ReadValid),		
                             .DRAMWriteData(			DDR3SDRAM_WriteData),
-                            .DRAMWriteMask(			DDR3SDRAM_WriteMask),
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
-							.Mode_TrafficGen(		1'b0),
+							.Mode_TrafficGen(		TGEN),
 							.Mode_DummyGen(			1'b0));
 					
 	//--------------------------------------------------------------------------
@@ -82,7 +89,7 @@ module testUORAM;
 	// It is cleaner and also makes more sense since IV/seed comes first now
    
 	FIFOShiftRound #(		.IWidth(				DDRDWidth),
-							.OWidth(				BEDWidth),
+							.OWidth(				NetworkWidth),
 							.Reverse(				1))
 				in_shft(	.Clock(					Clock),
 							.Reset(					Reset),
@@ -93,7 +100,7 @@ module testUORAM;
 							.OutValid(				DDR3SDRAM_ReadValid),
 							.OutReady(				1'b1));
 							
-	FIFOShiftRound #(		.IWidth(				BEDWidth),
+	FIFOShiftRound #(		.IWidth(				NetworkWidth),
 							.OWidth(				DDRDWidth),
 							.Reverse(				1))
 				out_shft(	.Clock(					Clock),
@@ -135,14 +142,25 @@ module testUORAM;
 			$display("Lose DRAM read data");
 			$finish;
 		end
+		
+		if (DDR3SDRAM_WriteValid_Wide === 1'bx ||
+			DDR3SDRAM_WriteReady_Wide === 1'bx ||
+			DDR3SDRAM_ReadData_Wide_Pre === 1'bx ||
+			DDR3SDRAM_ReadValid_Wide_Pre === 1'bx ||
+			DDR3SDRAM_ReadReady_Wide_Pre === 1'bx) begin
+			$display("DRAM control signals is X");
+			$finish;
+		end
 	end
 	
 	localparam				InBufDepth = 6,
 							OutInitLat = 30,
-							OutBandWidth = 57;
+							OutBandWidth = 57,
+							InBandWidth = 100;
 	SynthesizedRandDRAM	#(	.InBufDepth(			InBufDepth),
 	                        .OutInitLat(			OutInitLat),
 	                        .OutBandWidth(			OutBandWidth),
+							.InBandWidth(			InBandWidth),
                             .UWidth(				64),
                             .AWidth(				DDRAWidth),
                             .DWidth(				DDRDWidth),
@@ -236,10 +254,11 @@ module testUORAM;
 		TestCount = 0;
 		CmdInValid = 0;
 		DataInValid = 0;
-		ReturnDataReady = 1;   
+		ReturnDataReady = 1;
 		AddrRand = 0;
 		Checking_ProgData = 0;
         CycleCount = 0;
+		TGEN = 1'b0;
 		
 		`ifdef GATE_SIM_POWER $vcdpluson; `endif	
 		
@@ -373,9 +392,8 @@ module testUORAM;
 					$finish;   
             end
             else begin
-                $display("ALL TESTS PASSED!");
-                $finish;
-				`ifdef GATE_SIM_POWER $vcdplusclose; `endif
+                $display("TESTUORAM PASSED!");
+                TGEN = 1'b1;
             end
         end
     end

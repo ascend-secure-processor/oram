@@ -351,14 +351,38 @@ module AESPathORAM(
 
 `ifdef SIMULATION
     always @ (posedge Clock) begin
-		if (AESDataInValid && !AESDataInAccept) begin
+		if (RW == PATH_READ && AESDataInValid && !AESDataInAccept) begin
 			$display("Lose ciphertexts!");
 			$finish;
 		end
+		
 		if ((IVDataInValid && !IVDataInAccept)) begin
 			$display("Lose IVs!");
 			$finish;
 		end
+		
+		if (AESMaskInValid_BED && ~AESMaskInAccept_BED) begin
+			$display("Lose Masks!");
+			$finish;				  
+		end
+		
+		/*
+		if (RW == PATH_WRITE && AESDataInValid && AESDataInAccept) begin
+			$display("[AES] Data in");
+		end
+		
+		if (RW == PATH_WRITE && AESMaskInValid_BED && AESMaskInAccept_BED) begin
+			$display("[AES] Mask in");
+		end		
+		
+		if (RW == PATH_WRITE && DRAMWriteDataValid && DRAMWriteDataReady) begin
+			$display("[AES] DRAM write");
+		end		
+
+		if (RW == PATH_WRITE && BackendWValid && BackendWReady) begin
+			$display("[AES] Backend write");
+		end
+		*/
     end
 `endif
 
@@ -422,7 +446,7 @@ module AESPathORAM(
                   );
 
     FIFORAM#(.Width(BEDWidth),
-             .Buffering(BktSize_BEDChunks+1))
+             .Buffering(2 * (BktSize_BEDChunks+1))) // FIXME: this is a conservative fix to the data backpressure problem that is guaranteed to work ... just so expensive. 10/10/2014.  Talk with team to fix ...
     aesmask_fifo (.Clock(Clock),
                   .Reset(Reset),
                   .InData(AESMaskIn_BED),
@@ -432,7 +456,6 @@ module AESPathORAM(
                   .OutSend(AESMaskOutValid),
                   .OutReady(AESMaskOutReady)
                   );
-
 
     //------------------------------------------------------------------------------
     //  Enc/Dec
@@ -495,8 +518,7 @@ module AESPathORAM(
              );
 
     assign PathTransition = PathReadCtr_Reset & DataOutValid & DataOutReady;
-
-
+	
     //BackendW related
     assign DRAMWriteData = PassThroughW ? BackendWData : DataOut ;
     assign DRAMWriteDataValid = PassThroughW ? BackendWValid : (RW == PATH_WRITE) & DataOutValid;
