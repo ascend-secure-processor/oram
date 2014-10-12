@@ -29,15 +29,15 @@ module aes_128(clk, state, key, out);
       end
 
 	one_round 
-		r1 (clk, k0, 8'h1,  s0, k1, s1),
-        r2 (clk, k1, 8'h2,  s1, k2, s2),
-        r3 (clk, k2, 8'h4,  s2, k3, s3),
-        r4 (clk, k3, 8'h8,  s3, k4, s4),
-        r5 (clk, k4, 8'h10, s4, k5, s5),
-        r6 (clk, k5, 8'h20, s5, k6, s6),
-        r7 (clk, k6, 8'h40, s6, k7, s7),
-        r8 (clk, k7, 8'h80, s7, k8, s8),
-        r9 (clk, k8, 8'h1b, s8, k9, s9);
+		r1 (clk, k0, s0, 8'h1,  k1, s1),
+        r2 (clk, k1, s1, 8'h2,  k2, s2),
+        r3 (clk, k2, s2, 8'h4,  k3, s3),
+        r4 (clk, k3, s3, 8'h8,  k4, s4),
+        r5 (clk, k4, s4, 8'h10, k5, s5),
+        r6 (clk, k5, s5, 8'h20, k6, s6),
+        r7 (clk, k6, s6, 8'h40, k7, s7),
+        r8 (clk, k7, s7, 8'h80, k8, s8),
+        r9 (clk, k8, s8, 8'h1b, k9, s9);
 
 	expand_key_128 	
 		a10 (clk, k9,   , k9b, 8'h36);		
