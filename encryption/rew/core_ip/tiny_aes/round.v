@@ -15,7 +15,18 @@
  */
 
 /* one AES round for every two clock cycles */
-module one_round (clk, state_in, key, state_out);
+module one_round (clk, key_in, state_in, rcon, key_out, state_out);
+    input           clk;
+    input	[127:0]	state_in, key_in;
+	input 	[7:0]   rcon;
+    output  [127:0] state_out, key_out;
+	wire	[127:0] key_b;
+	
+	expand_key_128 a (clk, key_in, key_out, key_b, rcon);
+	one_round_sub r (clk, state_in, key_b, state_out);
+endmodule
+
+module one_round_sub (clk, state_in, key, state_out);
     input              clk;
     input      [127:0] state_in, key;
     output reg [127:0] state_out;

@@ -29,7 +29,7 @@ module AES_W
 
 `include "PathORAM.vh"
 
-    parameter W = 4;
+    parameter W = 1;
     parameter AESWIn_Width = AESEntropy;
 
     //--------------------------------------------------------------------------

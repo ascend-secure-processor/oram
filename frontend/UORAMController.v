@@ -205,8 +205,10 @@ module UORAMController
     // if EvictionRequest, write back a PosMap block; otherwise serve the next access in the queue
     assign CmdOut = (EvictionRequest || InitRequest) ? BECMD_Append
 						: DataBlockReq ? LastCmd : BECMD_ReadRmv;
-	assign WMaskOut = (EvictionRequest || InitRequest) ? {DMWidth{1'bx}}
+	assign WMaskOut = (EvictionRequest || InitRequest) ? {DMWidth{1'bx}}	
 						: DataBlockReq ? LastMask : {DMWidth{1'bx}};
+			// Note : this is because PosMap eviction is always append, and append does not need a mask (or PMMAC assumes mask is all 1 on an append)
+			// 		Be very careful if we decide to go for an inclusive PosMap/PLB design, in which case we do not mask for PLB block eviction
     assign AddrOut = EvictionRequest ? NumValidBlock + PPPAddrOut / LeafInBlock : AddrQ[QDepth];
 	
     assign SwitchReq = (CmdOutReady && CmdOutValid && !EvictionRequest) || (!DataBlockReq && PPPUnInitialized);
