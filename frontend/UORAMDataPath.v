@@ -138,7 +138,7 @@ module UORAMDataPath
 
     // control signal
     (* mark_debug = "TRUE" *) wire ExpectingPosMapBlock, ExpectingDataBlock, ExpectingProgStore;
-    (* mark_debug = "FALSE" *) wire [LogFEORAMBChunks-1:0] ProgDataCounter;
+    (* mark_debug = "TRUE" *) wire [LogFEORAMBChunks-1:0] ProgDataCounter;
     (* mark_debug = "TRUE" *) wire DataReturnTransfer, DataInTransfer, ProgCounterInc, DataTransferEnd;
 
     assign ExpectingProgramData =  ExpectingDataBlock || ExpectingProgStore;

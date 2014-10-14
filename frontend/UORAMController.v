@@ -73,7 +73,7 @@ module UORAMController
     input  [FEDWidth-1:0] LoadData;
 	
 	// Save the input data in case the client really needs to send data before command
-	(* mark_debug = "FALSE" *) wire 	[FEDWidth-1:0] 	DataIn_Internal;
+	wire 	[FEDWidth-1:0] 	DataIn_Internal;
 	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
 
 	localparam				BlkSize_FEDChunks =		`divceil(ORAMB, FEDWidth);	
@@ -129,7 +129,7 @@ module UORAMController
 
     // ================================== PosMapPLB ============================
     (* mark_debug = "TRUE" *) wire PPPCmdReady, PPPCmdValid;
-    (* mark_debug = "FALSE" *) wire [1:0] PPPCmd;
+    (* mark_debug = "TRUE" *) wire [1:0] PPPCmd;
     (* mark_debug = "FALSE" *) wire [ORAMU-1:0] PPPAddrIn, PPPAddrOut;
     (* mark_debug = "TRUE" *) wire PPPRefill;
     (* mark_debug = "FALSE" *) wire [LeafWidth-1:0] PPPRefillData;
