@@ -32,7 +32,9 @@ module IntegrityVerifier(
 	BELoadData, 
 	BELoadValid, BELoadReady,
 	BEStoreData,
-	BEStoreValid, BEStoreReady
+	BEStoreValid, BEStoreReady,
+	
+	JTAG_PMMAC
 	);
 		
 	//--------------------------------------------------------------------------
@@ -43,6 +45,7 @@ module IntegrityVerifier(
 	`include "CommandsLocal.vh"
 	`include "DMLocal.vh"
 	`include "IVLocal.vh"
+	`include "JTAG.vh"
 	
 	localparam				HashByteCount =			`divceil(AESEntropy + ORAMU + ORAMB, FEDWidth) * `divceil(FEDWidth, 8),
 							FullDigestWidth = 		224,
@@ -119,6 +122,12 @@ module IntegrityVerifier(
 	output	[FEDWidth-1:0]	BEStoreData;
 	output 					BEStoreValid;
 	input 					BEStoreReady;
+
+	//--------------------------------------------------------------------------
+	//	Status/Debugging Interface
+	//--------------------------------------------------------------------------
+	
+	output	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -128,7 +137,7 @@ module IntegrityVerifier(
 	
 	reg		[STWidth-1:0]	CS, NS;
 	
-	wire					ERROR_IV;
+	wire					IVViolation;
 	
 	wire					RdRmv_Terminal, CommandIsReadRmv;
 	wire					CommandIsUpdate, Update_Terminal;
@@ -209,13 +218,21 @@ module IntegrityVerifier(
 	wire	[ORAMH-1:0] 	MACOut;
 	wire	[MACPADWidth-1:0] MACOut_Padded;	
 	
+	// Debugging
+	
+	wire					ERROR_IV;
+	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 	
+	Register1b 	errno1(Clock, Reset, IVViolation, ERROR_IV);
+	
+	assign	JTAG_PMMAC =							ERROR_IV;
+	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (!Reset && ERROR_IV !== 1'b0) begin
+			if (!Reset && IVViolation !== 1'b0) begin
 				$display("ERROR: Integrity violation (expected,actual) : (%x:%x)", MACOut, LoadMAC);
 				$finish;
 			end
@@ -394,7 +411,7 @@ module IntegrityVerifier(
 				if (SMO_Terminal)
 					NS =							ST_ReadCheck;
 			ST_ReadCheck : // check the MAC
-				if (ERROR_IV)
+				if (IVViolation)
 					NS =							ST_Error;
 				else if (MACCheckComplete && CommandIsUpdate)
 					NS =							ST_ReadTurnaround;
@@ -571,7 +588,7 @@ module IntegrityVerifier(
 	assign	LoadMAC =								LoadMAC_Wide[ORAMH-1:0];
 	
 	assign	MACCheckComplete =						CSReadCheck && LoadMACValid && HashOutValid;
-	assign	ERROR_IV =								MACCheckComplete && (LoadMAC != MACOut);
+	assign	IVViolation =								MACCheckComplete && (LoadMAC != MACOut);
 	
 	Register1b ld_m(Clock, Reset || CSIdle, CSReadP, ReStoringLoadData);
 	

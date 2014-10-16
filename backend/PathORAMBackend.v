@@ -26,7 +26,9 @@ module PathORAMBackend(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Mode_DummyGen
+	Mode_DummyGen,
+	
+	JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend
 	);
 
 	//--------------------------------------------------------------------------
@@ -39,10 +41,11 @@ module PathORAMBackend(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
-
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
+	
 	parameter				ORAMUValid =			21;
-
-	parameter				DebugDRAMReadTiming =	0;
 
 	localparam				ORAMLogL = 				`log2(ORAML+1);
 
@@ -96,6 +99,16 @@ module PathORAMBackend(
 	input					Mode_DummyGen;
 	
 	//--------------------------------------------------------------------------
+	//	Status/Debugging interface
+	//--------------------------------------------------------------------------
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	output	[JTWidth_Stash-1:0] JTAG_Stash;
+	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
+	output	[JTWidth_BackendCore-1:0] JTAG_BackendCore;
+	output	[JTWidth_Backend-1:0] JTAG_Backend;
+	
+	//--------------------------------------------------------------------------
 	//	Wires & Regs
 	//--------------------------------------------------------------------------
 
@@ -112,14 +125,122 @@ module PathORAMBackend(
 	wire    [ORAMU-1:0]		ROPAddr;
 	wire	[ORAML-1:0]		ROLeaf;
 	wire                    REWRoundDummy;
+	
+	// Debugging
 
+	wire					// F1
+							CommandValid_Delay,
+							CommandReady_Delay,
+							LoadValid_Delay,
+							LoadReady_Delay,
+							StoreValid_Delay,
+							StoreReady_Delay,
+							
+							// F2
+							DRAMReadDataValid_Delay,
+							PBF_DRAMReadDataReady_Delay,
+							DRAMWriteDataValid_Delay,
+							DRAMWriteDataReady_Delay,
+							AES_DRAMReadDataValid_Delay,
+							AES_DRAMReadDataReady_Delay,
+							AES_DRAMWriteDataValid_Delay,
+							AES_DRAMWriteDataReady_Delay;
+	
+	wire	[BECMDWidth-1:0] Command_Delay;
+	wire	[ORAMU-1:0]		PAddr_Delay;
+	wire	[ORAML-1:0]		CurrentLeaf_Delay, RemappedLeaf_Delay;
+	
+							// F3
+	wire					ERROR_OF1;
+	
 	//--------------------------------------------------------------------------
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 
+	wire	[DBCCWidth-1:0] BEndDataLoadCount, BEndDataStoreCount;		
+			
+	MCounter #(DBCCWidth) 	bdatal(Clock, Reset, LoadValid_Delay && LoadReady_Delay, BEndDataLoadCount),
+							bdatas(Clock, Reset, StoreValid_Delay && StoreReady_Delay, BEndDataStoreCount);	
+												
+	assign	JTAG_Backend =							{
+														ERROR_OF1,
+														
+														CommandValid_Delay,
+														CommandReady_Delay,
+														LoadValid_Delay,
+														LoadReady_Delay,
+														StoreValid_Delay,
+														StoreReady_Delay,
+														
+														DRAMReadDataValid_Delay,
+														PBF_DRAMReadDataReady_Delay,
+														DRAMWriteDataValid_Delay,
+														DRAMWriteDataReady_Delay,
+														AES_DRAMReadDataValid_Delay,
+														AES_DRAMReadDataReady_Delay,
+														AES_DRAMWriteDataValid_Delay,
+														AES_DRAMWriteDataReady_Delay,
+														
+														BEndDataLoadCount,
+														BEndDataStoreCount,
+														
+														Command_Delay, 
+														PAddr_Delay, 	
+														CurrentLeaf_Delay,
+														RemappedLeaf_Delay
+													};
+	
+	Register	#(			.Width(					BECMDWidth + ORAMU + 2 * ORAML))
+				lastcmd(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Set(					1'b0),
+							.Enable(				CommandValid && CommandReady),
+							.In(					{Command, 		PAddr, 			CurrentLeaf, 		RemappedLeaf}),
+							.Out(					{Command_Delay, PAddr_Delay, 	CurrentLeaf_Delay, 	RemappedLeaf_Delay}));
+	
+	Pipeline 	#(JTWidth_BackendF1 + JTWidth_BackendF2) 
+				jtag_pipe(Clock, Reset, 
+													{
+														CommandValid,
+														CommandReady,
+														LoadValid,
+														LoadReady,
+														StoreValid,
+														StoreReady,
+														
+														DRAMReadDataValid,
+														PBF_DRAMReadDataReady,
+														DRAMWriteDataValid,
+														DRAMWriteDataReady,
+														AES_DRAMReadDataValid,
+														AES_DRAMReadDataReady,
+														AES_DRAMWriteDataValid,
+														AES_DRAMWriteDataReady
+													}, 
+													
+													{
+														CommandValid_Delay,
+														CommandReady_Delay,
+														LoadValid_Delay,
+														LoadReady_Delay,
+														StoreValid_Delay,
+														StoreReady_Delay,
+														
+														DRAMReadDataValid_Delay,
+														PBF_DRAMReadDataReady_Delay,
+														DRAMWriteDataValid_Delay,
+														DRAMWriteDataReady_Delay,
+														AES_DRAMReadDataValid_Delay,
+														AES_DRAMReadDataReady_Delay,
+														AES_DRAMWriteDataValid_Delay,
+														AES_DRAMWriteDataReady_Delay
+													});
+	
+	Register1b 	errno1(Clock, Reset, DRAMReadDataValid && ~PBF_DRAMReadDataReady, ERROR_OF1);
+	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
-			if (DRAMReadDataValid && ~PBF_DRAMReadDataReady) begin
+			if (ERROR_OF1) begin
 				$display("[%m @ %t] ERROR: Path buffer overflow", $time);
 				$finish;
 			end
@@ -183,7 +304,12 @@ module PathORAMBackend(
 							.ROLeaf(				ROLeaf),
 							.REWRoundDummy(			REWRoundDummy),
 							
-							.Mode_DummyGen(			Mode_DummyGen));
+							.Mode_DummyGen(			Mode_DummyGen),
+							
+							.JTAG_StashCore(		JTAG_StashCore), 
+							.JTAG_Stash(			JTAG_Stash), 
+							.JTAG_StashTop(			JTAG_StashTop), 
+							.JTAG_BackendCore(		JTAG_BackendCore));
 
 	//--------------------------------------------------------------------------
 	//	Symmetric Encryption

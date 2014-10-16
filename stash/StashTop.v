@@ -24,7 +24,9 @@ module StashTop(
 	FEWriteData, FEWriteDataValid, FEWriteDataReady,
 	
 	DRAMReadData, DRAMReadDataValid, DRAMReadDataReady,
-	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady
+	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
+	
+	JTAG_StashCore, JTAG_Stash, JTAG_StashTop
 	);
 
 	//--------------------------------------------------------------------------
@@ -37,6 +39,9 @@ module StashTop(
 	
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
 	
 	parameter				ORAMUValid =			21;
 															
@@ -95,6 +100,10 @@ module StashTop(
 	output	[BEDWidth-1:0]	DRAMWriteData;
 	output					DRAMWriteDataValid;
 	input					DRAMWriteDataReady;
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	output	[JTWidth_Stash-1:0] JTAG_Stash;
+	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -177,6 +186,13 @@ module StashTop(
 	Register1b 	errno5(Clock, Reset, LatchBECommand & StashAlmostFull & ~AccessIsDummy, 								ERROR_SOF);
 	
 	Register1b 	errANY(Clock, Reset, ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_SOF, ERROR_StashTop);
+	
+	assign	JTAG_StashTop =							{
+														ERROR_ISC2, 
+														ERROR_ISC3, 
+														ERROR_ISC4, 
+														ERROR_SOF	
+													};
 	
 	`ifdef SIMULATION
 		always @(posedge Clock) begin
@@ -399,9 +415,10 @@ module StashTop(
 							.PathReadComplete(		), // not connected
 							
 							.StashAlmostFull(		StashAlmostFull),
-							.StashOverflow(			),
-							.StashOccupancy(		)); // debugging
-
+							
+							.JTAG_StashCore(		JTAG_StashCore),
+							.JTAG_Stash(			JTAG_Stash));
+	
 	//--------------------------------------------------------------------------
 	//	[Writeback path] Buffers and up shifters
 	//--------------------------------------------------------------------------

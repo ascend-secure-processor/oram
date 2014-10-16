@@ -22,7 +22,9 @@ module UORAMController
     ReturnDataReady, ReturnDataValid, ReturnData,
     CmdOutReady, CmdOutValid, CmdOut, AddrOut, WMaskOut, OldLeaf, NewLeaf,
 	StoreDataReady, StoreDataValid, StoreData,
-    LoadDataReady, LoadDataValid, LoadData
+    LoadDataReady, LoadDataValid, LoadData,
+	
+	JTAG_UORAM
 );
 
 	`include "PathORAM.vh"
@@ -32,7 +34,8 @@ module UORAMController
     `include "CommandsLocal.vh"
     `include "CacheCmdLocal.vh"
     `include "PLBLocal.vh"
-
+	`include "JTAG.vh"
+	
     localparam MaxLogRecursion = 4;
 
     input Clock, Reset;
@@ -72,6 +75,8 @@ module UORAMController
     input  LoadDataValid;
     input  [FEDWidth-1:0] LoadData;
 	
+	output	[JTWidth_UORAM-1:0] JTAG_UORAM;
+	
 	// Save the input data in case the client really needs to send data before command
 	wire 	[FEDWidth-1:0] 	DataIn_Internal;
 	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
@@ -103,6 +108,8 @@ module UORAMController
 							.OutData(				AddrOutofRangeAddr),
 							.OutSend(				ERROR_OutOfRange),
 							.OutReady(				1'b0));
+							
+	assign	JTAG_UORAM =							ERROR_OutOfRange;
 							
 `ifdef SIMULATION		
 	always @ (posedge Clock) begin

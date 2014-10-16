@@ -46,7 +46,9 @@ module Stash(
 	ReadData, ReadPAddr, ReadLeaf, ReadMAC,
 	ReadOutValid, ReadOutReady, BlockReadComplete, PathReadComplete,
 	
-	StashAlmostFull, StashOverflow, StashOccupancy
+	StashAlmostFull, StashOverflow, StashOccupancy,
+	
+	JTAG_StashCore, JTAG_Stash
 	);
 
 	//--------------------------------------------------------------------------
@@ -59,6 +61,9 @@ module Stash(
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "StashLocal.vh"
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
 	
 	parameter				ORAMUValid =			21,
 	
@@ -189,6 +194,9 @@ module Stash(
 	output 					StashAlmostFull;
 	output					StashOverflow;
 	output	[SEAWidth-1:0] 	StashOccupancy;
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	output	[JTWidth_Stash-1:0] JTAG_Stash;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -327,6 +335,17 @@ module Stash(
 	
 	Register1b 	errANY(Clock, Reset, ERROR_BlockNotFound | ERROR_ISC1 | ERROR_ISC2 | ERROR_ISC3 | ERROR_ISC4 | ERROR_StashOverflow | ERROR_BOGUSU | ERROR_StashOverflowConservative, ERROR_Stash);
 
+	assign	JTAG_Stash =							{
+														ERROR_BlockNotFound, 
+														ERROR_ISC1, 
+														ERROR_ISC2, 
+														ERROR_ISC3, 
+														ERROR_ISC4, 
+														ERROR_StashOverflow, 
+														ERROR_BOGUSU, 
+														ERROR_StashOverflowConservative
+													};
+	
 	// TODO: add assertion to check that _every_ real block written to stash has a valid common subpath with the current leaf
 	
 	`ifdef SIMULATION
@@ -678,7 +697,9 @@ module Stash(
 							.ROAccess(				AccessSkipsWriteback),
 							
 							.CancelPushCommand(		StartWriteback_Pass),
-							.SyncComplete(			Core_AccessComplete));
+							.SyncComplete(			Core_AccessComplete),
+							
+							.JTAG_StashCore(		JTAG_StashCore));
 
 	// leaf remapping step
 	assign	MappedLeaf =							(LookForBlock & FoundBlock_ThisCycle) ? RemapLeaf : Scan_Leaf;

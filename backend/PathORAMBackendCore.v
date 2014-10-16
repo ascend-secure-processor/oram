@@ -28,7 +28,9 @@ module PathORAMBackendCore(
 
 	ROPAddr, ROLeaf, REWRoundDummy,
 	
-	Mode_DummyGen
+	Mode_DummyGen,
+	
+	JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore
 	);
 
 	//--------------------------------------------------------------------------
@@ -41,7 +43,10 @@ module PathORAMBackendCore(
 	`include "BucketLocal.vh"
 	`include "IVLocal.vh"
 	`include "CommandsLocal.vh"
-
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
+	
 	parameter				ORAMUValid =			21;
 
 	localparam				STWidth =				2,
@@ -108,6 +113,15 @@ module PathORAMBackendCore(
 	//--------------------------------------------------------------------------
 	
 	input					Mode_DummyGen;
+	
+	//--------------------------------------------------------------------------
+	//	Status/Debugging Interface
+	//--------------------------------------------------------------------------
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	output	[JTWidth_Stash-1:0] JTAG_Stash;
+	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
+	output	[JTWidth_BackendCore-1:0] JTAG_BackendCore;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -211,6 +225,11 @@ module PathORAMBackendCore(
 	Register1b 	errno2(Clock, Reset, Stash_ReturnDataValid && !Stash_ReturnDataReady, 	ERROR_OF2);
 	Register1b 	errANY(Clock, Reset, ERROR_OF1 || ERROR_OF2,							ERROR_BEndInner);
 
+	assign	JTAG_BackendCore =						{
+														ERROR_OF1,
+														ERROR_OF2
+													};
+	
 	`ifdef SIMULATION
 		reg [STWidth-1:0] CS_Delayed;
 		integer WriteCount_Sim = 0;
@@ -603,8 +622,12 @@ module PathORAMBackendCore(
 
 							.DRAMWriteData(			Stash_DRAMWriteData),
 							.DRAMWriteDataValid(	Stash_DRAMWriteDataValid),
-							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady));
-
+							.DRAMWriteDataReady(	Stash_DRAMWriteDataReady),
+							
+							.JTAG_StashCore(		JTAG_StashCore),
+							.JTAG_Stash(			JTAG_Stash),
+							.JTAG_StashTop(			JTAG_StashTop));
+							
 	//--------------------------------------------------------------------------
 	//	DRAM interface multiplexing
 	//--------------------------------------------------------------------------

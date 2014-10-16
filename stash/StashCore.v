@@ -64,7 +64,9 @@ module StashCore(
 
 	ROAccess,
 	
-	CancelPushCommand, SyncComplete
+	CancelPushCommand, SyncComplete,
+	
+	JTAG_StashCore
 	);
 	
 	//--------------------------------------------------------------------------
@@ -73,10 +75,13 @@ module StashCore(
 	
 	`include "PathORAM.vh"
 	
-	`include "DDR3SDRAMLocal.vh" // TODO cleanup
+	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "StashLocal.vh"
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
 
 	localparam				STWidth =				4,
 							ST_Reset =				4'd0,
@@ -169,7 +174,7 @@ module StashCore(
 	input					InScanStreaming;
 	
 	//--------------------------------------------------------------------------
-	//	Status interface
+	//	Status/Debugging interface
 	//--------------------------------------------------------------------------
 
 	output 					StashAlmostFull;
@@ -177,6 +182,8 @@ module StashCore(
 	output	[SEAWidth-1:0] 	StashOccupancy;
 
 	input					ROAccess;
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
 	
 	//--------------------------------------------------------------------------
 	//	Stash internal signals
@@ -331,6 +338,12 @@ module StashCore(
 	Register1b 	errno3(Clock, Reset, WriteTransfer & StashE_Address == SNULL, 					ERROR_ISC2);
 	
 	Register1b 	errANY(Clock, Reset, ERROR_UF1 | ERROR_ISC1 | ERROR_ISC2, 						ERROR_StashCore);
+	
+	assign	JTAG_StashCore =						{	
+														ERROR_UF1, 
+														ERROR_ISC1, 
+														ERROR_ISC2
+													};
 	
 	`ifdef SIMULATION
 		reg [SEAWidth-1:0] 	MS_pt;

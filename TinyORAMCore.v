@@ -31,7 +31,10 @@ module TinyORAMCore(
 	DRAMReadData, DRAMReadDataValid,
 	DRAMWriteData, DRAMWriteDataValid, DRAMWriteDataReady,
 	
-	Mode_DummyGen
+	Mode_DummyGen,
+	
+	JTAG_UORAM, JTAG_PMMAC, JTAG_Frontend,
+	JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend	
 	);
 
 	//--------------------------------------------------------------------------
@@ -46,7 +49,7 @@ module TinyORAMCore(
 								This eliminates differences in MIG vs. simulation read timing.
 	*/
 	parameter				SlowAESClock =			1; // NOTE: set to 0 for performance run
-	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run
+	parameter				DebugDRAMReadTiming =	0; // NOTE: set to 0 for performance run [NOTE: we un-implemented this.  look in SVN for old code ...]
 
 	//--------------------------------------------------------------------------
 	//	Constants
@@ -59,7 +62,8 @@ module TinyORAMCore(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
-
+	`include "JTAG.vh"
+	
 	localparam				ORAMUValid = ORAML + 3; // Note: +3 assumes 50% utilization at Z=4
 
 	// TODO: remove 	localparam	DelayedWB =	0; 
@@ -111,6 +115,20 @@ module TinyORAMCore(
 	//--------------------------------------------------------------------------
 
 	input					Mode_DummyGen;
+
+	//--------------------------------------------------------------------------
+	//	Status/Debugging interface
+	//--------------------------------------------------------------------------
+	
+	output	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
+	output	[JTWidth_UORAM-1:0] JTAG_UORAM;
+	output	[JTWidth_Frontend-1:0] JTAG_Frontend;	
+	
+	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	output	[JTWidth_Stash-1:0] JTAG_Stash;
+	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
+	output	[JTWidth_BackendCore-1:0] JTAG_BackendCore;
+	output	[JTWidth_Backend-1:0] JTAG_Backend;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -203,7 +221,11 @@ module TinyORAMCore(
 							.StoreData(				StoreData),
 							.LoadDataReady(			LoadReady),
 							.LoadDataValid(			LoadValid),
-							.LoadData(				LoadData));
+							.LoadData(				LoadData),
+							
+							.JTAG_PMMAC(			JTAG_PMMAC), 
+							.JTAG_UORAM(			JTAG_UORAM), 
+							.JTAG_Frontend(			JTAG_Frontend));
 
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
@@ -220,8 +242,7 @@ module TinyORAMCore(
 
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth),
-							.ORAMUValid(			ORAMUValid),
-							.DebugDRAMReadTiming(	DebugDRAMReadTiming))
+							.ORAMUValid(			ORAMUValid))
 				back_end (	.Clock(					Clock),
 			                .AESClock(				AESClock),
 							.Reset(					Reset),
@@ -251,7 +272,13 @@ module TinyORAMCore(
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady),
 							
-							.Mode_DummyGen(			Mode_DummyGen));
+							.Mode_DummyGen(			Mode_DummyGen),
+							
+							.JTAG_StashCore(		JTAG_StashCore), 
+							.JTAG_Stash(			JTAG_Stash), 
+							.JTAG_StashTop(			JTAG_StashTop), 
+							.JTAG_BackendCore(		JTAG_BackendCore), 
+							.JTAG_Backend(			JTAG_Backend));
 
 	//--------------------------------------------------------------------------
 endmodule

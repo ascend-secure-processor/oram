@@ -42,7 +42,7 @@ module TinyORAMASICWrap(
 	Mode_TrafficGen, 
 	Mode_DummyGen,
 	
-	
+	jtag_oram_req_val, oram_jtag_res_data
 	);
 	
 	//--------------------------------------------------------------------------
@@ -62,6 +62,7 @@ module TinyORAMASICWrap(
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
+	`include "JTAG.vh"
 
 	//--------------------------------------------------------------------------
 	//	System I/O
@@ -110,8 +111,11 @@ module TinyORAMASICWrap(
 	input					Mode_TrafficGen, Mode_DummyGen;	
 
 	//--------------------------------------------------------------------------
-	//	JTAG interface
+	//	JTAG interface [to Princeton]
 	//--------------------------------------------------------------------------
+	
+	input 					jtag_oram_req_val;
+	output	[JTWidth-1:0]	oram_jtag_res_data;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -154,6 +158,44 @@ module TinyORAMASICWrap(
 	wire	[BEDWidth-1:0]	DRAMReadData_BED, DRAMWriteData_BED;
 	wire					DRAMReadDataValid_BED, DRAMWriteDataValid_BED, DRAMWriteDataReady_BED;	
 	
+	// Debugging
+	
+	wire	[JTWidth_Top-1:0] JTAG_Top;
+	
+	wire	[JTWidth_Traffic-1:0] JTAG_Traffic;
+	
+	wire	[JTWidth_UORAM-1:0] JTAG_UORAM;	
+	wire	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
+	wire	[JTWidth_Frontend-1:0] JTAG_Frontend;
+	
+	wire	[JTWidth_StashCore-1:0] JTAG_StashCore;
+	wire	[JTWidth_Stash-1:0] JTAG_Stash;
+	wire	[JTWidth_StashTop-1:0] JTAG_StashTop;	
+	wire	[JTWidth_BackendCore-1:0] JTAG_BackendCore;
+	wire	[JTWidth_Backend-1:0] JTAG_Backend;	
+	
+	//--------------------------------------------------------------------------
+	//	Debugging
+	//--------------------------------------------------------------------------
+	
+	assign	JTAG_Top =								32'hdeadbeef;
+	
+	assign	oram_jtag_res_data =					{
+														JTAG_Top,
+														
+														JTAG_Traffic,
+														
+														JTAG_UORAM, 
+														JTAG_PMMAC, 
+														JTAG_Frontend,
+														
+														JTAG_StashCore, 
+														JTAG_Stash, 
+														JTAG_StashTop, 
+														JTAG_BackendCore, 
+														JTAG_Backend
+													};
+	
 	//--------------------------------------------------------------------------
 	//	Core modules
 	//--------------------------------------------------------------------------
@@ -174,7 +216,7 @@ module TinyORAMASICWrap(
 							.ORAMDataOutValid(		DataOutValid_TGen), 
 							.ORAMDataOutReady(		DataOutReady_TGen),
 							
-							.Error_ReceivePattern(	));	
+							.JTAG_Traffic(			JTAG_Traffic));	
 
 	assign	Cmd_ORAM =								(Mode_TrafficGen) ? Cmd_TGen : 			Cmd;
 	assign	PAddr_ORAM = 							(Mode_TrafficGen) ? PAddr_TGen : 		PAddr;
@@ -223,7 +265,16 @@ module TinyORAMASICWrap(
 							.DRAMWriteDataValid(	DRAMWriteDataValid_ORAM), 
 							.DRAMWriteDataReady(	DRAMWriteDataReady_ORAM),
 							
-							.Mode_DummyGen(			Mode_DummyGen));
+							.Mode_DummyGen(			Mode_DummyGen),
+							
+							.JTAG_PMMAC(			JTAG_PMMAC), 
+							.JTAG_UORAM(			JTAG_UORAM), 
+							.JTAG_Frontend(			JTAG_Frontend),
+							.JTAG_StashCore(		JTAG_StashCore), 
+							.JTAG_Stash(			JTAG_Stash), 
+							.JTAG_StashTop(			JTAG_StashTop), 
+							.JTAG_BackendCore(		JTAG_BackendCore), 
+							.JTAG_Backend(			JTAG_Backend));
 	
 	always @(posedge Clock) begin
 		if (DRAMReadDataValid_ORAM && Mode_DummyGen)

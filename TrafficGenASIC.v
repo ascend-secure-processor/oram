@@ -19,7 +19,7 @@ module TrafficGenASIC(
 	ORAMDataIn, ORAMDataInValid, ORAMDataInReady,
 	ORAMDataOut, ORAMDataOutValid, ORAMDataOutReady,
 	
-	Error_ReceivePattern
+	JTAG_Traffic
 	);
 	
 	//--------------------------------------------------------------------------
@@ -29,6 +29,9 @@ module TrafficGenASIC(
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
 	`include "PLBLocal.vh"
+	
+	`include "DMLocal.vh"
+	`include "JTAG.vh"
 	
 	parameter				NumCommands =			4, 
 							AccessCount_Fixed =		32'd100;
@@ -69,11 +72,11 @@ module TrafficGenASIC(
 	//	Status interface
 	//--------------------------------------------------------------------------
 	
-	output					Error_ReceivePattern;
+	output	[JTWidth_Traffic-1:0] JTAG_Traffic;
 	
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	// 	Wires & Regs
-	//------------------------------------------------------------------------------
+	//--------------------------------------------------------------------------
 	
 	// Receive pipeline
 
@@ -414,6 +417,8 @@ module TrafficGenASIC(
 							.Enable(				1'b0),
 							.In(					1'bx),
 							.Out(					Error_ReceivePattern));	
+	
+	assign	JTAG_Traffic =							Error_ReceivePattern;
 	
 	//------------------------------------------------------------------------------
 endmodule
