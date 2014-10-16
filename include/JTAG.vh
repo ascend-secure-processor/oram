@@ -2,6 +2,8 @@
 	localparam				DBDCWidth =				32,
 							DBCCWidth =				`log2(`divceil(ORAMB, FEDWidth)); // Debug counters
 
+	localparam				JTWidth_AES =			3;						
+							
 	localparam				JTWidth_StashCore =		3;
 	
 	localparam				JTWidth_Stash =			8;
@@ -13,7 +15,7 @@
 	localparam				JTWidth_BackendERR =	1, // error signals
 							JTWidth_BackendF1 =		6, // PMMAC - BackendCore R/V signals for cmd,store,load
 							JTWidth_BackendF2 =		8, // BackendCore - AES and AES - DRAM R/V signals
-							JTWidth_BackendCnt =	2 * DBCCWidth,
+							JTWidth_BackendCnt =	2 * DBCCWidth + 4 * DBDCWidth,
 							JTWidth_BackendCmd =	BECMDWidth + ORAMU + 2 * ORAML, // last BEnd command
 							JTWidth_Backend =		JTWidth_BackendERR + 
 													JTWidth_BackendF1 + 
@@ -38,7 +40,8 @@
 	
 	localparam				JTWidth_Top =			32; // just deadbeef
 	
-	localparam				JTWidth =				JTWidth_StashCore +
+	localparam				JTWidth =				JTWidth_AES + 
+													JTWidth_StashCore +
 													JTWidth_Stash + 
 													JTWidth_StashTop + 
 													JTWidth_BackendCore + 

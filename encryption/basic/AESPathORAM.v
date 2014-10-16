@@ -18,7 +18,9 @@ module AESPathORAM(
 
 	           BackendRData,	BackendRValid,	BackendRReady,
 
-	           BackendWData,	BackendWValid,	BackendWReady
+	           BackendWData,	BackendWValid,	BackendWReady,
+			   
+			   JTAG_AES
 	           );
 
     //------------------------------------------------------------------------------
@@ -29,7 +31,11 @@ module AESPathORAM(
 
 	`include "DDR3SDRAMLocal.vh"
 	`include "BucketLocal.vh"
-
+	
+	`include "DMLocal.vh"
+	`include "CommandsLocal.vh"
+	`include "JTAG.vh"
+	
     localparam W = (BEDWidth / AESWidth) == 0 ? 1 : BEDWidth / AESWidth;
     localparam D = 21;
 
@@ -90,6 +96,12 @@ module AESPathORAM(
     input                        BackendWValid;
     output                       BackendWReady;
 
+    //------------------------------------------------------------------------------
+    //	Status/Debugging
+    //------------------------------------------------------------------------------
+
+	output	[JTWidth_AES-1:0]	JTAG_AES;	
+	
     //------------------------------------------------------------------------------
     //	Wires & Regs
     //------------------------------------------------------------------------------
@@ -349,19 +361,35 @@ module AESPathORAM(
                .OutReady(AESDataOutReady)
                );
 
+	// Debugging
+	
+	wire	ERROR_OF1, 
+			ERROR_OF2,
+			ERROR_OF3;
+	
+	Register1b 	errno1(Clock, Reset, RW == PATH_READ && AESDataInValid && !AESDataInAccept, ERROR_OF1);
+	Register1b 	errno2(Clock, Reset, IVDataInValid && !IVDataInAccept, 						ERROR_OF2);
+	Register1b 	errno3(Clock, Reset, AESMaskInValid_BED && ~AESMaskInAccept_BED, 			ERROR_OF3);
+	
+	assign	JTAG_AES =								{	
+														ERROR_OF1,
+														ERROR_OF2,
+														ERROR_OF3
+													};
+			   
 `ifdef SIMULATION
     always @ (posedge Clock) begin
-		if (RW == PATH_READ && AESDataInValid && !AESDataInAccept) begin
+		if (ERROR_OF1) begin
 			$display("Lose ciphertexts!");
 			$finish;
 		end
 		
-		if ((IVDataInValid && !IVDataInAccept)) begin
+		if (ERROR_OF2) begin
 			$display("Lose IVs!");
 			$finish;
 		end
 		
-		if (AESMaskInValid_BED && ~AESMaskInAccept_BED) begin
+		if (ERROR_OF3) begin
 			$display("Lose Masks!");
 			$finish;				  
 		end

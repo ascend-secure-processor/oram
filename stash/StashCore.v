@@ -389,15 +389,7 @@ module StashCore(
 			
 			if (CS_Delayed != CS & CS == ST_Idle)
 				LS <= CS_Delayed;
-			
-			/* obsolete check with all of the operation interleaving ...
-			if (LS == ST_Dumping & ~CSSyncing & ~CSIdle & ~CSPushing) begin
-				// This is so the block count gets updated ...
-				$display("ERROR: must perform sync after dump");
-				$finish;
-			end
-			*/
-			
+		
 			if (StashH_WE & (^InPAddr === 1'bx | ^InLeaf === 1'bx)) begin
 				$display("[%m] ERROR: writing some X header into stash");
 				$finish;			

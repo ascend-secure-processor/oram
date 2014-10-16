@@ -34,7 +34,7 @@ module TinyORAMCore(
 	Mode_DummyGen,
 	
 	JTAG_UORAM, JTAG_PMMAC, JTAG_Frontend,
-	JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend	
+	JTAG_AES, JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend	
 	);
 
 	//--------------------------------------------------------------------------
@@ -124,6 +124,7 @@ module TinyORAMCore(
 	output	[JTWidth_UORAM-1:0] JTAG_UORAM;
 	output	[JTWidth_Frontend-1:0] JTAG_Frontend;	
 	
+	output	[JTWidth_AES-1:0] JTAG_AES;
 	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
 	output	[JTWidth_Stash-1:0] JTAG_Stash;
 	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
@@ -274,6 +275,7 @@ module TinyORAMCore(
 							
 							.Mode_DummyGen(			Mode_DummyGen),
 							
+							.JTAG_AES(				JTAG_AES),
 							.JTAG_StashCore(		JTAG_StashCore), 
 							.JTAG_Stash(			JTAG_Stash), 
 							.JTAG_StashTop(			JTAG_StashTop), 

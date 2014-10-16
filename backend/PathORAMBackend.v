@@ -28,7 +28,7 @@ module PathORAMBackend(
 	
 	Mode_DummyGen,
 	
-	JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend
+	JTAG_AES, JTAG_StashCore, JTAG_Stash, JTAG_StashTop, JTAG_BackendCore, JTAG_Backend
 	);
 
 	//--------------------------------------------------------------------------
@@ -102,6 +102,7 @@ module PathORAMBackend(
 	//	Status/Debugging interface
 	//--------------------------------------------------------------------------
 	
+	output	[JTWidth_AES-1:0] JTAG_AES;
 	output	[JTWidth_StashCore-1:0] JTAG_StashCore;
 	output	[JTWidth_Stash-1:0] JTAG_Stash;
 	output	[JTWidth_StashTop-1:0] JTAG_StashTop;	
@@ -150,6 +151,13 @@ module PathORAMBackend(
 	wire	[ORAMU-1:0]		PAddr_Delay;
 	wire	[ORAML-1:0]		CurrentLeaf_Delay, RemappedLeaf_Delay;
 	
+	wire	[DBCCWidth-1:0] BEndDataLoadCount, BEndDataStoreCount;		
+			
+	wire	[DBDCWidth-1:0]	AESDataLoadCount,
+							AESDataStoreCount,
+							DRAMDataLoadCount,
+							DRAMDataStoreCount;
+							
 							// F3
 	wire					ERROR_OF1;
 	
@@ -157,10 +165,14 @@ module PathORAMBackend(
 	//	Simulation checks
 	//--------------------------------------------------------------------------
 
-	wire	[DBCCWidth-1:0] BEndDataLoadCount, BEndDataStoreCount;		
-			
 	MCounter #(DBCCWidth) 	bdatal(Clock, Reset, LoadValid_Delay && LoadReady_Delay, BEndDataLoadCount),
 							bdatas(Clock, Reset, StoreValid_Delay && StoreReady_Delay, BEndDataStoreCount);	
+														
+	MCounter #(DBDCWidth) 	aesdatal(Clock, Reset, AES_DRAMReadDataValid_Delay && AES_DRAMReadDataReady_Delay, AESDataLoadCount),
+							aesdatas(Clock, Reset, AES_DRAMWriteDataValid_Delay && AES_DRAMWriteDataReady_Delay, AESDataStoreCount),
+							
+							dramdatal(Clock, Reset, DRAMReadDataValid_Delay, DRAMDataLoadCount),
+							dramdatas(Clock, Reset, DRAMWriteDataValid_Delay && DRAMWriteDataReady_Delay, DRAMDataStoreCount);
 												
 	assign	JTAG_Backend =							{
 														ERROR_OF1,
@@ -176,6 +188,7 @@ module PathORAMBackend(
 														PBF_DRAMReadDataReady_Delay,
 														DRAMWriteDataValid_Delay,
 														DRAMWriteDataReady_Delay,
+														
 														AES_DRAMReadDataValid_Delay,
 														AES_DRAMReadDataReady_Delay,
 														AES_DRAMWriteDataValid_Delay,
@@ -184,6 +197,11 @@ module PathORAMBackend(
 														BEndDataLoadCount,
 														BEndDataStoreCount,
 														
+														AESDataLoadCount,
+														AESDataStoreCount,
+														DRAMDataLoadCount,
+														DRAMDataStoreCount,
+							
 														Command_Delay, 
 														PAddr_Delay, 	
 														CurrentLeaf_Delay,
@@ -387,7 +405,9 @@ module PathORAMBackend(
 
 							.BackendWData(			AES_DRAMWriteData),
 							.BackendWValid(			AES_DRAMWriteDataValid),
-							.BackendWReady(			AES_DRAMWriteDataReady));
+							.BackendWReady(			AES_DRAMWriteDataReady),
+							
+							.JTAG_AES(				JTAG_AES));
 	end else begin:NO_AES
 		assign	AES_DRAMReadData =					DRAMReadData;
 		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;

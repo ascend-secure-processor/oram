@@ -168,6 +168,7 @@ module TinyORAMASICWrap(
 	wire	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
 	wire	[JTWidth_Frontend-1:0] JTAG_Frontend;
 	
+	wire	[JTWidth_AES-1:0] JTAG_AES;
 	wire	[JTWidth_StashCore-1:0] JTAG_StashCore;
 	wire	[JTWidth_Stash-1:0] JTAG_Stash;
 	wire	[JTWidth_StashTop-1:0] JTAG_StashTop;	
@@ -189,6 +190,7 @@ module TinyORAMASICWrap(
 														JTAG_PMMAC, 
 														JTAG_Frontend,
 														
+														JTAG_AES,
 														JTAG_StashCore, 
 														JTAG_Stash, 
 														JTAG_StashTop, 
@@ -270,6 +272,7 @@ module TinyORAMASICWrap(
 							.JTAG_PMMAC(			JTAG_PMMAC), 
 							.JTAG_UORAM(			JTAG_UORAM), 
 							.JTAG_Frontend(			JTAG_Frontend),
+							.JTAG_AES(				JTAG_AES),
 							.JTAG_StashCore(		JTAG_StashCore), 
 							.JTAG_Stash(			JTAG_Stash), 
 							.JTAG_StashTop(			JTAG_StashTop), 
