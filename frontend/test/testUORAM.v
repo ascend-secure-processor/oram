@@ -11,6 +11,8 @@ module testUORAM;
 	`include "BucketLocal.vh" 
 	`include "PLBLocal.vh" 
 	
+	`include "JTAG.vh"
+	
 	`ifdef SIMULATION_VIVADO
 	parameter				NetworkWidth =		64; // Princeton's network
 	`else
@@ -44,7 +46,10 @@ module testUORAM;
 	wire						DDR3SDRAM_ReadValid;
 	
 	reg							TGEN;
-
+	reg							ResetPulsed;
+	
+	wire	[JTWidth-1:0]	oram_jtag_res_data;
+	
 	//--------------------------------------------------------------------------
 	//	CUT
 	//--------------------------------------------------------------------------
@@ -77,8 +82,11 @@ module testUORAM;
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
 							.Mode_TrafficGen(		TGEN),
-							.Mode_DummyGen(			1'b0));
-					
+							.Mode_DummyGen(			1'b0),
+							
+							.jtag_oram_req_val(		1'b0),
+							.oram_jtag_res_data(	oram_jtag_res_data));
+	
 	//--------------------------------------------------------------------------
 
 	//--------------------------------------------------------------------------
@@ -143,12 +151,18 @@ module testUORAM;
 			$finish;
 		end
 		
-		if (DDR3SDRAM_WriteValid_Wide === 1'bx ||
-			DDR3SDRAM_WriteReady_Wide === 1'bx ||
-			DDR3SDRAM_ReadData_Wide_Pre === 1'bx ||
-			DDR3SDRAM_ReadValid_Wide_Pre === 1'bx ||
-			DDR3SDRAM_ReadReady_Wide_Pre === 1'bx) begin
+		if (ResetPulsed && 
+			(	DDR3SDRAM_WriteValid_Wide === 1'bx ||
+				DDR3SDRAM_WriteReady_Wide === 1'bx ||
+				DDR3SDRAM_ReadData_Wide_Pre === 1'bx ||
+				DDR3SDRAM_ReadValid_Wide_Pre === 1'bx ||
+				DDR3SDRAM_ReadReady_Wide_Pre === 1'bx) ) begin
 			$display("DRAM control signals is X");
+			$finish;
+		end
+		
+		if (ResetPulsed && ^oram_jtag_res_data === 1'bx) begin
+			$display("JTAG signal is X");
 			$finish;
 		end
 	end
@@ -235,9 +249,12 @@ module testUORAM;
 
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
+		
+		if (Reset)
+			ResetPulsed = 1;
     end
 
-    assign Reset = CycleCount < 5;
+    assign Reset = CycleCount == 4;
   	
     reg [ORAML:0] GlobalPosMap [TotalNumBlock-1:0];
 	reg [CWidth:0] GlobalAccessCountTrack [TotalNumBlock-1:0] [FEORAMBChunks:0]; // we use GlobalAccessCountTrack[...][FEORAMBChunks] to keep track of the access count for the block
@@ -258,7 +275,8 @@ module testUORAM;
 		AddrRand = 0;
 		Checking_ProgData = 0;
         CycleCount = 0;
-		TGEN = 1'b0;
+		TGEN = 1'b1;
+		ResetPulsed = 0;
 		
 		`ifdef GATE_SIM_POWER $vcdpluson; `endif	
 		
