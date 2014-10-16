@@ -33,7 +33,7 @@ module AddrGenBktHead
 	output [ORAML:0] STIdx, BktIdxInST;  // tmp output for debugging
   
 	
-`ifndef ASIC	
+`ifdef FPGA	
 	initial begin	// don't delete, REWAES needs this to get rid of Reset
 		currentLevel = ORAML+1;
 	end

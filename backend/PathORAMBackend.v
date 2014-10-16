@@ -287,7 +287,7 @@ module PathORAMBackend(
 
 							.ORAMUValid(			ORAMUValid))
 			bend_core(		.Clock(					Clock),
-				`ifdef ASIC
+				`ifndef FPGA
 							.Reset(					Reset),
 				`else
 							.Reset(					1'b0),
@@ -347,7 +347,7 @@ module PathORAMBackend(
 							.ORAMUValid(			ORAMUValid))
 			aes(			.Clock(					Clock),
 							.FastClock(				AESClock),
-			`ifdef ASIC
+			`ifndef FPGA
 							.Reset(					Reset),
 			`else
 							.Reset(					1'b0),
@@ -382,7 +382,7 @@ module PathORAMBackend(
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
 				aes(		.Clock(					Clock),
-				`ifdef ASIC
+				`ifndef FPGA
 							.Reset(					Reset),
 				`else
 							.Reset(					1'b0),

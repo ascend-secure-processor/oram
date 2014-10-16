@@ -98,7 +98,7 @@ module	FIFORAM(
 							Buffering =				16,
 							BWLatency =				1;
 	
-	parameter				ASIC =					0;
+	parameter				SRAM =					0;
 	//--------------------------------------------------------------------------
 	
 	//--------------------------------------------------------------------------
@@ -188,7 +188,7 @@ module	FIFORAM(
 								.AWidth(			AWidth),
 								.RLatency(			1),
 								.WLatency(			1)
-								`ifdef ASIC , .ASIC(ASIC) `endif)
+								`ifndef FPGA_MEMORY , .SRAM(SRAM) `endif)
 					RAM(		.Clock(				Clock),
 								.Reset(				Reset),
 								.Write(				InWrite),								

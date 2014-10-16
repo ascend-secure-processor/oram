@@ -211,7 +211,7 @@ module PathORAMBackendCore(
 	//	Initial state
 	//--------------------------------------------------------------------------
 
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS = ST_Idle;
 		end

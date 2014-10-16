@@ -231,8 +231,17 @@ module IntegrityVerifier(
 	assign	JTAG_PMMAC =							ERROR_IV;
 	
 	`ifdef SIMULATION
+	   reg ResetPulsed;
+	
+	   initial begin
+	       ResetPulsed = 0;
+	   end
+	
 		always @(posedge Clock) begin
-			if (!Reset && IVViolation !== 1'b0) begin
+		    if (Reset) 
+				ResetPulsed = 1;
+		
+			if (ResetPulsed && !Reset && IVViolation !== 1'b0) begin
 				$display("ERROR: Integrity violation (expected,actual) : (%x:%x)", MACOut, LoadMAC);
 				$finish;
 			end

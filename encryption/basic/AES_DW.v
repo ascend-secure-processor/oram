@@ -73,7 +73,7 @@ module AES_DW
 
     reg	     [31:0]              i;
 
-	`ifndef ASIC
+	`ifdef FPGA
 	initial begin
 		Count = 0;
 		InTurn = 0;

@@ -56,7 +56,7 @@ module GentrySeedGenerator(
 
 	reg CSRWWrite, CSStartOp;
 
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CSStartOp <= 1;
 			CSRWWrite <= 0;	// read first

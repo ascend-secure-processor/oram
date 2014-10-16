@@ -242,7 +242,7 @@ module StashCore(
 	wire					StashP_WE;
 	wire					StashP_EN;
 	
-	`ifdef ASIC
+	`ifndef FPGA
 	wire	[ENWWidth-1:0]	StashC_DataIn_Wide, StashC_DataOut_Wide;
 	wire	[ENWidth-1:0]	StashC_RODataOut_Pre, StashC_DataOut_Pre;
 	`endif
@@ -309,7 +309,7 @@ module StashCore(
 	//	Initial state
 	//--------------------------------------------------------------------------	
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS = ST_Reset;
 			CS_Sync = ST_Sync_Idle;
@@ -354,8 +354,10 @@ module StashCore(
 		wire				MS_StartingWrite;
 		reg [STWidth-1:0]	CS_Delayed, LS;
 		wire				MS_FinishedSync;
+		
+		reg                 ResetPulsed;
 	
-	`ifdef ASIC	
+	`ifndef FPGA	
 		`define STASHC StashC_DataOut_Wide[MS_pt]
 	`else
 		`define STASHC StashC.BEHAVIORAL.Mem[MS_pt]
@@ -363,6 +365,7 @@ module StashCore(
 
 		initial begin
 			LS = 			ST_Reset;
+			ResetPulsed =   0;
 			
 			if (StashCapacity < BlocksOnPath) begin
 				$display("[%m] ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
@@ -375,6 +378,9 @@ module StashCore(
 		assign	MS_StartingWrite = WriteTransfer & FirstChunk;
 		
 		always @(posedge Clock) begin
+		    if (Reset)
+		        ResetPulsed = 1;
+		
 			if (MS_StartingWrite) begin
 				$display("[%m @ %t] Writing [a=%x, l=%x, h=%x, sloc=%d]", $time, InPAddr, InLeaf, InMAC, StashE_Address);
 				if (CSOverwriting) begin
@@ -395,7 +401,7 @@ module StashCore(
 				$finish;			
 			end
 			
-			if (!Reset && (^OutScanValidDump === 1'bx | 
+			if (ResetPulsed && !Reset && (^OutScanValidDump === 1'bx | 
 				^DumpStop === 1'bx |
 				^InScanValid === 1'bx |
 				^InScanDone === 1'bx |
@@ -698,7 +704,7 @@ module StashCore(
 	*/
 	RAM			#(			.DWidth(				BEDWidth),
 							.AWidth(				SDAWidth)
-							`ifdef ASIC , .ASIC(1) `endif)
+							`ifndef FPGA_MEMORY , .SRAM(1) `endif)
 				StashD(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -739,7 +745,7 @@ module StashCore(
 	
 	RAM			#(			.DWidth(				SHDWidth),
 							.AWidth(				SEAWidth)
-							`ifdef ASIC , .ASIC(1) `endif)
+							`ifndef FPGA_MEMORY , .SRAM(1) `endif)
 				StashH(		.Clock(					Clock),
 							.Reset(					1'b0),
 							.Enable(				1'b1),
@@ -859,7 +865,7 @@ module StashCore(
 	// On FPGA, this should become a LUTRAM
 	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM) with manual reset
 
-	`ifdef ASIC
+	`ifndef FPGA
 	genvar	j;
 	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
 		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];

@@ -115,10 +115,10 @@ module DM_Cache
     assign DataIn = (IsLastWrite && !WriteLate) ? LastDIn : DIn;
 
     // data and tag array
-    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)  `ifdef ASIC , .ASIC(1) `endif ) 
+    RAM #(.DWidth(DataWidth), .AWidth(DArrayAddrWidth)  `ifndef FPGA_MEMORY , .SRAM(1) `endif ) 
         DataArray(Clock, Reset, DataEnable, DataWrite, DArrayAddr, DataIn, DOut);
 
-    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth) `ifdef ASIC , .ASIC(1) `endif ) 
+    RAM #(.DWidth(TagWidth+1+ExtraTagWidth), .AWidth(TArrayAddrWidth) `ifndef FPGA_MEMORY , .SRAM(1) `endif ) 
         TagArray(Clock, Reset, TagEnable, TagWrite, TArrayAddr, TagIn, TagOut);  
  
     // output for cache outcome

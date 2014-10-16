@@ -52,7 +52,7 @@ module AddrGen
 	reg RW, BH;
 	reg [BBSTWidth-1:0] BktCounter;
 
-`ifdef ASIC
+`ifndef FPGA
 	AddrGenBktHead
 	abt 	(  	.Clock(		Clock),
 						.Reset(		Reset),

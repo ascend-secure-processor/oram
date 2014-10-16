@@ -169,7 +169,7 @@ module BackendCoreController(
 	Register #( .Width(1),	.Initial(1'b0))
 		first_access (Clock, Reset, CommandRequest, 1'b0, 1'bx, OneAccessHasOccurred);
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS = ST_Idle;
 		end 
@@ -359,7 +359,7 @@ module BackendCoreController(
 
 		assign	DummyLeaf =							DummyLeaf_Pre;
 		
-`ifndef ASIC
+`ifdef FPGA
 		initial begin
 			ROPAddr =								{ORAMU{1'bx}};
 			ROLeaf =								{ORAML{1'bx}};

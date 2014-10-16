@@ -75,7 +75,7 @@ module PosMapPLB
     (* mark_debug = "TRUE" *) wire [LogFinalPosMapEntry-1:0] PosMapAddr;
     (* mark_debug = "TRUE" *) wire [LeafWidth-1:0] PosMapIn, PosMapOut;
 
-    RAM #(.DWidth(LeafWidth), .AWidth(LogFinalPosMapEntry) `ifdef ASIC , .ASIC(1) `endif )
+    RAM #(.DWidth(LeafWidth), .AWidth(LogFinalPosMapEntry) `ifndef FPGA_MEMORY , .SRAM(1) `endif )
         PosMap (    .Clock(Clock), .Reset(Reset), 
                     .Enable(PosMapEnable), .Write(PosMapWrite), .Address(PosMapAddr), 
                     .DIn(PosMapIn), .DOut(PosMapOut)
@@ -156,7 +156,7 @@ module PosMapPLB
 				// CacheRefill must use NewLeafOut (not NewLeafIn), the previous leaf that's still in store.
 	
 `ifdef SIMULATION
-	`ifndef ASIC
+	`ifdef FPGA
 		always @ (posedge Clock) begin
 			if (PLBRefill && PLB.RefillWriting && !DInValid) begin // Note: PLB.RefillWriting causes ASIC tool to complain
 				$display("Error: PLB is a passive device. Once started refill, data must come in every cycle");

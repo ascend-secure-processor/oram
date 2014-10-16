@@ -170,7 +170,7 @@ module StashTop(
 	//	Initial state
 	//--------------------------------------------------------------------------	
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS = ST_Initialize;
 		end

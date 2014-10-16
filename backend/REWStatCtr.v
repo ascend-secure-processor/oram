@@ -143,7 +143,7 @@ module REWStatCtr(
 		State_Trans(rw_access, path_read);	// Start from RW_R
     endtask
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			Task_Init;
 			Reset_Post = 1'b1;

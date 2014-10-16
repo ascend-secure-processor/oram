@@ -206,7 +206,7 @@ module REWAESCore(
 	// Note: We split the input buffers so RW commands don't head of line block
 	// RO commands.  
 	
-	`ifdef ASIC
+	`ifndef FPGA
 	FIFORAM		#(			.Width(					AESEntropy + BIDWidth + PCCMDWidth),
 							.Buffering(				InFlightMaskLimit)) // probably can be smaller than this 
 				rofifo(		.Clock(					SlowClock),
@@ -229,7 +229,7 @@ module REWAESCore(
 							.valid(					ROValid_Fifo));
 	`endif
 	
-	`ifdef ASIC
+	`ifndef FPGA
 	FIFORAM		#(			.Width(					AESEntropy + BIDWidth),
 							.Buffering(				InFlightMaskLimit))
 				rwfifo(		.Clock(					SlowClock),
@@ -435,7 +435,7 @@ module REWAESCore(
 	// the command bit here adds 0 additional logic since we just use the BRAM 
 	// ECC bits.
 
-	`ifdef ASIC
+	`ifndef FPGA
 	FIFORAM		#(			.Width(					AESWidth + PCCMDWidth),
 							.Buffering(				128)) // TODO: how to set this?  just make it big to be conservative ...
 				roOfifo(	.Clock(					SlowClock),
@@ -459,7 +459,7 @@ module REWAESCore(
 							.valid(					RODataOutValid));						
 	`endif
 	
-	`ifdef ASIC
+	`ifndef FPGA
 	FIFORAM		#(			.Width(					DDRDWidth),
 							.Buffering(				MaskFIFODepth))
 				rwOfifo(	.Clock(					SlowClock),

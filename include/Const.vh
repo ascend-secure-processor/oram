@@ -49,7 +49,7 @@
 //
 //	YOU SHOULD DEFINE THE "MODELSIM" FLAG FOR SIMULATION!!!!
 //------------------------------------------------------------------------------
-`ifndef ASIC // TODO clean this up
+`ifdef FPGA
 	`ifdef SYNTHESIS                // if Synplify
 		`define SYNPLIFY
 		`define MACROSAFE
@@ -70,7 +70,10 @@
 			`endif
 		`endif
 	`endif
+`else
+	`define MACROSAFE
 `endif
+
 //------------------------------------------------------------------------------
 
 //------------------------------------------------------------------------------

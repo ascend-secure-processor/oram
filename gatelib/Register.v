@@ -66,7 +66,7 @@ module	Register(Clock, Reset, Set, Enable, In, Out);
 	//--------------------------------------------------------------------------
 	//	Initial value
 	//--------------------------------------------------------------------------
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			Out = Initial; // WARNING: DO NOT CHANGE THIS BACK TO 'output reg Out = Initial'; Vivado 2013.4 silently ignores this syntax for synthesis.
 		end

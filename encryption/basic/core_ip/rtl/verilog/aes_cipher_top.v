@@ -99,7 +99,7 @@ reg	[3:0]	dcnt;
 // Misc Logic
 //
 
-`ifndef ASIC
+`ifdef FPGA
 	initial begin
 		dcnt = 4'h0;
 		busy = 1'b0;

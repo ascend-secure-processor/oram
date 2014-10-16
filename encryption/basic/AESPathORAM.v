@@ -189,7 +189,7 @@ module AESPathORAM(
     wire [`log2(AESDataDepth)-1:0] AESDataEmptyCount;
     reg                          InitDone;
 
-`ifndef ASIC
+`ifdef FPGA
 	initial begin
 		RW = PATH_WRITE; //0: ORAM->MIG, 1: MIG->ORAM
 		AESIVDone = 0;

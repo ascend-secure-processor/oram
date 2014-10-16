@@ -325,7 +325,7 @@ module AESREWORAM(
 	//	Initial state
 	//--------------------------------------------------------------------------	
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS_RO = ST_RO_Idle;
 			CS_CO = ST_CO_Read;
@@ -747,7 +747,7 @@ module AESREWORAM(
 	// Note: This buffer is only needed because the Path Buffer is a FIFO
 	FIFORAM	#(			.Width(						BDWidth),
 						.Buffering(					128)
-						`ifdef ASIC , .ASIC(1) `endif) // really, this only needs to be ~AESLatencyPlus deep; but we get the extra depth for free if it is BRAM ...
+						`ifndef FPGA_MEMORY , .SRAM(1) `endif) // really, this only needs to be ~AESLatencyPlus deep; but we get the extra depth for free if it is BRAM ...
 			data_buf(	.Clock(						Clock),
 						.Reset(						Reset),
 						.InData(					BufferedDataIn_Wide),
@@ -901,7 +901,7 @@ module AESREWORAM(
 							.BEDWidth(				BEDWidth))
 				core(		.SlowClock(				Clock),
 							.FastClock(				FastClock),
-				`ifdef ASIC
+				`ifndef FPGA
 							.Reset(					Reset),
 				`else
 							.Reset(					1'b0),

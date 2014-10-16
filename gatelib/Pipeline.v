@@ -129,7 +129,7 @@ module	PipelinedRegister(Clock, Reset, In, Out) /* synthesis syn_srlstyle="regis
 	input	[Width-1:0]		In;
 	output reg [Width-1:0]	Out /* synthesis syn_srlstyle="registers" */;
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			Out = {Width{1'b0}};
 		end

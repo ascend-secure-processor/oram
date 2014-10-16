@@ -309,7 +309,7 @@ module Stash(
 	//	Initial state
 	//--------------------------------------------------------------------------	
 	
-	`ifndef ASIC
+	`ifdef FPGA
 		initial begin
 			CS = ST_Reset;
 		end
