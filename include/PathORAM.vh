@@ -40,7 +40,7 @@ localparam				PINIT =					-1;
 	`ifdef SIMULATION_VIVADO
 		parameter 			ORAML =					15;		// cannot simulate too large an ORAM
 	`else
-		parameter 			ORAML =					23; 
+		parameter 			ORAML =					15; 
 	`endif
 	
 	parameter				FEDWidth =				64, 	// data width of frontend busses (reading/writing from/to stash, LLC network interface width)
@@ -49,7 +49,7 @@ localparam				PINIT =					-1;
 					
 	parameter				Overclock = 			1; 		// Pipeline various operations inside the stash (needed for 200 Mhz operation)
 						
-	parameter				EnableAES =				1, 		// Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
+	parameter				EnableAES =				0, 		// Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
 							EnableREW =				0, 		// Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 							EnableIV =          	1; 		// Integrity verification
 							

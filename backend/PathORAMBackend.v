@@ -409,6 +409,8 @@ module PathORAMBackend(
 							
 							.JTAG_AES(				JTAG_AES));
 	end else begin:NO_AES
+		assign	JTAG_AES =							{JTWidth_AES{1'b0}};
+	
 		assign	AES_DRAMReadData =					DRAMReadData;
 		assign	AES_DRAMReadDataValid =				DRAMReadDataValid;
 		assign	PBF_DRAMReadDataReady =				AES_DRAMReadDataReady;
