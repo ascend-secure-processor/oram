@@ -45,8 +45,10 @@ module testUORAM;
 	wire						DDR3SDRAM_WriteValid, DDR3SDRAM_WriteReady;
 	wire						DDR3SDRAM_ReadValid;
 	
-	reg							TGEN;
 	reg							ResetPulsed;
+	
+	reg 						TestUORAMPassed;
+	reg							TGEN;
 	
 	wire	[JTWidth-1:0]	oram_jtag_res_data;
 	
@@ -275,8 +277,9 @@ module testUORAM;
 		AddrRand = 0;
 		Checking_ProgData = 0;
         CycleCount = 0;
-		TGEN = 1'b1;
 		ResetPulsed = 0;
+		TestUORAMPassed = 1'b0;
+		TGEN = 0;
 		
 		`ifdef GATE_SIM_POWER $vcdpluson; `endif	
 		
@@ -395,12 +398,13 @@ module testUORAM;
 
 	wire [1:0] Op;
 	wire  Exist;
-
+	
 	assign Exist = GlobalPosMap[AddrRand][ORAML];
 	assign Op = Exist ? {GlobalPosMap[AddrRand][0], 1'b0} : 2'b00;
 
     always @(negedge Clock) begin
-        if (!Reset && CmdInReady) begin
+		TestUORAMPassed = 1'b0;
+        if (!Reset && CmdInReady && !TGEN) begin
             if (TestCount < 2 * NN) begin
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);
@@ -411,7 +415,7 @@ module testUORAM;
             end
             else begin
                 $display("TESTUORAM PASSED!");
-                TGEN = 1'b1;
+				TGEN = 1'b1;
             end
         end
     end

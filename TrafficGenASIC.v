@@ -36,7 +36,7 @@ module TrafficGenASIC(
 	`include "JTAG.vh"
 	
 	parameter				NumCommands =			4, 
-							AccessCount_Fixed =		32'd100;
+							AccessCount_Fixed =		32'd256;
 	
 	localparam				StallThreshold =		20000; // astronomical? maybe not for these slow ass pins ;-)
 
