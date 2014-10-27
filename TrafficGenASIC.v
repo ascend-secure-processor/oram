@@ -29,17 +29,16 @@ module TrafficGenASIC(
 	`include "PathORAM.vh"
 	`include "UORAM.vh"
 	`include "PLBLocal.vh"
-	
+	`include "CommandsLocal.vh"
+	`include "TrafficGenLocal.vh"
+
 	`include "DMLocal.vh"
 	`include "JTAG.vh"
 	
 	parameter				NumCommands =			4, 
 							AccessCount_Fixed =		32'd100;
 	
-	`include "CommandsLocal.vh"
-	`include "TrafficGenLocal.vh"
-	
-	localparam				StallThreshold =		10000; // astronomical? maybe not for these slow ass pins ;-)
+	localparam				StallThreshold =		20000; // astronomical? maybe not for these slow ass pins ;-)
 
 	localparam				NVWidth =				`log2(NumValidBlock);	
 	localparam				OBUChunks = 			ORAMB / ORAMU;
