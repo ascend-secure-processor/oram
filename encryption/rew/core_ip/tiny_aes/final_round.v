@@ -15,7 +15,19 @@
  */
 
 /* AES final round for every two clock cycles */
-module final_round (clk, state_in, key_in, state_out);
+
+module final_round (clk, key_in, state_in, rcon, state_out);
+    input           clk;
+    input	[127:0]	state_in, key_in;
+	input 	[7:0]   rcon;
+    output  [127:0] state_out;
+	wire	[127:0] key_b;
+		
+	expand_key_128 a (.clk(clk), .in(key_in), .out_2(key_b), .rcon(rcon));
+	final_round_sub r (clk, state_in, key_b, state_out);
+endmodule
+
+module final_round_sub (clk, state_in, key_in, state_out);
     input              clk;
     input      [127:0] state_in;
     input      [127:0] key_in;

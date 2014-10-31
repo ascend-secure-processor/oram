@@ -38,10 +38,8 @@ module aes_128(clk, state, key, out);
         r7 (clk, k6, s6, 8'h40, k7, s7),
         r8 (clk, k7, s7, 8'h80, k8, s8),
         r9 (clk, k8, s8, 8'h1b, k9, s9);
-
-	expand_key_128 	
-		a10 (clk, k9,   , k9b, 8'h36);		
-    final_round
-        rf (clk, s9, k9b, out);
+	
+	final_round
+		rf (clk, k9, s9, 8'h36, out);
 		
 endmodule
