@@ -3,7 +3,7 @@
 // Author: Tri Nguyen
 `timescale 1ns/100ps
 `include "define.vh"
-module RF1DFCMN00128X192D02C064_TWRAPPER
+module RF1DFCMN00128X192D02C064_PWRAP
 (
 input wire MEMCLK,
 input wire RESET_N,
@@ -1573,6 +1573,6 @@ end
             dout_f <= cache[A];
       end
    end
-   
+
 `endif
 endmodule

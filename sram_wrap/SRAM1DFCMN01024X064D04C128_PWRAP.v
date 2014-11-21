@@ -3,7 +3,7 @@
 // Author: Tri Nguyen
 `timescale 1ns/100ps
 `include "define.vh"
-module SRAM1DFCMN01024X064D04C128_TWRAPPER
+module SRAM1DFCMN01024X064D04C128_PWRAP
 (
 input wire MEMCLK,
 input wire RESET_N,
@@ -689,6 +689,6 @@ end
             dout_f <= cache[A];
       end
    end
-   
+
 `endif
 endmodule

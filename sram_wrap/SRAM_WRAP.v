@@ -1,4 +1,4 @@
-// SRAM wrapper, select the appropriate SRAM cell (the next smallest) 
+// SRAM wrapper, select the appropriate SRAM cell (the next smallest)
 // Author: Ling Ren
 
 `include "Const.vh"
@@ -13,14 +13,14 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 	output [DWidth-1:0] DOut;
 
 	// select SRAM parameters
-	localparam NWORDS = AWidth <= 7 ? 128 :	
+	localparam NWORDS = AWidth <= 7 ? 128 :
 						AWidth <= 9 ? 512 :
 						AWidth <= 10 ? 1024	: 0;
 
 
 	localparam AWidth_Pad = `log2(NWORDS);
 
-	localparam 	NBITS = NWORDS == 128 ? (		
+	localparam 	NBITS = NWORDS == 128 ? (
 							DWidth <= 78 ? 		78 :
 							DWidth <= 192 ? 	192 : 0 ) 	:
 						NWORDS == 512 ? 		128 		:
@@ -28,7 +28,7 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 						0;
 
 	// pad to a multiple of NBITS
-	localparam DWidth_Pad = (DWidth + NBITS - 1) / NBITS * NBITS;	
+	localparam DWidth_Pad = (DWidth + NBITS - 1) / NBITS * NBITS;
 
 	wire [AWidth_Pad-1:0] _Addr;
 	wire [DWidth_Pad-1:0] _DIn;
@@ -43,7 +43,7 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 	generate for (dw = 0; dw < DWidth_Pad; dw = dw + NBITS) begin:SRAM_MAT
 		if (NWORDS == 1024 && NBITS == 64) begin:SRAM1
 			//SRAM1DFCMN01024X064D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
-			SRAM1DFCMN01024X064D04C128_TWRAPPER SRAM(
+			SRAM1DFCMN01024X064D04C128_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
 				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
 				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
@@ -51,7 +51,7 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 
 		else if (NWORDS == 128 && NBITS == 78) begin:SRAM2
 			//RF1DFCMN00128X078D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
- 			RF1DFCMN00128X078D02C064_TWRAPPER SRAM(
+ 			RF1DFCMN00128X078D02C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
 				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
 				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
@@ -59,14 +59,14 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 
 		else if (NWORDS == 128 && NBITS == 192) begin:SRAM3
 			//RF1DFCMN00128X192D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
- 			RF1DFCMN00128X192D02C064_TWRAPPER SRAM(
+ 			RF1DFCMN00128X192D02C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
 				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
 				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
 		end
 
 		else if (NWORDS == 512 && NBITS == 128) begin:SRAM4
-			RF1DFCMN00512X128D04C064_TWRAPPER SRAM(
+			RF1DFCMN00512X128D04C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
 				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
 				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
@@ -101,13 +101,13 @@ module SRAM2D_WRAP(Clock, Reset, Read, Write, ReadAddress, WriteAddress, DIn, DO
 	localparam AWidth_Pad = `log2(NWORDS);
 
 	localparam 	NBITS = NWORDS == 256 ? ( (DWidth <= 128) ?	8   : 256 ) :
-						NWORDS == 128 ? 		32	: 
+						NWORDS == 128 ? 		32	:
 						NWORDS == 512 ?			64  :
 						NWORDS == 1024 ?		64  :
 						0;
 
 	// pad to a multiple of NBITS
-	localparam DWidth_Pad = (DWidth + NBITS - 1) / NBITS * NBITS;	
+	localparam DWidth_Pad = (DWidth + NBITS - 1) / NBITS * NBITS;
 
 	wire [AWidth_Pad-1:0] _RAddr, _WAddr;
     wire [DWidth_Pad-1:0] _DIn;
