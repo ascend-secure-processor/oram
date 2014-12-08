@@ -186,6 +186,9 @@ module TinyORAMCore(
 	//	Core modules
 	//--------------------------------------------------------------------------
 
+`ifndef FPGA
+	Frontend
+`else
 	Frontend #(  			.ORAMU(         		ORAMU),
 							.ORAML(         		ORAML),
 							.ORAMB(         		ORAMB),
@@ -195,7 +198,7 @@ module TinyORAMCore(
 							.EnablePLB(				EnablePLB),
 							.PLBCapacity(   		PLBCapacity),
 							.PRFPosMap(				PRFPosMap))
-
+`endif
 				front_end(	.Clock(             	Clock),
 							.Reset(					Reset),
 

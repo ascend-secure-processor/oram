@@ -269,6 +269,9 @@ module PathORAMBackend(
 	//	Address generation & the stash
 	//--------------------------------------------------------------------------
 
+`ifndef FPGA
+	PathORAMBackendCore
+`else
 	PathORAMBackendCore #(	.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -286,6 +289,7 @@ module PathORAMBackend(
 							.BEDWidth(				BEDWidth),
 
 							.ORAMUValid(			ORAMUValid))
+`endif							
 			bend_core(		.Clock(					Clock),
 				`ifndef FPGA
 							.Reset(					Reset),
@@ -372,6 +376,9 @@ module PathORAMBackend(
 							.DRAMWriteDataValid(	DRAMWriteDataValid),
 							.DRAMWriteDataReady(	DRAMWriteDataReady));
 	end else if (EnableAES) begin:BASIC_AES
+	`ifndef FPGA
+		AESPathORAM
+	`else
 		AESPathORAM #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
 							.ORAML(					ORAML),
@@ -381,6 +388,7 @@ module PathORAMBackend(
 							.EnableIV(				EnableIV),
 							.FEDWidth(				FEDWidth),
 							.BEDWidth(				BEDWidth))
+	`endif						
 				aes(		.Clock(					Clock),
 				`ifndef FPGA
 							.Reset(					Reset),
