@@ -163,7 +163,7 @@ module testUORAM;
 			$finish;
 		end
 		
-		if (ResetPulsed && ^oram_jtag_res_data === 1'bx) begin
+		if (CycleCountSinceReset > 5 /* give things time to settle */ && ^oram_jtag_res_data === 1'bx) begin
 			$display("JTAG signal is X");
 			$finish;
 		end
@@ -248,9 +248,13 @@ module testUORAM;
 	localparam CWidth = 5;
 
     reg [64-1:0] CycleCount;
-
+	reg [64-1:0] CycleCountSinceReset;
+	
     always@(negedge Clock) begin
         CycleCount = CycleCount + 1;
+		
+		if (ResetPulsed)
+			CycleCountSinceReset = CycleCountSinceReset + 1;
 		
 		if (Reset)
 			ResetPulsed = 1;
@@ -277,6 +281,7 @@ module testUORAM;
 		AddrRand = 0;
 		Checking_ProgData = 0;
         CycleCount = 0;
+		CycleCountSinceReset = 0;
 		ResetPulsed = 0;
 		TestUORAMPassed = 1'b0;
 		TGEN = 0;
