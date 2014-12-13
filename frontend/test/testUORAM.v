@@ -409,7 +409,7 @@ module testUORAM;
 
     always @(negedge Clock) begin
 		TestUORAMPassed = 1'b0;
-        if (!Reset && CmdInReady && !TGEN) begin
+        if (ResetPulsed && !Reset && CmdInReady && !TGEN) begin
             if (TestCount < 2 * NN) begin
                 Task_StartORAMAccess(Op, AddrRand);
                 #(Cycle);
