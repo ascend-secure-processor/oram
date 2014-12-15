@@ -63,8 +63,6 @@ module TinyORAMCore(
 	`include "BucketLocal.vh"
 	`include "CommandsLocal.vh"
 	`include "JTAG.vh"
-	
-	localparam				ORAMUValid = ORAML + 3; // Note: +3 assumes 50% utilization at Z=4
 
 	// TODO: remove 	localparam	DelayedWB =	0; 
 	// there is some logic in BackendControllerCore that implicitly
@@ -245,8 +243,7 @@ module TinyORAMCore(
 							.DelayedWB(				1'b0),
 
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),
-							.ORAMUValid(			ORAMUValid))
+							.BEDWidth(				BEDWidth))
 				back_end (	.Clock(					Clock),
 			                .AESClock(				AESClock),
 							.Reset(					Reset),

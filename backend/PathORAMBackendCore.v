@@ -46,8 +46,6 @@ module PathORAMBackendCore(
 	
 	`include "DMLocal.vh"
 	`include "JTAG.vh"
-	
-	parameter				ORAMUValid =			21;
 
 	localparam				STWidth =				2,
 							ST_Idle =				2'd0,
@@ -588,8 +586,7 @@ module PathORAMBackendCore(
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableIV(				EnableIV),
-							.EnableREW(             EnableREW),
-							.ORAMUValid(			ORAMUValid))
+							.EnableREW(             EnableREW))
 				stash_top(	.Clock(					Clock),
 							.Reset(					Reset),
 

@@ -42,9 +42,7 @@ module StashTop(
 	
 	`include "DMLocal.vh"
 	`include "JTAG.vh"
-	
-	parameter				ORAMUValid =			21;
-															
+		
 	localparam				STWidth =				3,
 							ST_Initialize =			3'd0,
 							ST_Idle =				3'd1,
@@ -355,7 +353,6 @@ module StashTop(
 							.BEDWidth(				BEDWidth),
 							.EnableIV(				EnableIV),
 							.Overclock(				Overclock),
-							.ORAMUValid(			ORAMUValid),
 							.StashOutBuffering(		4), // this should be good enough ...
 							.StopOnBlockNotFound(	1))
 				stash(		.Clock(					Clock),

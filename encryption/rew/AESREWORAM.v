@@ -55,9 +55,10 @@ module AESREWORAM(
 	`include "StashLocal.vh"
 	
 	parameter				DebugAES =				0;
-	parameter				ORAMUValid =			21;
 	
 	parameter				DebugAggressive =		0; // This is only a valid assertion under certain traffic generators.  Generally it should be disabled.
+	
+	localparam				ORAMUValid = 			ORAML + 3; // Note: +3 assumes 50% utilization at Z=4
 	
 	localparam				PathMaskBuffering =		2; // with ORAML = 31, ORAMZ = 5 & a 512 deep mask FIFO, we can fit 2 whole paths
 	

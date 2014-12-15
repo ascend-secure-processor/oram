@@ -44,8 +44,6 @@ module PathORAMBackend(
 	
 	`include "DMLocal.vh"
 	`include "JTAG.vh"
-	
-	parameter				ORAMUValid =			21;
 
 	localparam				ORAMLogL = 				`log2(ORAML+1);
 
@@ -286,9 +284,7 @@ module PathORAMBackend(
 							.DelayedWB(				DelayedWB),
 
 							.FEDWidth(				FEDWidth),
-							.BEDWidth(				BEDWidth),
-
-							.ORAMUValid(			ORAMUValid))
+							.BEDWidth(				BEDWidth))
 `endif							
 			bend_core(		.Clock(					Clock),
 				`ifndef FPGA
@@ -347,8 +343,7 @@ module PathORAMBackend(
 							.Overclock(				Overclock),
 							.EnableAES(				EnableAES),
 							.EnableIV(				EnableIV),
-							.DelayedWB(				DelayedWB),
-							.ORAMUValid(			ORAMUValid))
+							.DelayedWB(				DelayedWB))
 			aes(			.Clock(					Clock),
 							.FastClock(				AESClock),
 			`ifndef FPGA
