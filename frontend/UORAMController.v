@@ -82,7 +82,8 @@ module UORAMController
 	(* mark_debug = "TRUE" *) wire					DataInValid_Internal, DataInReady_Internal;
 
 	localparam				BlkSize_FEDChunks =		`divceil(ORAMB, FEDWidth);	
-	
+
+/*	
 	FIFORAM	#(				.Width(					FEDWidth),
 							.Buffering(				BlkSize_FEDChunks))
 				in_D_buf(	.Clock(					Clock),
@@ -93,6 +94,10 @@ module UORAMController
 							.OutData(				DataIn_Internal),
 							.OutSend(				DataInValid_Internal),
 							.OutReady(				DataInReady_Internal));
+*/
+	assign	DataIn_Internal = DataIn;
+	assign	DataInValid_Internal = DataInValid;
+	assign	DataInReady = DataInReady_Internal;
 
 	// check whether input is valid
 	(* mark_debug = "TRUE" *) wire	AddrOutofRange;
