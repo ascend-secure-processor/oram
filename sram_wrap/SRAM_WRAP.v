@@ -45,31 +45,31 @@ module SRAM1D_WRAP(Clock, Reset, Enable, Write, Address, DIn, DOut);
 			//SRAM1DFCMN01024X064D04C128_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
 			SRAM1DFCMN01024X064D04C128_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
-				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
-				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
+				.A( _Addr),				.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), 	.DOUT( _DOut[dw+NBITS-1:dw]),
+				.TA({AWidth_Pad{1'b0}}),.TRDWEN(1'b1),	.TBW({NBITS{1'b1}}), .TDIN({NBITS{1'b0}}), 			.TDOUT());
 		end
 
 		else if (NWORDS == 128 && NBITS == 78) begin:SRAM2
 			//RF1DFCMN00128X078D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
  			RF1DFCMN00128X078D02C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
-				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
-				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
+				.A( _Addr),				.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), 	.DOUT( _DOut[dw+NBITS-1:dw]),
+				.TA({AWidth_Pad{1'b0}}),.TRDWEN(1'b1),	.TBW({NBITS{1'b1}}), .TDIN({NBITS{1'b0}}), 			.TDOUT());
 		end
 
 		else if (NWORDS == 128 && NBITS == 192) begin:SRAM3
 			//RF1DFCMN00128X192D02C064_WRAP SRAM (Clock, Enable, Write, _Addr, _DIn[dw+NBITS-1:dw], _DOut[dw+NBITS-1:dw]);
  			RF1DFCMN00128X192D02C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
-				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
-				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
+				.A( _Addr),				.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), 	.DOUT( _DOut[dw+NBITS-1:dw]),
+				.TA({AWidth_Pad{1'b0}}),.TRDWEN(1'b1),	.TBW({NBITS{1'b1}}), .TDIN({NBITS{1'b0}}), 			.TDOUT());
 		end
 
 		else if (NWORDS == 512 && NBITS == 128) begin:SRAM4
 			RF1DFCMN00512X128D04C064_PWRAP SRAM(
 				.MEMCLK(Clock), .RESET_N(~Reset), .CE(Enable), .TESTEN(1'b0), .FUSE(`BIST_FUSE_WIDTH'b0),
-				.A( _Addr),.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), .DOUT( _DOut[dw+NBITS-1:dw]),
-				.TA(_Addr),.TRDWEN(~Write),.TBW({NBITS{1'b1}}), .TDIN(_DIn[dw+NBITS-1:dw]), .TDOUT());
+				.A( _Addr),				.RDWEN( ~Write),.BW( {NBITS{1'b1}}), .DIN( _DIn[dw+NBITS-1:dw]), 	.DOUT( _DOut[dw+NBITS-1:dw]),
+				.TA({AWidth_Pad{1'b0}}),.TRDWEN(1'b1),	.TBW({NBITS{1'b1}}), .TDIN({NBITS{1'b0}}), 			.TDOUT());
 		end
 	end endgenerate
 
