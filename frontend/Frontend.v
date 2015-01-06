@@ -22,9 +22,9 @@ module Frontend
     ReturnDataReady, ReturnDataValid, ReturnData,
     CmdOutReady, CmdOutValid, CmdOut, AddrOut, OldLeaf, NewLeaf,
 	StoreDataReady, StoreDataValid, StoreData,
-    LoadDataReady, LoadDataValid, LoadData//, FIXME
+    LoadDataReady, LoadDataValid, LoadData,
 	
-	//JTAG_PMMAC, JTAG_UORAM, JTAG_Frontend FIXME
+	JTAG_PMMAC, JTAG_UORAM, JTAG_Frontend
 );
 
 	`include "PathORAM.vh"
@@ -69,10 +69,10 @@ module Frontend
     output StoreDataValid;
     output [FEDWidth-1:0] StoreData;
 	
-	// Status/Debugging FIXME
-	//output	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
-	//output	[JTWidth_UORAM-1:0] JTAG_UORAM;
-	//output	[JTWidth_Frontend-1:0] JTAG_Frontend;	
+	// Status/Debugging
+	output	[JTWidth_PMMAC-1:0] JTAG_PMMAC;
+	output	[JTWidth_UORAM-1:0] JTAG_UORAM;
+	output	[JTWidth_Frontend-1:0] JTAG_Frontend;	
 
     // receive response from backend
     output LoadDataReady;

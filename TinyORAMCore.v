@@ -223,15 +223,10 @@ module TinyORAMCore(
 							.StoreData(				StoreData),
 							.LoadDataReady(			LoadReady),
 							.LoadDataValid(			LoadValid),
-							.LoadData(				LoadData));
-							
-							// FIXME
-							//.JTAG_PMMAC(			JTAG_PMMAC), 
-							//.JTAG_UORAM(			JTAG_UORAM), 
-							//.JTAG_Frontend(		JTAG_Frontend));
-	assign	JTAG_PMMAC = {JTWidth_PMMAC{1'b0}};
-	assign	JTAG_UORAM = {JTWidth_UORAM{1'b0}};
-	assign	JTAG_Frontend = {JTWidth_Frontend{1'b0}};
+							.LoadData(				LoadData),
+							.JTAG_PMMAC(			JTAG_PMMAC), 
+							.JTAG_UORAM(			JTAG_UORAM), 
+							.JTAG_Frontend(			JTAG_Frontend));
 	
 	PathORAMBackend #(		.ORAMB(					ORAMB),
 							.ORAMU(					ORAMU),
