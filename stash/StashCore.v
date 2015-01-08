@@ -861,10 +861,12 @@ module StashCore(
 																			{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
 
+	// FIXME
 	// This is a 2-read 1-write register file
 	// On FPGA, this should become a LUTRAM
 	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM) with manual reset
 
+	/* FIXME
 	`ifndef FPGA
 	genvar	j;
 	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
@@ -883,7 +885,7 @@ module StashCore(
 	Mux #(.Width(ENWidth), .NPorts(StashCapacity), .SelectCode(0))	sc_rd2(	StashC_Address, 	StashC_DataOut_Wide, StashC_DataOut_Pre);
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly1(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
 	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly2(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
-	`else
+	`else*/
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),
 							.RLatency(				Overclock),
@@ -897,7 +899,7 @@ module StashCore(
 							.Address(				{StashC_ROAddress,	StashC_Address}),
 							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
 							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
-	`endif
+	//`endif FIXME
 
 	//--------------------------------------------------------------------------
 	//	Element counting
