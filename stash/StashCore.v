@@ -242,11 +242,6 @@ module StashCore(
 	wire					StashP_WE;
 	wire					StashP_EN;
 
-	`ifndef FPGA
-	wire	[ENWWidth-1:0]	StashC_DataIn_Wide, StashC_DataOut_Wide;
-	wire	[ENWidth-1:0]	StashC_RODataOut_Pre, StashC_DataOut_Pre;
-	`endif
-
 	wire	[SEAWidth-1:0]	StashC_Address;
 	wire	[ENWidth-1:0] 	StashC_DataIn, StashC_DataOut;
 	wire					StashC_WE;
@@ -358,7 +353,7 @@ module StashCore(
 		reg                 ResetPulsed;
 
 	`ifndef FPGA
-		`define STASHC StashC_DataOut_Wide[MS_pt]
+		`define STASHC StashC1.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt]
 	`else
 		`define STASHC StashC.BEHAVIORAL.Mem[MS_pt]
 	`endif
@@ -855,37 +850,47 @@ module StashCore(
 													(CSSyncing_PreLatch) ?	SyncCount_PreLatch :
 																			{SEAWidth{1'bx}};
 
+	// This logic is for REW ORAM: we want to skip the Sync operation on RO
+	// accesses and therefore need to tolerate invalid StashC entries.
+	assign	StashC_ROAddress =						StashWalk;																			
+																			
 	assign	StashC_DataIn = 						(InScanStreaming) ? 	((InScanAccepted) ? EN_Free : EN_Used) :
 													(CSHUpdate) ?			EN_Free :
 													(CSReset) ? 			EN_Free :
 																			{ENWidth{1'bx}};
 	assign	StashC_WE =								CSReset | InScanValid | (CSHUpdate & InHeaderRemove);
 
-	// FIXME
 	// This is a 2-read 1-write register file
 	// On FPGA, this should become a LUTRAM
 	// On ASIC, this should become an array of registers (not a 1-bit wide SRAM) with manual reset
 
-	/* FIXME
 	`ifndef FPGA
-	genvar	j;
-	generate for(j = 0; j < StashCapacity; j = j + 1) begin:FANOUT
-		assign 	StashC_DataIn_Wide[ENWidth*(j+1)-1:ENWidth*j] = (StashC_Address == j) ? StashC_DataIn : StashC_DataOut_Wide[ENWidth*(j+1)-1:ENWidth*j];
-	end endgenerate
-
-	Register	#(			.Width(					ENWWidth))
-				StashC(		.Clock(					Clock),
+	// The ASIC tools can't handle multi-read port combinational memories
+	
+	SDPRAM		#(			.DWidth(				ENWidth),
+							.AWidth(				SEAWidth),
+							.RLatency(				Overclock))
+				StashC1(	.Clock(					Clock),
 							.Reset(					Reset),
-							.Set(					1'b0),
-							.Enable(				StashC_WE),
-							.In(					StashC_DataIn_Wide),
-							.Out(					StashC_DataOut_Wide));
-
-	Mux	#(.Width(ENWidth), .NPorts(StashCapacity), .SelectCode(0)) 	sc_rd1(	StashC_ROAddress, 	StashC_DataOut_Wide, StashC_RODataOut_Pre);
-	Mux #(.Width(ENWidth), .NPorts(StashCapacity), .SelectCode(0))	sc_rd2(	StashC_Address, 	StashC_DataOut_Wide, StashC_DataOut_Pre);
-	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly1(Clock, Reset, StashC_RODataOut_Pre, StashC_RODataOut);
-	Pipeline #(.Width(ENWidth), .Stages(Overclock)) sc_dly2(Clock, Reset, StashC_DataOut_Pre, 	StashC_DataOut);
-	`else*/
+							.Write(					StashC_WE),								
+							.WriteAddress(			StashC_Address),
+							.WriteData(				StashC_DataIn),
+							.Read(					1'b1),
+							.ReadAddress(			StashC_Address), 
+							.ReadData(				StashC_DataOut));
+	
+	SDPRAM		#(			.DWidth(				ENWidth),
+							.AWidth(				SEAWidth),
+							.RLatency(				Overclock))
+				StashC2(	.Clock(					Clock),
+							.Reset(					Reset),
+							.Write(					StashC_WE),								
+							.WriteAddress(			StashC_Address),
+							.WriteData(				StashC_DataIn),
+							.Read(					1'b1),
+							.ReadAddress(			StashC_ROAddress), 
+							.ReadData(				StashC_RODataOut));	
+	`else
 	RAM			#(			.DWidth(				ENWidth), // 1b typically
 							.AWidth(				SEAWidth),
 							.RLatency(				Overclock),
@@ -899,7 +904,7 @@ module StashCore(
 							.Address(				{StashC_ROAddress,	StashC_Address}),
 							.DIn(					{{ENWidth{1'bx}},	StashC_DataIn}),
 							.DOut(					{StashC_RODataOut,	StashC_DataOut}));
-	//`endif FIXME
+	`endif
 
 	//--------------------------------------------------------------------------
 	//	Element counting
@@ -936,9 +941,6 @@ module StashCore(
 	assign	SWTerminator_Empty =					CSDumping & CSDumping_FirstCycle & (UsedListHead == SNULL);
 	assign 	StashWalk_Terminator =					SWTerminator_Finished | SWTerminator_Empty;
 
-	// This logic is for REW ORAM: we want to skip the Sync operation on RO
-	// accesses and therefore need to tolerate invalid StashC entries.
-	assign	StashC_ROAddress =						StashWalk;
 	generate if (Overclock == 0) begin:OC_DUMP_DLY // Note: StashP read latency must always == StashC read latency
 		Register #(			.Width(					ENWidth)) // TODO change to Pipeline.v
 				ROdly(		.Clock(					Clock),
