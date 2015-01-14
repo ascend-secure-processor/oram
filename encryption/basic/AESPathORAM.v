@@ -325,7 +325,7 @@ module AESPathORAM(
                                            DataIn[AESEntropy-1:0];
         assign AESDataIn[BEDWidth-1:AESEntropy] = DataIn[BEDWidth-1:AESEntropy];
     end else if (BEDWidth == AESEntropy) begin:BED_LESS_AES
-        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? {DataIn[BEDWidth-1:AESEntropy], GlobalCounter} : DataIn;
+        assign AESDataIn = IsIV & (RW == PATH_WRITE) ? GlobalCounter : DataIn;
     end
     endgenerate
     assign AESDataInValid = DataInValid;
