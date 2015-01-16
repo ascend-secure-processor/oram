@@ -278,13 +278,14 @@ module TinyORAMASICWrap(
 							.JTAG_StashTop(			JTAG_StashTop), 
 							.JTAG_BackendCore(		JTAG_BackendCore), 
 							.JTAG_Backend(			JTAG_Backend));
-	
+`ifdef SIMULATION
 	always @(posedge Clock) begin
 		if (DRAMReadDataValid_ORAM && Mode_DummyGen)
 			$display("DummyGen giving data %x", DRAMReadData_ORAM);
 		if (DRAMWriteDataValid_ORAM && Mode_DummyGen)
 			$display("DummyGen getting data %x", DRAMWriteData_ORAM);
 	end
+`endif
 	
 	assign	DRAMAddress =							DRAMAddress_ORAM;
 	assign	DRAMCommand =							DRAMCommand_ORAM;

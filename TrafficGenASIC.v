@@ -225,7 +225,7 @@ module TrafficGenASIC(
 	//------------------------------------------------------------------------------
 	// 	[Send path] Hardware command generation
 	//------------------------------------------------------------------------------
-	
+	wire AccessTransfer;	
 	assign	AccessTransfer =						CrossBufIn_DataInValid & CrossBufIn_DataInReady;
 	
 	assign	CrossBufIn_DataInValid =				(CSAccess) ? 	CrossBufIn_DataInValidPre : 
@@ -402,7 +402,7 @@ module TrafficGenASIC(
 							.OutData(				DataOutExpected),
 							.OutSend(				DataOutExpectedValid),
 							.OutReady(				DataOutActualValid));								
-			
+	wire Error_ReceivePattern;			
 	assign	ERROR_MismatchReceivePattern =			(DataOutActual != {(ORAMB/32){FakePattern}}) && (DataOutActual != DataOutExpected) && DataOutActualValid; 		
 				
 	//------------------------------------------------------------------------------
