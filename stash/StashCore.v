@@ -383,7 +383,10 @@ module StashCore(
 		    if (Reset)
 		        ResetPulsed = 1;
 
-			if (StartingEviction) Evicting <= 1'b1;
+			if (StartingEviction) begin 
+				Evicting = 1'b1;
+				pmax = 0;
+			end
 				
 			// if (MS_StartingWrite) begin
 			// 	$display("[%m @ %t] Writing [a=%x, l=%x, h=%x, sloc=%d]", $time, InPAddr, InLeaf, InMAC, StashE_Address);
@@ -433,8 +436,7 @@ module StashCore(
 	`ifndef SIMULATION_ASIC
 
 			if (PerAccessReset) begin
-				pmax = 0;
-				Evicting <= 1'b0;
+				Evicting = 1'b0;
 			
 				MS_pt = UsedListHead;
 				i = 0;
@@ -525,7 +527,7 @@ module StashCore(
 						p = 0;
 						while (p < pmax) begin
 							if (PointersChecked[p] == StashE_Address_Delayed) begin
-								$display("[%m] ERROR: Same pointer (%d) read twice during eviction.", StashE_Address_Delayed);
+								$display("[%m] ERROR: Same pointer (%d) read twice during eviction (pmax = %d).", StashE_Address_Delayed, pmax);
 								$finish;
 							end else begin
 								//$display("[%m] OK! %d != %d", PointersChecked[p], StashE_Address_Delayed);
