@@ -30,6 +30,15 @@ localparam				PINIT =					-1;
 
 `else
 
+/* TODO: set the parameters like this for the scripted tests
+	parameter				ORAMB =					512,
+							ORAMU =					32,
+							ORAML =					`ifdef ORAML 	`ORAML 		`else 10  	`endif,
+							ORAMZ =					`ifdef ORAMZ 	`ORAMZ 		`else 5 	`endif,
+							FEDWidth =				`ifdef FEDWidth `FEDWidth 	`else 64	`endif,
+							BEDWidth =              `ifdef BEDWidth `BEDWidth   `else 64   `endif;
+*/
+
 	parameter				ORAMB =					512, 	// block size in bits
 							ORAMU =					32, 	// program addr (at byte-addressable block granularity) width
 							ORAMZ =					4, 		// data block slots per bucket
@@ -38,7 +47,7 @@ localparam				PINIT =					-1;
 	
 	// the number of bits needed to determine a path down the tree (actual # levels is ORAML + 1)
 	`ifdef SIMULATION_VIVADO
-		parameter 			ORAML =					13;		// cannot simulate too large an ORAM ; Note: Vivado 2013.4 can handle L = 19 with typical parameters
+		parameter 			ORAML =					19;		// cannot simulate too large an ORAM ; Note: Vivado 2013.4 can handle L = 19 with typical parameters
 	`else
 		parameter 			ORAML =					23; 
 	`endif
@@ -49,7 +58,7 @@ localparam				PINIT =					-1;
 					
 	parameter				Overclock = 			1; 		// Pipeline various operations inside the stash (needed for 200 Mhz operation)
 						
-	parameter				EnableAES =				0, 		// Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
+	parameter				EnableAES =				1, 		// Should ORAM include encryption?  (All secure designs should pick 1; 0 is easier to debug)
 							EnableREW =				0, 		// Backend mode: 0 - path ORAM with background eviction; 1 - REWORAM with background eviction
 							EnableIV =          	1; 		// Integrity verification
 							

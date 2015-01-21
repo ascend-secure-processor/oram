@@ -64,7 +64,7 @@ module StashCore(
 
 	ROAccess,
 
-	CancelPushCommand, SyncComplete,
+	CancelPushCommand, SyncComplete, StartingEviction,
 
 	JTAG_StashCore
 	);
@@ -193,6 +193,7 @@ module StashCore(
 		helps maintain 100% throughput).  So, we need to kill the last request. */
 	input					CancelPushCommand; // TODO can we refactor to get rid of this signal?
 	output					SyncComplete;
+	input					StartingEviction;
 
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -352,6 +353,10 @@ module StashCore(
 
 		reg                 ResetPulsed;
 
+		reg		[SEAWidth-1:0]	PointersChecked [0:StashCapacity-1];
+		integer 			pmax, p;
+		reg					Evicting;
+		
 	`ifndef FPGA
 		`define STASHC StashC1.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt]
 	`else
@@ -361,6 +366,8 @@ module StashCore(
 		initial begin
 			LS = 			ST_Reset;
 			ResetPulsed =   0;
+			pmax =			0;
+			Evicting =		0;
 
 			if (StashCapacity < BlocksOnPath) begin
 				$display("[%m] ERROR: retarded stash capacity (%d < %d)", StashCapacity, BlocksOnPath);
@@ -376,6 +383,8 @@ module StashCore(
 		    if (Reset)
 		        ResetPulsed = 1;
 
+			if (StartingEviction) Evicting <= 1'b1;
+				
 			// if (MS_StartingWrite) begin
 			// 	$display("[%m @ %t] Writing [a=%x, l=%x, h=%x, sloc=%d]", $time, InPAddr, InLeaf, InMAC, StashE_Address);
 			// 	if (CSOverwriting) begin
@@ -424,6 +433,9 @@ module StashCore(
 	`ifndef SIMULATION_ASIC
 
 			if (PerAccessReset) begin
+				pmax = 0;
+				Evicting <= 1'b0;
+			
 				MS_pt = UsedListHead;
 				i = 0;
 	`ifdef SIMULATION_VERBOSE_STASH
@@ -452,11 +464,11 @@ module StashCore(
 				MS_pt = FreeListHead;
 				i = 0;
 	`ifdef SIMULATION_VERBOSE_STASH
-	//			$display("\tFreeListHead = %d", MS_pt);
+				$display("\tFreeListHead = %d", MS_pt);
 	`endif
 				while (MS_pt != SNULL) begin
 	`ifdef SIMULATION_VERBOSE_STASH
-	//				$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.Mem[MS_pt], `STASHC == EN_Used);
+					$display("\t\tStashP[%d] = %d (Used? = %b)", MS_pt, StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt], `STASHC == EN_Used);
 	`endif
 					MS_pt = StashP.BEHAVIORAL.core.BEHAVIORAL.Mem[MS_pt];
 					i = i + 1;
@@ -499,13 +511,34 @@ module StashCore(
 					end
 				end
 			end
+			
 	`endif // endif SIMULATION_ASIC
-
-			// if (CSPeaking & LastChunk_Read)
-			// 	if (OutPAddr == DummyBlockAddress)
-			// 		$display("[%m @ %t] Reading dummy block", $time);
-			// 	else
-			// 		$display("[%m @ %t] Reading [a=%x, l=%x, h=%x, sloc=%d]", $time, OutPAddr, OutLeaf, OutMAC, StashE_Address_Delayed);
+			
+			// Check that, during the eviction, no pointer is read twice
+			if (CSPeaking & LastChunk_Read) begin
+				if (OutPAddr == DummyBlockAddress) begin
+					$display("[%m @ %t] Reading dummy block", $time);
+				end else begin
+					$display("[%m @ %t] Reading [a=%x, l=%x, h=%x, sloc=%d]", $time, OutPAddr, OutLeaf, OutMAC, StashE_Address_Delayed);
+					
+					if (Evicting) begin
+						p = 0;
+						while (p < pmax) begin
+							if (PointersChecked[p] == StashE_Address_Delayed) begin
+								$display("[%m] ERROR: Same pointer (%d) read twice during eviction.", StashE_Address_Delayed);
+								$finish;
+							end else begin
+								//$display("[%m] OK! %d != %d", PointersChecked[p], StashE_Address_Delayed);
+							end
+							p = p + 1;
+						end
+						PointersChecked[pmax] = StashE_Address_Delayed;
+					end
+					
+					if (Evicting) pmax = pmax + 1;
+				end
+			end
+			
 		end
 	`endif
 

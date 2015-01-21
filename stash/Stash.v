@@ -698,6 +698,7 @@ module Stash(
 							
 							.CancelPushCommand(		StartWriteback_Pass),
 							.SyncComplete(			Core_AccessComplete),
+							.StartingEviction(		CSPathWriteback),
 							
 							.JTAG_StashCore(		JTAG_StashCore));
 

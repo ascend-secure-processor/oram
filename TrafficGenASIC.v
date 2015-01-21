@@ -35,14 +35,19 @@ module TrafficGenASIC(
 	`include "DMLocal.vh"
 	`include "JTAG.vh"
 	
-	parameter				NumCommands =			4, 
-							AccessCount_Fixed =		32'd256;
+	parameter				
+	`ifdef SIMULATION
+							NumCommands =			3,
+	`else
+							NumCommands =			4,
+	`endif
+							AccessCount_Fixed =		32'd2048;
 	
 	localparam				StallThreshold =		20000; // astronomical? maybe not for these slow ass pins ;-)
 
 	localparam				NVWidth =				`log2(NumValidBlock);	
 	localparam				OBUChunks = 			ORAMB / ORAMU;
-							
+
 	//--------------------------------------------------------------------------
 	//	System I/O
 	//--------------------------------------------------------------------------
@@ -218,7 +223,7 @@ module TrafficGenASIC(
 	assign	CrossBufIn_DataInPre =					(CmdCount == 0) ? 	{	TCMD_Fill,				32'd0,			AccessCount_Fixed,	32'd0} : // Fill with some data
 													(CmdCount == 1) ? 	{	TCMD_CmdRnd_AddrLin,	32'd0,			AccessCount_Fixed,	32'd0} : // Sequential rd/wr to initialized region
 													(CmdCount == 2) ? 	{	TCMD_CmdRnd_AddrRnd,	32'dx,			AccessCount_Fixed,	AccessCount_Fixed - 32'd1} : // Random rd/wr to initialized region
-																		{	TCMD_CmdRnd_AddrRnd,	32'dx,			AccessCount_Fixed,	NumValidBlock - 32'd1} ; // Random rd/wr to anywhere
+																		{	TCMD_CmdRnd_AddrRnd,	32'dx,			NumValidBlock,		NumValidBlock - 32'd1} ; // Random rd/wr to anywhere
 																		
 	assign	CrossBufIn_DataInValidPre =				CmdCount < NumCommands;
 	

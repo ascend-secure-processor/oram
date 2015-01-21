@@ -83,7 +83,7 @@ module testUORAM;
                             .DRAMWriteDataValid(	DDR3SDRAM_WriteValid),
                             .DRAMWriteDataReady(	DDR3SDRAM_WriteReady),
 							
-							.Mode_TrafficGen(		TGEN),
+							.Mode_TrafficGen(		1'b1), // For the chip, just run traffic gen for a long time
 							.Mode_DummyGen(			1'b0),
 							
 							.jtag_oram_req_val(		1'b0),
@@ -136,6 +136,7 @@ module testUORAM;
 							.OutReady(				DDR3SDRAM_ReadValid_Wide && DDR3SDRAM_ReadReady_Wide));
 
 	always @(posedge Clock) begin
+		
 		if (DDR3SDRAM_Command == DDR3CMD_Write && DDR3SDRAM_CommandValid && DDR3SDRAM_CommandReady) begin
 			$display("[%m @ %t] Write DRAM[%x]", $time, DDR3SDRAM_Address);
 		end
