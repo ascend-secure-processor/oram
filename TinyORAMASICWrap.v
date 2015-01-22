@@ -42,7 +42,7 @@ module TinyORAMASICWrap(
 	Mode_TrafficGen, 
 	Mode_DummyGen,
 	
-	jtag_oram_req_val, oram_jtag_res_data
+	ctap_oram_req_val, oram_ctap_res_data
 	);
 	
 	//--------------------------------------------------------------------------
@@ -51,9 +51,12 @@ module TinyORAMASICWrap(
 	
 	`ifdef SIMULATION_VIVADO
 	parameter				NetworkWidth =		64; // Princeton's network
+	parameter				JTPWidth =			8;
 	`else
 	`include "network_define.v"
+	`include "jtag.vh"
 	parameter				NetworkWidth =		`DATA_WIDTH;
+	parameter				JTPWidth =			`JTAG_ORAM_DATA_WIDTH;
 	`endif
 	
 	`include "PathORAM.vh"
@@ -114,8 +117,8 @@ module TinyORAMASICWrap(
 	//	JTAG interface [to Princeton]
 	//--------------------------------------------------------------------------
 	
-	input 					jtag_oram_req_val;
-	output	[JTWidth-1:0]	oram_jtag_res_data;
+	input 					ctap_oram_req_val;
+	output	[JTPWidth-1:0]	oram_ctap_res_data;
 	
 	//--------------------------------------------------------------------------
 	//	Wires & Regs
@@ -175,13 +178,30 @@ module TinyORAMASICWrap(
 	wire	[JTWidth_BackendCore-1:0] JTAG_BackendCore;
 	wire	[JTWidth_Backend-1:0] JTAG_Backend;	
 	
+	wire	[JTWidth-1:0]	JTagData_Wide;
+	wire					JTagInValid, JTagOutValid, JTagOutReady;
+	
 	//--------------------------------------------------------------------------
 	//	Debugging
 	//--------------------------------------------------------------------------
 	
 	assign	JTAG_Top =								32'hdeadbeef;
 	
-	assign	oram_jtag_res_data =					{
+	FIFOShiftRound #(		.IWidth(				JTWidth),
+							.OWidth(				JTPWidth))
+				jtshift(	.Clock(					Clock),
+							.Reset(					Reset),
+							.InData(				JTagData_Wide),
+							.InValid(				JTagInValid),
+							.InAccept(				),
+							.OutData(				oram_ctap_res_data),
+							.OutValid(				JTagOutValid),
+							.OutReady(				JTagOutReady));	
+	
+	assign	JTagInValid =							~JTagOutValid && ctap_oram_req_val;
+	assign	JTagOutReady =							 JTagOutValid && ctap_oram_req_val;
+	
+	assign	JTagData_Wide =							{
 														JTAG_Top,
 														
 														JTAG_Traffic,

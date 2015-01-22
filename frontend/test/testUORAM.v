@@ -15,9 +15,12 @@ module testUORAM;
 	
 	`ifdef SIMULATION_VIVADO
 	parameter				NetworkWidth =		64; // Princeton's network
+	parameter				JTPWidth =			8;
 	`else
 	`include "network_define.v"
+	`include "jtag.vh"
 	parameter				NetworkWidth =		`DATA_WIDTH;
+	parameter				JTPWidth =			`JTAG_ORAM_DATA_WIDTH;
 	`endif
 	
     wire 						Clock; 
@@ -50,7 +53,8 @@ module testUORAM;
 	reg 						TestUORAMPassed;
 	reg							TGEN;
 	
-	wire	[JTWidth-1:0]	oram_jtag_res_data;
+	reg							ctap_oram_req_val; 
+	wire	[JTPWidth-1:0]		oram_ctap_res_data;
 	
 	//--------------------------------------------------------------------------
 	//	CUT
@@ -86,8 +90,8 @@ module testUORAM;
 							.Mode_TrafficGen(		1'b1), // For the chip, just run traffic gen for a long time
 							.Mode_DummyGen(			1'b0),
 							
-							.jtag_oram_req_val(		1'b0),
-							.oram_jtag_res_data(	oram_jtag_res_data));
+							.ctap_oram_req_val(		ctap_oram_req_val),
+							.oram_ctap_res_data(	oram_ctap_res_data));
 	
 	//--------------------------------------------------------------------------
 
@@ -164,7 +168,12 @@ module testUORAM;
 			$finish;
 		end
 		
-		if (CycleCountSinceReset > 5 /* give things time to settle */ && ^oram_jtag_res_data === 1'bx) begin
+		if (CycleCountSinceReset >= 20)
+			ctap_oram_req_val = 1'b1;
+		else
+			ctap_oram_req_val = 1'b0;
+	
+		if (CycleCountSinceReset >= 21 && ^oram_ctap_res_data === 1'bx) begin
 			$display("JTAG signal is X");
 			$finish;
 		end
