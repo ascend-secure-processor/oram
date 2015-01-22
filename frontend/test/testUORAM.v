@@ -168,10 +168,7 @@ module testUORAM;
 			$finish;
 		end
 		
-		if (CycleCountSinceReset >= 20)
-			ctap_oram_req_val = 1'b1;
-		else
-			ctap_oram_req_val = 1'b0;
+		ctap_oram_req_val = (CycleCountSinceReset >= 20 && CycleCountSinceReset % 2 == 0);
 	
 		if (CycleCountSinceReset >= 21 && ^oram_ctap_res_data === 1'bx) begin
 			$display("JTAG signal is X");

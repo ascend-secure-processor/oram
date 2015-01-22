@@ -197,9 +197,9 @@ module TinyORAMASICWrap(
 							.OutData(				oram_ctap_res_data),
 							.OutValid(				JTagOutValid),
 							.OutReady(				JTagOutReady));	
-	
+
 	assign	JTagInValid =							~JTagOutValid && ctap_oram_req_val;
-	assign	JTagOutReady =							 JTagOutValid && ctap_oram_req_val;
+	assign	JTagOutReady =							 ctap_oram_req_val;
 	
 	assign	JTagData_Wide =							{
 														JTAG_Top,
