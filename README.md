@@ -93,7 +93,8 @@ Citations
 	Xiangyao Yu, and Srinivas Devadas. 2013.
 	Path ORAM: an extremely simple oblivious RAM protocol.
 	In Proceedings of the 2013 ACM SIGSAC conference on Computer &
-	communications security (CCS '13). ACM, New York, NY, USA, 299-310.
-	DOI=10.1145/2508859.2516660 http://doi.acm.org/10.1145/2508859.2516660
-
-[2] In submission.
+	communications security (CCS).
+	
+[2] Ling Ren, Christopher Fletcher, Albert Kwon, Marten van Dijk, and Srinivas Devadas. 2017.
+	Design and implementation of the Ascend secure processor.
+	IEEE Transactions on Dependable and Secure Computing (TDSC)
