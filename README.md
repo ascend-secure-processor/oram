@@ -47,23 +47,38 @@ parameters passed to TinyORAMCore:
 Code structure
 --------------------------------------------------------------------------------
 
-Tiny ORAM								(TinyORAMCore.v, top module)
-	Frontend 							(choose between Basic or Unified)
-		Basic frontend					(under development)
-		Unified frontend				(frontend/UORAMController.v)
-			PosMap+PLB					(frontend/PosMapPLB.v)
-			DataPath					(frontend/UORAMDataPath.v)
-	Backend								(choose between Path ORAM or RAW Path ORAM)
-		Path ORAM Backend 				(backend/PathORAMBackend.v)
-			Symmetric Encryption		(encryption/basic/*.v)
-		RAW Path ORAM Backend 			(backend/PathORAMBackend.v)
-			Coherence Controller		(backend/CoherenceController.v)
-			Integrity Verification		(integrity/*.v)
-			Symmetric Encryption		(encryption/rew/*.v)
-		Shared across both backend designs
-			Address Generator			(addr/*.v)
-			Stash						(stash/*.v)
-	User-level parameters				(local/PathORAM.vh)
+	Tiny ORAM							(TinyORAMCore.v, top module)
+	
+		Frontend 						(choose between Basic or Unified)
+		
+			Basic frontend					(under development)
+			
+			
+			Unified frontend				(frontend/UORAMController.v)
+			
+				PosMap+PLB				(frontend/PosMapPLB.v)
+				
+				DataPath				(frontend/UORAMDataPath.v)
+				
+				Integrity Verification			(integrity/*.v)
+				
+		Backend							(choose between Path ORAM or RAW Path ORAM)
+		
+			Path ORAM Backend 				(backend/PathORAMBackend.v)
+			
+				Symmetric Encryption			(encryption/basic/*.v)
+				
+			RAW Path ORAM Backend 				(backend/PathORAMBackend.v)
+				
+				Symmetric Encryption			(encryption/rew/*.v)
+				
+			Shared across both backend designs
+			
+				Address Generator			(addr/*.v)
+				
+				Stash					(stash/*.v)
+				
+		User-level parameters					(include/PathORAM.vh)
 
 --------------------------------------------------------------------------------
 Conventions
